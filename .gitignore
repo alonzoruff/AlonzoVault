@@ -1,0 +1,21 @@
+# Secrets and private data — never commit
+.env
+*.env
+*credential*
+*secret*
+*.pem
+*.key
+
+# Big/binary files that do not belong in this repo
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.docx
+*.pptx
+*.xlsx
+
+# OS / editor noise
+.DS_Store
+__pycache__/
+*.pyc
