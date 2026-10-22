@@ -248,16 +248,25 @@ def friday_champs_week():
     # Oct 23, 2026 (Grey). XC pre-champs team meeting ADDED alongside the
     # usual after-school blocks — nothing removed.
     blocks = morning(4)
-    blocks += grey_school()
+    # Pep Rally day runs a fully modified period grid (Ian MacInnes email,
+    # Oct 22) — not the normal Grey blocks.
+    blocks += [
+        B(8, 10, 9, 10, "Period 1 (modified schedule)", "school"),
+        B(9, 15, 9, 25, "Community Time", "school"),
+        B(9, 30, 10, 30, "Period 2", "school"),
+        B(10, 35, 11, 35, "Period 3", "school"),
+        B(11, 40, 12, 40, "Period 4", "school"),
+        B(12, 45, 13, 45, "Period 5", "school"),
+    ]
     blocks += [
         B(13, 50, 14, 35, "Pep Rally", "event"),
-        B(14, 20, 14, 45, "Prep for practices", "coach"),
+        B(14, 35, 14, 45, "Prep for practices", "coach"),
         B(14, 45, 15, 0, "Track pre-meeting", "coach"),
         B(15, 0, 15, 10, "Football warm-up (Grey team)", "coach"),
         B(15, 15, 16, 0, "Help football lift (Scarlet team)", "coach"),
         B(16, 0, 17, 0, "Basketball", "coach"),
         B(16, 0, 17, 15, "Cross Country Pre-Champs Team Meeting + Team Dinner", "event"),
-        B(17, 0, 17, 30, "Football lift (Grey team)", "coach"),
+        # No 5:00-5:30 football lift on Oct 23 (AJ, 2026-10-22).
     ]
     ev = evening()
     blocks += ev[:2]
@@ -279,8 +288,8 @@ def saturday_wcac():
         B(8, 0, 9, 30, "Course opens — team walks", "coach"),
         B(9, 30, 10, 0, "Coaches meeting", "coach"),
         B(10, 0, 10, 30, "Freshman Boys", "event"),
-        B(10, 30, 11, 0, "Varsity B Boys", "event"),
-        B(11, 0, 11, 30, "Varsity B Girls (Freshman Girls incl.)", "event"),
+        B(10, 30, 11, 0, "Varsity B Girls", "event"),
+        B(11, 0, 11, 30, "Varsity B Boys", "event"),
         B(11, 30, 12, 0, "Varsity A Girls", "event"),
         B(12, 0, 12, 30, "Varsity A Boys", "event"),
         B(12, 45, 13, 30, "Awards — Top 12 (Top 15 for Var B Girls)", "event"),
