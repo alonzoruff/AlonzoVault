@@ -1,0 +1,2 @@
+date,session_id,session_name,athlete_or_group,what_actually_happened,times_or_marks,how_it_felt_1_to_5,notes
+EXAMPLE,MAX-01,Fly runs (20m build + fly zone),Varsity sprint group,Ran 4 x fly 20s instead of 5 - form broke on rep 4 so we stopped,Best fly 10m: 1.02,4,EXAMPLE ROW - delete when the first real session is logged
