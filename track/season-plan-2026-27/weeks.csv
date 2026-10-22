@@ -1,0 +1,30 @@
+week,start,end,phase,load,mon,tue,wed,thu,fri,sun,sat,focus
+1,2026-10-26,2026-11-01,GPP,Build,ACC-01 + STR-01,TEM-01 + PLY-01,ACC-02 hills + STR-01,TEM-02,ACC-01 short + med ball,Sun off,TEM-03 opt,"General strength, hills, tempo base"
+2,2026-11-02,2026-11-08,GPP,Build,ACC-01 + STR-01,TEM-01 + PLY-01,ACC-02 hills + STR-01,TEM-02,ACC-01 + core,Sun off,TEM-03 opt,"Build volume, start mechanics"
+3,2026-11-09,2026-11-15,GPP,Build,ACC-01 + STR-01,TEM-01 + PLY-01,ACC-02 hills + STR-01,TEM-02,ACC-01 + med ball,Sun off,TEM-03 opt,Highest GPP load
+4,2026-11-16,2026-11-22,GPP,Deload/Test,ACC-01 light,TEM-01 short,"TEST: 30m, fly 10/30, CMJ, med ball",Off,ACC-01 light,Sun off,Off,Testing checkpoint 1
+5,2026-11-23,2026-11-29,SPP-A,Build,ACC-03 + STR-02,TEM-01,ACC-04 + PLY-02,Low (holiday flex),SE-06 + STR-02 light,Sun off,TEM-03 opt,Acceleration + max strength; Thanksgiving week
+6,2026-11-30,2026-12-06,SPP-A,Build,ACC-03 + STR-02,TEM-01,ACC-04 + PLY-02,TEM-02,SE-06 + STR-02 light,Sun off,Off,T-APEX slots into ACC-04
+7,2026-12-07,2026-12-13,SPP-A,Build,ACC-03 + STR-02,TEM-01,MAX-01 intro + PLY-02,Low,SE-06 + STR-02 light,Sun off,TEM-03 opt,First max-velocity exposures
+8,2026-12-14,2026-12-20,SPP-A,Deload,ACC-03 light + STR-02 light,TEM-01 short,MAX-03,Off,RM-05 primer,Sun off,MEET: indoor opener,Deload + low-key opener
+9,2026-12-21,2026-12-27,Pre-Comp A,Build,ACC-03/04 + STR-02,TEM-01 short,MAX-01/02,Low (holiday),SE-01,Sun off,Off,Max velocity block; Christmas-modified
+10,2026-12-28,2027-01-03,Pre-Comp A,Build,ACC-04 + STR-02,TEM-01 short,MAX-01/02,Low,SE-02,Sun off,Off,Speed endurance layering in
+11,2027-01-04,2027-01-10,Pre-Comp A,Build,ACC-03 + STR-02,TEM-01 short,MAX-02,Low,RM-05 primer,Sun off,MEET,Race rhythm
+12,2027-01-11,2027-01-17,Pre-Comp A,Deload/Test,ACC-03 light,TEM-01 short,TEST: fly 30 + 60m mark,Off,RM-05 primer,Sun off,MEET,Testing checkpoint 2
+13,2027-01-18,2027-01-24,Comp A,Race,ACC-03 short + MAX-03,Low,RM-01,Low,RM-05 primer,Sun off,MEET,Race and sharpen
+14,2027-01-25,2027-01-31,Comp A,Race,ACC-03 short + MAX-03,Low,RM-02,Low,RM-05 primer,Sun off,MEET,Race modeling 200
+15,2027-02-01,2027-02-07,Comp A,Race,MAX-03,Low,SE-05,Off,RM-05 primer,Sun off,MEET,Final pre-taper race
+16,2027-02-08,2027-02-14,Mini-peak taper,Taper,MAX-03 light,Low,LAST BIG: MAX-01 + SE-01 short (Feb 10),Low,95% touch: ACC-03 short,Sun off,Off,10-day taper starts; volume -30%
+17,2027-02-15,2027-02-21,MINI PEAK,Peak,95% touch: MAX-03,Low,95% touch: ACC-03 short,Off,RM-05 primer,Sun off,MINI PEAK: Indoor championships Feb 20,Race week
+18,2027-02-22,2027-02-28,Regen,Recovery,Off,REC-01,TEM-01 easy,Off,ACC-01 very light,Sun off,Off,Rebuild; no high CNS early week
+19,2027-03-01,2027-03-07,SPP-B,Build,ACC-03 + STR-02,TEM-01,MAX-01 + PLY-02,Low,SE-02,Sun off,TEM-03 opt,Rebuild speed for outdoors
+20,2027-03-08,2027-03-14,SPP-B,Build,ACC-03 + STR-02,TEM-01,MAX-02 + PLY-02,Low,SE-03,Sun off,Off,Max velocity emphasis
+21,2027-03-15,2027-03-21,SPP-B,Build,ACC-04 + STR-02,TEM-01,MAX-01 + PLY-02,Low,SPE-01 (200),Sun off,Off,Special endurance enters
+22,2027-03-22,2027-03-28,SPP-B,Deload/Test,ACC-03 light,TEM-01 short,TEST: fly 30 + 150m TT,Off,RM-05 primer,Sun off,MEET: outdoor opener opt,Testing checkpoint 3
+23,2027-03-29,2027-04-04,Pre-Comp B,Build,MAX-01 + ACC-03,Low,RM-01,Low,SE-03,Sun off,Off,Race modeling block
+24,2027-04-05,2027-04-11,Pre-Comp B,Build,MAX-02,Low,RM-02,Low,RM-05 primer,Sun off,MEET,Curve work
+25,2027-04-12,2027-04-18,Pre-Comp B,Build,MAX-01 + ACC-04,Low,RM-04,Low,SPE-01 (200),Sun off,Off,150m simulations
+26,2027-04-19,2027-04-25,Pre-Comp B,Deload,MAX-03 light,Low,SE-04,Off,RM-05 primer,Sun off,MEET: major invitational window,Checkpoint 4: set championship goals
+27,2027-04-26,2027-05-02,Comp B,Race,MAX-03 + RM-01,Low,SE-04,Low,RM-05 primer,Sun off,MEET,Final sharpening
+28,2027-05-03,2027-05-09,Major taper,Taper,MAX-03 light,Low,LAST BIG: MAX-01 + SE-03 (May 5),Low,95% touch: ACC-03 short,Sun off,Off,10-day taper starts; volume -30-40%
+29,2027-05-10,2027-05-16,MAJOR PEAK,Peak,95% touch: MAX-03,Low,95% touch: ACC-03 short,Off,RM-05 primer,Sun off,MAJOR PEAK: Championships May 15,The peak of the year
