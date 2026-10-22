@@ -250,15 +250,22 @@ def friday_champs_week():
     blocks = morning(4)
     blocks += grey_school()
     blocks += [
+        B(13, 50, 14, 35, "Pep Rally", "event"),
         B(14, 20, 14, 45, "Prep for practices", "coach"),
         B(14, 45, 15, 0, "Track pre-meeting", "coach"),
         B(15, 0, 15, 10, "Football warm-up (Grey team)", "coach"),
         B(15, 15, 16, 0, "Help football lift (Scarlet team)", "coach"),
         B(16, 0, 17, 0, "Basketball", "coach"),
-        B(16, 0, 17, 15, "Cross Country Pre-Champs Team Meeting", "event"),
+        B(16, 0, 17, 15, "Cross Country Pre-Champs Team Meeting + Team Dinner", "event"),
         B(17, 0, 17, 30, "Football lift (Grey team)", "coach"),
     ]
-    blocks += evening()
+    ev = evening()
+    blocks += ev[:2]
+    blocks += [
+        B(19, 30, 21, 0, "CSCS study — Module 9 Nutrition + 20 questions", "free"),
+        B(21, 0, 21, 45, "Wind down", "downtime"),
+        ev[3],
+    ]
     return blocks
 
 
@@ -268,7 +275,7 @@ def saturday_wcac():
     return [
         B(5, 45, 6, 15, "Wake up early (no sleeping in)", "wake"),
         B(6, 15, 7, 0, "Breakfast + pack for the meet", "meal"),
-        B(7, 0, 8, 0, "Travel to Kenilworth Park", "travel"),
+        B(7, 15, 8, 0, "Team bus to Kenilworth Park (leaves 7:45 AM)", "travel"),
         B(8, 0, 9, 30, "Course opens — team walks", "coach"),
         B(9, 30, 10, 0, "Coaches meeting", "coach"),
         B(10, 0, 10, 30, "Freshman Boys", "event"),
@@ -277,7 +284,9 @@ def saturday_wcac():
         B(11, 30, 12, 0, "Varsity A Girls", "event"),
         B(12, 0, 12, 30, "Varsity A Boys", "event"),
         B(12, 45, 13, 30, "Awards — Top 12 (Top 15 for Var B Girls)", "event"),
-        B(13, 30, 17, 30, "Free afternoon", "free"),
+        B(13, 30, 14, 0, "Head to Fernandez Stadium", "travel"),
+        B(14, 0, 16, 30, "Varsity football vs DeMatha", "event"),
+        B(16, 30, 17, 30, "Free / reset", "free"),
         B(17, 30, 18, 0, "Make dinner", "meal"),
         B(18, 0, 19, 30, "Entertainment (games / TV)", "downtime"),
         B(19, 30, 21, 45, "Wind down", "downtime"),
