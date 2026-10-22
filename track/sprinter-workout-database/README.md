@@ -54,7 +54,7 @@ Feed the Cats' simpler taxonomy (speed / x-factor / lactate / off) maps onto `qu
 
 ## Roadmap
 
-1. **v0 (this):** schema + 18 seed sessions + 16 drills, CSV/JSON, command-line search.
+1. **v0 (this):** schema + 29 seed sessions + 16 drills, CSV/JSON, command-line search.
 2. **v1:** AJ's own sessions as he runs them at St. John's — every real practice logged back into the database with what actually happened.
 3. **v2:** Week builder — pick a phase and a quality per day, get a full week that respects CNS spacing automatically.
 4. **v3:** Search app (same pattern as the CSCS Practice Quiz) + weight-room side seeded from free-exercise-db (800+ exercises, public domain).

@@ -1,0 +1,17 @@
+id,name,category,distance_or_reps,coaching_cue,source
+DRL-01,Jog 800m + progressive strides,general,800m + 4 x 60m,"Finish each stride slightly faster, last near 80%",AJ plan warm-up Part A
+DRL-02,Skipping series,general,4 x 20m,"Regular, arm swing, for height, for distance",AJ plan warm-up Part A
+DRL-03,Forward leg swings,dynamic_stretch,10 per leg,"Tall posture, no trunk swing",AJ plan warm-up Part B
+DRL-04,Lateral leg swings,dynamic_stretch,10 per leg,Hips stay square while the leg opens and closes,AJ plan warm-up Part B
+DRL-05,Walking knee hugs,dynamic_stretch,15-20m,Rise onto the toe of the stance leg,AJ plan warm-up Part B
+DRL-06,Walking quad pulls,dynamic_stretch,15-20m,"Heel to glute, reach tall with the opposite arm",AJ plan warm-up Part B
+DRL-07,Walking lunges with twist,dynamic_stretch,15-20m,Front knee tracks over the ankle; rotate over the front leg,AJ plan warm-up Part B
+DRL-08,Inchworms,dynamic_stretch,15-20m,Legs straight to load the hamstrings,AJ plan warm-up Part B
+DRL-09,A-skips,sprint_drill,20m x 2,"Dorsiflexed toe, paw down under the hip: down, not out",AJ plan warm-up Part B
+DRL-10,B-skips,sprint_drill,20m x 2,"Extend out, then paw back down under the hip",AJ plan warm-up Part B
+DRL-11,High knees,sprint_drill,20m x 2,"Upright torso, fast ground contact",AJ plan warm-up Part B
+DRL-12,Butt kicks,sprint_drill,20m x 2,"Heels to glutes, knees pointing down, quick turnover",AJ plan warm-up Part B
+DRL-13,Straight-leg bounds,sprint_drill,20m x 2,"Strike the ground under the hips, legs straight",AJ plan warm-up Part B
+DRL-14,Karaoke (grapevine),dynamic_stretch,20m each direction,Opens the hips for curve running,AJ plan warm-up Part B
+DRL-15,Hip circles,dynamic_stretch,5 each direction per leg,"Knee at 90 degrees, big controlled circle",AJ plan warm-up Part B
+DRL-16,Ankle dribbles,sprint_drill,20m,Short quick steps on the balls of the feet,AJ plan warm-up Part B
