@@ -1,0 +1,8 @@
+date,day,planned_session_ids,planned_sessions,planned_cns,actual_session_ids,what_actually_happened,times_or_marks,how_it_felt_1_to_5,notes
+2026-10-26,Mon,ACC-01 + STR-01,Block starts and short drives + Base weights and circuit,High,,,,,Week 1 of GPP. High day 1 of the week.
+2026-10-27,Tue,TEM-01 + PLY-01,Extensive tempo 100s + Low-impact plyos,Low,,,,,Low day. Tempo at 65-75 percent effort only.
+2026-10-28,Wed,ACC-02 + STR-01,Hill repeats 60-100m + Base weights and circuit,High,,,,,High day. 48 hours after Monday's high day.
+2026-10-29,Thu,TEM-02,Tempo 100s + low plyos,Low,,,,,Low day.
+2026-10-30,Fri,ACC-01,Block starts and short drives (short version) + med ball work,High,,,,,High day. 48 hours after Wednesday. Med ball work has no session code in the database.
+2026-10-31,Sat,TEM-03,Fartlek up to 30 min (optional),Low,,,,,Optional low day. Skip it if the week felt heavy.
+2026-11-01,Sun,OFF,Rest day,None,,,,,Planned day off. Next high day is Monday Nov 2 (Week 2).
