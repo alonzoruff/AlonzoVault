@@ -35,6 +35,8 @@ const state = {
   topWeek: null,
   concerns: [],
   media: {},
+  wuOverrides: {},
+  wuEdit: null,
   profiles: [],
   pfGroup: '',
   pfEvent: '',
@@ -184,16 +186,44 @@ function md(src) {
   return html;
 }
 
-/* ---------------- navigation ---------------- */
+/* ---------------- navigation ----------------
+   Five primary destinations — Today, Train, Learn, My Log, Account —
+   plus a Coach area only coaches ever see. Grouped views (Workouts,
+   Season Plan, Warm-Up Cards, …) live under Train / Learn / Coach and
+   share a segmented sub-navigation rendered into each view's
+   .subnav-slot. Every nav control carries data-view; one delegated
+   listener below routes them all. */
+const VIEW_AREA = {
+  home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
+  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train',
+  videos: 'learn', definitions: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub',
+};
+const GROUP_SUBNAV = {
+  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['health', 'Aches & Pains'], ['inventory', 'Inventory']],
+};
+function renderSubnav(name, area) {
+  const items = GROUP_SUBNAV[area];
+  const activeSection = document.getElementById('view-' + name);
+  $$('.subnav-slot').forEach(slot => {
+    if (!items || slot.closest('.view') !== activeSection) { slot.innerHTML = ''; return; }
+    slot.innerHTML = '<nav class="seg" aria-label="In this section">' + items.map(([v, label]) =>
+      `<button type="button" class="seg-btn${v === name ? ' active' : ''}" data-view="${v}">${label}</button>`).join('') + '</nav>';
+  });
+}
 function showView(name) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
-  $$('#main-tabs .tab').forEach(t => {
-    const main = ['home', 'library', 'season', 'log', 'cards', 'nutrition', 'videos', 'definitions', 'education', 'testing', 'top', 'health', 'groups', 'coach', 'inventory'].includes(name) ? name : 'more';
-    t.classList.toggle('active', t.dataset.view === main);
-  });
+  const area = VIEW_AREA[name] || 'home';
+  $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
+  renderSubnav(name, area);
   window.scrollTo(0, 0);
 }
-$$('#main-tabs .tab').forEach(t => t.addEventListener('click', () => showView(t.dataset.view)));
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-view]');
+  if (b) showView(b.dataset.view);
+});
 $$('[data-goto]').forEach(b => b.addEventListener('click', () => showView(b.dataset.goto)));
 
 /* ---------------- motion helpers ---------------- */
@@ -275,6 +305,31 @@ document.addEventListener('click', (e) => {
 });
 
 /* ---------------- home ---------------- */
+/* "Start here" strip: three plain first steps for a new visitor.
+   Dismissal is remembered on this device. */
+function startHereDismissed() {
+  try { return localStorage.getItem('swa-start-here') === 'dismissed'; } catch (_) { return false; }
+}
+function dismissStartHere() {
+  try { localStorage.setItem('swa-start-here', 'dismissed'); } catch (_) { /* private mode: just hide it for now */ }
+}
+/* The printed warm-up card that matches each warm-up session:
+   WUP-01 is the Speed Day card, WUP-03 is the Light card. */
+const WARMUP_CARD_FOR = { 'WUP-01': 'wu-card-2', 'WUP-03': 'wu-card-1' };
+function openWarmupCard() {
+  showView('cards');
+  const t = todayLocal();
+  const wk = state.content.weeks.find(w => w.week === currentWeekNum());
+  if (!wk) return;
+  const info = dayInfo(wk, DAY_KEYS[(t.getDay() + 6) % 7]);
+  const cardId = info && info.warmup ? WARMUP_CARD_FOR[info.warmup] : null;
+  if (!cardId) return;
+  requestAnimationFrame(() => {
+    const el = document.getElementById(cardId);
+    if (el) el.scrollIntoView({ block: 'start' });
+  });
+}
+
 function renderHome() {
   const c = state.content;
   const t = todayLocal();
@@ -290,17 +345,47 @@ function renderHome() {
   const todayKey = DAY_KEYS[(t.getDay() + 6) % 7]; // Mon=0
   const inSeason = t >= parseDate(wk.start) && t <= parseDate(wk.end);
 
-  let daysHtml = DAY_KEYS.map(dk => {
-    const info = dayInfo(wk, dk);
-    const isToday = inSeason && dk === todayKey;
-    return dayCardHtml(wk, dk, info, { highlight: isToday });
-  }).join('');
+  /* Today's session is featured on its own, up top, with the day's
+     warm-up card right under it. The rest of the week follows under
+     the week heading — every day card still shows. */
+  let todayHtml = '';
+  let restKeys = DAY_KEYS;
+  if (inSeason) {
+    const info = dayInfo(wk, todayKey);
+    restKeys = DAY_KEYS.filter(dk => dk !== todayKey);
+    const w = info.warmup ? state.sessions.get(info.warmup) : null;
+    todayHtml = `
+    <h2>Today — ${DAY_NAMES[todayKey]}, ${fmtDate(info.date)}</h2>
+    ${LANE_DIVIDER}
+    ${dayCardHtml(wk, todayKey, info, { highlight: true })}
+    ${w ? `<div class="card warmup-panel">
+      <h3>Today's warm-up</h3>
+      <p><a class="code-link" data-code="${w.id}">${w.id}</a> ${esc(w.name)} — run this before the session starts.</p>
+      <button class="btn primary" id="home-warmup-card" type="button">Open today's warm-up card</button>
+    </div>` : ''}`;
+  }
+  const daysHtml = restKeys.map(dk => dayCardHtml(wk, dk, dayInfo(wk, dk), { highlight: false })).join('');
+
+  const startStrip = startHereDismissed() ? '' : `
+    <div class="card start-strip" id="start-strip">
+      <div class="start-head">
+        <h2>New here? Start in 3 steps</h2>
+        <button class="btn secondary" id="start-dismiss" type="button">Dismiss</button>
+      </div>
+      <ol class="start-steps">
+        <li><strong>See today's workout.</strong> It is right on this page, every day.</li>
+        <li><strong>Watch the demo videos.</strong> Short clips of every drill and lift, in Learn. <button class="btn secondary" id="start-videos" type="button">Watch demos</button></li>
+        <li><strong>Check your warm-up card.</strong> The right warm-up for today, ready to print. <button class="btn secondary" id="start-cards" type="button">See warm-up cards</button></li>
+      </ol>
+    </div>`;
 
   $('#home-content').innerHTML = `
     <h1>Today</h1>
     ${LANE_DIVIDER}
     <p>${statusLine}</p>
     ${isCoachUser() ? '<div id="coach-today"></div>' : ''}
+    ${todayHtml}
+    ${startStrip}
     <div class="card">
       <div class="hero-stats">
         <div class="hero-stat"><span class="stat-num" data-count="${c.sessions.length}">0</span><span class="stat-label">workouts</span></div>
@@ -327,6 +412,18 @@ function renderHome() {
     showView('library'); renderLibrary();
   });
   $('#home-open-season').addEventListener('click', () => { state.week = wkNum; renderSeason(); showView('season'); });
+  const warmBtn = $('#home-warmup-card');
+  if (warmBtn) warmBtn.addEventListener('click', openWarmupCard);
+  const dismissBtn = $('#start-dismiss');
+  if (dismissBtn) dismissBtn.addEventListener('click', () => {
+    dismissStartHere();
+    const strip = $('#start-strip');
+    if (strip) strip.remove();
+  });
+  const startVideos = $('#start-videos');
+  if (startVideos) startVideos.addEventListener('click', () => showView('videos'));
+  const startCards = $('#start-cards');
+  if (startCards) startCards.addEventListener('click', () => showView('cards'));
   $$('#home-content .stat-num').forEach(countUp);
   const gotoBtn = $('#home-content [data-goto]');
   if (gotoBtn) gotoBtn.addEventListener('click', () => showView(gotoBtn.dataset.goto));
@@ -352,13 +449,13 @@ async function renderCoachToday() {
         : esc(g.assignment.planText || 'Rest day')}
       ${g.assignment.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : ''}</span>
       <span class="muted">${g.completed} of ${g.total} done</span>
-    </div>`).join('') : '<p class="muted">No groups yet — set them up in Groups.</p>';
+    </div>`).join('') : '<p class="muted">No groups yet — set them up in Roster &amp; Groups.</p>';
   const open = data.healthFlags || [];
   const healthHtml = open.length ? open.slice(0, 8).map(c => `
     <div class="roster-row">
       <span>${c.flagged ? '🚩 ' : ''}<strong>${esc(c.athleteName)}</strong> — ${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}), pain ${c.pain}/10${c.impact === 'stopped' ? ' · stopped training' : ''}</span>
       <span class="badge ${c.status === 'new' ? 'high' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
-    </div>`).join('') + (open.length > 8 ? `<p class="muted">…and ${open.length - 8} more open in Health.</p>` : '')
+    </div>`).join('') + (open.length > 8 ? `<p class="muted">…and ${open.length - 8} more open in Aches &amp; Pains.</p>` : '')
     : '<p class="muted">No open health flags. Good news.</p>';
   el.innerHTML = `<div class="card">
     <h2>Coach summary</h2>
@@ -368,7 +465,7 @@ async function renderCoachToday() {
     <p><button class="btn secondary" id="ct-open-coach" type="button">Open today's checklist</button></p>
     <h3>Health flags${open.length ? ` (${open.length} open)` : ''}</h3>
     ${healthHtml}
-    <p><button class="btn secondary" id="ct-open-health" type="button">Open Health</button></p>
+    <p><button class="btn secondary" id="ct-open-health" type="button">Open Aches &amp; Pains</button></p>
   </div>`;
   $('#ct-open-coach').addEventListener('click', () => { state.feedDate = data.date; renderCoach(); showView('coach'); });
   $('#ct-open-health').addEventListener('click', () => { renderHealth(); showView('health'); });
@@ -762,6 +859,7 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
+  renderWarmupCards();
   if (isCoach) loadMedia();
 }
 
@@ -898,6 +996,214 @@ document.addEventListener('click', (e) => {
     }
   }
 });
+
+/* ---------------- warm-up card editor ----------------
+   The three cards ship as fixed HTML in index.html. A coach can edit
+   a card's item lists in the app; the edit is stored server-side as
+   an override (db.warmupCardEdits) and layered over the shipped card
+   for every viewer. With no override, the shipped DOM is never
+   touched, so the default cards render exactly as published. */
+const WU_CARD_IDS = ['wu-card-1', 'wu-card-2', 'wu-card-3'];
+let wuDefaultsCache = null;
+const wuDomEdited = new Set();
+
+function parseWuItem(li) {
+  const text = li.textContent.replace(/\s+/g, ' ').trim();
+  const strong = li.querySelector('strong');
+  if (!strong) return { name: text, detail: '' };
+  const name = strong.textContent.replace(/\s+/g, ' ').trim();
+  const rest = text.slice(text.indexOf(name) + name.length).replace(/^[\s\u2014\u2013-]+/, '').trim();
+  return { name, detail: rest };
+}
+/* The shipped defaults are parsed out of the static HTML itself, so
+   the editor's "original" always matches the published card. Parsed
+   once, before any override is applied to the DOM. */
+function parseWuDefaults() {
+  if (wuDefaultsCache) return wuDefaultsCache;
+  const out = {};
+  for (const id of WU_CARD_IDS) {
+    const card = document.getElementById(id);
+    if (!card) continue;
+    const sections = [];
+    card.querySelectorAll('.wu-sec').forEach(sec => {
+      const ul = sec.querySelector('ul.wu-list');
+      if (!ul) return;
+      const h3 = sec.querySelector('h3');
+      sections.push({
+        title: h3 ? h3.textContent.replace(/\s+/g, ' ').trim() : 'Section',
+        items: Array.from(ul.querySelectorAll(':scope > li')).map(parseWuItem),
+      });
+    });
+    out[id] = sections;
+  }
+  wuDefaultsCache = out;
+  return out;
+}
+function wuItemsHtml(items) {
+  return (items || []).map(it =>
+    `<li><strong>${esc(it.name)}</strong>${it.detail ? ' \u2014 ' + esc(it.detail) : ''}</li>`).join('');
+}
+function renderWuCardItems(cardId) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  const ov = state.wuOverrides[cardId];
+  if (!ov && !wuDomEdited.has(cardId)) return; /* shipped HTML stays untouched */
+  const sections = ov ? ov.sections : (parseWuDefaults()[cardId] || []);
+  const uls = card.querySelectorAll('.wu-sec ul.wu-list');
+  (sections || []).forEach((sec, i) => {
+    if (uls[i]) uls[i].innerHTML = wuItemsHtml(sec.items);
+  });
+  if (ov) wuDomEdited.add(cardId); else wuDomEdited.delete(cardId);
+}
+function renderWarmupCards() {
+  parseWuDefaults();
+  for (const id of WU_CARD_IDS) renderWuCardItems(id);
+  $$('.wu-edit-ui').forEach(el => el.remove());
+  state.wuEdit = null;
+  if (!isCoachUser()) return;
+  for (const id of WU_CARD_IDS) {
+    const card = document.getElementById(id);
+    if (!card) continue;
+    const bar = document.createElement('div');
+    bar.className = 'wu-edit-ui';
+    bar.innerHTML = `
+      <button class="btn secondary" type="button" data-wu-edit="${id}">Edit this card</button>
+      ${state.wuOverrides[id] ? '<span class="badge plain">Edited by a coach</span>' : ''}
+      <div class="wu-editor" id="wu-editor-${id}" hidden></div>`;
+    const printBtn = card.querySelector('[data-print-card]');
+    if (printBtn) card.insertBefore(bar, printBtn); else card.appendChild(bar);
+    bar.querySelector('[data-wu-edit]').addEventListener('click', () => openWuEditor(id));
+  }
+}
+function openWuEditor(cardId) {
+  $$('.wu-editor').forEach(p => { p.hidden = true; p.innerHTML = ''; });
+  const panel = document.getElementById('wu-editor-' + cardId);
+  if (!panel) return;
+  const src = state.wuOverrides[cardId]
+    ? state.wuOverrides[cardId].sections
+    : (parseWuDefaults()[cardId] || []);
+  state.wuEdit = {
+    cardId,
+    work: (src || []).map(s => ({ items: (s.items || []).map(it => ({ name: it.name, detail: it.detail || '' })) })),
+  };
+  panel.hidden = false;
+  drawWuEditor();
+}
+function closeWuEditor() {
+  state.wuEdit = null;
+  $$('.wu-editor').forEach(p => { p.hidden = true; p.innerHTML = ''; });
+}
+/* Pull whatever is currently typed in the open editor back into the
+   working copy before any structural change re-renders the panel. */
+function syncWuEditorInputs() {
+  if (!state.wuEdit) return;
+  const panel = document.getElementById('wu-editor-' + state.wuEdit.cardId);
+  if (!panel) return;
+  panel.querySelectorAll('[data-wu-name]').forEach(inp => {
+    const sec = state.wuEdit.work[Number(inp.dataset.wuName)];
+    if (sec && sec.items[Number(inp.dataset.wuIdx)]) sec.items[Number(inp.dataset.wuIdx)].name = inp.value;
+  });
+  panel.querySelectorAll('[data-wu-detail]').forEach(inp => {
+    const sec = state.wuEdit.work[Number(inp.dataset.wuDetail)];
+    if (sec && sec.items[Number(inp.dataset.wuIdx)]) sec.items[Number(inp.dataset.wuIdx)].detail = inp.value;
+  });
+}
+function drawWuEditor() {
+  if (!state.wuEdit) return;
+  const { cardId, work } = state.wuEdit;
+  const panel = document.getElementById('wu-editor-' + cardId);
+  if (!panel) return;
+  const defaults = parseWuDefaults()[cardId] || [];
+  const drills = (state.content && state.content.drills) || [];
+  const drillOptions = '<option value="">Quick-pick a drill...</option>' + drills.map(d =>
+    `<option value="${esc(d.id)}">${esc(d.id)} \u00B7 ${esc(d.name)}</option>`).join('');
+  panel.innerHTML = `
+    <p class="muted">Editing this card. Your saved version is what everyone sees; the printed card updates too. Reset restores the original shipped card.</p>
+    ${work.map((sec, si) => `
+      <div class="wu-ed-sec">
+        <h4>${esc((defaults[si] && defaults[si].title) || ('Section ' + (si + 1)))}</h4>
+        ${sec.items.map((it, ii) => `
+          <div class="wu-ed-row">
+            <input class="wu-ed-name" type="text" data-wu-name="${si}" data-wu-idx="${ii}" value="${esc(it.name)}" placeholder="Item name" aria-label="Item name">
+            <input class="wu-ed-detail" type="text" data-wu-detail="${si}" data-wu-idx="${ii}" value="${esc(it.detail)}" placeholder="Sets / distance / cues (optional)" aria-label="Item detail">
+            <span class="wu-ed-btns">
+              <button class="btn secondary" type="button" data-wu-move="-1" data-sec="${si}" data-idx="${ii}" aria-label="Move item up">Up</button>
+              <button class="btn secondary" type="button" data-wu-move="1" data-sec="${si}" data-idx="${ii}" aria-label="Move item down">Down</button>
+              <button class="btn danger" type="button" data-wu-remove data-sec="${si}" data-idx="${ii}">Remove</button>
+            </span>
+          </div>`).join('')}
+        <div class="wu-ed-add">
+          <select class="wu-add-drill" data-sec="${si}" aria-label="Quick-pick a drill">${drillOptions}</select>
+          <input class="wu-add-name" type="text" data-sec="${si}" placeholder="New item name" aria-label="New item name">
+          <input class="wu-add-detail" type="text" data-sec="${si}" placeholder="Sets / distance / cues (optional)" aria-label="New item detail">
+          <button class="btn secondary" type="button" data-wu-add="${si}">Add item</button>
+        </div>
+      </div>`).join('')}
+    <div class="wu-ed-actions">
+      <button class="btn primary" type="button" data-wu-save>Save card</button>
+      <button class="btn" type="button" data-wu-cancel>Cancel</button>
+      ${state.wuOverrides[cardId] ? '<button class="btn danger" type="button" data-wu-reset>Reset to original</button>' : ''}
+    </div>
+    <p class="error" data-wu-err></p>`;
+  panel.querySelectorAll('.wu-add-drill').forEach(sel => sel.addEventListener('change', () => {
+    const d = drills.find(x => x.id === sel.value);
+    if (!d) return;
+    const si = sel.dataset.sec;
+    const nameInp = panel.querySelector('.wu-add-name[data-sec="' + si + '"]');
+    const detInp = panel.querySelector('.wu-add-detail[data-sec="' + si + '"]');
+    if (nameInp) nameInp.value = d.name || '';
+    if (detInp) detInp.value = [d.distance_or_reps, d.coaching_cue].filter(x => x && String(x).trim()).join(' \u2014 ');
+  }));
+  panel.querySelectorAll('[data-wu-move]').forEach(b => b.addEventListener('click', () => {
+    syncWuEditorInputs();
+    const si = Number(b.dataset.sec), ii = Number(b.dataset.idx), dir = Number(b.dataset.wuMove);
+    const items = state.wuEdit.work[si].items;
+    const j = ii + dir;
+    if (j < 0 || j >= items.length) return;
+    [items[ii], items[j]] = [items[j], items[ii]];
+    drawWuEditor();
+  }));
+  panel.querySelectorAll('[data-wu-remove]').forEach(b => b.addEventListener('click', () => {
+    syncWuEditorInputs();
+    state.wuEdit.work[Number(b.dataset.sec)].items.splice(Number(b.dataset.idx), 1);
+    drawWuEditor();
+  }));
+  panel.querySelectorAll('[data-wu-add]').forEach(b => b.addEventListener('click', () => {
+    syncWuEditorInputs();
+    const si = Number(b.dataset.wuAdd);
+    const nameInp = panel.querySelector('.wu-add-name[data-sec="' + si + '"]');
+    const detInp = panel.querySelector('.wu-add-detail[data-sec="' + si + '"]');
+    const name = (nameInp.value || '').trim();
+    if (!name) { panel.querySelector('[data-wu-err]').textContent = 'Give the new item a name first.'; return; }
+    state.wuEdit.work[si].items.push({ name, detail: (detInp.value || '').trim() });
+    drawWuEditor();
+  }));
+  const saveBtn = panel.querySelector('[data-wu-save]');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    syncWuEditorInputs();
+    const errEl = panel.querySelector('[data-wu-err]');
+    try {
+      const data = await apiPut('/api/coach/warmup-cards/' + encodeURIComponent(cardId),
+        { sections: state.wuEdit.work });
+      state.wuOverrides[cardId] = { sections: data.sections };
+      closeWuEditor();
+      renderWarmupCards();
+    } catch (err) { if (errEl) errEl.textContent = err.message; }
+  });
+  const cancelBtn = panel.querySelector('[data-wu-cancel]');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { closeWuEditor(); });
+  const resetBtn = panel.querySelector('[data-wu-reset]');
+  if (resetBtn) resetBtn.addEventListener('click', async () => {
+    if (!confirm('Reset this card to the original shipped version?')) return;
+    const errEl = panel.querySelector('[data-wu-err]');
+    try {
+      await apiDel('/api/coach/warmup-cards/' + encodeURIComponent(cardId));
+      delete state.wuOverrides[cardId];
+      closeWuEditor();
+      renderWarmupCards();
+    } catch (err) { if (errEl) errEl.textContent = err.message; }
+  });
+}
 
 /* ---------------- SVG line charts (hand-rolled) ---------------- */
 const CHART_COLORS = ['#CC0033', '#20242a', '#8A939F', '#C9A227', '#46647a', '#6a4a7a'];
@@ -1884,10 +2190,12 @@ $('#log-form').addEventListener('submit', async (e) => {
   $('#season-doc').innerHTML = md(state.content.season);
   $('#log-date').value = todayStr();
   try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
+  try { state.wuOverrides = (await api('/api/warmup-cards')).cards || {}; } catch (_) { state.wuOverrides = {}; }
   await refreshUserData();
   renderAccount();
   renderLog();
   renderLibrary();
   renderSeason();
   renderHome();
+  renderWarmupCards();
 })();

@@ -37,15 +37,46 @@ body {
 .app-name { font-size: 12px; color: var(--gray); font-weight: 600; }
 .account-chip { font-size: 13px; color: var(--muted); text-align: right; }
 .account-chip button { font-size: 13px; }
+/* Primary navigation: five destinations — Today, Train, Learn,
+   My Log, Account — plus a Coach tab only coaches ever see.
+   Wide screens: a pill row in the header. Small screens: a fixed
+   bottom tab bar with an icon and a text label on every tab. */
 .tabs {
   max-width: 880px; margin: 0 auto; padding: 8px 12px 10px;
-  display: flex; gap: 6px; overflow-x: auto;
+  display: flex; gap: 6px; flex-wrap: wrap;
 }
 .tab {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 44px;
   border: 1px solid var(--line); background: #fff; color: var(--ink);
   padding: 8px 14px; border-radius: 999px; font-size: 14px; white-space: nowrap; cursor: pointer;
 }
+.tab[hidden] { display: none !important; }
 .tab.active { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
+.tab-icon { display: inline-flex; flex: none; }
+.tab-icon svg { width: 19px; height: 19px; display: block; }
+.tabbar { display: none; }
+@media (max-width: 759px) {
+  .topbar .tabs { display: none; }
+  body { padding-bottom: 78px; } /* clearance so the tab bar never covers content */
+  .tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--card); border-top: 1px solid var(--line);
+    box-shadow: 0 -2px 14px rgba(20, 22, 26, .07);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar .tab {
+    flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center;
+    gap: 2px; min-height: 58px; padding: 6px 2px 5px;
+    border: none; border-radius: 0; background: transparent; color: var(--muted);
+    font-size: 11.5px; font-weight: 600; position: relative;
+  }
+  .tabbar .tab .tab-icon svg { width: 23px; height: 23px; }
+  .tabbar .tab.active { background: transparent; border-color: transparent; color: var(--red); }
+  .tabbar .tab.active::before {
+    content: ""; position: absolute; top: 0; left: 22%; right: 22%;
+    height: 3px; border-radius: 0 0 3px 3px; background: var(--red);
+  }
+}
 main { max-width: 880px; margin: 0 auto; padding: 16px; padding-bottom: 40px; }
 .view { display: none; }
 .view.active { display: block; }
@@ -1563,6 +1594,29 @@ svg.chart { width: 100%; height: auto; display: block; }
 .wu-foot { font-size: 12px; color: var(--muted); margin-top: 12px; }
 .wu-print { margin-top: 12px; }
 
+/* Warm-up card editor (coach-only, injected by app.js) */
+.wu-edit-ui { margin-top: 12px; }
+.wu-edit-ui .badge { margin-left: 8px; }
+.wu-editor { margin-top: 12px; border-top: 1.5px dashed var(--line); padding-top: 12px; }
+.wu-ed-sec { margin-bottom: 16px; }
+.wu-ed-sec h4 { margin: 0 0 6px; font-size: 14px; }
+.wu-ed-row { display: flex; gap: 6px; align-items: stretch; margin-bottom: 6px; }
+.wu-ed-row .wu-ed-name { flex: 0 0 32%; }
+.wu-ed-row .wu-ed-detail { flex: 1; }
+.wu-ed-row input, .wu-ed-add input, .wu-ed-add select { min-height: 44px; }
+.wu-ed-btns { display: flex; gap: 4px; }
+.wu-ed-btns .btn { min-width: 44px; min-height: 44px; padding: 4px 8px; }
+.wu-ed-add { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.wu-ed-add .wu-add-name { flex: 1 1 140px; }
+.wu-ed-add .wu-add-detail { flex: 1 1 180px; }
+.wu-ed-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.wu-ed-actions .btn { min-height: 44px; }
+@media (max-width: 560px) {
+  .wu-ed-row { flex-wrap: wrap; }
+  .wu-ed-row .wu-ed-name, .wu-ed-row .wu-ed-detail { flex: 1 1 100%; }
+}
+@media print { .wu-edit-ui { display: none !important; } }
+
 /* Nutrition cards */
 .nu-card {
   background: #fff; border: 1px solid var(--line); border-top: 6px solid var(--red);
@@ -1582,12 +1636,14 @@ svg.chart { width: 100%; height: auto; display: block; }
 /* Print: one warm-up card per Letter page, nothing else */
 @media print {
   body.printing-card .topbar,
+  body.printing-card .tabbar,
   body.printing-card .footer,
   body.printing-card #media-modal { display: none !important; }
   body.printing-card main > section { display: none !important; }
   body.printing-card main > section#view-cards { display: block !important; }
   body.printing-card #view-cards > h1,
   body.printing-card #view-cards > .lane-divider,
+  body.printing-card #view-cards > .subnav-slot,
   body.printing-card #view-cards > p { display: none !important; }
   body.printing-card .wu-card { display: none !important; }
   body.printing-card .wu-card.print-target {
@@ -1661,3 +1717,28 @@ svg.chart { width: 100%; height: auto; display: block; }
 .hero-stat.inv-flag .stat-num { color: var(--red); }
 .inv-note { font-size: 14px; margin: 6px 0 0; }
 .inv-updated { font-size: 12.5px; margin: 4px 0 0; }
+
+/* ---- UX reorganization: view intros, in-section sub-navigation,
+   Start-here strip, Today's warm-up panel ---- */
+.view-sub { margin: 0 0 12px; }
+.seg {
+  display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.seg::-webkit-scrollbar { display: none; }
+.seg-btn {
+  flex: none; min-height: 40px; padding: 8px 14px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: #fff; color: var(--ink);
+  font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.seg-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+.start-strip { border: 2px solid var(--red); }
+.start-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.start-head h2 { margin: 0; }
+.start-head .btn { flex: none; width: auto; padding: 5px 14px; font-size: 13.5px; }
+.start-steps { margin: 10px 0 2px; padding-left: 22px; }
+.start-steps li { padding: 5px 0; }
+.start-steps .btn { width: auto; padding: 4px 12px; font-size: 13.5px; margin-left: 6px; }
+.warmup-panel h3 { margin: 0 0 6px; font-size: 16.5px; }
+:focus-visible { outline: 3px solid rgba(204, 0, 51, .55); outline-offset: 2px; }

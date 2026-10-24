@@ -24,23 +24,13 @@
     </div>
     <div id="account-chip" class="account-chip"></div>
   </div>
-  <nav class="tabs" id="main-tabs">
-    <button data-view="home" class="tab active">Today</button>
-    <button data-view="library" class="tab">Workouts</button>
-    <button data-view="season" class="tab">Season Plan</button>
-    <button data-view="log" class="tab">My Log</button>
-    <button data-view="cards" class="tab">Warm-Up Cards</button>
-    <button data-view="nutrition" class="tab">Nutrition</button>
-    <button data-view="videos" class="tab">Videos</button>
-    <button data-view="definitions" class="tab">Definitions</button>
-    <button data-view="education" class="tab">Coach Education</button>
-    <button data-view="testing" class="tab coach-tab" hidden>Testing</button>
-    <button data-view="top" class="tab coach-tab" hidden>Top Athletes</button>
-    <button data-view="health" class="tab coach-tab" hidden>Health</button>
-    <button data-view="groups" class="tab coach-tab" hidden>Groups</button>
-    <button data-view="coach" class="tab coach-tab" hidden>Coach</button>
-    <button data-view="inventory" class="tab coach-tab" hidden>Inventory</button>
-    <button data-view="more" class="tab">More</button>
+  <nav class="tabs primary-nav" id="main-tabs" aria-label="Main">
+    <button type="button" data-view="home" class="tab active"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="tab-label">Today</span></button>
+    <button type="button" data-view="train" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L9.8 22l8.7-11.5H12L13 2z"/></svg></span><span class="tab-label">Train</span></button>
+    <button type="button" data-view="learn" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7.3 4.2 4 4.2v14c3.3 0 6 .6 8 2.3 2-1.7 4.7-2.3 8-2.3v-14c-3.3 0-6 .6-8 2.3z"/><path d="M12 6.5v14"/></svg></span><span class="tab-label">Learn</span></button>
+    <button type="button" data-view="log" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.5 11h5M9.5 15h3.5"/></svg></span><span class="tab-label">My Log</span></button>
+    <button type="button" data-view="account" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c1.4-3.8 4.2-5.4 7.5-5.4s6.1 1.6 7.5 5.4"/></svg></span><span class="tab-label">Account</span></button>
+    <button type="button" data-view="coachhub" class="tab coach-tab" hidden><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.3 13.2l2 2 3.6-3.8"/></svg></span><span class="tab-label">Coach</span></button>
   </nav>
 </header>
 
@@ -110,10 +100,56 @@
     <div id="home-content"><p class="muted">Loading…</p></div>
   </section>
 
+  <!-- TRAIN (hub) -->
+  <section id="view-train" class="view">
+    <h1>Train</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Everything you train with, in one place — the workouts, the plan for the season, and your warm-ups.</p>
+    <div class="menu-list">
+      <button type="button" class="menu-item" data-view="library">Workouts <span>Find a workout by type, distance, or day</span></button>
+      <button type="button" class="menu-item" data-view="season">Season Plan <span>The week-by-week plan for the whole season</span></button>
+      <button type="button" class="menu-item" data-view="cards">Warm-Up Cards <span>The three printed cards: light day, speed day, circuit day</span></button>
+      <button type="button" class="menu-item" data-view="drills">Warm-Up Drills <span>The 16 standard drills, Parts A &amp; B</span></button>
+      <button type="button" class="menu-item" data-view="qtr">400m Training <span>The full 400m framework and the QTR sessions</span></button>
+    </div>
+  </section>
+
+  <!-- LEARN (hub) -->
+  <section id="view-learn" class="view">
+    <h1>Learn</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Watch how it is done, look up any word, and fuel the work.</p>
+    <div class="menu-list">
+      <button type="button" class="menu-item" data-view="videos">Videos <span>Watch a demo of any drill or lift</span></button>
+      <button type="button" class="menu-item" data-view="definitions">Definitions <span>Every term in plain language, with the coaching cue</span></button>
+      <button type="button" class="menu-item" data-view="nutrition">Nutrition <span>What to eat and when — practice days and meet days</span></button>
+      <button type="button" class="menu-item" data-view="education">Coach Education <span>Clinics and courses for coaches</span></button>
+      <button type="button" class="menu-item" data-view="guide">How to use this app <span>The whole system in plain words</span></button>
+    </div>
+  </section>
+
+  <!-- COACH (hub, coaches only) -->
+  <section id="view-coachhub" class="view">
+    <h1>Coach</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Coach tools only — athletes never see this section. Everything for running the team lives here.</p>
+    <div class="menu-list">
+      <button type="button" class="menu-item" data-view="coach">Today's Checklist <span>Each group's workout for the day, with check-offs</span></button>
+      <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
+      <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
+      <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
+      <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
+      <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
+      <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access — under Account</span></button>
+    </div>
+  </section>
+
   <!-- LIBRARY -->
   <section id="view-library" class="view">
-    <h1>Workout library</h1>
+    <h1>Workouts</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Find a workout by type, distance, or day. Tap any workout to see the full session — reps, rest, and coaching cues.</p>
     <div class="filters card">
       <input id="lib-search" type="search" placeholder="Search by name or code (try “fly” or MAX-01)">
       <div class="filter-row">
@@ -133,9 +169,10 @@
 
   <!-- SEASON -->
   <section id="view-season" class="view">
-    <h1>Season plan 2026-27</h1>
+    <h1>Season Plan</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="muted">29 weeks. Mini peak <strong>Sat Feb 20, 2027</strong> (indoor championships) · Major peak <strong>Sat May 15, 2027</strong> (outdoor championships).</p>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">See what every week of the season looks like, day by day. 29 weeks. Mini peak <strong>Sat Feb 20, 2027</strong> (indoor championships) · Major peak <strong>Sat May 15, 2027</strong> (outdoor championships).</p>
     <div class="card">
       <label for="week-jump">Jump to week</label>
       <div class="filter-row">
@@ -152,8 +189,9 @@
 
   <!-- LOG -->
   <section id="view-log" class="view">
-    <h1>My practice log</h1>
+    <h1>My Log</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Your private practice log. Save what you actually ran, so you can look back at it — only you can see it.</p>
     <div id="log-gate"></div>
     <div id="log-main" hidden>
       <form id="log-form" class="card">
@@ -185,7 +223,8 @@
   <section id="view-cards" class="view">
     <h1>Warm-Up Cards</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="muted">The three laminated cards. Print any card on its own — one Letter page, single-sided — straight from here.</p>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The warm-up for today, on three cards. Print any card on its own — one Letter page, single-sided — straight from here.</p>
 
     <article class="wu-card wu-light" id="wu-card-1">
       <header class="wu-head">
@@ -362,6 +401,8 @@
   <section id="view-nutrition" class="view">
     <h1>Nutrition</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">What to eat and when — on practice days, meet days, and lifting days.</p>
     <p class="muted">Fueling education for Cadet sprinters — principles, plates, and timing. No diet plans and no calorie counting: eat to match the work, protein at every meal, and never train on empty. Ranges below are general education guidelines for hard-training athletes, in the coach's words.</p>
 
     <article class="nu-card nu-scarlet">
@@ -457,6 +498,8 @@
   <section id="view-videos" class="view">
     <h1>Videos</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Watch a demo of any drill or lift before you try it.</p>
     <p class="muted">The demo library — every video picked and checked by hand. Tap a card to play it right here.</p>
     <div class="filters card">
       <input id="vid-search" type="search" placeholder="Search videos (try “squat”, “wickets”, “hip”)">
@@ -470,6 +513,8 @@
   <section id="view-definitions" class="view">
     <h1>Definitions</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Look up any word the coach uses — defined in plain language, with the coaching cue where there is one.</p>
     <p class="muted">Every exercise, every type of running, and every program term in this app — defined in plain language, with the coaching cue where there is one.</p>
     <div class="filters card">
       <input id="def-search" type="search" placeholder="Search definitions (try “tempo”, “A-skips”, “taper”)">
@@ -483,6 +528,8 @@
   <section id="view-education" class="view">
     <h1>Coach Education</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Clinics and courses for coaches — local, national, and online.</p>
     <p class="muted">Trainings and courses for sprint and strength coaches — local to the DC metro, national events worth the trip, and online options you can do from anywhere. Researched and linked to each provider's own page.</p>
     <div class="filters card">
       <input id="edu-search" type="search" placeholder="Search trainings (try “ALTIS”, “USATF”, “strength”)">
@@ -504,6 +551,8 @@
   <section id="view-testing" class="view">
     <h1>Testing</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record test days and results — lifts, jumps, and pull-ups — and see ranked tables and personal bests. Coaches only.</p>
     <div id="testing-main"></div>
   </section>
 
@@ -511,65 +560,67 @@
   <section id="view-top" class="view">
     <h1>Top Athletes</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Weekly numbers for your starred athletes. Enter them each week and watch the graphs move. Coaches only.</p>
     <div id="top-main"></div>
   </section>
 
   <!-- HEALTH -->
   <section id="view-health" class="view">
-    <h1>Aches &amp; pains</h1>
+    <h1>Aches &amp; Pains</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record what an athlete reports to you, and track it until it clears.</p>
     <p class="muted">Your private notebook: record what an athlete reports to you — an ache, a pain, something tight — and track it until it clears. Athletes never see this; it is coach-only.</p>
     <div id="health-main"></div>
   </section>
 
   <!-- GROUPS (coach) -->
   <section id="view-groups" class="view">
-    <h1>Training groups</h1>
+    <h1>Roster &amp; Groups</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Every athlete on the roster, their training group, and their events. Add athletes here, one at a time or in bulk. Coaches only.</p>
     <div id="groups-main"></div>
   </section>
 
   <!-- COACH -->
   <section id="view-coach" class="view">
-    <h1>Coach view</h1>
+    <h1>Today's Checklist</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Each group's workout for the day. Change the plan when you need to, and check off who finished. Coaches only.</p>
     <div id="coach-main"></div>
   </section>
 
   <!-- INVENTORY (coach) -->
   <section id="view-inventory" class="view">
-    <h1>Equipment inventory</h1>
+    <h1>Equipment Inventory</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">What gear the program owns, how much of it, and where it lives.</p>
     <p class="muted">The program's gear, counted by you: what you have, how many, what shape it is in, and where it lives. Coach-only — athletes never see this.</p>
     <div id="inventory-main"></div>
   </section>
 
-  <!-- MORE -->
-  <section id="view-more" class="view">
-    <h1>More</h1>
-    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <div class="menu-list">
-      <button class="menu-item" data-goto="drills">Warm-up drills <span>16 drills, Parts A &amp; B</span></button>
-      <button class="menu-item" data-goto="qtr">400m Training <span>The full 400m framework and the QTR sessions</span></button>
-      <button class="menu-item" data-goto="guide">How to use this <span>The system in plain words</span></button>
-      <button class="menu-item" data-goto="account">Account <span id="menu-account-note">Log in or create an account</span></button>
-    </div>
-  </section>
-
   <!-- DRILLS -->
   <section id="view-drills" class="view">
-    <button class="btn secondary back" data-goto="more">← More</button>
-    <h1>Warm-up drills</h1>
+    <button class="btn secondary back" data-goto="train">← Train</button>
+    <h1>Warm-Up Drills</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The 16 standard drills — how each one goes, and a demo for most of them.</p>
     <p class="muted">The standard warm-up series. Part A warms up, Part B mobilizes and drills sprint mechanics.</p>
     <div id="drill-list"></div>
   </section>
 
   <!-- 400M TRAINING -->
   <section id="view-qtr" class="view">
-    <button class="btn secondary back" data-goto="more">← More</button>
+    <button class="btn secondary back" data-goto="train">← Train</button>
     <h1>400m Training</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The full 400m framework and the QTR sessions.</p>
     <p class="muted">The long work the 100/200 plan leaves out: 500s and 600s, lactate days, split runs, and practicing the 400 race itself. Sessions are the QTR rows in the workout library.</p>
     <div id="qtr-list"></div>
     <div class="card doc" id="qtr-doc"></div>
@@ -577,20 +628,32 @@
 
   <!-- GUIDE -->
   <section id="view-guide" class="view">
-    <button class="btn secondary back" data-goto="more">← More</button>
-    <h1>How to use this</h1>
+    <button class="btn secondary back" data-goto="learn">← Learn</button>
+    <h1>How to use this app</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The whole system in plain words — hard days, easy days, and how the plan fits together.</p>
     <div class="card doc" id="guide-doc"></div>
   </section>
 
   <!-- ACCOUNT -->
   <section id="view-account" class="view">
-    <button class="btn secondary back" data-goto="more">← More</button>
     <h1>Account</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Log in or create an account. Coaches manage coach accounts and assistant-coach invites here.</p>
+    <p class="muted" id="menu-account-note">Log in or create an account</p>
     <div id="account-main"></div>
   </section>
 </main>
+
+<nav class="tabbar primary-nav" id="tab-bar" aria-label="Main">
+  <button type="button" data-view="home" class="tab active"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="tab-label">Today</span></button>
+  <button type="button" data-view="train" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L9.8 22l8.7-11.5H12L13 2z"/></svg></span><span class="tab-label">Train</span></button>
+  <button type="button" data-view="learn" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7.3 4.2 4 4.2v14c3.3 0 6 .6 8 2.3 2-1.7 4.7-2.3 8-2.3v-14c-3.3 0-6 .6-8 2.3z"/><path d="M12 6.5v14"/></svg></span><span class="tab-label">Learn</span></button>
+  <button type="button" data-view="log" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.5 11h5M9.5 15h3.5"/></svg></span><span class="tab-label">My Log</span></button>
+  <button type="button" data-view="account" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c1.4-3.8 4.2-5.4 7.5-5.4s6.1 1.6 7.5 5.4"/></svg></span><span class="tab-label">Account</span></button>
+  <button type="button" data-view="coachhub" class="tab coach-tab" hidden><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.3 13.2l2 2 3.6-3.8"/></svg></span><span class="tab-label">Coach</span></button>
+</nav>
 
 <div id="media-modal" class="media-modal" hidden>
   <div class="media-box card">

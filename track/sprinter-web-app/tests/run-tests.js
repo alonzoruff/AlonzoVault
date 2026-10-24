@@ -199,6 +199,39 @@ async function main() {
     appJs.status === 200 && appJs.text.includes('renderInventory') &&
     appJs.text.includes('/api/inventory'));
 
+  /* UX reorganization: five primary destinations (Today, Train,
+     Learn, My Log, Account) + a coach-only Coach area; grouped views
+     under hub views with a shared sub-navigation. Nothing removed —
+     every pre-existing view section is still in the page. */
+  check('hub views for Train, Learn and Coach are in the served page',
+    pageHtml.text.includes('id="view-train"') && pageHtml.text.includes('id="view-learn"') &&
+    pageHtml.text.includes('id="view-coachhub"'));
+  check('primary nav carries the five destinations plus the coach area',
+    ['data-view="home"', 'data-view="train"', 'data-view="learn"', 'data-view="log"',
+     'data-view="account"', 'data-view="coachhub"'].every(s => pageHtml.text.includes(s)));
+  check('mobile bottom tab bar is in the served page',
+    pageHtml.text.includes('id="tab-bar"') && pageHtml.text.includes('tabbar'));
+  check('every pre-existing view section survived the reorganization',
+    ['view-home', 'view-library', 'view-season', 'view-log', 'view-cards', 'view-nutrition',
+     'view-videos', 'view-definitions', 'view-education', 'view-testing', 'view-top',
+     'view-health', 'view-groups', 'view-coach', 'view-inventory', 'view-drills',
+     'view-qtr', 'view-guide', 'view-account']
+      .every(id => pageHtml.text.includes('id="' + id + '"')));
+  check('grouped views keep a sub-navigation slot',
+    (pageHtml.text.match(/subnav-slot/g) || []).length >= 12,
+    (pageHtml.text.match(/subnav-slot/g) || []).length);
+  check('app JS maps views to nav areas and renders the sub-nav',
+    appJs.text.includes('VIEW_AREA') && appJs.text.includes('GROUP_SUBNAV') &&
+    appJs.text.includes('renderSubnav'));
+  check('app JS has the dismissible Start here strip (localStorage)',
+    appJs.text.includes('start-strip') && appJs.text.includes('swa-start-here') &&
+    appJs.text.includes('start-dismiss'));
+  check('app JS surfaces today\'s warm-up card on the home view',
+    appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
+  const swJs = await apiText(null, '/sw.js');
+  check('service worker cache is bumped to v11',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v11"), swJs.text.slice(0, 80));
+
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
   check('first account is coach', r.json.role === 'coach', r.json.role);
@@ -845,6 +878,139 @@ async function main() {
   r = await api(coach, 'DELETE', '/api/coach-invites/ghost@test.com');
   check('removing an unknown email is 404', r.status === 404, r.status);
 
+  /* ---------------- warm-up card editor ---------------- */
+  // The shipped cards live in the page; the editor wiring lives in the JS.
+  check('warm-up card shell is unchanged (3 cards + print buttons)',
+    pageHtml.text.includes('id="wu-card-1"') && pageHtml.text.includes('id="wu-card-2"') &&
+    pageHtml.text.includes('id="wu-card-3"') && pageHtml.text.includes('data-print-card="wu-card-1"') &&
+    pageHtml.text.includes('data-print-card="wu-card-2"') && pageHtml.text.includes('data-print-card="wu-card-3"'));
+  check('warm-up editor wiring is in the served JS',
+    appJs.text.includes('Edit this card') && appJs.text.includes('/api/warmup-cards') &&
+    appJs.text.includes('/api/coach/warmup-cards/'));
+
+  r = await api(null, 'GET', '/api/warmup-cards');
+  check('warm-up cards start with no edits for a fresh viewer',
+    r.status === 200 && r.json.cards && Object.keys(r.json.cards).length === 0, r.json);
+  r = await api(null, 'GET', '/api/coach/warmup-cards');
+  check('warm-up coach state without login is 401', r.status === 401, r.status);
+  r = await api(null, 'PUT', '/api/coach/warmup-cards/wu-card-1', { sections: [] });
+  check('warm-up save without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/coach/warmup-cards');
+  check('athlete is 403 on the warm-up coach state', r.status === 403, r.status);
+  r = await api(athlete, 'PUT', '/api/coach/warmup-cards/wu-card-1', { sections: [] });
+  check('athlete is 403 on warm-up save', r.status === 403, r.status);
+  r = await api(athlete, 'DELETE', '/api/coach/warmup-cards/wu-card-1');
+  check('athlete is 403 on warm-up reset', r.status === 403, r.status);
+
+  r = await api(coach, 'GET', '/api/coach/warmup-cards');
+  check('coach state lists all three cards, none edited',
+    r.status === 200 && r.json.cards.length === 3 &&
+    r.json.cards.every(c => c.edited === false && c.sections === null),
+    r.json && r.json.cards);
+
+  /* An edit of Card 1 (Light): section 1 gains a marker item (add),
+     section 2 swaps its first two items (reorder) and drops
+     "Walking quad pulls" (remove). */
+  const wuEdit1 = {
+    sections: [
+      { items: [
+        { name: 'Jog', detail: '400-800m easy \u2014 relaxed shoulders, easy breathing' },
+        { name: 'Skipping', detail: '2 x 20m \u2014 regular skip and arm-swing skip only, keep it light' },
+        { name: 'Test Marker Drill', detail: '2 x 20m \u2014 restart marker' },
+      ] },
+      { items: [
+        { name: 'Lateral leg swings', detail: '10 per leg \u2014 hips stay square while the leg opens and closes' },
+        { name: 'Forward leg swings', detail: '10 per leg \u2014 tall posture, no trunk swing' },
+        { name: 'Walking knee hugs', detail: '15-20m \u2014 rise onto the toe of the stance leg' },
+        { name: 'Hip circles', detail: '5 each direction, per leg \u2014 knee at 90 degrees, big controlled circle' },
+        { name: 'Karaoke', detail: '20m each direction, easy \u2014 opens the hips, stay light on your feet' },
+      ] },
+      { items: [
+        { name: 'Ankle dribbles', detail: '20m \u2014 short quick steps on the balls of the feet' },
+        { name: 'Relaxed strides', detail: '2 x 60m at about 70% \u2014 finish each stride slightly faster, stay relaxed' },
+      ] },
+      { items: [
+        { name: 'Breathing easy', detail: 'you can talk in full sentences' },
+      ] },
+    ],
+  };
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-1', wuEdit1);
+  check('coach warm-up save is 200', r.status === 200 && r.json.ok === true, r.status);
+  r = await api(null, 'GET', '/api/warmup-cards');
+  const pubCard1 = r.json.cards && r.json.cards['wu-card-1'];
+  check('fresh viewer sees the edited card, others untouched',
+    r.status === 200 && !!pubCard1 && !r.json.cards['wu-card-2'] && !r.json.cards['wu-card-3'],
+    r.json && Object.keys(r.json.cards || {}));
+  check('edited card shows the add, the reorder, and the removal',
+    !!pubCard1 &&
+    pubCard1.sections[0].items.some(i => i.name === 'Test Marker Drill') &&
+    pubCard1.sections[1].items.map(i => i.name).join('|') ===
+      'Lateral leg swings|Forward leg swings|Walking knee hugs|Hip circles|Karaoke' &&
+    !JSON.stringify(pubCard1).includes('Walking quad pulls'),
+    pubCard1 && pubCard1.sections[1].items.map(i => i.name));
+  r = await api(coach, 'GET', '/api/coach/warmup-cards');
+  check('coach state flags card 1 as edited only',
+    r.status === 200 &&
+    r.json.cards.find(c => c.id === 'wu-card-1').edited === true &&
+    r.json.cards.find(c => c.id === 'wu-card-2').edited === false,
+    r.json.cards);
+
+  // An assistant (non-owner) coach can edit too — that is the point.
+  const wuEdit3 = {
+    sections: [
+      { items: [{ name: 'Jog', detail: '400m easy' }] },
+      { items: [{ name: 'Leg swings', detail: 'forward + lateral, 10 per leg' }] },
+      { items: [{ name: 'Glute bridges', detail: 'x 10' }] },
+      { items: [{ name: 'Easy strides or spin', detail: '2 x 60m relaxed' }] },
+    ],
+  };
+  r = await api(assistant, 'PUT', '/api/coach/warmup-cards/wu-card-3', wuEdit3);
+  check('assistant coach can save a warm-up edit', r.status === 200 && r.json.ok === true, r.status);
+  r = await api(null, 'GET', '/api/warmup-cards');
+  check('assistant edit is live for fresh viewers',
+    !!(r.json.cards && r.json.cards['wu-card-3']), r.json && Object.keys(r.json.cards || {}));
+  r = await api(coach, 'DELETE', '/api/coach/warmup-cards/wu-card-3');
+  check('owner reset of the assistant edit is 200', r.status === 200 && r.json.reset === true, r.json);
+
+  // Invalid payloads are clean 400s.
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-9', wuEdit1);
+  check('warm-up save with a bad card id is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-2', { sections: wuEdit1.sections.slice(0, 3) });
+  check('warm-up save with the wrong section count is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-2', { sections: 'nope' });
+  check('warm-up save with non-array sections is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-2',
+    { sections: [{ items: [{ name: '   ' }] }, { items: [] }, { items: [] }, { items: [] }] });
+  check('warm-up save with an empty item name is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-2',
+    { sections: [{ items: [{ name: 'x'.repeat(81) }] }, { items: [] }, { items: [] }, { items: [] }] });
+  check('warm-up save with an oversized name is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-2',
+    { sections: [{ items: [{ name: 'Ok', detail: 'x'.repeat(241) }] }, { items: [] }, { items: [] }, { items: [] }] });
+  check('warm-up save with an oversized detail is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-2',
+    { sections: [{ items: Array.from({ length: 31 }, (_, i) => ({ name: 'Item ' + i })) }, { items: [] }, { items: [] }, { items: [] }] });
+  check('warm-up save with too many items in a section is 400', r.status === 400, r.status);
+  r = await api(coach, 'DELETE', '/api/coach/warmup-cards/wu-card-9');
+  check('warm-up reset with a bad card id is 400', r.status === 400, r.status);
+  r = await api(null, 'GET', '/api/warmup-cards');
+  check('the invalid saves changed nothing',
+    r.status === 200 && !!r.json.cards['wu-card-1'] && !r.json.cards['wu-card-2'],
+    r.json && Object.keys(r.json.cards || {}));
+
+  // Reset restores the shipped card: the override disappears.
+  r = await api(coach, 'DELETE', '/api/coach/warmup-cards/wu-card-1');
+  check('warm-up reset is 200 and reports the reset', r.status === 200 && r.json.reset === true, r.json);
+  r = await api(null, 'GET', '/api/warmup-cards');
+  check('after reset a fresh viewer gets the shipped card again',
+    r.status === 200 && Object.keys(r.json.cards).length === 0, r.json);
+  r = await api(coach, 'DELETE', '/api/coach/warmup-cards/wu-card-1');
+  check('resetting an unedited card is a clean no-op', r.status === 200 && r.json.reset === false, r.json);
+
+  // Save once more so the restart check below can prove persistence.
+  r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-1', wuEdit1);
+  check('coach re-saves the card 1 edit for the restart check', r.status === 200, r.status);
+
   return { coach, inventoryId: invBlocks };
 }
 
@@ -884,6 +1050,11 @@ async function waitForServer(tries = 60) {
     check('inventory survives a server restart',
       rr.status === 200 && rr.json.items.some(i => i.id === ctx.inventoryId),
       rr.json && rr.json.items && rr.json.items.length);
+    const rw = await api(null, 'GET', '/api/warmup-cards');
+    check('warm-up card edits survive a server restart',
+      rw.status === 200 && !!rw.json.cards['wu-card-1'] &&
+      JSON.stringify(rw.json.cards['wu-card-1']).includes('Test Marker Drill'),
+      rw.json && Object.keys(rw.json.cards || {}));
 
     /* Env-seeded invites (COACH_INVITE_EMAILS): a fresh store gets the
        invites, a seeded email registers as coach, and a seeded invite
