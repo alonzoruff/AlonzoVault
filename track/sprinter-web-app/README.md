@@ -19,12 +19,73 @@ will live under your hosting account, in your name.
 - **16 warm-up drills**, the **29-week season plan** (mini peak Feb 20,
   2027 · major peak May 15, 2027), the **400m Training** section, and the
   plain-English guide.
-- **Accounts**: each coach registers with an email and password. Passwords
-  are scrambled with a strong one-way hash (scrypt) — the real password is
-  never stored. Each person sees only their own log and swaps.
-- **Saved per person**: practice log entries, and easy-day cross-training
-  swaps on the season plan. Hard-day spacing (the 48-hour rule) is checked
-  automatically on every week.
+- **Accounts are for coaches only.** Athletes never log in and never enter
+  data — the coach records everything. The first account registered becomes
+  the coach account; a coach can promote other accounts from the Account
+  page. Passwords are scrambled with a strong one-way hash (scrypt) — the
+  real password is never stored. Any non-coach account gets a firm "no" from
+  every team-data screen.
+- **Saved per coach account**: your own practice log entries, and easy-day
+  cross-training swaps on the season plan. Hard-day spacing (the 48-hour
+  rule) is checked automatically on every week.
+
+## The coach system
+
+Everything below lives behind a coach login and hangs off **athlete
+profiles** — roster entries you manage (name, training group, event tags
+like sprinter / jumper / hurdler, and a Top Athlete star). No athlete
+accounts, no athlete typing.
+
+- **Groups & roster**: create training groups, add athletes one at a time,
+  or use the **bulk roster import** in the Groups view — paste lines like
+  `Last, First | Group | sprinter, hurdler | yes` (or a CSV with a
+  `name,group,events,top` header) and the app creates the groups and
+  profiles in one go. It reports what it created, what it skipped as a
+  duplicate, and any line it could not read — one bad line never blocks
+  the rest. Re-importing the same list creates no duplicates. Filter the
+  roster by group, event, or Top Athletes; archive athletes who leave
+  (their records stay saved).
+- **Assignments & the daily checklist**: every group automatically gets
+  the season plan's workout for each day — zero setup. In the Coach view
+  you can override any group's workout for any date (with a short note),
+  then check off who completed it, with optional marks and a 1–5 "how it
+  felt" per athlete. Completions land on the athlete's profile record.
+- **Testing**: build test days (for example "Fall Weight Room Testing")
+  from the preloaded battery — back squat, trap bar deadlift, bench press,
+  hang clean, power clean, vertical jump, broad jump, pull-ups — or add
+  your own tests. Enter results walking the roster with your phone: lifts
+  can go in as a top single or as weight × reps, and the app stores an
+  estimated 1RM (Epley formula) next to the raw lift. You get a live
+  progress grid, a ranked table per test, and each athlete's history with
+  personal bests flagged.
+- **Top Athletes weekly tracker**: starred athletes get weekly numbers —
+  fly 30m time, vertical jump, broad jump, estimated 1RMs for squat, hang
+  clean and bench, body weight (plus any metric you add). One value per
+  athlete per week (weeks start on Mondays); saving again overwrites.
+  Graphs are drawn right in the app: one chart per athlete per metric with
+  their best marked and the change since their first week colored by
+  whether lower or higher is better, plus an overlay chart that puts
+  every Top Athlete's line for a metric on one graph.
+- **Aches & pains**: when an athlete tells you something hurts, you file
+  it under their profile — body area, side, what it feels like, pain 1–10,
+  when it started, whether it changed or stopped their training, and a
+  note. High pain (7+) and "stopped me" concerns float to the top until
+  you work them through New → Monitoring → Cleared, with room for a coach
+  note ("sent to athletic trainer"). It is a private coach notebook;
+  athletes never see it.
+- **Demo videos**: any drill or test can carry a demo — paste a YouTube
+  link (or a .gif link) onto the movement and a Demo button appears;
+  tapping it plays the video in the app without loading anything heavy
+  until you tap. Handy mid-test-day: two taps and the athlete sees the
+  lift done right.
+- **Warm-Up Cards & Nutrition**: the three printable warm-up cards (Light,
+  Speed Day, Circuit Day) live in their own section, each with a print
+  button that prints just that card on one Letter page, ready to laminate.
+  The Nutrition section is six plain-language fueling cards for high
+  school sprinters — the everyday plate (fuel follows the training day),
+  the pre-practice timing ladder, recovery fueling, hydration, a meet-day
+  timeline, and weight-room day fueling — plus an honest note on
+  supplements: food first, and no supplement pushing for school athletes.
 
 ## Run it on your own computer (to look at it)
 
@@ -39,8 +100,8 @@ Open http://localhost:3000 in your browser. That's the whole thing —
 there is nothing to install first, because the app uses zero outside
 packages. Stop it with Ctrl+C.
 
-The first account you register can be yours — there is no special admin
-account; every account works the same way.
+Register the first account with your own email — that account is the
+coach account and unlocks the whole coach system described below.
 
 ## Put it on the internet (deploy)
 

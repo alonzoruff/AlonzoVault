@@ -29,6 +29,13 @@
     <button data-view="library" class="tab">Workouts</button>
     <button data-view="season" class="tab">Season Plan</button>
     <button data-view="log" class="tab">My Log</button>
+    <button data-view="cards" class="tab">Warm-Up Cards</button>
+    <button data-view="nutrition" class="tab">Nutrition</button>
+    <button data-view="testing" class="tab coach-tab" hidden>Testing</button>
+    <button data-view="top" class="tab coach-tab" hidden>Top Athletes</button>
+    <button data-view="health" class="tab coach-tab" hidden>Health</button>
+    <button data-view="groups" class="tab coach-tab" hidden>Groups</button>
+    <button data-view="coach" class="tab coach-tab" hidden>Coach</button>
     <button data-view="more" class="tab">More</button>
   </nav>
 </header>
@@ -170,6 +177,314 @@
     </div>
   </section>
 
+  <!-- WARM-UP CARDS -->
+  <section id="view-cards" class="view">
+    <h1>Warm-Up Cards</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="muted">The three laminated cards. Print any card on its own — one Letter page, single-sided — straight from here.</p>
+
+    <article class="wu-card wu-light" id="wu-card-1">
+      <header class="wu-head">
+        <div class="wu-brand">ST. JOHN'S COLLEGE HIGH SCHOOL <span>// CADETS TRACK &amp; FIELD</span></div>
+        <div class="wu-title-row">
+          <div>
+            <div class="wu-num">01</div>
+            <h2>LIGHT<br>WARM-UP</h2>
+            <div class="wu-sub">Recovery / Tempo Day</div>
+          </div>
+          <div class="wu-time"><strong>10 min</strong><span>TOTAL TIME</span></div>
+        </div>
+        <p class="wu-use">Use on: Tempo days, recovery days, cross-training days, and the day after a hard day. If the work is low, the warm-up stays low.</p>
+        <div class="wu-tags"><span>TRAINERS ONLY</span><span>GRASS OR TRACK</span><span>NO SPIKES</span><span>NO PLYOS</span></div>
+        <p class="wu-goal"><strong>GOAL</strong> Get blood moving and joints loose. You should finish warm and relaxed, never breathing hard. This warm-up should never become a workout.</p>
+      </header>
+      <section class="wu-sec">
+        <h3><span class="wu-step">1</span> RAISE <em>3 min — easy and conversational</em></h3>
+        <ul class="wu-list">
+          <li><strong>Jog</strong> — 400-800m easy — relaxed shoulders, easy breathing</li>
+          <li><strong>Skipping</strong> — 2 x 20m — regular skip and arm-swing skip only, keep it light</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">2</span> MOBILITY <em>5 min — walk the line, no rushing</em></h3>
+        <ul class="wu-list">
+          <li><strong>Forward leg swings</strong> — 10 per leg — tall posture, no trunk swing</li>
+          <li><strong>Lateral leg swings</strong> — 10 per leg — hips stay square while the leg opens and closes</li>
+          <li><strong>Walking knee hugs</strong> — 15-20m — rise onto the toe of the stance leg</li>
+          <li><strong>Walking quad pulls</strong> — 15-20m — heel to glute, reach tall with the opposite arm</li>
+          <li><strong>Hip circles</strong> — 5 each direction, per leg — knee at 90 degrees, big controlled circle</li>
+          <li><strong>Karaoke</strong> — 20m each direction, easy — opens the hips, stay light on your feet</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">3</span> WAKE UP <em>2 min — smooth, not fast</em></h3>
+        <ul class="wu-list">
+          <li><strong>Ankle dribbles</strong> — 20m — short quick steps on the balls of the feet</li>
+          <li><strong>Relaxed strides</strong> — 2 x 60m at about 70% — finish each stride slightly faster, stay relaxed</li>
+        </ul>
+      </section>
+      <section class="wu-sec wu-finish">
+        <h3>FINISH CHECK <em>Before you start the day's work</em></h3>
+        <ul class="wu-list">
+          <li><strong>Breathing easy</strong> — you can talk in full sentences</li>
+          <li><strong>Hips and ankles loose</strong> — no stiffness left from yesterday</li>
+          <li><strong>Warm, not tired</strong> — if not, walk one more easy lap and repeat leg swings</li>
+        </ul>
+      </section>
+      <p class="wu-rule"><strong>Do not add:</strong> No plyos, no extra strides, no sprint drills at speed. Save that work for a hard day — that is the whole point of a light day.</p>
+      <p class="wu-coach"><strong>COACH RULE:</strong> If you are breathing hard, you went too hard. Low days stay low — that is what makes the next hard day possible.</p>
+      <footer class="wu-foot">Card 1 of 3 — Based on WUP-03 Tempo-Day Warm-Up (10 min) and drills DRL-01 to DRL-16. Print single-sided, laminate, keep with the tempo-day gear.</footer>
+      <button class="btn primary wu-print" type="button" data-print-card="wu-card-1">Print this card</button>
+    </article>
+
+    <article class="wu-card wu-speed" id="wu-card-2">
+      <header class="wu-head">
+        <div class="wu-brand">ST. JOHN'S COLLEGE HIGH SCHOOL <span>// CADETS TRACK &amp; FIELD</span></div>
+        <div class="wu-title-row">
+          <div>
+            <div class="wu-num">02</div>
+            <h2>SPEED DAY<br>WARM-UP</h2>
+            <div class="wu-sub">Acceleration / Max Velocity / Speed Endurance</div>
+          </div>
+          <div class="wu-time"><strong>20-25 min</strong><span>TOTAL TIME</span></div>
+        </div>
+        <p class="wu-use">Use on: Every high day — block work, fly runs, max velocity, and speed endurance. Full routine, every time. Speed is never done cold.</p>
+        <div class="wu-tags"><span>TRAINERS, THEN SPIKES</span><span>TRACK</span><span>PLYOS INCLUDED</span><span>BLOCKS IN PART 4</span></div>
+        <p class="wu-goal"><strong>GOAL</strong> Prime the body for 95% and above: warm, loose, springy, and sharp — without getting tired in the warm-up.</p>
+      </header>
+      <section class="wu-sec">
+        <h3><span class="wu-step">1</span> RAISE — PART A <em>Jog and skipping series</em></h3>
+        <ul class="wu-list">
+          <li><strong>Jog + progressive strides</strong> — 800m + 4 x 60m — finish each stride slightly faster, last near 80%</li>
+          <li><strong>Skipping series</strong> — 4 x 20m — regular, arm swing, for height, for distance</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">2</span> DYNAMIC + SPRINT DRILLS — PART B <em>15-20m each / drills 20m x 2</em></h3>
+        <ul class="wu-list wu-cols">
+          <li><strong>Leg swings</strong> — fwd + lateral, 10/leg</li>
+          <li><strong>A-skips</strong> — toe up, paw under hip</li>
+          <li><strong>Knee hugs / Quad pulls</strong> — 15-20m</li>
+          <li><strong>B-skips</strong> — extend, then paw down</li>
+          <li><strong>Lunges with twist</strong> — 15-20m</li>
+          <li><strong>High knees</strong> — tall, fast contact</li>
+          <li><strong>Inchworms</strong> — 15-20m</li>
+          <li><strong>Butt kicks</strong> — heels to glutes, knees down</li>
+          <li><strong>Hip circles</strong> — 5/dir/leg</li>
+          <li><strong>Straight-leg bounds</strong> — strike under hips</li>
+          <li><strong>Karaoke</strong> — 20m each way</li>
+          <li><strong>Ankle dribbles</strong> — 20m, quick and short</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">3</span> PLYO PRIMER <em>Quality only — full recovery, low contacts</em></h3>
+        <ul class="wu-list">
+          <li><strong>Pogo hops</strong> — 2 x 10 — quiet, springy, stiff ankles; spring off the ground, do not sink</li>
+          <li><strong>Countermovement jumps</strong> — 2 x 3 — explode up, stick the landing</li>
+          <li><strong>Alternating bounds</strong> — 2 x 20m — powerful push, do not reach</li>
+          <li><strong>Single-leg hops</strong> — 1-2 x 10m per leg — speed days only, and only when fresh</li>
+        </ul>
+        <p class="wu-stop"><strong>Stop rule:</strong> If landings get loud or heavy, the plyo primer is done. Quality contacts over quantity, always.</p>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">4</span> BUILD — PART C <em>Spikes on</em></h3>
+        <ul class="wu-list">
+          <li><strong>Build-ups</strong> — 2-3 x 60-80m to session speed — tall, relaxed, strike under the hip</li>
+          <li><strong>Block starts</strong> — 1-2 on acceleration days — own the first three steps, gradual rise</li>
+        </ul>
+      </section>
+      <p class="wu-coach"><strong>FORM CHECK:</strong> Tall with a slight whole-body lean. Toe up. Arms cheek to pocket, opposite arm and leg together. If times are 3% off standard or form breaks down, the high session ends.</p>
+      <footer class="wu-foot">Card 2 of 3 — Based on WUP-01 Standard Sprint Warm-Up (Parts A/B/C) with PLY-01 / PLY-02 plyo primer and drills DRL-01 to DRL-16. Print single-sided, laminate, keep at the start line.</footer>
+      <button class="btn primary wu-print" type="button" data-print-card="wu-card-2">Print this card</button>
+    </article>
+
+    <article class="wu-card wu-circuit" id="wu-card-3">
+      <header class="wu-head">
+        <div class="wu-brand">ST. JOHN'S COLLEGE HIGH SCHOOL <span>// CADETS TRACK &amp; FIELD</span></div>
+        <div class="wu-title-row">
+          <div>
+            <div class="wu-num">03</div>
+            <h2>CIRCUIT DAY<br>WARM-UP</h2>
+            <div class="wu-sub">Strength Circuit / Weights / Cross-Training Circuit</div>
+          </div>
+          <div class="wu-time"><strong>12-15 min</strong><span>TOTAL TIME</span></div>
+        </div>
+        <p class="wu-use">Use on: Circuit and weight-room days, and cross-training circuit days. Built to flow straight into Round 1 — no standing around between the warm-up and the work.</p>
+        <div class="wu-tags"><span>TRAINERS</span><span>TRACK OR WEIGHT ROOM</span><span>MINI-BANDS READY</span><span>MATS OUT</span></div>
+        <p class="wu-goal"><strong>GOAL</strong> Raise temperature, open the hips, and switch on glutes and core, so the first circuit round is already clean.</p>
+      </header>
+      <section class="wu-sec">
+        <h3><span class="wu-step">1</span> RAISE <em>3 min — keep moving</em></h3>
+        <ul class="wu-list">
+          <li><strong>Jog</strong> — 400m easy — or 2 min easy bike / rower if you are already in the weight room</li>
+          <li><strong>Skipping + Karaoke</strong> — 2 x 20m / 20m each way — light, quick feet</li>
+          <li><strong>Inchworms</strong> — 15-20m — legs straight to load the hamstrings</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">2</span> MOBILITY <em>4 min</em></h3>
+        <ul class="wu-list">
+          <li><strong>Leg swings</strong> — forward + lateral, 10 per leg — tall posture, hips square</li>
+          <li><strong>Walking knee hugs</strong> — 15-20m — rise onto the toe of the stance leg</li>
+          <li><strong>Walking quad pulls</strong> — 15-20m — heel to glute, reach tall with the opposite arm</li>
+          <li><strong>Walking lunges with twist</strong> — 15-20m — front knee tracks over the ankle, rotate over the front leg</li>
+          <li><strong>Hip circles</strong> — 5 each direction, per leg — knee at 90 degrees, big controlled circle</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">3</span> ACTIVATION CIRCUIT <em>2 rounds — 30 sec rest between rounds</em></h3>
+        <ul class="wu-list">
+          <li><strong>Bodyweight squats</strong> — x 10 — knees track over toes, chest tall</li>
+          <li><strong>Walking lunges</strong> — 10m — front knee over ankle, torso tall</li>
+          <li><strong>Glute bridges</strong> — x 10 — squeeze at the top, ribs down</li>
+          <li><strong>Mini-band lateral walks</strong> — 10m each way — hips level, feet straight, band stays tight</li>
+          <li><strong>Dead bugs</strong> — x 6 per side — low back stays down, move slow</li>
+          <li><strong>Ankle dribbles</strong> — 20m — short quick steps on the balls of the feet</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">4</span> READY</h3>
+        <ul class="wu-list">
+          <li><strong>Easy strides or spin</strong> — 2 x 60m relaxed, or 1 min easy bike / rower — conversational effort, then go straight into Round 1</li>
+        </ul>
+      </section>
+      <p class="wu-coach"><strong>COACH RULE:</strong> Moderate loads, clean reps. Build capacity, not soreness. If form breaks in the activation circuit, fix it there — do not carry it into loaded work.</p>
+      <footer class="wu-foot">Card 3 of 3 — Based on WUP-01 drills with STR-01 circuit and XT-03 / XT-04 activation work, drills DRL-01 to DRL-16. Print single-sided, laminate, keep in the weight room.</footer>
+      <button class="btn primary wu-print" type="button" data-print-card="wu-card-3">Print this card</button>
+    </article>
+  </section>
+
+  <!-- NUTRITION -->
+  <section id="view-nutrition" class="view">
+    <h1>Nutrition</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="muted">Fueling education for Cadet sprinters — principles, plates, and timing. No diet plans and no calorie counting: eat to match the work, protein at every meal, and never train on empty. Ranges below are general education guidelines for hard-training athletes, in the coach's words.</p>
+
+    <article class="nu-card nu-scarlet">
+      <h2>1 · Daily Fueling for Sprinters</h2>
+      <p class="nu-sub">The everyday plate — and how it changes with the training day.</p>
+      <ul class="nu-list">
+        <li><strong>Fuel matches the day.</strong> On hard and speed days, build a carb-forward plate — roughly half the plate from foods like rice, pasta, potatoes, bread, and fruit. Speed work burns through stored fuel fast, and the tank has to be full before you ask for top speed. On light and recovery days, keep the same protein and color and ease the starch portion back a little.</li>
+        <li><strong>Protein at every meal.</strong> A palm-sized portion — eggs, chicken, beef, fish, Greek yogurt, milk, beans. Hard-training sprinters generally land around <strong>1.4–2.0 grams of protein per kilo of body weight across the whole day</strong>, spread over breakfast, lunch, dinner, and a snack — not one giant serving at night.</li>
+        <li><strong>Carbs follow the workload.</strong> As a general guide, hard training days run about <strong>5–6 grams of carbohydrate per kilo of body weight</strong> for the day; lighter days need somewhat less. If afternoon practices feel flat week after week, the first suspect is not enough carbs earlier in the day.</li>
+        <li><strong>Color at lunch and dinner.</strong> A fruit or a vegetable at both meals, every day. It is the simplest habit that covers the most ground.</li>
+        <li><strong>Breakfast is non-negotiable.</strong> Carbs plus protein before school — oatmeal and milk, eggs and toast, a smoothie. Skipping breakfast means starting the day on empty and trying to fuel practice from lunch alone.</li>
+        <li><strong>Snacks have a job.</strong> Pair a carb with a protein: banana and milk, a peanut butter sandwich, trail mix and yogurt. A snack is a bridge to the next meal, not a meal replacement.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-gold">
+      <h2>2 · Before Practice / Before a Meet</h2>
+      <p class="nu-sub">The timing ladder — the closer to go-time, the smaller and simpler the food.</p>
+      <ul class="nu-list">
+        <li><strong>3–4 hours out: a full meal.</strong> Carb-based with moderate protein, and go easy on fat and fiber so it has time to digest — pasta with a light sauce, rice and chicken, a sandwich and fruit.</li>
+        <li><strong>1–2 hours out: a carb snack.</strong> A bagel, pretzels, fruit, applesauce, or a sports drink. Familiar and easy on the stomach.</li>
+        <li><strong>30–60 minutes out: small fast carbs only.</strong> A few gummies or chews, juice, half a banana. Just enough to top off — nothing heavy sitting in the stomach at the start line.</li>
+        <li><strong>Keep fat and fiber low right before.</strong> Heavy, greasy, or high-fiber food digests slowly and is the classic cause of a sloshy, heavy warm-up.</li>
+        <li><strong>Nothing new on meet day.</strong> If a food has not been tested before a hard practice, it does not debut at a meet.</li>
+        <li><strong>Skip the energy drinks.</strong> They are not fuel, and the crash lands mid-meet.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-green">
+      <h2>3 · Recovery Fueling</h2>
+      <p class="nu-sub">What happens after the session decides how ready you are for the next one.</p>
+      <ul class="nu-list">
+        <li><strong>Protein + carbs together, within about 60 minutes</strong> after a hard session. That pairing is the whole point: carbs refill the tank while protein starts the repair work.</li>
+        <li><strong>Carbs first priority after hard days.</strong> The fuel you burned (glycogen) restocks fastest in the first hours after training. Skipping carbs after a hard day is borrowing from tomorrow's practice.</li>
+        <li><strong>A real protein dose at each meal.</strong> A palm-sized serving, roughly 20–40 grams of protein, at breakfast, lunch, the post-practice meal, and dinner. Total daily protein matters more than any single shake moment.</li>
+        <li><strong>Chocolate milk is the classic for a reason</strong> — carbs, protein, and fluid in one bottle. Also strong: a turkey sandwich and fruit, a smoothie, pasta with meat sauce, eggs and toast.</li>
+        <li><strong>Two meals after a hard day.</strong> The post-practice bite is a bridge. Dinner still happens when you get home.</li>
+        <li><strong>Sleep is the other half of recovery.</strong> Fueling works with sleep, never instead of it.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-steel">
+      <h2>4 · Hydration</h2>
+      <p class="nu-sub">Start hydrated, sip through the work, replace what you lost.</p>
+      <ul class="nu-list">
+        <li><strong>Daily baseline:</strong> water all day. Bring a bottle, refill it at school, and sip between classes — do not try to catch up at 2:45.</li>
+        <li><strong>The urine-color rule:</strong> aim for pale yellow, like lemonade. Dark yellow, like apple juice, means drink more — starting now, not at practice.</li>
+        <li><strong>Before practice:</strong> drink with your pre-practice meal or snack, then a few big gulps again right before warm-up.</li>
+        <li><strong>During practice:</strong> sip regularly instead of waiting for thirst — in the heat, roughly a cup every 15–20 minutes.</li>
+        <li><strong>After practice:</strong> replace what you sweated out. If you step on a scale and you are down a pound, drink roughly 2–3 cups of fluid for that pound. The goal is to finish sessions within about 2% of your starting body weight.</li>
+        <li><strong>Hot or long days: add electrolytes.</strong> On 90-minute-plus sessions or very hot days, a sports drink — or water plus salty food — replaces the salt that plain water cannot.</li>
+        <li><strong>Know the warning signs:</strong> headache, dizziness, dark urine, cramps that will not release, nausea, or fatigue that feels wrong for the workout. Tell a coach. Dizziness is never something to push through.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-scarlet">
+      <h2>5 · Meet Day Timeline</h2>
+      <p class="nu-sub">A race-day run-through, wake-up to the ride home.</p>
+      <ul class="nu-list">
+        <li><strong>Wake-up meal (3–4 hours before your first race when the schedule allows):</strong> a familiar, carb-based breakfast with some protein — eggs and toast with fruit, oatmeal and milk. The meal shrinks as the start gets closer, exactly like the practice ladder.</li>
+        <li><strong>Pack for the bus.</strong> Meets run long and concession stands are a gamble: bagels, pretzels, bananas, granola bars, a sports drink — food you already trust.</li>
+        <li><strong>Between races: small carb bites.</strong> A few bites and sips after each race keeps the tank steady. Save a bigger meal for after your last event, or for a break of two hours or more.</li>
+        <li><strong>Food finishes before the warm-up.</strong> Your last real bite should be done about 30–60 minutes before your warm-up starts; after that, only tiny fast carbs.</li>
+        <li><strong>After your last race:</strong> a recovery meal within the hour — protein plus carbs — then a full dinner at home.</li>
+        <li><strong>The meet-day rule:</strong> nothing new. New food, new drinks, and new routines all get tested at practice first.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-slate">
+      <h2>6 · Weight Room Day Fueling</h2>
+      <p class="nu-sub">Strength and testing days — fueling for the build.</p>
+      <ul class="nu-list">
+        <li><strong>Protein emphasis.</strong> Strength days are when protein does its building work: a palm-sized portion at every meal, all day, not just after lifting.</li>
+        <li><strong>Pre-lift snack, 1–2 hours out:</strong> carbs plus a little protein — a peanut butter sandwich, yogurt and granola, milk and a banana. Never lift on empty.</li>
+        <li><strong>Testing days are max-effort days.</strong> Eat a real breakfast and a real lunch. Personal records do not happen on fumes; if it has been hours since lunch, take a small carb bite before you test.</li>
+        <li><strong>Post-lift, within the hour:</strong> protein + carbs together — chocolate milk, a sandwich, a smoothie — then dinner as usual. That is the recovery window that turns today's lifting into next month's strength.</li>
+        <li><strong>Hydration counts indoors too.</strong> Bottle nearby, sips between sets on long sessions.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-note">
+      <h2>Supplements — the honest version</h2>
+      <ul class="nu-list">
+        <li><strong>Food first, always.</strong> No supplement fixes skipped meals, low carbs on hard days, or short sleep — and those three move performance more than anything in a tub.</li>
+        <li><strong>We do not push supplements for high school athletes.</strong> Products are not regulated like food, labels can be wrong, and a contaminated product can cost an athlete their eligibility.</li>
+        <li><strong>The evidence conversation belongs at home.</strong> Sports-science texts do review ergogenic aids with real evidence behind them in adult athletes — but that is a family-and-doctor conversation, not a weight-room one, and school rules govern everything.</li>
+        <li><strong>The proven stack is boring:</strong> breakfast, carbs around training, protein at meals, water, and sleep.</li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- TESTING -->
+  <section id="view-testing" class="view">
+    <h1>Testing</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div id="testing-main"></div>
+  </section>
+
+  <!-- TOP ATHLETES -->
+  <section id="view-top" class="view">
+    <h1>Top Athletes</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div id="top-main"></div>
+  </section>
+
+  <!-- HEALTH -->
+  <section id="view-health" class="view">
+    <h1>Aches &amp; pains</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="muted">Your private notebook: record what an athlete reports to you — an ache, a pain, something tight — and track it until it clears. Athletes never see this; it is coach-only.</p>
+    <div id="health-main"></div>
+  </section>
+
+  <!-- GROUPS (coach) -->
+  <section id="view-groups" class="view">
+    <h1>Training groups</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div id="groups-main"></div>
+  </section>
+
+  <!-- COACH -->
+  <section id="view-coach" class="view">
+    <h1>Coach view</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div id="coach-main"></div>
+  </section>
+
   <!-- MORE -->
   <section id="view-more" class="view">
     <h1>More</h1>
@@ -217,6 +532,17 @@
     <div id="account-main"></div>
   </section>
 </main>
+
+<div id="media-modal" class="media-modal" hidden>
+  <div class="media-box card">
+    <div class="media-head">
+      <strong id="media-title">Demo</strong>
+      <button class="btn secondary" id="media-close" type="button" style="padding:2px 12px">Close</button>
+    </div>
+    <div id="media-player"></div>
+    <div id="media-edit"></div>
+  </div>
+</div>
 
 <footer class="footer muted">
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">

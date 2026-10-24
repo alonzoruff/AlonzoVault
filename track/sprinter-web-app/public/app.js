@@ -11,6 +11,25 @@ const state = {
   week: 1,
   libQuery: '',
   detailId: null,
+  groups: [],
+  roster: null,
+  assignment: null,
+  feedDate: null,
+  tests: [],
+  testDays: [],
+  testDayId: null,
+  rapidAthleteId: null,
+  topMetric: 'fly-30m',
+  entryMetric: 'fly-30m',
+  topWeek: null,
+  concerns: [],
+  media: {},
+  profiles: [],
+  pfGroup: '',
+  pfEvent: '',
+  pfTop: false,
+  pfQ: '',
+  importReport: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -35,6 +54,7 @@ const apiPost = (path, body) => api(path, {
 const apiPut = (path, body) => api(path, {
   method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
 });
+const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- dates ---------------- */
 function parseDate(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
@@ -157,7 +177,7 @@ function md(src) {
 function showView(name) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   $$('#main-tabs .tab').forEach(t => {
-    const main = ['home', 'library', 'season', 'log'].includes(name) ? name : 'more';
+    const main = ['home', 'library', 'season', 'log', 'cards', 'nutrition', 'testing', 'top', 'health', 'groups', 'coach'].includes(name) ? name : 'more';
     t.classList.toggle('active', t.dataset.view === main);
   });
   window.scrollTo(0, 0);
@@ -393,6 +413,7 @@ function renderDrills() {
       <strong>${esc(d.id.replace('DRL-', 'Drill '))} · ${esc(d.name)}</strong>
       <div class="muted">${esc(d.distance_or_reps)}</div>
       <p style="margin-bottom:0">${esc(d.coaching_cue)}</p>
+      ${demoHtml(d.id, d.name)}
     </div>`).join('')}
   `).join('');
 }
@@ -479,11 +500,15 @@ function renderLog() {
   }));
 }
 async function refreshUserData() {
-  if (!state.user) { state.logs = []; state.swaps = {}; return; }
+  if (!state.user) { state.logs = []; state.swaps = {}; state.groups = []; return; }
   try {
-    const [logs, swaps] = await Promise.all([api('/api/logs'), api('/api/swaps')]);
+    const [logs, swaps, groups] = await Promise.all([
+      api('/api/logs'), api('/api/swaps'),
+      api('/api/groups').catch(() => ({ groups: [] })),
+    ]);
     state.logs = logs.entries || [];
     state.swaps = swaps.swaps || {};
+    state.groups = groups.groups || [];
   } catch (_) { state.logs = []; state.swaps = {}; }
 }
 
@@ -496,8 +521,11 @@ function renderAccount() {
     note.textContent = 'Logged in as ' + state.user.email;
     $('#account-main').innerHTML = `<div class="card">
       <p>Logged in as <strong>${esc(state.user.email)}</strong>.</p>
-      <p class="muted">Your log entries and cross-training swaps save to this account and are only visible to you.</p>
-      <button class="btn" id="acct-logout" type="button">Log out</button></div>`;
+      <p>${state.user.role === 'coach' ? '<span class="badge high">COACH ACCOUNT</span>' : '<span class="badge low">NOT A COACH ACCOUNT</span>'}</p>
+      <p class="muted">Accounts are for coaches only — athletes never log in. The coach records everything: groups and rosters, assignments, testing results, weekly numbers, and health concerns. Your personal log entries and cross-training swaps save to this account.</p>
+      <button class="btn" id="acct-logout" type="button">Log out</button></div>
+      <div id="coach-accounts"></div>`;
+    renderCoachAccounts();
     const out = async () => { await apiPost('/api/logout'); state.user = null; await refreshUserData(); syncAuthUi(); };
     $('#chip-logout').addEventListener('click', out);
     $('#acct-logout').addEventListener('click', out);
@@ -537,7 +565,869 @@ function renderAccount() {
   }
 }
 function syncAuthUi() {
+  const isCoach = !!(state.user && state.user.role === 'coach');
+  $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
+  renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth();
+  if (isCoach) loadMedia();
+}
+
+/* ================================================================
+   COACH SYSTEM — profiles, assignments, testing, weekly tracker,
+   health concerns, demo media. Coach-input only: athletes never
+   log in; the coach records everything.
+   ================================================================ */
+const isCoachUser = () => !!(state.user && state.user.role === 'coach');
+const FEEL_OPTIONS = '<option value="">—</option><option value="1">1 — rough</option><option value="2">2</option><option value="3">3 — solid</option><option value="4">4</option><option value="5">5 — great</option>';
+const EVENT_SUGGESTIONS = ['sprinter', 'jumper', 'hurdler'];
+function mondayStr() {
+  const t = todayLocal();
+  t.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+  return dateStrOf(t);
+}
+function dateStrOf(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function fmtNum(v) { return String(Math.round(v * 100) / 100); }
+async function refreshProfiles() {
+  if (!isCoachUser()) { state.profiles = []; return; }
+  try {
+    const [profs, groups] = await Promise.all([api('/api/profiles?includeArchived=1'), api('/api/groups')]);
+    state.profiles = profs.profiles || [];
+    state.groups = groups.groups || [];
+  } catch (_) { /* keep old */ }
+}
+const activeProfiles = () => state.profiles.filter(pr => !pr.archived);
+function profileOptions(selectedId, includeBlank) {
+  const byGroup = {};
+  for (const pr of activeProfiles()) {
+    const gname = pr.groupName || 'No group';
+    (byGroup[gname] = byGroup[gname] || []).push(pr);
+  }
+  let html = includeBlank ? '<option value="">— pick an athlete —</option>' : '';
+  for (const gname of Object.keys(byGroup).sort()) {
+    html += `<optgroup label="${esc(gname)}">` + byGroup[gname].map(pr =>
+      `<option value="${pr.id}" ${pr.id === selectedId ? 'selected' : ''}>${esc(pr.name)}${pr.topAthlete ? ' ★' : ''}</option>`).join('') + '</optgroup>';
+  }
+  return html;
+}
+function eventBadges(pr) {
+  return (pr.events || []).map(e => `<span class="badge plain">${esc(e)}</span>`).join(' ');
+}
+function gateHtml(el, what) {
+  el.innerHTML = `<div class="card"><strong>Coaches only.</strong><p class="muted">${what} This system is run by the coach — athletes do not log in or enter data. <button class="btn secondary" data-goto="account" type="button">Go to account</button></p></div>`;
+  const b = el.querySelector('[data-goto]');
+  if (b) b.addEventListener('click', () => showView('account'));
+}
+
+/* ---------------- demo media ---------------- */
+async function loadMedia() {
+  try {
+    const data = await api('/api/media');
+    state.media = data.media || {};
+    renderDrills();
+    if (state.testDays.length) renderTesting();
+  } catch (_) { /* media is optional */ }
+}
+function demoHtml(id, title) {
+  if (!isCoachUser()) return '';
+  const m = state.media[id];
+  const view = m ? `<button class="btn secondary demo-btn" type="button" data-demo="${esc(id)}" data-demo-title="${esc(title || id)}">▶ Demo</button>` : '';
+  return `<span class="demo-zone">${view}<button class="btn secondary demo-edit-btn" type="button" data-demo-edit="${esc(id)}" data-demo-title="${esc(title || id)}">${m ? 'Edit demo' : 'Add demo'}</button></span>`;
+}
+let mediaTarget = null;
+function openMedia(id, title, editOnly) {
+  mediaTarget = id;
+  const m = state.media[id];
+  $('#media-title').textContent = (title || id) + ' — demo';
+  const player = $('#media-player');
+  if (m && !editOnly) {
+    player.innerHTML = m.type === 'youtube'
+      ? `<div class="media-frame"><iframe src="${esc(m.embedUrl)}" title="Demo video" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`
+      : `<img class="media-gif" src="${esc(m.url)}" alt="Demo animation">`;
+  } else {
+    player.innerHTML = m ? '' : '<p class="muted">No demo attached to this movement yet.</p>';
+  }
+  const ed = $('#media-edit');
+  if (isCoachUser()) {
+    ed.innerHTML = `<label>Demo link — YouTube or a .gif
+      <input type="url" id="media-url" value="${m ? esc(m.url) : ''}" placeholder="https://www.youtube.com/watch?v=…"></label>
+      <div class="filter-row">
+        <button class="btn primary" id="media-save" type="button" style="width:auto">Save demo</button>
+        ${m ? '<button class="btn danger" id="media-remove" type="button" style="width:auto">Remove</button>' : ''}
+      </div>
+      <p class="error" id="media-err"></p>`;
+    $('#media-save').addEventListener('click', async () => {
+      try {
+        await apiPut('/api/media/' + encodeURIComponent(mediaTarget), { url: $('#media-url').value });
+        closeMedia();
+        await loadMedia();
+      } catch (err) { $('#media-err').textContent = err.message; }
+    });
+    const rm = $('#media-remove');
+    if (rm) rm.addEventListener('click', async () => {
+      try {
+        await apiDel('/api/media/' + encodeURIComponent(mediaTarget));
+        closeMedia();
+        await loadMedia();
+      } catch (err) { $('#media-err').textContent = err.message; }
+    });
+  } else {
+    ed.innerHTML = '';
+  }
+  $('#media-modal').hidden = false;
+}
+function closeMedia() {
+  $('#media-modal').hidden = true;
+  $('#media-player').innerHTML = '';
+  mediaTarget = null;
+}
+document.addEventListener('click', (e) => {
+  const d = e.target.closest('[data-demo]');
+  if (d) { openMedia(d.dataset.demo, d.dataset.demoTitle, false); return; }
+  const de = e.target.closest('[data-demo-edit]');
+  if (de) { openMedia(de.dataset.demoEdit, de.dataset.demoTitle, true); return; }
+  const pc = e.target.closest('[data-print-card]');
+  if (pc) {
+    const card = document.getElementById(pc.dataset.printCard);
+    if (card) {
+      card.classList.add('print-target');
+      document.body.classList.add('printing-card');
+      const cleanup = () => {
+        card.classList.remove('print-target');
+        document.body.classList.remove('printing-card');
+        window.removeEventListener('afterprint', cleanup);
+      };
+      window.addEventListener('afterprint', cleanup);
+      setTimeout(cleanup, 1500);
+      window.print();
+    }
+  }
+});
+
+/* ---------------- SVG line charts (hand-rolled) ---------------- */
+const CHART_COLORS = ['#CC0033', '#20242a', '#8A939F', '#C9A227', '#46647a', '#6a4a7a'];
+function seriesFromEntries(entriesForProfile, metricKey) {
+  const byWeek = (entriesForProfile || {})[metricKey] || {};
+  return Object.keys(byWeek).sort().map(week => ({ week, value: byWeek[week] }));
+}
+function seriesStats(points, metric) {
+  let best = null;
+  if (points.length && metric.better !== 'neutral') {
+    best = points.reduce((acc, pt) => acc === null ? pt.value : (metric.better === 'lower' ? Math.min(acc, pt.value) : Math.max(acc, pt.value)), null);
+  }
+  const first = points.length ? points[0].value : null;
+  const latest = points.length ? points[points.length - 1].value : null;
+  const delta = points.length > 1 ? Math.round((latest - first) * 100) / 100 : null;
+  let improved = null;
+  if (delta !== null && delta !== 0 && metric.better !== 'neutral') improved = metric.better === 'lower' ? delta < 0 : delta > 0;
+  return { best, first, latest, delta, improved };
+}
+function deltaHtml(metric, stats) {
+  if (!stats || stats.delta === null) return '<span class="muted">not enough weeks yet</span>';
+  const arrow = stats.delta < 0 ? '▼' : (stats.delta > 0 ? '▲' : '—');
+  const cls = stats.improved === null ? 'flat' : (stats.improved ? 'good' : 'bad');
+  const sign = stats.delta > 0 ? '+' : '';
+  return `<span class="delta ${cls}">${arrow} ${sign}${fmtNum(stats.delta)} ${esc(metric.unit)} since first week</span>`;
+}
+function lineChart(seriesList, metric, small) {
+  const allWeeks = [...new Set(seriesList.flatMap(s => s.points.map(pt => pt.week)))].sort();
+  const allVals = seriesList.flatMap(s => s.points.map(pt => pt.value));
+  if (!allWeeks.length || !allVals.length) return '<p class="muted">No numbers yet.</p>';
+  const W = 340, H = small ? 120 : 180, PL = 36, PR = 12, PT = 16, PB = 20;
+  let min = Math.min(...allVals), max = Math.max(...allVals);
+  if (min === max) { min -= 1; max += 1; }
+  const pad = (max - min) * 0.15;
+  min -= pad; max += pad;
+  const x = (week) => {
+    const i = allWeeks.indexOf(week);
+    return allWeeks.length === 1 ? (PL + W - PR) / 2 : PL + (i * (W - PL - PR)) / (allWeeks.length - 1);
+  };
+  const y = (v) => PT + (1 - (v - min) / (max - min)) * (H - PT - PB);
+  let svg = '';
+  for (let g = 0; g <= 3; g++) {
+    const gv = min + ((max - min) * g) / 3;
+    const gy = y(gv);
+    svg += `<line x1="${PL}" y1="${gy}" x2="${W - PR}" y2="${gy}" class="chart-grid"/><text x="${PL - 4}" y="${gy + 3}" class="chart-axis" text-anchor="end">${fmtNum(gv)}</text>`;
+  }
+  allWeeks.forEach((wk, i) => {
+    if (allWeeks.length <= 5 || i === 0 || i === allWeeks.length - 1) {
+      svg += `<text x="${x(wk)}" y="${H - 5}" class="chart-axis" text-anchor="middle">${esc(wk.slice(5))}</text>`;
+    }
+  });
+  seriesList.forEach((s, si) => {
+    if (!s.points.length) return;
+    const color = s.color || CHART_COLORS[si % CHART_COLORS.length];
+    const line = s.points.map(pt => `${x(pt.week).toFixed(1)},${y(pt.value).toFixed(1)}`).join(' ');
+    svg += `<polyline points="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const stats = seriesStats(s.points, metric);
+    for (const pt of s.points) {
+      const isBest = stats.best !== null && pt.value === stats.best;
+      svg += `<circle cx="${x(pt.week)}" cy="${y(pt.value)}" r="${isBest ? 5 : 3.5}" fill="${color}" stroke="#fff" stroke-width="1.5"><title>${esc(s.label || '')} ${esc(pt.week)}: ${fmtNum(pt.value)} ${esc(metric.unit)}</title></circle>`;
+      if (isBest) svg += `<text x="${x(pt.week)}" y="${y(pt.value) - 9}" class="chart-best" text-anchor="middle" fill="${color}">★ ${fmtNum(pt.value)}</text>`;
+    }
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(metric.name)} chart">${svg}</svg>`;
+}
+
+/* ---------------- coach accounts ---------------- */
+async function renderCoachAccounts() {
+  const el = $('#coach-accounts');
+  if (!el || !isCoachUser()) return;
+  try {
+    const data = await api('/api/coaches');
+    el.innerHTML = `<div class="card"><h3>Coach accounts</h3>
+      <p class="muted">Accounts are for coaches only. Promote another account here if a second coach needs access.</p>
+      ${data.users.map(u => `<div class="roster-row"><span>${esc(u.email)} ${u.role === 'coach' ? '<span class="badge high">COACH</span>' : '<span class="badge plain">NO ACCESS</span>'}</span>
+      ${u.id !== state.user.id ? `<button class="btn secondary" data-role-toggle="${u.id}" data-role="${u.role === 'coach' ? 'athlete' : 'coach'}" type="button">${u.role === 'coach' ? 'Remove coach access' : 'Make coach'}</button>` : '<span class="muted">you</span>'}</div>`).join('')}
+    </div>`;
+    el.querySelectorAll('[data-role-toggle]').forEach(b => b.addEventListener('click', async () => {
+      try {
+        await apiPut('/api/users/' + encodeURIComponent(b.dataset.roleToggle) + '/role', { role: b.dataset.role });
+        renderCoachAccounts();
+      } catch (err) { alert(err.message); }
+    }));
+  } catch (_) { el.innerHTML = ''; }
+}
+
+/* ---------------- groups + roster ---------------- */
+async function renderGroups() {
+  const el = $('#groups-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Rosters and groups live here.'); return; }
+  await refreshProfiles();
+  const allEvents = [...new Set(state.profiles.flatMap(pr => pr.events || []))].sort();
+  const groupOpts = (sel) => '<option value="">No group</option>' + state.groups.map(g =>
+    `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
+  let list = activeProfiles();
+  if (state.pfGroup === '__none') list = list.filter(pr => !pr.groupId);
+  else if (state.pfGroup) list = list.filter(pr => pr.groupId === state.pfGroup);
+  if (state.pfEvent) list = list.filter(pr => (pr.events || []).includes(state.pfEvent));
+  if (state.pfTop) list = list.filter(pr => pr.topAthlete);
+  if (state.pfQ) list = list.filter(pr => pr.name.toLowerCase().includes(state.pfQ.toLowerCase()));
+  const byGroup = new Map();
+  for (const pr of list) {
+    const key = pr.groupId || '__none';
+    if (!byGroup.has(key)) byGroup.set(key, []);
+    byGroup.get(key).push(pr);
+  }
+  const groupSections = [...state.groups.map(g => g.id), '__none'].filter(k => byGroup.has(k)).map(k => {
+    const gname = k === '__none' ? 'No group' : (state.groups.find(g => g.id === k) || {}).name;
+    return `<h3>${esc(gname || '')}</h3>` + byGroup.get(k).map(pr => `
+      <div class="card roster-card">
+        <div class="roster-row">
+          <span><strong>${esc(pr.name)}</strong> ${pr.topAthlete ? '<span class="badge star">★ TOP</span>' : ''} ${eventBadges(pr)}</span>
+          <span class="roster-actions">
+            <button class="btn secondary" data-star="${pr.id}" type="button">${pr.topAthlete ? 'Unstar' : '★ Star'}</button>
+            <button class="btn secondary" data-archive="${pr.id}" type="button">Archive</button>
+          </span>
+        </div>
+        <label>Group <select data-move="${pr.id}">${groupOpts(pr.groupId)}</select></label>
+        <details>
+          <summary>Edit profile</summary>
+          <label>First name <input type="text" id="ef-${pr.id}" value="${esc(pr.firstName)}"></label>
+          <label>Last name <input type="text" id="el-${pr.id}" value="${esc(pr.lastName)}"></label>
+          <label>Events (comma list — sprinter, jumper, hurdler…)
+            <input type="text" id="ee-${pr.id}" value="${esc((pr.events || []).join(', '))}"></label>
+          <button class="btn primary" data-save-profile="${pr.id}" type="button">Save profile</button>
+        </details>
+      </div>`).join('');
+  }).join('');
+  el.innerHTML = `
+    <div class="card">
+      <h2>Filters</h2>
+      <div class="filter-row">
+        <select id="pf-group">
+          <option value="">All groups</option>
+          <option value="__none" ${state.pfGroup === '__none' ? 'selected' : ''}>No group</option>
+          ${state.groups.map(g => `<option value="${g.id}" ${state.pfGroup === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+        </select>
+        <select id="pf-event">
+          <option value="">All events</option>
+          ${[...new Set([...EVENT_SUGGESTIONS, ...allEvents])].map(e => `<option value="${esc(e)}" ${state.pfEvent === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}
+        </select>
+      </div>
+      <label>Search <input type="search" id="pf-q" value="${esc(state.pfQ)}" placeholder="Athlete name"></label>
+      <label class="check-line"><input type="checkbox" id="pf-top" ${state.pfTop ? 'checked' : ''}> Top Athletes only</label>
+      <p class="muted">${list.length} athlete${list.length === 1 ? '' : 's'} shown · ${activeProfiles().length} on the roster</p>
+    </div>
+    ${groupSections || '<p class="muted">No athletes match. Add one below or import the roster.</p>'}
+    <form class="card" id="profile-form">
+      <h2>Add an athlete</h2>
+      <div class="filter-row">
+        <label>First name <input type="text" id="np-first" required></label>
+        <label>Last name <input type="text" id="np-last" required></label>
+      </div>
+      <label>Group <select id="np-group">${groupOpts(null)}</select></label>
+      <label>Events (comma list) <input type="text" id="np-events" placeholder="sprinter, hurdler"></label>
+      <label class="check-line"><input type="checkbox" id="np-top"> Top Athlete ★</label>
+      <button class="btn primary" type="submit">Add athlete</button>
+      <p class="error" id="np-err"></p>
+    </form>
+    <form class="card" id="group-form">
+      <h2>Groups</h2>
+      ${state.groups.map(g => `<div class="roster-row"><span>${esc(g.name)}</span><span>
+        <button class="btn secondary" data-rename-group="${g.id}" type="button">Rename</button>
+        <button class="btn danger" data-delete-group="${g.id}" type="button">Delete</button></span></div>`).join('')}
+      <label>New group name <input type="text" id="ng-name" placeholder="e.g. 100/200"></label>
+      <button class="btn primary" type="submit">Create group</button>
+      <p class="error" id="ng-err"></p>
+    </form>
+    <div class="card">
+      <h2>Bulk roster import</h2>
+      <p class="muted">One athlete per line: <code>Last, First | Group | events (comma list) | Top (optional: yes)</code><br>
+      Example: <code>Doe, John | 100/200 | sprinter, hurdler | yes</code><br>
+      A simple CSV with a <code>name,group,events,top</code> header also works. Groups are created as needed; duplicate names in the same group are skipped and reported.</p>
+      <label>Roster lines <textarea id="import-text" rows="6" placeholder="Doe, John | 100/200 | sprinter | yes"></textarea></label>
+      <button class="btn primary" id="import-btn" type="button">Import roster</button>
+      <div id="import-report">${state.importReport ? importReportHtml(state.importReport) : ''}</div>
+    </div>
+    <div id="archived-zone"></div>`;
+  $('#pf-group').addEventListener('change', (e) => { state.pfGroup = e.target.value; renderGroups(); });
+  $('#pf-event').addEventListener('change', (e) => { state.pfEvent = e.target.value; renderGroups(); });
+  $('#pf-top').addEventListener('change', (e) => { state.pfTop = e.target.checked; renderGroups(); });
+  $('#pf-q').addEventListener('input', (e) => { state.pfQ = e.target.value; clearTimeout(state._pfT); state._pfT = setTimeout(renderGroups, 250); });
+  el.querySelectorAll('[data-move]').forEach(sel => sel.addEventListener('change', async () => {
+    try { await apiPut('/api/profiles/' + encodeURIComponent(sel.dataset.move), { groupId: sel.value || null }); renderGroups(); }
+    catch (err) { alert(err.message); renderGroups(); }
+  }));
+  el.querySelectorAll('[data-star]').forEach(b => b.addEventListener('click', async () => {
+    const pr = state.profiles.find(x => x.id === b.dataset.star);
+    try { await apiPut('/api/profiles/' + encodeURIComponent(b.dataset.star), { topAthlete: !(pr && pr.topAthlete) }); renderGroups(); }
+    catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-archive]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Archive this athlete? Their records stay saved and you can restore them later.')) return;
+    try { await apiDel('/api/profiles/' + encodeURIComponent(b.dataset.archive)); renderGroups(); }
+    catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-save-profile]').forEach(b => b.addEventListener('click', async () => {
+    const id = b.dataset.saveProfile;
+    try {
+      await apiPut('/api/profiles/' + encodeURIComponent(id), {
+        firstName: $('#ef-' + CSS.escape(id)).value,
+        lastName: $('#el-' + CSS.escape(id)).value,
+        events: $('#ee-' + CSS.escape(id)).value.split(',').map(s => s.trim()).filter(Boolean),
+      });
+      renderGroups();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-rename-group]').forEach(b => b.addEventListener('click', async () => {
+    const g = state.groups.find(x => x.id === b.dataset.renameGroup);
+    const name = prompt('New name for this group:', g ? g.name : '');
+    if (!name) return;
+    try { await apiPut('/api/groups/' + encodeURIComponent(b.dataset.renameGroup), { name }); renderGroups(); }
+    catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-delete-group]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Delete this group? Athletes in it become unassigned; their records stay.')) return;
+    try { await apiDel('/api/groups/' + encodeURIComponent(b.dataset.deleteGroup)); renderGroups(); }
+    catch (err) { alert(err.message); }
+  }));
+  $('#profile-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost('/api/profiles', {
+        firstName: $('#np-first').value, lastName: $('#np-last').value,
+        groupId: $('#np-group').value || null,
+        events: $('#np-events').value.split(',').map(s => s.trim()).filter(Boolean),
+        topAthlete: $('#np-top').checked,
+      });
+      renderGroups();
+    } catch (err) { $('#np-err').textContent = err.message; }
+  });
+  $('#group-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost('/api/groups', { name: $('#ng-name').value });
+      renderGroups();
+    } catch (err) { $('#ng-err').textContent = err.message; }
+  });
+  $('#import-btn').addEventListener('click', async () => {
+    try {
+      const data = await apiPost('/api/profiles/import', { text: $('#import-text').value });
+      state.importReport = data.report;
+      renderGroups();
+    } catch (err) { alert(err.message); }
+  });
+  renderArchived();
+}
+function importReportHtml(r) {
+  return `<div class="ok-note">Import done: <strong>${r.created}</strong> athlete${r.created === 1 ? '' : 's'} created, <strong>${r.groupsCreated}</strong> group${r.groupsCreated === 1 ? '' : 's'} created.</div>
+    ${r.skipped.length ? `<div class="flag">Skipped ${r.skipped.length}:<br>${r.skipped.map(s => `Line ${s.line}: ${esc(s.text)} — ${esc(s.reason)}`).join('<br>')}</div>` : ''}
+    ${r.errors.length ? `<div class="flag">Could not read ${r.errors.length} line${r.errors.length === 1 ? '' : 's'}:<br>${r.errors.map(s => `Line ${s.line}: ${esc(s.text)} — ${esc(s.reason)}`).join('<br>')}</div>` : ''}`;
+}
+async function renderArchived() {
+  const el = $('#archived-zone');
+  if (!el) return;
+  const archived = state.profiles.filter(pr => pr.archived);
+  if (!archived.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="card"><h3>Archived athletes</h3>
+    ${archived.map(pr => `<div class="roster-row"><span>${esc(pr.name)}</span>
+      <button class="btn secondary" data-restore="${pr.id}" type="button">Restore</button></div>`).join('')}</div>`;
+  el.querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', async () => {
+    try { await apiPut('/api/profiles/' + encodeURIComponent(b.dataset.restore), { archived: false }); renderGroups(); }
+    catch (err) { alert(err.message); }
+  }));
+}
+
+/* ---------------- coach view: assignments + completions ---------------- */
+async function renderCoach() {
+  const el = $('#coach-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Daily assignments and checklists live here.'); return; }
+  if (!state.feedDate) state.feedDate = todayStr();
+  await refreshProfiles();
+  let feed;
+  try { feed = await api('/api/coach/feed?date=' + encodeURIComponent(state.feedDate)); }
+  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const sessionOpts = (sel) => '<option value="">— pick a workout —</option>' + state.content.sessions.map(s =>
+    `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${s.id} · ${esc(s.name)}</option>`).join('');
+  const groupCard = (blk) => {
+    if (!blk.group) {
+      return `<div class="card"><h3>No group</h3>
+        ${blk.members.length ? blk.members.map(m => `<div class="roster-row"><span>${esc(m.profile.name)}</span><span class="muted">assign a group in Groups</span></div>`).join('') : '<p class="muted">Everyone is in a group.</p>'}
+      </div>`;
+    }
+    const a = blk.assignment;
+    return `<div class="card">
+      <h3>${esc(blk.group.name)}</h3>
+      <p class="plan">${a.sessionId ? `<a class="code-link" data-code="${a.sessionId}">${a.sessionId}</a> ${esc(a.sessionName)}` : esc(a.planText || 'Rest day')}
+        ${a.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : '<span class="badge plain">FROM THE PLAN</span>'}</p>
+      ${a.note ? `<p><strong>Your note:</strong> ${esc(a.note)}</p>` : ''}
+      ${a.warmup ? `<div class="warmup">Warm-up: ${esc(a.warmup)}</div>` : ''}
+      <details>
+        <summary>Change today's workout for this group</summary>
+        <label>Workout <select id="ov-${blk.group.id}">${sessionOpts(a.sessionId)}</select></label>
+        <label>Note (optional) <input type="text" id="ovn-${blk.group.id}" value="${esc(a.note || '')}" placeholder="e.g. Keep it at 90% today"></label>
+        <div class="filter-row">
+          <button class="btn primary" data-override="${blk.group.id}" type="button" style="width:auto">Save override</button>
+          <button class="btn secondary" data-clear-override="${blk.group.id}" type="button" style="width:auto">Back to the plan</button>
+        </div>
+      </details>
+      <h4>Who got it done</h4>
+      ${blk.members.length ? blk.members.map(m => `
+        <div class="roster-row check-row">
+          <span>${m.completed ? '✅' : '⬜'} <strong>${esc(m.profile.name)}</strong> ${m.profile.topAthlete ? '<span class="badge star">★</span>' : ''}
+          ${m.completed && m.completion ? `<span class="muted">${esc(m.completion.marks || '')}${m.completion.feel ? ' · felt ' + m.completion.feel + '/5' : ''}</span>` : ''}</span>
+          ${m.completed
+            ? `<button class="btn secondary" data-unmark="${m.profile.id}" type="button">Undo</button>`
+            : `<span class="check-inputs"><input type="text" id="cm-${m.profile.id}" placeholder="marks (optional)">
+               <select id="cf-${m.profile.id}">${FEEL_OPTIONS}</select>
+               <button class="btn primary" data-mark="${m.profile.id}" type="button" style="width:auto">Mark done</button></span>`}
+        </div>`).join('') : '<p class="muted">No athletes in this group yet.</p>'}
+    </div>`;
+  };
+  el.innerHTML = `
+    <div class="card">
+      <label>Date <input type="date" id="feed-date" value="${esc(state.feedDate)}"></label>
+      <p class="muted">Each group gets the season plan's workout by default. Override it when the day calls for something else, then check off who completed it — marks and feel land on the athlete's record.</p>
+    </div>
+    ${feed.groups.map(groupCard).join('')}
+    ${groupCard(feed.unassigned)}`;
+  $('#feed-date').addEventListener('change', (e) => { state.feedDate = e.target.value; renderCoach(); });
+  el.querySelectorAll('[data-override]').forEach(b => b.addEventListener('click', async () => {
+    const gid = b.dataset.override;
+    try {
+      await apiPost('/api/assignments/override', {
+        groupId: gid, date: state.feedDate,
+        sessionId: $('#ov-' + CSS.escape(gid)).value,
+        note: $('#ovn-' + CSS.escape(gid)).value,
+      });
+      renderCoach();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-clear-override]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await apiPost('/api/assignments/override', { groupId: b.dataset.clearOverride, date: state.feedDate, sessionId: null });
+      renderCoach();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-mark]').forEach(b => b.addEventListener('click', async () => {
+    const pid = b.dataset.mark;
+    try {
+      await apiPost('/api/completions', {
+        profileId: pid, date: state.feedDate,
+        marks: $('#cm-' + CSS.escape(pid)).value,
+        feel: $('#cf-' + CSS.escape(pid)).value ? parseInt($('#cf-' + CSS.escape(pid)).value, 10) : null,
+      });
+      renderCoach();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-unmark]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await apiPost('/api/completions', { profileId: b.dataset.unmark, date: state.feedDate, completed: false });
+      renderCoach();
+    } catch (err) { alert(err.message); }
+  }));
+}
+
+/* ---------------- testing tracker ---------------- */
+function resultRawText(r, test) {
+  if (test && test.kind === 'lift') {
+    if (r.reps) return `${fmtNum(r.weight)} × ${r.reps}`;
+    return `${fmtNum(r.weight)}`;
+  }
+  return `${fmtNum(r.value)} ${test ? esc(test.unit) : ''}`;
+}
+async function renderTesting() {
+  const el = $('#testing-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Testing days and results live here.'); return; }
+  await refreshProfiles();
+  let tests, days;
+  try {
+    const [t, d] = await Promise.all([api('/api/tests'), api('/api/test-days')]);
+    tests = t.tests; days = d.testDays;
+    state.tests = tests; state.testDays = days;
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  if (!state.testDayId || !days.some(d => d.id === state.testDayId)) {
+    state.testDayId = days.length ? days[0].id : null;
+  }
+  const day = days.find(d => d.id === state.testDayId) || null;
+  let dayResults = [];
+  if (day) {
+    try { dayResults = (await api('/api/results?testDayId=' + encodeURIComponent(day.id))).results; }
+    catch (_) { dayResults = []; }
+  }
+  const resultFor = (pid, key) => dayResults.find(r => r.profileId === pid && r.testKey === key);
+  const dayTests = day ? day.testKeys.map(k => tests.find(t => t.key === k)).filter(Boolean) : [];
+  const testInputs = (test, current, pid) => {
+    const cur = current ? `<div class="muted">Now: ${resultRawText(current, test)}${test.kind === 'lift' ? ` · est. 1RM ${fmtNum(current.display || current.est1rm)} lb` : ''}</div>` : '';
+    if (test.kind === 'lift') {
+      return `${cur}<div class="filter-row">
+        <label>Weight (lb) <input type="number" step="any" min="0" id="rw-${pid}-${test.key}" value="${current ? esc(current.weight) : ''}"></label>
+        <label>Reps (blank = top single) <input type="number" step="1" min="1" max="30" id="rr-${pid}-${test.key}" value="${current && current.reps ? esc(current.reps) : ''}"></label>
+        <button class="btn primary" data-save-result="${pid}:${test.key}" type="button" style="width:auto">Save</button></div>`;
+    }
+    return `${cur}<div class="filter-row">
+      <label>Result (${esc(test.unit)}) <input type="number" step="any" min="0" id="rv-${pid}-${test.key}" value="${current ? esc(current.value) : ''}"></label>
+      <button class="btn primary" data-save-result="${pid}:${test.key}" type="button" style="width:auto">Save</button></div>`;
+  };
+  el.innerHTML = `
+    <form class="card" id="testday-form">
+      <h2>New test day</h2>
+      <div class="filter-row">
+        <label>Date <input type="date" id="td-date" value="${todayStr()}" required></label>
+        <label>Title <input type="text" id="td-title" placeholder="Fall Weight Room Testing" required></label>
+      </div>
+      <div class="test-checks">
+        ${tests.map(t => `<label class="check-line"><input type="checkbox" class="td-test" value="${t.key}" ${['back-squat', 'hang-clean', 'bench-press'].includes(t.key) ? 'checked' : ''}> ${esc(t.name)} (${esc(t.unit)})</label>`).join('')}
+      </div>
+      <button class="btn primary" type="submit">Create test day</button>
+      <p class="error" id="td-err"></p>
+    </form>
+    <form class="card" id="customtest-form">
+      <h2>Add a custom test</h2>
+      <div class="filter-row">
+        <label>Name <input type="text" id="ct-name" placeholder="e.g. Med ball throw"></label>
+        <label>Unit <input type="text" id="ct-unit" placeholder="lb, in, reps, sec…"></label>
+        <label>Type <select id="ct-kind"><option value="lift">Lift (lb, est. 1RM)</option><option value="measure">Measured</option><option value="reps">Reps</option></select></label>
+      </div>
+      <button class="btn primary" type="submit">Add test</button>
+      <p class="error" id="ct-err"></p>
+    </form>
+    ${days.length ? `
+    <div class="card">
+      <label>Test day
+        <select id="td-pick">${days.map(d => `<option value="${d.id}" ${day && d.id === day.id ? 'selected' : ''}>${esc(d.date)} · ${esc(d.title)}</option>`).join('')}</select>
+      </label>
+      ${day ? `<button class="btn danger" id="td-delete" type="button">Delete this test day</button>` : ''}
+    </div>` : '<div class="card"><p class="muted">No test days yet. Create the first one above.</p></div>'}
+    ${day ? `
+    <div class="card">
+      <h2>${esc(day.title)} — progress</h2>
+      <p class="muted">${esc(day.date)} · tap an athlete below and walk the room.</p>
+      <div class="table-wrap"><table class="matrix">
+        <thead><tr><th>Athlete</th>${dayTests.map(t => `<th>${esc(t.name)}</th>`).join('')}</tr></thead>
+        <tbody>
+        ${activeProfiles().map(pr => `<tr><td>${esc(pr.name)}</td>${dayTests.map(t => `<td>${resultFor(pr.id, t.key) ? '✅' : '<span class="muted">·</span>'}</td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h2>Rapid entry</h2>
+      <label>Athlete <select id="rapid-athlete">${profileOptions(state.rapidAthleteId, true)}</select></label>
+      <div id="rapid-zone"></div>
+    </div>
+    <div class="card">
+      <h2>Ranked — ${esc(day.title)}</h2>
+      ${dayTests.map(t => {
+        const rows = dayResults.filter(r => r.testKey === t.key).slice()
+          .sort((a, b) => (b.display || 0) - (a.display || 0));
+        return `<h3>${esc(t.name)} ${demoHtml(t.key, t.name)}</h3>
+        ${rows.length ? `<div class="table-wrap"><table class="ranked">
+          <thead><tr><th>#</th><th>Athlete</th><th>Result</th>${t.kind === 'lift' ? '<th>Est. 1RM</th>' : ''}</tr></thead>
+          <tbody>${rows.map((r, i) => {
+            const pr = state.profiles.find(x => x.id === r.profileId);
+            return `<tr><td>${i + 1}</td><td>${esc(pr ? pr.name : '?')}</td><td>${resultRawText(r, t)}</td>${t.kind === 'lift' ? `<td><strong>${fmtNum(r.display)} lb</strong></td>` : ''}</tr>`;
+          }).join('')}</tbody></table></div>` : '<p class="muted">No results yet.</p>'}`;
+      }).join('')}
+    </div>
+    <div class="card">
+      <h2>Athlete history</h2>
+      <label>Athlete <select id="hist-athlete">${profileOptions(state.rapidAthleteId, true)}</select></label>
+      <div id="hist-zone"></div>
+    </div>` : ''}`;
+  $('#testday-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const keys = Array.from(el.querySelectorAll('.td-test')).filter(c => c.checked).map(c => c.value);
+    try {
+      const data = await apiPost('/api/test-days', { date: $('#td-date').value, title: $('#td-title').value, testKeys: keys });
+      state.testDayId = data.testDay.id;
+      renderTesting();
+    } catch (err) { $('#td-err').textContent = err.message; }
+  });
+  $('#customtest-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost('/api/tests', { name: $('#ct-name').value, unit: $('#ct-unit').value, kind: $('#ct-kind').value });
+      renderTesting();
+    } catch (err) { $('#ct-err').textContent = err.message; }
+  });
+  const pick = $('#td-pick');
+  if (pick) pick.addEventListener('change', () => { state.testDayId = pick.value; renderTesting(); });
+  const del = $('#td-delete');
+  if (del) del.addEventListener('click', async () => {
+    if (!confirm('Delete this test day and all its results?')) return;
+    try { await apiDel('/api/test-days/' + encodeURIComponent(day.id)); state.testDayId = null; renderTesting(); }
+    catch (err) { alert(err.message); }
+  });
+  if (!day) return;
+  const renderRapid = () => {
+    const zone = $('#rapid-zone');
+    const pid = $('#rapid-athlete').value;
+    state.rapidAthleteId = pid || null;
+    if (!pid) { zone.innerHTML = '<p class="muted">Pick an athlete to start entering.</p>'; return; }
+    const pr = state.profiles.find(x => x.id === pid);
+    zone.innerHTML = `<h3>${esc(pr ? pr.name : '')}</h3>` + dayTests.map(t => `
+      <div class="rapid-test">
+        <div class="roster-row"><strong>${esc(t.name)}</strong> ${demoHtml(t.key, t.name)}</div>
+        ${testInputs(t, resultFor(pid, t.key), pid)}
+      </div>`).join('');
+    zone.querySelectorAll('[data-save-result]').forEach(b => b.addEventListener('click', async () => {
+      const [p2, key] = b.dataset.saveResult.split(':');
+      const test = tests.find(t => t.key === key);
+      const body = { profileId: p2, testDayId: day.id, testKey: key };
+      try {
+        if (test.kind === 'lift') {
+          body.weight = $('#rw-' + CSS.escape(p2) + '-' + CSS.escape(key)).value;
+          const reps = $('#rr-' + CSS.escape(p2) + '-' + CSS.escape(key)).value;
+          if (reps) body.reps = parseInt(reps, 10);
+        } else {
+          body.value = $('#rv-' + CSS.escape(p2) + '-' + CSS.escape(key)).value;
+        }
+        await apiPost('/api/results', body);
+        renderTesting();
+      } catch (err) { alert(err.message); }
+    }));
+  };
+  const ra = $('#rapid-athlete');
+  if (ra) { ra.addEventListener('change', renderRapid); renderRapid(); }
+  const renderHist = async () => {
+    const zone = $('#hist-zone');
+    const pid = $('#hist-athlete').value;
+    if (!pid) { zone.innerHTML = '<p class="muted">Pick an athlete to see their testing history.</p>'; return; }
+    try {
+      const data = await api('/api/results?profileId=' + encodeURIComponent(pid));
+      const byDay = {};
+      for (const r of data.results) { (byDay[r.testDayId] = byDay[r.testDayId] || []).push(r); }
+      const dayList = state.testDays.filter(d => byDay[d.id]);
+      zone.innerHTML = dayList.length ? dayList.map(d => `
+        <h4>${esc(d.date)} · ${esc(d.title)}</h4>
+        ${byDay[d.id].map(r => {
+          const t = tests.find(x => x.key === r.testKey);
+          const pb = data.personalBests[r.testKey];
+          const isPb = pb && pb.display === r.display;
+          return `<div class="roster-row"><span>${esc(t ? t.name : r.testKey)}</span>
+            <span>${resultRawText(r, t)}${t && t.kind === 'lift' ? ` · est. <strong>${fmtNum(r.display)} lb</strong>` : ''} ${isPb ? '<span class="badge star">PB ★</span>' : ''}</span></div>`;
+        }).join('')}`).join('') : '<p class="muted">No results yet for this athlete.</p>';
+    } catch (err) { zone.innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+  };
+  const ha = $('#hist-athlete');
+  if (ha) { ha.addEventListener('change', renderHist); renderHist(); }
+}
+
+/* ---------------- Top Athletes weekly tracker ---------------- */
+async function renderTop() {
+  const el = $('#top-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The Top Athletes tracker lives here.'); return; }
+  let dash;
+  try { dash = await api('/api/weekly/dashboard'); }
+  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const metrics = dash.metrics;
+  if (!metrics.some(m => m.key === state.topMetric)) state.topMetric = metrics[0] ? metrics[0].key : 'fly-30m';
+  if (!metrics.some(m => m.key === state.entryMetric)) state.entryMetric = state.topMetric;
+  if (!state.topWeek) state.topWeek = mondayStr();
+  const metric = metrics.find(m => m.key === state.topMetric);
+  const entryMetricObj = metrics.find(m => m.key === state.entryMetric);
+  let overlay = { athletes: [] };
+  try { overlay = await api('/api/weekly/overlay?metricId=' + encodeURIComponent(state.topMetric)); } catch (_) { /* ignore */ }
+  const tops = dash.topAthletes;
+  el.innerHTML = `
+    ${tops.length ? `
+    <div class="card">
+      <h2>Compare Top Athletes</h2>
+      <label>Metric <select id="top-metric">${metrics.map(m => `<option value="${m.key}" ${m.key === state.topMetric ? 'selected' : ''}>${esc(m.name)} (${esc(m.unit)})</option>`).join('')}</select></label>
+      ${lineChart(overlay.athletes.map((a, i) => ({ label: a.name, color: CHART_COLORS[i % CHART_COLORS.length], points: a.points })), metric)}
+      <div class="legend">
+        ${overlay.athletes.map((a, i) => `<div class="roster-row"><span><span class="swatch" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span> ${esc(a.name)}${a.best !== null ? ` · best ${fmtNum(a.best)} ${esc(metric.unit)}` : ''}</span>${deltaHtml(metric, a)}</div>`).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Enter this week's numbers</h2>
+      <div class="filter-row">
+        <label>Week of (Monday) <input type="date" id="top-week" value="${esc(state.topWeek)}"></label>
+        <label>Metric <select id="top-entry-metric">${metrics.map(m => `<option value="${m.key}" ${m.key === state.entryMetric ? 'selected' : ''}>${esc(m.name)} (${esc(m.unit)})</option>`).join('')}</select></label>
+      </div>
+      ${tops.map(pr => {
+        const cur = ((dash.entries[pr.id] || {})[state.entryMetric] || {})[state.topWeek];
+        return `<div class="roster-row"><span>${esc(pr.name)} ${cur !== undefined ? `<span class="muted">now ${fmtNum(cur)} ${esc(entryMetricObj.unit)}</span>` : ''}</span>
+          <span class="check-inputs"><input type="number" step="any" min="0" id="wv-${pr.id}" value="${cur !== undefined ? esc(cur) : ''}" placeholder="${esc(entryMetricObj.unit)}">
+          <button class="btn primary" data-weekly-save="${pr.id}" type="button" style="width:auto">Save</button></span></div>`;
+      }).join('')}
+      <p class="muted">Saving overwrites that week's number — one value per athlete per week.</p>
+    </div>
+    <div class="card">
+      <h2>Each athlete</h2>
+      ${tops.map(pr => {
+        const charts = metrics.map(m => {
+          const pts = seriesFromEntries(dash.entries[pr.id], m.key);
+          if (!pts.length) return '';
+          const stats = seriesStats(pts, m);
+          return `<h4>${esc(m.name)} <span class="muted">best ${stats.best !== null ? fmtNum(stats.best) + ' ' + esc(m.unit) : '—'}</span> ${deltaHtml(m, stats)}</h4>
+            ${lineChart([{ label: pr.name, color: '#CC0033', points: pts }], m, true)}`;
+        }).join('');
+        return `<h3>${esc(pr.name)} ${eventBadges(pr)}</h3>${charts || '<p class="muted">No weekly numbers yet.</p>'}`;
+      }).join('')}
+    </div>` : `<div class="card"><strong>No Top Athletes yet.</strong>
+      <p class="muted">Star athletes in the Groups view (★ Star on a profile) and they will show up here with their weekly graphs.</p></div>`}
+    <form class="card" id="custommetric-form">
+      <h2>Add a custom weekly metric</h2>
+      <div class="filter-row">
+        <label>Name <input type="text" id="cm-name" placeholder="e.g. 150m time"></label>
+        <label>Unit <input type="text" id="cm-unit" placeholder="sec, in, lb…"></label>
+        <label>Better is <select id="cm-better"><option value="higher">Higher</option><option value="lower">Lower</option><option value="neutral">Neither (just track it)</option></select></label>
+      </div>
+      <button class="btn primary" type="submit">Add metric</button>
+      <p class="error" id="cm-err"></p>
+    </form>`;
+  const tm = $('#top-metric');
+  if (tm) tm.addEventListener('change', () => { state.topMetric = tm.value; renderTop(); });
+  const tw = $('#top-week');
+  if (tw) tw.addEventListener('change', () => { state.topWeek = tw.value; renderTop(); });
+  const tem = $('#top-entry-metric');
+  if (tem) tem.addEventListener('change', () => { state.entryMetric = tem.value; renderTop(); });
+  el.querySelectorAll('[data-weekly-save]').forEach(b => b.addEventListener('click', async () => {
+    const pid = b.dataset.weeklySave;
+    const val = $('#wv-' + CSS.escape(pid)).value;
+    try {
+      await apiPut('/api/weekly/entry', { profileId: pid, metricId: state.entryMetric, week: state.topWeek, value: val === '' ? '' : Number(val) });
+      renderTop();
+    } catch (err) { alert(err.message); }
+  }));
+  $('#custommetric-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost('/api/weekly/metrics', { name: $('#cm-name').value, unit: $('#cm-unit').value, better: $('#cm-better').value });
+      renderTop();
+    } catch (err) { $('#cm-err').textContent = err.message; }
+  });
+}
+
+/* ---------------- aches & pains ---------------- */
+const AREA_LABELS = { ankle: 'Ankle', achilles: 'Achilles', calf: 'Calf', shin: 'Shin', knee: 'Knee', hamstring: 'Hamstring', quad: 'Quad', 'hip-flexor': 'Hip flexor', hip: 'Hip', groin: 'Groin', glute: 'Glute', 'lower-back': 'Lower back', foot: 'Foot', shoulder: 'Shoulder', other: 'Other' };
+const FEELING_LABELS = { ache: 'Ache', sharp: 'Sharp pain', tightness: 'Tightness', soreness: 'Soreness', stiffness: 'Stiffness', swelling: 'Swelling', other: 'Other' };
+const IMPACT_LABELS = { none: 'No effect', modified: 'Modified training', stopped: 'Stopped me' };
+const STATUS_LABELS = { new: 'New', monitoring: 'Monitoring', cleared: 'Cleared' };
+async function renderHealth() {
+  const el = $('#health-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Health concerns live here.'); return; }
+  await refreshProfiles();
+  let concerns = [];
+  try { concerns = (await api('/api/concerns')).concerns; state.concerns = concerns; }
+  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const concernCard = (c) => `
+    <div class="card concern-card ${c.flagged ? 'flagged' : ''}">
+      <div class="roster-row">
+        <span><strong>${esc(c.athleteName)}</strong> · ${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}) — ${esc(FEELING_LABELS[c.feeling] || c.feeling)}</span>
+        <span><span class="badge ${c.pain >= 7 ? 'high' : 'plain'}">PAIN ${c.pain}/10</span>
+        ${c.impact === 'stopped' ? '<span class="badge high">STOPPED</span>' : `<span class="badge plain">${esc(IMPACT_LABELS[c.impact] || c.impact)}</span>`}
+        <span class="badge ${c.status === 'cleared' ? 'low' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span></span>
+      </div>
+      <p class="muted">Started ${esc(c.started)} · filed ${esc(String(c.createdAt).slice(0, 10))}</p>
+      ${c.note ? `<p>${esc(c.note)}</p>` : ''}
+      <div class="filter-row">
+        <label>Status <select id="cs-${c.id}">
+          ${Object.keys(STATUS_LABELS).map(s => `<option value="${s}" ${c.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
+        </select></label>
+        <label>Pain now <select id="cp-${c.id}">
+          ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${c.pain === n ? 'selected' : ''}>${n}/10</option>`).join('')}
+        </select></label>
+      </div>
+      <label>Coach note <input type="text" id="cn-${c.id}" value="${esc(c.coachNote || '')}" placeholder="e.g. Sent to athletic trainer"></label>
+      <button class="btn primary" data-concern-save="${c.id}" type="button">Save update</button>
+    </div>`;
+  const byAthlete = {};
+  for (const c of concerns) { (byAthlete[c.athleteName] = byAthlete[c.athleteName] || []).push(c); }
+  el.innerHTML = `
+    <form class="card" id="concern-form">
+      <h2>Record a concern</h2>
+      <p class="muted">An athlete tells you something hurts — you write it down here so the plan can adjust.</p>
+      <label>Athlete <select id="hc-athlete">${profileOptions(null, true)}</select></label>
+      <div class="filter-row">
+        <label>Body area <select id="hc-area">${Object.keys(AREA_LABELS).map(a => `<option value="${a}">${AREA_LABELS[a]}</option>`).join('')}</select></label>
+        <label>Side <select id="hc-side"><option value="left">Left</option><option value="right">Right</option><option value="both">Both</option><option value="na">N/A</option></select></label>
+      </div>
+      <div class="filter-row">
+        <label>Feels like <select id="hc-feeling">${Object.keys(FEELING_LABELS).map(f => `<option value="${f}">${FEELING_LABELS[f]}</option>`).join('')}</select></label>
+        <label>Pain (1-10) <select id="hc-pain">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === 5 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      </div>
+      <div class="filter-row">
+        <label>When it started <input type="date" id="hc-started" value="${todayStr()}"></label>
+        <label>Effect on training <select id="hc-impact"><option value="none">No effect</option><option value="modified">Modified</option><option value="stopped">Stopped me</option></select></label>
+      </div>
+      <label>Note <textarea id="hc-note" rows="2" placeholder="What the athlete said, in their words if you can"></textarea></label>
+      <button class="btn primary" type="submit">File concern</button>
+      <p class="error" id="hc-err"></p>
+    </form>
+    <h2>All concerns</h2>
+    ${LANE_DIVIDER}
+    <p class="muted">High pain (7+) and "stopped" concerns sit at the top until cleared.</p>
+    ${concerns.length ? concerns.map(concernCard).join('') : '<p class="muted">No concerns on file. Good news.</p>'}
+    <h2>History by athlete</h2>
+    ${LANE_DIVIDER}
+    ${Object.keys(byAthlete).sort().map(name => `
+      <details class="card"><summary><strong>${esc(name)}</strong> — ${byAthlete[name].length} concern${byAthlete[name].length === 1 ? '' : 's'}</summary>
+      ${byAthlete[name].map(c => `<div class="roster-row"><span>${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}) · ${esc(FEELING_LABELS[c.feeling] || c.feeling)} · started ${esc(c.started)}</span>
+        <span><span class="badge ${c.pain >= 7 ? 'high' : 'plain'}">${c.pain}/10</span> <span class="badge plain">${esc(STATUS_LABELS[c.status] || c.status)}</span></span></div>`).join('')}
+      </details>`).join('') || '<p class="muted">Nothing yet.</p>'}`;
+  $('#concern-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost('/api/concerns', {
+        profileId: $('#hc-athlete').value,
+        area: $('#hc-area').value, side: $('#hc-side').value, feeling: $('#hc-feeling').value,
+        pain: parseInt($('#hc-pain').value, 10), started: $('#hc-started').value,
+        impact: $('#hc-impact').value, note: $('#hc-note').value,
+      });
+      renderHealth();
+    } catch (err) { $('#hc-err').textContent = err.message; }
+  });
+  el.querySelectorAll('[data-concern-save]').forEach(b => b.addEventListener('click', async () => {
+    const id = b.dataset.concernSave;
+    try {
+      await apiPut('/api/concerns/' + encodeURIComponent(id), {
+        status: $('#cs-' + CSS.escape(id)).value,
+        pain: parseInt($('#cp-' + CSS.escape(id)).value, 10),
+        coachNote: $('#cn-' + CSS.escape(id)).value,
+      });
+      renderHealth();
+    } catch (err) { alert(err.message); }
+  }));
 }
 
 /* ---------------- wiring ---------------- */
