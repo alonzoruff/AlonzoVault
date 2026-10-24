@@ -73,6 +73,132 @@ async function main() {
   r = await api(null, 'GET', '/');
   check('home page serves', r.status === 200);
 
+  /* ---------------- video library ---------------- */
+  const contentJson = (await api(null, 'GET', '/api/content')).json;
+  const vids = contentJson.videoLibrary;
+  check('video library serves an array', Array.isArray(vids), typeof vids);
+  check('video library has 102 entries', Array.isArray(vids) && vids.length === 102,
+    Array.isArray(vids) ? vids.length : 'not an array');
+  if (Array.isArray(vids)) {
+    const wantCounts = {
+      'Warm-Ups & Drills': 22, 'Lifts & Weight Room': 25, 'Sprint Mechanics & Speed': 20,
+      'Plyometrics': 10, 'Hip Mobility & Strength': 15, 'Core & Trunk': 5, 'Recovery & Mobility': 5,
+    };
+    const gotCounts = {};
+    for (const v of vids) gotCounts[v.category] = (gotCounts[v.category] || 0) + 1;
+    check('video library category counts are exact',
+      Object.keys(gotCounts).length === 7 &&
+      Object.keys(wantCounts).every(k => gotCounts[k] === wantCounts[k]),
+      gotCounts);
+    const ids = vids.map(v => v.id);
+    const wantIds = Array.from({ length: 102 }, (_, i) => 'VID-' + String(i + 1).padStart(3, '0'));
+    check('video entry ids are unique and complete VID-001..VID-102',
+      new Set(ids).size === 102 && wantIds.every(id => ids.includes(id)), ids.slice(0, 5));
+    const urlRe = /^https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})$/;
+    check('every video url is canonical watch form with an 11-char id',
+      vids.every(v => urlRe.test(v.url || '')), vids.find(v => !urlRe.test(v.url || '')));
+    const yids = vids.map(v => (v.url.match(urlRe) || [])[1]);
+    check('no duplicate video ids in the library', new Set(yids).size === yids.length);
+    check('every video entry has all 7 fields filled',
+      vids.every(v => ['id', 'title', 'category', 'movement', 'url', 'source', 'note']
+        .every(f => typeof v[f] === 'string' && v[f].trim().length > 0)));
+    check('card-gap demos are in the library (VID-101 squat, VID-102 lateral walks)',
+      vids.some(v => v.id === 'VID-101' && /squat/i.test(v.movement)) &&
+      vids.some(v => v.id === 'VID-102' && /lateral/i.test(v.movement)));
+  }
+  const pageHtml = await apiText(null, '/');
+  check('videos view markers are in the served page',
+    pageHtml.status === 200 && pageHtml.text.includes('id="view-videos"') &&
+    pageHtml.text.includes('data-view="videos"') && pageHtml.text.includes('id="vid-search"') &&
+    pageHtml.text.includes('id="vid-chips"') && pageHtml.text.includes('id="vid-grid"'));
+  const appJs = await apiText(null, '/app.js');
+  check('videos filter/search/play wiring is in the served JS',
+    appJs.status === 200 && appJs.text.includes('renderVideos') &&
+    appJs.text.includes('data-vidcat') && appJs.text.includes('vid-search') &&
+    appJs.text.includes('i.ytimg.com/vi/') && appJs.text.includes('youtube-nocookie.com/embed/'));
+
+  /* ---------------- glossary (Definitions tab) ---------------- */
+  const gloss = contentJson.glossary;
+  check('glossary serves an array', Array.isArray(gloss), typeof gloss);
+  check('glossary has 138 entries', Array.isArray(gloss) && gloss.length === 138,
+    Array.isArray(gloss) ? gloss.length : 'not an array');
+  if (Array.isArray(gloss)) {
+    const wantDefCounts = {
+      'Types of Running': 22, 'Sprint Drills & Warm-Up': 30, 'Lifts & Strength': 23,
+      'Plyometrics & Power': 12, 'Mobility, Activation & Core': 26, 'Program Terms': 25,
+    };
+    const gotDefCounts = {};
+    for (const e of gloss) gotDefCounts[e.category] = (gotDefCounts[e.category] || 0) + 1;
+    check('glossary category counts are exact',
+      Object.keys(gotDefCounts).length === 6 &&
+      Object.keys(wantDefCounts).every(k => gotDefCounts[k] === wantDefCounts[k]),
+      gotDefCounts);
+    check('every glossary entry has term/category/definition and a known category',
+      gloss.every(e => typeof e.term === 'string' && e.term.trim()
+        && typeof e.definition === 'string' && e.definition.trim()
+        && Object.prototype.hasOwnProperty.call(wantDefCounts, e.category)),
+      gloss.find(e => !(typeof e.term === 'string' && e.term.trim()
+        && typeof e.definition === 'string' && e.definition.trim()
+        && Object.prototype.hasOwnProperty.call(wantDefCounts, e.category))));
+    const runningTerms = ['Extensive Tempo', 'Intensive Tempo', 'Acceleration',
+      'Maximum Velocity', 'Speed Endurance', 'Special Endurance'];
+    check('required Types of Running terms exist',
+      runningTerms.every(t => gloss.some(e => e.term === t && e.category === 'Types of Running')),
+      runningTerms.filter(t => !gloss.some(e => e.term === t && e.category === 'Types of Running')));
+    /* Drill names in drills.csv are Title-Cased in the glossary and one
+       drops its distance ("Jog 800m + ..." -> "Jog + Progressive
+       Strides"), so compare with case/punctuation/distance normalized. */
+    const normTerm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ')
+      .split(' ').filter(tok => tok && !/^\d+(m|km|s)?$/.test(tok)).join(' ');
+    const glossNorms = new Set(gloss.map(e => normTerm(e.term)));
+    const drillNames = (contentJson.drills || []).map(d => d.name);
+    check('all 16 drill names appear as glossary terms',
+      drillNames.length === 16 && drillNames.every(n => glossNorms.has(normTerm(n))),
+      drillNames.filter(n => !glossNorms.has(normTerm(n))));
+  }
+  check('definitions view markers are in the served page',
+    pageHtml.status === 200 && pageHtml.text.includes('id="view-definitions"') &&
+    pageHtml.text.includes('data-view="definitions"') && pageHtml.text.includes('id="def-search"') &&
+    pageHtml.text.includes('id="def-chips"') && pageHtml.text.includes('id="def-list"'));
+  check('definitions search/filter wiring is in the served JS',
+    appJs.status === 200 && appJs.text.includes('renderDefinitions') &&
+    appJs.text.includes('data-defcat') && appJs.text.includes('def-search'));
+
+  /* ---------------- coach education ---------------- */
+  const edu = contentJson.coachEducation;
+  check('coach education serves an array', Array.isArray(edu), typeof edu);
+  check('coach education has 23 entries', Array.isArray(edu) && edu.length === 23,
+    Array.isArray(edu) ? edu.length : 'not an array');
+  if (Array.isArray(edu)) {
+    const wantEduCounts = { 'Local (DC Metro)': 4, 'National (U.S.)': 9, 'Online': 10 };
+    const gotEduCounts = {};
+    for (const e of edu) gotEduCounts[e.bucket] = (gotEduCounts[e.bucket] || 0) + 1;
+    check('coach education bucket counts are 4/9/10',
+      Object.keys(gotEduCounts).length === 3 &&
+      Object.keys(wantEduCounts).every(k => gotEduCounts[k] === wantEduCounts[k]),
+      gotEduCounts);
+    check('every coach education entry has all fields and an https url',
+      edu.every(e => ['name', 'provider', 'bucket', 'focus', 'format', 'location', 'url', 'notes']
+        .every(f => typeof e[f] === 'string' && e[f].trim().length > 0)
+        && /^https:\/\//.test(e.url)
+        && ['Sprints', 'Strength & Performance', 'Both'].includes(e.focus)),
+      edu.find(e => !/^https:\/\//.test(e.url || '')));
+  }
+  check('coach education view markers are in the served page',
+    pageHtml.status === 200 && pageHtml.text.includes('id="view-education"') &&
+    pageHtml.text.includes('data-view="education"') && pageHtml.text.includes('id="edu-search"') &&
+    pageHtml.text.includes('id="edu-chips"') && pageHtml.text.includes('id="edu-focus"') &&
+    pageHtml.text.includes('id="edu-list"'));
+  check('coach education filter/search wiring is in the served JS',
+    appJs.status === 200 && appJs.text.includes('renderEducation') &&
+    appJs.text.includes('data-edubucket') && appJs.text.includes('edu-focus'));
+  check('inventory view markers are in the served page',
+    pageHtml.status === 200 && pageHtml.text.includes('id="view-inventory"') &&
+    pageHtml.text.includes('data-view="inventory"') && pageHtml.text.includes('id="inventory-main"'));
+  check('inventory wiring is in the served JS',
+    appJs.status === 200 && appJs.text.includes('renderInventory') &&
+    appJs.text.includes('/api/inventory'));
+
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
   check('first account is coach', r.json.role === 'coach', r.json.role);
@@ -571,6 +697,81 @@ async function main() {
   check('archived profile visible with includeArchived=1', r.json.profiles.some(p => p.id === jane));
   r = await api(coach, 'GET', '/api/weekly/dashboard');
   check('archived top athlete leaves the dashboard', !r.json.topAthletes.some(t => t.id === jane));
+
+  /* ---------------- equipment inventory ---------------- */
+  r = await api(null, 'GET', '/api/inventory');
+  check('inventory without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/inventory');
+  check('athlete is 403 on inventory list', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/inventory', { name: 'Sneak', category: 'Hurdles', quantity: 1, condition: 'Good' });
+  check('athlete is 403 on inventory create', r.status === 403, r.status);
+  r = await api(athlete, 'PUT', '/api/inventory/whatever', { quantity: 2 });
+  check('athlete is 403 on inventory update', r.status === 403, r.status);
+  r = await api(athlete, 'DELETE', '/api/inventory/whatever');
+  check('athlete is 403 on inventory delete', r.status === 403, r.status);
+
+  r = await api(coach, 'GET', '/api/inventory');
+  check('inventory starts empty', r.status === 200 && Array.isArray(r.json.items) && r.json.items.length === 0,
+    r.json && r.json.items && r.json.items.length);
+  r = await api(coach, 'POST', '/api/inventory', { name: 'Championship blocks', category: 'Starting Blocks', quantity: 8, condition: 'Good', location: 'Track shed', note: 'Moye-style' });
+  check('inventory create is 201', r.status === 201, r.status);
+  const invBlocks = r.json.item.id;
+  check('inventory item keeps its fields',
+    r.json.item.name === 'Championship blocks' && r.json.item.category === 'Starting Blocks' &&
+    r.json.item.quantity === 8 && r.json.item.condition === 'Good' &&
+    r.json.item.location === 'Track shed' && !!r.json.item.updatedAt, r.json.item);
+  r = await api(coach, 'POST', '/api/inventory', { name: 'Practice hurdles', category: 'Hurdles', quantity: 40, condition: 'Replace', location: 'Track shed', note: 'Two bent uprights' });
+  const invHurdles = r.json.item.id;
+  r = await api(coach, 'POST', '/api/inventory', { name: 'Relay batons', category: 'Relay Batons', quantity: 12, condition: 'Fair', location: 'Coach office', note: '' });
+  const invBatons = r.json.item.id;
+
+  r = await api(coach, 'GET', '/api/inventory');
+  check('inventory lists the three items', r.status === 200 && r.json.items.length === 3,
+    r.json.items && r.json.items.length);
+  check('inventory sorts by category then name',
+    r.json.items.map(i => i.id).join(',') === [invHurdles, invBatons, invBlocks].join(','),
+    r.json.items.map(i => i.name));
+  const invSummary = {
+    types: r.json.items.length,
+    units: r.json.items.reduce((s, i) => s + i.quantity, 0),
+    replace: r.json.items.filter(i => i.condition === 'Replace').length,
+  };
+  check('inventory summary matches what was created',
+    invSummary.types === 3 && invSummary.units === 60 && invSummary.replace === 1, invSummary);
+
+  r = await api(coach, 'PUT', '/api/inventory/' + invBlocks, { quantity: 6, condition: 'Fair' });
+  check('inventory update is 200 with new values',
+    r.status === 200 && r.json.item.quantity === 6 && r.json.item.condition === 'Fair' &&
+    r.json.item.name === 'Championship blocks', r.json);
+  r = await api(coach, 'GET', '/api/inventory');
+  check('inventory totals reflect the update',
+    r.json.items.reduce((s, i) => s + i.quantity, 0) === 58, r.json.items.map(i => i.quantity));
+
+  r = await api(coach, 'POST', '/api/inventory', { category: 'Hurdles', quantity: 1, condition: 'Good' });
+  check('inventory missing name is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/inventory', { name: 'Neg', category: 'Hurdles', quantity: -1, condition: 'Good' });
+  check('inventory negative quantity is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/inventory', { name: 'Frac', category: 'Hurdles', quantity: 2.5, condition: 'Good' });
+  check('inventory fractional quantity is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/inventory', { name: 'BadCat', category: 'Widgets', quantity: 1, condition: 'Good' });
+  check('inventory bad category is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/inventory', { name: 'BadCond', category: 'Hurdles', quantity: 1, condition: 'Minty' });
+  check('inventory bad condition is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/inventory/' + invBlocks, { condition: 'Broken' });
+  check('inventory update with bad condition is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/inventory/does-not-exist', { quantity: 1 });
+  check('inventory update of unknown id is 404', r.status === 404, r.status);
+  r = await api(coach, 'DELETE', '/api/inventory/does-not-exist');
+  check('inventory delete of unknown id is 404', r.status === 404, r.status);
+
+  r = await api(coach, 'DELETE', '/api/inventory/' + invBatons);
+  check('inventory delete is 200', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/inventory');
+  check('inventory no longer lists the deleted item',
+    r.json.items.length === 2 && !r.json.items.some(i => i.id === invBatons),
+    r.json.items && r.json.items.length);
+
+  return { coach, inventoryId: invBlocks };
 }
 
 async function waitForServer(tries = 60) {
@@ -585,16 +786,30 @@ async function waitForServer(tries = 60) {
 }
 
 (async () => {
-  const child = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
-    env: Object.assign({}, process.env, { PORT: String(PORT), DATA_DIR, SESSION_SECRET: 'test-secret' }),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
   let serverLog = '';
-  child.stdout.on('data', d => { serverLog += d; });
-  child.stderr.on('data', d => { serverLog += d; });
+  const startServer = () => {
+    const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, { PORT: String(PORT), DATA_DIR, SESSION_SECRET: 'test-secret' }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    c.stdout.on('data', d => { serverLog += d; });
+    c.stderr.on('data', d => { serverLog += d; });
+    return c;
+  };
+  let child = startServer();
   try {
     if (!await waitForServer()) throw new Error('server did not start.\n' + serverLog);
-    await main();
+    const ctx = await main();
+    /* Restart on the same DATA_DIR: coach-entered data lives in the
+       store file, so a fresh boot must still see it. */
+    child.kill('SIGKILL');
+    await new Promise(res => setTimeout(res, 300));
+    child = startServer();
+    if (!await waitForServer()) throw new Error('server did not restart.\n' + serverLog);
+    const rr = await api(ctx.coach, 'GET', '/api/inventory');
+    check('inventory survives a server restart',
+      rr.status === 200 && rr.json.items.some(i => i.id === ctx.inventoryId),
+      rr.json && rr.json.items && rr.json.items.length);
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {

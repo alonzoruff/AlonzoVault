@@ -63,6 +63,7 @@ let db = {
   customWeeklyMetrics: [], weekly: {},
   concerns: {},
   mediaOverrides: {},
+  inventory: [],
 };
 
 function migrate() {
@@ -80,6 +81,7 @@ function migrate() {
   db.weekly = db.weekly || {};
   db.concerns = db.concerns || {};
   db.mediaOverrides = db.mediaOverrides || {};
+  db.inventory = Array.isArray(db.inventory) ? db.inventory : [];
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     if (!db.logs[u.id]) db.logs[u.id] = [];
@@ -174,7 +176,59 @@ function loadContent() {
     framework400: read('framework400.md'),
     guide: read('guide.md'),
     season: read('season.md'),
+    videoLibrary: loadVideoLibrary(),
+    glossary: loadGlossary(),
+    coachEducation: loadCoachEducation(),
   };
+}
+/* The Videos section library (content/video_library.json). Loaded
+   tolerantly, like the movement media base: a missing or malformed
+   file means an empty library, never a crashed server. */
+function loadVideoLibrary() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'video_library.json'), 'utf8'));
+    if (Array.isArray(parsed)) {
+      return parsed.filter(v => v && typeof v === 'object'
+        && typeof v.id === 'string' && typeof v.url === 'string'
+        && typeof v.title === 'string' && typeof v.category === 'string');
+    }
+  } catch (_) { /* no video library bundled — that is fine */ }
+  return [];
+}
+/* The Definitions tab glossary (content/glossary.json). Same tolerant
+   loading as the video library: a missing or malformed file means an
+   empty glossary, never a crashed server. Entries without a term,
+   category, or definition are dropped; the optional cues line is kept
+   only when it is a non-empty string. */
+function loadGlossary() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'glossary.json'), 'utf8'));
+    if (Array.isArray(parsed)) {
+      return parsed.filter(e => e && typeof e === 'object'
+        && typeof e.term === 'string' && e.term.trim()
+        && typeof e.category === 'string' && e.category.trim()
+        && typeof e.definition === 'string' && e.definition.trim())
+        .map(e => (typeof e.cues === 'string' && e.cues.trim())
+          ? e
+          : { term: e.term, category: e.category, definition: e.definition });
+    }
+  } catch (_) { /* no glossary bundled — that is fine */ }
+  return [];
+}
+/* The Coach Education tab list (content/coach_education.json). Same
+   tolerant loading as the glossary: a missing or malformed file means
+   an empty list, never a crashed server. Entries missing any display
+   field are dropped. */
+function loadCoachEducation() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'coach_education.json'), 'utf8'));
+    if (Array.isArray(parsed)) {
+      const fields = ['name', 'provider', 'bucket', 'focus', 'format', 'location', 'url', 'notes'];
+      return parsed.filter(e => e && typeof e === 'object'
+        && fields.every(f => typeof e[f] === 'string' && e[f].trim()));
+    }
+  } catch (_) { /* no coach education bundled — that is fine */ }
+  return [];
 }
 const CONTENT = loadContent();
 const SESSION_BY_ID = new Map(CONTENT.sessions.map(s => [s.id, s]));
@@ -281,6 +335,46 @@ function mergedMedia() {
 const CONCERN_AREAS = ['ankle', 'achilles', 'calf', 'shin', 'knee', 'hamstring', 'quad', 'hip-flexor', 'hip', 'groin', 'glute', 'lower-back', 'foot', 'shoulder', 'other'];
 const CONCERN_FEELINGS = ['ache', 'sharp', 'tightness', 'soreness', 'stiffness', 'swelling', 'other'];
 const EVENT_TAGS = ['sprinter', 'jumper', 'hurdler'];
+
+/* Equipment inventory: fixed category + condition lists. The coach
+   records the program's gear; items live in the JSON store. */
+const INVENTORY_CATEGORIES = ['Starting Blocks', 'Hurdles', 'Relay Batons', 'Throws Implements',
+  'Timing & Tech', 'Medicine Balls', 'Bands & Mobility', 'Plyo & Training Aids',
+  'Cones & Markers', 'Uniforms & Gear', 'First Aid & Medical', 'Other'];
+const INVENTORY_CONDITIONS = ['Good', 'Fair', 'Replace'];
+/* Shared create/update validation. With partial=true only the fields
+   present in the body are checked (and returned); creates require the
+   core fields. Returns { fields } or { error }. */
+function validateInventory(body, partial) {
+  const fields = {};
+  const has = (k) => body[k] !== undefined;
+  if (!partial || has('name')) {
+    fields.name = clean(body.name, 80);
+    if (!fields.name) return { error: 'An inventory item needs a name.' };
+  }
+  if (!partial || has('category')) {
+    fields.category = clean(body.category, 40);
+    if (!INVENTORY_CATEGORIES.includes(fields.category)) {
+      return { error: 'Pick a category from the list.' };
+    }
+  }
+  if (!partial || has('quantity')) {
+    const quantity = num(body.quantity);
+    if (quantity === null || !Number.isInteger(quantity) || quantity < 0 || quantity > 100000) {
+      return { error: 'Quantity must be a whole number from 0 to 100000.' };
+    }
+    fields.quantity = quantity;
+  }
+  if (!partial || has('condition')) {
+    fields.condition = clean(body.condition, 10);
+    if (!INVENTORY_CONDITIONS.includes(fields.condition)) {
+      return { error: 'Condition must be Good, Fair, or Replace.' };
+    }
+  }
+  if (!partial || has('location')) fields.location = clean(body.location, 80);
+  if (!partial || has('note')) fields.note = clean(body.note, 500);
+  return { fields };
+}
 
 /* ------------------------------------------------------------------ */
 /* Dates + season plan resolution                                      */
@@ -1337,6 +1431,45 @@ async function handleApi(req, res, url) {
     } else {
       delete db.mediaOverrides[movementId];
     }
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---------- equipment inventory (coach-only tracker) ---------- */
+  if (p === '/api/inventory' && req.method === 'GET') {
+    const items = db.inventory.slice().sort((a, b) =>
+      a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+    return sendJson(res, 200, { items });
+  }
+  if (p === '/api/inventory' && req.method === 'POST') {
+    const body = await readBody(req);
+    const v = validateInventory(body, false);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const item = Object.assign({
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+    }, v.fields, { updatedAt: new Date().toISOString() });
+    db.inventory.push(item);
+    saveDb();
+    return sendJson(res, 201, { item });
+  }
+  const inventoryMatch = p.match(/^\/api\/inventory\/([^/]+)$/);
+  if (inventoryMatch && req.method === 'PUT') {
+    const item = db.inventory.find(i => i.id === decodeURIComponent(inventoryMatch[1]));
+    if (!item) return sendJson(res, 404, { error: 'Inventory item not found.' });
+    const body = await readBody(req);
+    const v = validateInventory(body, true);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    Object.assign(item, v.fields, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { item });
+  }
+  if (inventoryMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(inventoryMatch[1]);
+    if (!db.inventory.some(i => i.id === id)) {
+      return sendJson(res, 404, { error: 'Inventory item not found.' });
+    }
+    db.inventory = db.inventory.filter(i => i.id !== id);
     saveDb();
     return sendJson(res, 200, { ok: true });
   }

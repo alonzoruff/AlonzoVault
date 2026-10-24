@@ -1598,3 +1598,66 @@ svg.chart { width: 100%; height: auto; display: block; }
   body.printing-card .wu-card .wu-print { display: none !important; }
   @page { size: Letter; margin: 0.5in; }
 }
+
+/* ---- Videos section: chips + thumbnail grid + in-place player ---- */
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
+.chip {
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.chip.active { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
+.vid-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.vid-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.vid-thumb { position: relative; aspect-ratio: 16 / 9; background: #111; cursor: pointer; }
+.vid-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vid-thumb iframe { width: 100%; height: 100%; border: 0; display: block; }
+.vid-play {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 52px; height: 52px; border-radius: 50%;
+  background: rgba(204, 0, 51, .92); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 19px; padding-left: 3px; pointer-events: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+}
+.vid-body { padding: 10px 14px 14px; }
+.vid-movement { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--red-dark); }
+.vid-title { font-size: 15.5px; margin: 3px 0 2px; line-height: 1.3; }
+.vid-source { font-size: 13px; }
+.vid-note { font-size: 14px; margin: 6px 0 0; }
+@media (max-width: 520px) { .vid-grid { grid-template-columns: 1fr; } }
+
+/* ---- Definitions section: search + category chips + term cards ---- */
+.def-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.def-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px 14px 14px; display: flex; flex-direction: column;
+}
+.def-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.def-term { font-size: 16.5px; margin: 0; line-height: 1.25; }
+.def-cat {
+  font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--red-dark); white-space: nowrap;
+}
+.def-text { font-size: 14.5px; margin: 6px 0 0; line-height: 1.45; }
+.def-cue { font-size: 13.5px; margin: 8px 0 0; color: var(--red-dark); }
+@media (max-width: 520px) { .def-list { grid-template-columns: 1fr; } }
+
+/* ---- Coach Education section: bucket chips + focus filter + link cards ---- */
+.edu-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.edu-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px 14px 14px; display: flex; flex-direction: column;
+}
+.edu-provider { font-size: 13px; margin-top: 2px; }
+.edu-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 2px; }
+.edu-link { margin: 12px 0 0; }
+@media (max-width: 520px) { .edu-list { grid-template-columns: 1fr; } }
+
+/* ---- Inventory (coach): summary strip + item cards ---- */
+.hero-stat.inv-flag { border-color: var(--red); background: #fdf0f3; }
+.hero-stat.inv-flag .stat-num { color: var(--red); }
+.inv-note { font-size: 14px; margin: 6px 0 0; }
+.inv-updated { font-size: 12.5px; margin: 4px 0 0; }

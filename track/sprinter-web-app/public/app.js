@@ -10,6 +10,17 @@ const state = {
   swaps: {},
   week: 1,
   libQuery: '',
+  vidCat: 'All',
+  vidQuery: '',
+  defCat: 'All',
+  defQuery: '',
+  eduBucket: 'All',
+  eduFocus: '',
+  eduQuery: '',
+  invItems: [],
+  invCat: '',
+  invQ: '',
+  invEditId: null,
   detailId: null,
   groups: [],
   roster: null,
@@ -177,7 +188,7 @@ function md(src) {
 function showView(name) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   $$('#main-tabs .tab').forEach(t => {
-    const main = ['home', 'library', 'season', 'log', 'cards', 'nutrition', 'testing', 'top', 'health', 'groups', 'coach'].includes(name) ? name : 'more';
+    const main = ['home', 'library', 'season', 'log', 'cards', 'nutrition', 'videos', 'definitions', 'education', 'testing', 'top', 'health', 'groups', 'coach', 'inventory'].includes(name) ? name : 'more';
     t.classList.toggle('active', t.dataset.view === main);
   });
   window.scrollTo(0, 0);
@@ -465,6 +476,144 @@ function renderQtr() {
   $('#qtr-doc').innerHTML = md(state.content.framework400);
 }
 
+/* ---------------- videos ---------------- */
+const VID_CATEGORIES = ['Warm-Ups & Drills', 'Lifts & Weight Room', 'Sprint Mechanics & Speed',
+  'Plyometrics', 'Hip Mobility & Strength', 'Core & Trunk', 'Recovery & Mobility'];
+function ytVideoId(url) {
+  const m = String(url || '').match(/(?:[?&]v=|youtu\.be\/|\/(?:embed|shorts|live)\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+function videoCardHtml(v) {
+  const yid = ytVideoId(v.url);
+  const thumb = yid
+    ? `<div class="vid-thumb" data-play="${yid}" role="button" tabindex="0" aria-label="Play: ${esc(v.title)}">
+         <img loading="lazy" src="https://i.ytimg.com/vi/${yid}/hqdefault.jpg" alt="">
+         <span class="vid-play" aria-hidden="true">▶</span>
+       </div>`
+    : '';
+  return `<article class="vid-card">
+    ${thumb}
+    <div class="vid-body">
+      <div class="vid-movement">${esc(v.movement)}</div>
+      <h3 class="vid-title">${esc(v.title)}</h3>
+      <div class="muted vid-source">${esc(v.source)}</div>
+      <p class="vid-note">${esc(v.note)}</p>
+    </div>
+  </article>`;
+}
+function renderVideos() {
+  const grid = $('#vid-grid');
+  if (!grid) return;
+  const lib = (state.content && state.content.videoLibrary) || [];
+  const counts = {};
+  for (const v of lib) counts[v.category] = (counts[v.category] || 0) + 1;
+  const cats = VID_CATEGORIES.filter(c => counts[c]);
+  for (const c of Object.keys(counts)) if (!cats.includes(c)) cats.push(c);
+  if (state.vidCat !== 'All' && !counts[state.vidCat]) state.vidCat = 'All';
+  $('#vid-chips').innerHTML =
+    `<button type="button" class="chip ${state.vidCat === 'All' ? 'active' : ''}" data-vidcat="All">All (${lib.length})</button>` +
+    cats.map(c => `<button type="button" class="chip ${state.vidCat === c ? 'active' : ''}" data-vidcat="${esc(c)}">${esc(c)} (${counts[c]})</button>`).join('');
+  const q = (state.vidQuery || '').trim().toLowerCase();
+  const list = lib.filter(v => {
+    if (state.vidCat !== 'All' && v.category !== state.vidCat) return false;
+    if (q && !(v.title.toLowerCase().includes(q) || v.movement.toLowerCase().includes(q)
+      || v.source.toLowerCase().includes(q) || v.note.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  $('#vid-count').textContent = lib.length
+    ? `Showing ${list.length} of ${lib.length} videos.`
+    : 'The video library has not loaded.';
+  grid.innerHTML = list.length
+    ? list.map(videoCardHtml).join('')
+    : '<p class="muted">No videos match. Try a different search or category.</p>';
+}
+
+/* ---------------- definitions ---------------- */
+const DEF_CATEGORIES = ['Types of Running', 'Sprint Drills & Warm-Up', 'Lifts & Strength',
+  'Plyometrics & Power', 'Mobility, Activation & Core', 'Program Terms'];
+function defCardHtml(e) {
+  const cue = e.cues ? `<p class="def-cue"><strong>Cue:</strong> ${esc(e.cues)}</p>` : '';
+  return `<article class="def-card">
+    <div class="def-head">
+      <h3 class="def-term">${esc(e.term)}</h3>
+      <span class="def-cat">${esc(e.category)}</span>
+    </div>
+    <p class="def-text">${esc(e.definition)}</p>
+    ${cue}
+  </article>`;
+}
+function renderDefinitions() {
+  const list = $('#def-list');
+  if (!list) return;
+  const gloss = (state.content && state.content.glossary) || [];
+  const counts = {};
+  for (const e of gloss) counts[e.category] = (counts[e.category] || 0) + 1;
+  const cats = DEF_CATEGORIES.filter(c => counts[c]);
+  for (const c of Object.keys(counts)) if (!cats.includes(c)) cats.push(c);
+  if (state.defCat !== 'All' && !counts[state.defCat]) state.defCat = 'All';
+  $('#def-chips').innerHTML =
+    `<button type="button" class="chip ${state.defCat === 'All' ? 'active' : ''}" data-defcat="All">All (${gloss.length})</button>` +
+    cats.map(c => `<button type="button" class="chip ${state.defCat === c ? 'active' : ''}" data-defcat="${esc(c)}">${esc(c)} (${counts[c]})</button>`).join('');
+  const q = (state.defQuery || '').trim().toLowerCase();
+  const rows = gloss.filter(e => {
+    if (state.defCat !== 'All' && e.category !== state.defCat) return false;
+    if (q && !(e.term.toLowerCase().includes(q) || e.definition.toLowerCase().includes(q)
+      || (e.cues || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  $('#def-count').textContent = gloss.length
+    ? `Showing ${rows.length} of ${gloss.length} definitions.`
+    : 'The glossary has not loaded.';
+  list.innerHTML = rows.length
+    ? rows.map(defCardHtml).join('')
+    : '<p class="muted">No definitions match. Try a different search or category.</p>';
+}
+
+/* ---------------- coach education ---------------- */
+const EDU_BUCKETS = ['Local (DC Metro)', 'National (U.S.)', 'Online'];
+function eduCardHtml(e) {
+  return `<article class="edu-card">
+    <div class="def-head">
+      <h3 class="def-term">${esc(e.name)}</h3>
+      <span class="def-cat">${esc(e.bucket)}</span>
+    </div>
+    <div class="muted edu-provider">${esc(e.provider)} · ${esc(e.location)}</div>
+    <div class="edu-tags">
+      <span class="badge plain">${esc(e.focus)}</span>
+      <span class="badge plain">${esc(e.format)}</span>
+    </div>
+    <p class="def-text">${esc(e.notes)}</p>
+    <p class="edu-link"><a class="btn secondary" href="${esc(e.url)}" target="_blank" rel="noopener">Visit site</a></p>
+  </article>`;
+}
+function renderEducation() {
+  const list = $('#edu-list');
+  if (!list) return;
+  const edu = (state.content && state.content.coachEducation) || [];
+  const counts = {};
+  for (const e of edu) counts[e.bucket] = (counts[e.bucket] || 0) + 1;
+  const buckets = EDU_BUCKETS.filter(b => counts[b]);
+  for (const b of Object.keys(counts)) if (!buckets.includes(b)) buckets.push(b);
+  if (state.eduBucket !== 'All' && !counts[state.eduBucket]) state.eduBucket = 'All';
+  $('#edu-chips').innerHTML =
+    `<button type="button" class="chip ${state.eduBucket === 'All' ? 'active' : ''}" data-edubucket="All">All (${edu.length})</button>` +
+    buckets.map(b => `<button type="button" class="chip ${state.eduBucket === b ? 'active' : ''}" data-edubucket="${esc(b)}">${esc(b)} (${counts[b]})</button>`).join('');
+  const q = (state.eduQuery || '').trim().toLowerCase();
+  const rows = edu.filter(e => {
+    if (state.eduBucket !== 'All' && e.bucket !== state.eduBucket) return false;
+    if (state.eduFocus && e.focus !== state.eduFocus) return false;
+    if (q && !(e.name.toLowerCase().includes(q) || e.provider.toLowerCase().includes(q)
+      || e.notes.toLowerCase().includes(q) || e.location.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  $('#edu-count').textContent = edu.length
+    ? `Showing ${rows.length} of ${edu.length} trainings.`
+    : 'The coach education list has not loaded.';
+  list.innerHTML = rows.length
+    ? rows.map(eduCardHtml).join('')
+    : '<p class="muted">No trainings match. Try a different search, bucket, or focus.</p>';
+}
+
 /* ---------------- season ---------------- */
 function renderSeason() {
   const weeks = state.content.weeks;
@@ -610,7 +759,7 @@ function syncAuthUi() {
   const isCoach = !!(state.user && state.user.role === 'coach');
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
-  renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth();
+  renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
   if (isCoach) loadMedia();
 }
 
@@ -1479,8 +1628,168 @@ async function renderHealth() {
   }));
 }
 
+/* ---------------- equipment inventory ---------------- */
+const INV_CATEGORIES = ['Starting Blocks', 'Hurdles', 'Relay Batons', 'Throws Implements',
+  'Timing & Tech', 'Medicine Balls', 'Bands & Mobility', 'Plyo & Training Aids',
+  'Cones & Markers', 'Uniforms & Gear', 'First Aid & Medical', 'Other'];
+const INV_CONDITIONS = ['Good', 'Fair', 'Replace'];
+function invConditionBadge(c) {
+  if (c === 'Replace') return '<span class="badge high">REPLACE</span>';
+  if (c === 'Good') return '<span class="badge done">GOOD</span>';
+  return '<span class="badge plain">FAIR</span>';
+}
+async function renderInventory() {
+  const el = $('#inventory-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The equipment inventory lives here.'); return; }
+  try {
+    const data = await api('/api/inventory');
+    state.invItems = data.items || [];
+  } catch (err) {
+    el.innerHTML = '<p class="error">Could not load the inventory: ' + esc(err.message) + '</p>';
+    return;
+  }
+  const items = state.invItems;
+  const totalUnits = items.reduce((s, i) => s + (i.quantity || 0), 0);
+  const replaceCount = items.filter(i => i.condition === 'Replace').length;
+  const editing = state.invEditId ? items.find(i => i.id === state.invEditId) : null;
+  if (state.invEditId && !editing) state.invEditId = null;
+  let list = items.slice();
+  if (state.invCat) list = list.filter(i => i.category === state.invCat);
+  if (state.invQ) {
+    const q = state.invQ.toLowerCase();
+    list = list.filter(i => i.name.toLowerCase().includes(q)
+      || (i.location || '').toLowerCase().includes(q) || (i.note || '').toLowerCase().includes(q));
+  }
+  const catOpts = (sel, blankLabel) => (blankLabel ? `<option value="">${blankLabel}</option>` : '')
+    + INV_CATEGORIES.map(c => `<option value="${esc(c)}" ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  const condOpts = (sel) => INV_CONDITIONS.map(c =>
+    `<option value="${c}" ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
+  const itemCard = (i) => `
+    <div class="card inv-card">
+      <div class="roster-row">
+        <span><strong>${esc(i.name)}</strong> · ×${i.quantity}${i.location ? ' · ' + esc(i.location) : ''}</span>
+        <span class="roster-actions">
+          ${invConditionBadge(i.condition)}
+          <button class="btn secondary" data-inv-edit="${i.id}" type="button">Edit</button>
+          <button class="btn danger" data-inv-del="${i.id}" type="button">Delete</button>
+        </span>
+      </div>
+      ${i.note ? `<p class="inv-note">${esc(i.note)}</p>` : ''}
+      <p class="muted inv-updated">Updated ${esc(String(i.updatedAt || '').slice(0, 10))}</p>
+    </div>`;
+  const groupSections = INV_CATEGORIES.filter(c => list.some(i => i.category === c))
+    .map(c => `<h3>${esc(c)}</h3>` + list.filter(i => i.category === c).map(itemCard).join('')).join('');
+  el.innerHTML = `
+    <div class="hero-stats">
+      <div class="hero-stat"><span class="stat-num">${items.length}</span><span class="stat-label">Item types</span></div>
+      <div class="hero-stat"><span class="stat-num">${totalUnits}</span><span class="stat-label">Total units</span></div>
+      <div class="hero-stat ${replaceCount ? 'inv-flag' : ''}"><span class="stat-num">${replaceCount}</span><span class="stat-label">Flagged Replace</span></div>
+    </div>
+    <div class="card">
+      <h2>Filters</h2>
+      <div class="filter-row">
+        <select id="inv-filter-cat">${catOpts(state.invCat, 'All categories')}</select>
+      </div>
+      <label>Search <input type="search" id="inv-filter-q" value="${esc(state.invQ)}" placeholder="Item, location, or note"></label>
+      <p class="muted">${list.length} of ${items.length} item types shown.</p>
+    </div>
+    ${items.length === 0
+      ? '<div class="card"><h2>No equipment logged yet</h2><p class="muted">This is your inventory book for the whole program — blocks, hurdles, implements, timing gear, all of it. Add the first item below: what it is, how many you have, what shape it is in, and where it lives. Once it is in here, counts and replacement flags stay one glance away.</p></div>'
+      : (groupSections || '<p class="muted">No items match those filters.</p>')}
+    <form class="card" id="inv-form">
+      <h2>${editing ? 'Edit item' : 'Add an item'}</h2>
+      <label>Name <input type="text" id="inv-name" required value="${editing ? esc(editing.name) : ''}" placeholder="e.g. Championship starting blocks"></label>
+      <div class="filter-row">
+        <label>Category <select id="inv-category">${catOpts(editing ? editing.category : 'Starting Blocks')}</select></label>
+        <label>Quantity <input type="number" id="inv-quantity" min="0" step="1" required value="${editing ? editing.quantity : ''}" placeholder="0"></label>
+      </div>
+      <div class="filter-row">
+        <label>Condition <select id="inv-condition">${condOpts(editing ? editing.condition : 'Good')}</select></label>
+        <label>Location <input type="text" id="inv-location" value="${editing ? esc(editing.location || '') : ''}" placeholder="e.g. Track shed"></label>
+      </div>
+      <label>Note <textarea id="inv-note" rows="2" placeholder="Anything worth knowing — sizes, a broken part, who borrowed it">${editing ? esc(editing.note || '') : ''}</textarea></label>
+      <button class="btn primary" type="submit">${editing ? 'Save changes' : 'Add item'}</button>
+      ${editing ? '<button class="btn secondary" id="inv-cancel" type="button">Cancel edit</button>' : ''}
+      <p class="error" id="inv-err"></p>
+    </form>`;
+  $('#inv-filter-cat').addEventListener('change', (e) => { state.invCat = e.target.value; renderInventory(); });
+  $('#inv-filter-q').addEventListener('input', (e) => { state.invQ = e.target.value; clearTimeout(state._invT); state._invT = setTimeout(renderInventory, 250); });
+  el.querySelectorAll('[data-inv-edit]').forEach(b => b.addEventListener('click', () => {
+    state.invEditId = b.dataset.invEdit;
+    renderInventory();
+    const f = $('#inv-form');
+    if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  el.querySelectorAll('[data-inv-del]').forEach(b => b.addEventListener('click', async () => {
+    const item = state.invItems.find(i => i.id === b.dataset.invDel);
+    if (!confirm('Delete "' + (item ? item.name : 'this item') + '" from the inventory?')) return;
+    try {
+      await apiDel('/api/inventory/' + encodeURIComponent(b.dataset.invDel));
+      if (state.invEditId === b.dataset.invDel) state.invEditId = null;
+      renderInventory();
+    } catch (err) { alert(err.message); }
+  }));
+  const cancelBtn = $('#inv-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { state.invEditId = null; renderInventory(); });
+  $('#inv-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      name: $('#inv-name').value,
+      category: $('#inv-category').value,
+      quantity: parseInt($('#inv-quantity').value, 10),
+      condition: $('#inv-condition').value,
+      location: $('#inv-location').value,
+      note: $('#inv-note').value,
+    };
+    try {
+      if (state.invEditId) await apiPut('/api/inventory/' + encodeURIComponent(state.invEditId), payload);
+      else await apiPost('/api/inventory', payload);
+      state.invEditId = null;
+      renderInventory();
+    } catch (err) { $('#inv-err').textContent = err.message; }
+  });
+}
+
 /* ---------------- wiring ---------------- */
 $('#lib-search').addEventListener('input', (e) => { state.libQuery = e.target.value; renderLibrary(); });
+$('#vid-search').addEventListener('input', (e) => { state.vidQuery = e.target.value; renderVideos(); });
+$('#vid-chips').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-vidcat]');
+  if (!chip) return;
+  state.vidCat = chip.dataset.vidcat;
+  renderVideos();
+});
+$('#def-search').addEventListener('input', (e) => { state.defQuery = e.target.value; renderDefinitions(); });
+$('#def-chips').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-defcat]');
+  if (!chip) return;
+  state.defCat = chip.dataset.defcat;
+  renderDefinitions();
+});
+$('#edu-search').addEventListener('input', (e) => { state.eduQuery = e.target.value; renderEducation(); });
+$('#edu-chips').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-edubucket]');
+  if (!chip) return;
+  state.eduBucket = chip.dataset.edubucket;
+  renderEducation();
+});
+$('#edu-focus').addEventListener('change', (e) => { state.eduFocus = e.target.value; renderEducation(); });
+function playVideoThumb(thumb) {
+  const yid = thumb.dataset.play;
+  if (!yid || thumb.dataset.playing) return;
+  thumb.dataset.playing = '1';
+  thumb.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${yid}?autoplay=1&rel=0" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+}
+$('#vid-grid').addEventListener('click', (e) => {
+  const thumb = e.target.closest('[data-play]');
+  if (thumb) playVideoThumb(thumb);
+});
+$('#vid-grid').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const thumb = e.target.closest('[data-play]');
+  if (thumb) { e.preventDefault(); playVideoThumb(thumb); }
+});
 ['lib-quality', 'lib-phase', 'lib-cns'].forEach(id => $('#' + id).addEventListener('change', renderLibrary));
 $('#week-jump').addEventListener('change', (e) => { state.week = parseInt(e.target.value, 10); renderSeason(); });
 $('#week-today').addEventListener('click', () => { state.week = currentWeekNum(); renderSeason(); });
@@ -1521,6 +1830,9 @@ $('#log-form').addEventListener('submit', async (e) => {
   fillWeekJump();
   renderDrills();
   renderQtr();
+  renderVideos();
+  renderDefinitions();
+  renderEducation();
   $('#guide-doc').innerHTML = md(state.content.guide);
   $('#season-doc').innerHTML = md(state.content.season);
   $('#log-date').value = todayStr();

@@ -31,11 +31,15 @@
     <button data-view="log" class="tab">My Log</button>
     <button data-view="cards" class="tab">Warm-Up Cards</button>
     <button data-view="nutrition" class="tab">Nutrition</button>
+    <button data-view="videos" class="tab">Videos</button>
+    <button data-view="definitions" class="tab">Definitions</button>
+    <button data-view="education" class="tab">Coach Education</button>
     <button data-view="testing" class="tab coach-tab" hidden>Testing</button>
     <button data-view="top" class="tab coach-tab" hidden>Top Athletes</button>
     <button data-view="health" class="tab coach-tab" hidden>Health</button>
     <button data-view="groups" class="tab coach-tab" hidden>Groups</button>
     <button data-view="coach" class="tab coach-tab" hidden>Coach</button>
+    <button data-view="inventory" class="tab coach-tab" hidden>Inventory</button>
     <button data-view="more" class="tab">More</button>
   </nav>
 </header>
@@ -449,6 +453,53 @@
     </article>
   </section>
 
+  <!-- VIDEOS -->
+  <section id="view-videos" class="view">
+    <h1>Videos</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="muted">The demo library — every video picked and checked by hand. Tap a card to play it right here.</p>
+    <div class="filters card">
+      <input id="vid-search" type="search" placeholder="Search videos (try “squat”, “wickets”, “hip”)">
+      <div class="chip-row" id="vid-chips"></div>
+      <p id="vid-count" class="muted"></p>
+    </div>
+    <div id="vid-grid" class="vid-grid"></div>
+  </section>
+
+  <!-- DEFINITIONS -->
+  <section id="view-definitions" class="view">
+    <h1>Definitions</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="muted">Every exercise, every type of running, and every program term in this app — defined in plain language, with the coaching cue where there is one.</p>
+    <div class="filters card">
+      <input id="def-search" type="search" placeholder="Search definitions (try “tempo”, “A-skips”, “taper”)">
+      <div class="chip-row" id="def-chips"></div>
+      <p id="def-count" class="muted"></p>
+    </div>
+    <div id="def-list" class="def-list"></div>
+  </section>
+
+  <!-- COACH EDUCATION -->
+  <section id="view-education" class="view">
+    <h1>Coach Education</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="muted">Trainings and courses for sprint and strength coaches — local to the DC metro, national events worth the trip, and online options you can do from anywhere. Researched and linked to each provider's own page.</p>
+    <div class="filters card">
+      <input id="edu-search" type="search" placeholder="Search trainings (try “ALTIS”, “USATF”, “strength”)">
+      <div class="chip-row" id="edu-chips"></div>
+      <div class="filter-row">
+        <select id="edu-focus">
+          <option value="">All focus areas</option>
+          <option value="Sprints">Sprints</option>
+          <option value="Strength &amp; Performance">Strength &amp; Performance</option>
+          <option value="Both">Both</option>
+        </select>
+      </div>
+      <p id="edu-count" class="muted"></p>
+    </div>
+    <div id="edu-list" class="edu-list"></div>
+  </section>
+
   <!-- TESTING -->
   <section id="view-testing" class="view">
     <h1>Testing</h1>
@@ -483,6 +534,14 @@
     <h1>Coach view</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div id="coach-main"></div>
+  </section>
+
+  <!-- INVENTORY (coach) -->
+  <section id="view-inventory" class="view">
+    <h1>Equipment inventory</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="muted">The program's gear, counted by you: what you have, how many, what shape it is in, and where it lives. Coach-only — athletes never see this.</p>
+    <div id="inventory-main"></div>
   </section>
 
   <!-- MORE -->

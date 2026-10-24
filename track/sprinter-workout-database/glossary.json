@@ -1,0 +1,784 @@
+[
+  {
+    "term": "Acceleration",
+    "category": "Types of Running",
+    "definition": "The first part of a sprint, from the blocks to about 30-40m, where speed is built with powerful pushes and a gradual rise from a low drive position to tall. Acceleration work means short starts and drives done fresh, with full rest, so every rep is fast.",
+    "cues": "Push the ground back, stay low early, rise gradually, strike under the hip."
+  },
+  {
+    "term": "Broken Runs",
+    "category": "Types of Running",
+    "definition": "A race-distance run split into fast pieces with short jog recoveries between them, like 200 fast, jog, 200 fast. Broken runs let you practice race-pace running and race segments without one all-out full-distance effort."
+  },
+  {
+    "term": "Build-Ups",
+    "category": "Types of Running",
+    "definition": "Runs that start easy and build smoothly to near session speed over 60-80m, finishing tall and relaxed. Build-ups bridge the warm-up and the real work and are the last step of the speed-day warm-up.",
+    "cues": "Build gradually, finish tall and relaxed, strike under the hip."
+  },
+  {
+    "term": "Curve Running",
+    "category": "Types of Running",
+    "definition": "Sprinting on the bend of the track, as in the first part of the 200m. It takes a slight lean into the curve and relaxed, patient acceleration so you come off the bend set up to run the straight.",
+    "cues": "Lean into the curve as one tall line and stay relaxed; let the straight come to you."
+  },
+  {
+    "term": "Differential 200s",
+    "category": "Types of Running",
+    "definition": "200m reps run at planned 400m first-200 pace: fast but controlled, about 1-2 seconds slower than your open 200m best. They teach the patience the first half of a 400 demands (QTR-11)."
+  },
+  {
+    "term": "Event Run",
+    "category": "Types of Running",
+    "definition": "A near-race-distance run just short of the full race, like a 350m for a 400 runner, done at race effort (QTR-09). Event runs rehearse the rhythm and toughness of the race at slightly less cost than the race itself."
+  },
+  {
+    "term": "Extensive Tempo",
+    "category": "Types of Running",
+    "definition": "Easy, steady running at about 65-75% effort, like tempo 100s with short walk-back rests or longer moderate runs in the base phase. Extensive tempo builds fitness and work capacity and helps you recover; it is low-day work, never a test of toughness.",
+    "cues": "Relaxed and smooth; you should be able to talk in short phrases."
+  },
+  {
+    "term": "Fartlek",
+    "category": "Types of Running",
+    "definition": "Unstructured speed play: alternating stretches of jogging, striding, and faster running over a set time, up to about 30 minutes in the base phase. Fartlek builds general fitness without the pressure of exact splits."
+  },
+  {
+    "term": "Fly Runs (Fly 30m)",
+    "category": "Types of Running",
+    "definition": "Runs where you build up over a set distance, then sprint all-out through a timed zone, the fly zone, already at top speed. Fly 30m is this program's key top-speed measure: a build of about 20m, then 30m flat out.",
+    "cues": "Build tall, hit the zone at full speed, stay relaxed through it."
+  },
+  {
+    "term": "Hill Sprints",
+    "category": "Types of Running",
+    "definition": "Short sprints up a moderate hill, used mostly for acceleration work. The hill forces a strong push and good drive mechanics, and it slows you down enough to be easier on the hamstrings than flat sprinting at the same effort."
+  },
+  {
+    "term": "Ins-and-Outs",
+    "category": "Types of Running",
+    "definition": "A sprint that alternates short segments: build in, sprint out at top speed, then float relaxed, usually in 30m pieces (30-30-30, MAX-02). Ins-and-outs teach you to hit top speed and then relax without slowing down."
+  },
+  {
+    "term": "Intensive Tempo",
+    "category": "Types of Running",
+    "definition": "Tempo running at a harder effort than extensive tempo, roughly 80-90%, with longer reps and fuller rests. It bridges easy tempo and true speed endurance, but it costs more, so the program uses it carefully."
+  },
+  {
+    "term": "Interval Training",
+    "category": "Types of Running",
+    "definition": "Any session built as repeated runs with planned rest between them. The distance, effort, and rest decide what it trains: short reps with full rest train speed; longer reps with short rest train endurance and lactate tolerance."
+  },
+  {
+    "term": "Lactate Tolerance Work",
+    "category": "Types of Running",
+    "definition": "Very hard reps, like 300s with short rests or full-speed 500s and 600s for the 400 group, that teach the body to keep running fast when the legs burn. This trains the last-100m-of-the-400 problem on purpose, and it is used sparingly."
+  },
+  {
+    "term": "Maximum Velocity",
+    "category": "Types of Running",
+    "definition": "Your absolute top speed, reached after about 40-60m of sprinting. Max velocity work is short, fresh, and fully rested (fly runs, ins-and-outs), and it stops the moment form or speed slips."
+  },
+  {
+    "term": "Race Modeling",
+    "category": "Types of Running",
+    "definition": "Practicing exact pieces of your race at race speed: blocks to 60m for the 100, the curve for the 200, broken runs and simulations for the 400. Race modeling turns the race into something you have already done many times."
+  },
+  {
+    "term": "Recovery Day",
+    "category": "Types of Running",
+    "definition": "A planned easy day: walking, mobility, easy movement, or light cross-training, with no fast running and no heavy lifting. Recovery days are part of the training, not a day off by accident; they are when the body adapts and gets faster."
+  },
+  {
+    "term": "Resisted Sprints",
+    "category": "Types of Running",
+    "definition": "Sprints done against resistance (a sled, harness, hill, or the T-APEX) to overload the push. Resistance builds acceleration power and is always paired with free sprints so the speed carries over."
+  },
+  {
+    "term": "Special Endurance",
+    "category": "Types of Running",
+    "definition": "Long, hard reps at or near race pace (300m build-ups, fast relaxed 200s, and for the 400 group 500s and 600s) that build the strength to finish your race. It is the most demanding running in the program and is dosed carefully."
+  },
+  {
+    "term": "Speed Endurance",
+    "category": "Types of Running",
+    "definition": "Fast reps of about 80-150m that teach you to hold near-top speed as fatigue starts, which decides the last part of the 100 and 200. Quality matters more than volume: total fast work in a session stays around 200-500m."
+  },
+  {
+    "term": "Split Runs",
+    "category": "Types of Running",
+    "definition": "One long effort broken into segments run faster than race pace, with very short rests (about 30 seconds) between segments, like a 480 split into 3 x 160m. Split runs let you run more race-pace speed than a single long rep allows."
+  },
+  {
+    "term": "Strides",
+    "category": "Types of Running",
+    "definition": "Short, smooth accelerations of about 60-100m at roughly 70-90%, each one finishing a little faster than the last. Strides wake the legs up without tiring them and appear in warm-ups and pre-meet primers.",
+    "cues": "Smooth and relaxed; finish each stride slightly faster than the last."
+  },
+  {
+    "term": "A-Skips",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "A skipping drill with a sharp knee drive and a quick pawing action under the hip. A-skips groove front-side mechanics: toe up, thigh up, foot striking under you instead of out in front.",
+    "cues": "Dorsiflexed toe, paw down under the hip: down, not out."
+  },
+  {
+    "term": "Ankle Dribbles",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Tiny, quick steps on the balls of the feet with the heels barely clearing the ground. Ankle dribbles warm up the ankles and teach quick, stiff ground contacts.",
+    "cues": "Short quick steps on the balls of the feet."
+  },
+  {
+    "term": "Arm Action",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "How the arms work in sprinting: elbows near 90 degrees, hands swinging from cheek height to the back pocket, shoulders down. Good arm action balances the legs and drives rhythm; arms and legs work in opposite pairs.",
+    "cues": "Cheek to pocket, elbows back, shoulders down and relaxed."
+  },
+  {
+    "term": "B-Skips",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Like an A-skip, but after the knee drives up, the leg extends out before pawing back down under the hip. B-skips add the extension-and-paw rhythm used in full sprinting.",
+    "cues": "Extend out, then paw back down under the hip."
+  },
+  {
+    "term": "Block Starts",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "The start of a sprint race from the starting blocks: the set position, then an aggressive push out and a low drive that rises gradually. Block start work ranges from short drives to full starts at race speed and is always done fresh.",
+    "cues": "Push out hard with both feet, stay low through the drive, strike under the hip."
+  },
+  {
+    "term": "Butt Kicks",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "A fast drill where the heels snap up to the glutes while the knees keep pointing down. Butt kicks train quick leg recovery and turnover without reaching.",
+    "cues": "Heels to glutes, knees pointing down, quick turnover."
+  },
+  {
+    "term": "Circuit-Day Warm-Up",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "The 12-15 minute warm-up card for circuit and weight-room days: raise, mobility line, then a two-round activation circuit (bodyweight squats, walking lunges, glute bridges, mini-band lateral walks, dead bugs, ankle dribbles) that flows straight into the workout. Trainers only, with mini-bands and mats ready."
+  },
+  {
+    "term": "Dynamic Warm-Up Routine",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "The full sequence of moving stretches and drills (leg swings, knee hugs, skips, and sprint drills) that starts every training day. In this program, dynamic work comes before practice and static stretching is saved for after."
+  },
+  {
+    "term": "Falling Starts",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "A start drill where you stand tall, lean forward from the ankles until you have to step, then explode into a sprint. Falling starts teach the forward angle and first steps of acceleration without blocks.",
+    "cues": "Lean as one straight line from the ankles; catch yourself with a push, not a reach."
+  },
+  {
+    "term": "Foot Strike & Ankle Stiffness",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Where and how the foot meets the ground at speed: striking under the hips on the ball of the foot, with a stiff ankle that springs off instead of sinking. Good foot strike is what makes top speed feel bouncy instead of heavy.",
+    "cues": "Strike under the hip, toe up, spring off; don't reach or sink."
+  },
+  {
+    "term": "Forward Leg Swings",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Standing swings where one leg swings forward and back like a pendulum while you stay tall. They loosen the hips and hamstrings dynamically before running.",
+    "cues": "Tall posture, no trunk swing."
+  },
+  {
+    "term": "Front-Side Mechanics",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Everything that happens in front of the body when you sprint: the thigh driving up, the toe up, and the foot pawing down under the hip. Front-side mechanics are the heart of fast, safe sprinting, and this program trains them instead of reaching out front.",
+    "cues": "Toe up, thigh up, paw down under the hip."
+  },
+  {
+    "term": "High Knees",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "A fast drill of driving the knees up, moving forward with an upright torso. High knees build quick front-side action and fast ground contact.",
+    "cues": "Upright torso, fast ground contact."
+  },
+  {
+    "term": "Hip Circles",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Standing circles with the knee bent at 90 degrees, opening and closing the hip through a big, controlled circle. Hip circles take the hip joint through its full range before training.",
+    "cues": "Knee at 90 degrees, big controlled circle."
+  },
+  {
+    "term": "Hurdle Mobility Walk-Overs",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Walking slowly over a line of low hurdles (forward, sideways, and over-under) to open the hips. Hurdle mobility is a staple warm-up for hurdlers and sprinters alike.",
+    "cues": "Stay tall, move slowly, lead with the knee."
+  },
+  {
+    "term": "Inchworms",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "From standing, walk the hands out to a plank, then walk the feet back up keeping the legs straight. Inchworms load the hamstrings and warm up the shoulders and core at once.",
+    "cues": "Legs straight to load the hamstrings."
+  },
+  {
+    "term": "Jog + Progressive Strides",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "The opening of the standard warm-up: an easy 800m jog, then progressive strides that finish a little faster each time. It raises temperature and heart rate gradually before the drills begin.",
+    "cues": "Finish each stride slightly faster, last near 80%."
+  },
+  {
+    "term": "Karaoke (Grapevine)",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "A sideways traveling drill where the feet cross over and behind in a grapevine pattern. Karaoke opens the hips and warms up lateral movement and coordination.",
+    "cues": "Opens the hips for curve running; stay light on your feet."
+  },
+  {
+    "term": "Lateral Leg Swings",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Standing swings where the leg swings across the body and out to the side while the hips stay square. They loosen the inner and outer hip before training.",
+    "cues": "Hips stay square while the leg opens and closes."
+  },
+  {
+    "term": "Light Warm-Up (Tempo-Day)",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "The short 10-minute warm-up card (WUP-03) for tempo, recovery, and cross-training days: easy jog, mobility line, ankle dribbles, relaxed strides. If the work is low, the warm-up stays low: trainers only, no spikes, no plyos."
+  },
+  {
+    "term": "Pre-Meet Warm-Up",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "The shortened 12-15 minute warm-up (WUP-02) used on meet days, modeled on how elite sprinters prepare: hip mobility, skipping and drill progressions, bounds, and strides. Same pieces as the standard warm-up, tightened to fit the meet schedule."
+  },
+  {
+    "term": "Relay Exchanges",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Passing the baton at full speed inside the exchange zone, practiced for the 4x100 and 4x400 relays. Good exchanges are free speed: the outgoing runner leaves on a mark and trusts the pass.",
+    "cues": "Leave on your mark, run through the zone, steady target hand."
+  },
+  {
+    "term": "Skipping Series",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "The skipping part of the warm-up: regular skips, arm-swing skips, skips for height, and skips for distance. Skipping warms up the ankles and grooves rhythm and bounce.",
+    "cues": "Regular, arm swing, for height, for distance."
+  },
+  {
+    "term": "Speed-Day Warm-Up",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "The full 20-25 minute warm-up card (WUP-01) for acceleration, max velocity, and speed endurance days, in three parts: A) jog and skipping series, B) dynamic mobility and sprint drills, C) build-ups and block starts. Speed is never done cold: the full routine, every high day."
+  },
+  {
+    "term": "Straight-Leg Bounds",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Bounding with nearly straight legs, striking the ground under the hips. Straight-leg bounds build stiff, springy contacts and hamstring readiness for top speed.",
+    "cues": "Strike the ground under the hips, legs straight."
+  },
+  {
+    "term": "Walking Knee Hugs",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Walking while pulling one knee up into the chest, rising onto the toe of the standing leg each step. Knee hugs open the hip and wake up balance and posture.",
+    "cues": "Rise onto the toe of the stance leg."
+  },
+  {
+    "term": "Walking Lunges with Twist",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "A walking lunge with a rotation over the front leg at the bottom. It warms up the hips, glutes, and trunk rotation together.",
+    "cues": "Front knee tracks over the ankle; rotate over the front leg."
+  },
+  {
+    "term": "Walking Quad Pulls",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Walking while pulling the heel to the glute and reaching tall with the opposite arm. Quad pulls stretch the front of the thigh dynamically and reinforce tall posture.",
+    "cues": "Heel to glute, reach tall with the opposite arm."
+  },
+  {
+    "term": "Wall Drills",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Sprint drills done leaning into a wall: posture holds, marches, and quick switches (pistons). Wall drills let you practice acceleration angles and fast leg switches without moving.",
+    "cues": "Straight line from head to heel, push the wall away, switch fast."
+  },
+  {
+    "term": "Wicket Runs (Mini-Hurdle Runs)",
+    "category": "Sprint Drills & Warm-Up",
+    "definition": "Sprinting through a line of low mini-hurdles (wickets) spaced to force good front-side mechanics and quick steps. The spacing sets the stride; you cannot overreach without clipping a wicket, so the form fixes itself.",
+    "cues": "Tall, toe up, paw under the hip; let the spacing set your stride."
+  },
+  {
+    "term": "Back Squat",
+    "category": "Lifts & Strength",
+    "definition": "A barbell squat with the bar across the upper back, sitting the hips down between the heels and standing up tall. The back squat is the program's main heavy strength lift and one of the testing-day lifts.",
+    "cues": "Chest tall, knees track over toes, drive the floor away."
+  },
+  {
+    "term": "Bench Press",
+    "category": "Lifts & Strength",
+    "definition": "A barbell press lying on a bench: lower the bar to the chest with control, then press it up. The bench press is the program's main upper-body pushing lift and a testing-day lift.",
+    "cues": "Feet planted, shoulder blades pinched, bar to the chest, press up and back."
+  },
+  {
+    "term": "Bent-Over Row",
+    "category": "Lifts & Strength",
+    "definition": "A barbell row done hinged over at the hips, pulling the bar into the lower ribs. Rows build the upper back that keeps posture strong late in a race.",
+    "cues": "Flat back, hinge don't round, pull to the ribs and squeeze."
+  },
+  {
+    "term": "Bulgarian Split Squat",
+    "category": "Lifts & Strength",
+    "definition": "A single-leg squat with the back foot elevated on a bench. Split squats build sprint-specific leg strength and fix side-to-side differences.",
+    "cues": "Torso tall, front knee tracks over the ankle, push through the whole front foot."
+  },
+  {
+    "term": "Clean Pull",
+    "category": "Lifts & Strength",
+    "definition": "The first part of a clean done heavy: a powerful pull from the floor to full extension without catching the bar. Clean pulls build explosive hip power that carries over to the clean and to sprinting.",
+    "cues": "Push the floor, stay over the bar, finish tall on the toes."
+  },
+  {
+    "term": "Conventional Deadlift",
+    "category": "Lifts & Strength",
+    "definition": "Lifting a barbell from the floor by hinging at the hips and standing tall. The deadlift builds total-body strength, especially the back, glutes, and hamstrings.",
+    "cues": "Bar close, flat back, push the floor away, stand tall."
+  },
+  {
+    "term": "Front Squat",
+    "category": "Lifts & Strength",
+    "definition": "A squat with the bar resting across the front of the shoulders, elbows high. The front squat builds leg strength with a more upright torso than the back squat.",
+    "cues": "Elbows up, chest tall, sit between the heels."
+  },
+  {
+    "term": "Good Morning",
+    "category": "Lifts & Strength",
+    "definition": "A hip hinge with a light bar across the upper back, bowing forward with nearly straight legs, then standing tall. Good mornings strengthen the hamstrings and lower back that hold sprint posture.",
+    "cues": "Soft knees, hinge from the hips, flat back, squeeze the glutes to stand."
+  },
+  {
+    "term": "Hang Clean",
+    "category": "Lifts & Strength",
+    "definition": "An Olympic lift where the bar starts at the thighs, then you extend explosively and catch it on the shoulders in a partial squat. The hang clean builds the power sprinting runs on and is a testing-day lift.",
+    "cues": "Jump with the bar, shrug, catch tall with fast elbows."
+  },
+  {
+    "term": "Hang Power Snatch",
+    "category": "Lifts & Strength",
+    "definition": "A wide-grip Olympic lift from the hang position, pulled overhead and caught in one motion in a partial squat. The snatch builds explosive power and coordination.",
+    "cues": "Wide grip, jump and shrug, punch the bar up, catch with locked arms."
+  },
+  {
+    "term": "Hip Thrust",
+    "category": "Lifts & Strength",
+    "definition": "A loaded hip extension with the upper back on a bench and the bar across the hips, driving up to a full glute squeeze. Hip thrusts build the glutes, the biggest engine in sprinting.",
+    "cues": "Ribs down, chin tucked, squeeze the glutes hard at the top."
+  },
+  {
+    "term": "Incline Bench Press",
+    "category": "Lifts & Strength",
+    "definition": "A barbell press on an incline bench, between a flat bench press and an overhead press. It builds pushing strength with more shoulder and upper chest.",
+    "cues": "Control the bar to the upper chest, press up and slightly back."
+  },
+  {
+    "term": "Nordic Hamstring Curl",
+    "category": "Lifts & Strength",
+    "definition": "From tall kneeling with the ankles anchored, lower your body toward the floor as slowly as possible using the hamstrings, then catch yourself and push back up. Nordics are the program's hamstring armor: hard, and dosed in small sets.",
+    "cues": "Straight line from knees to head; lower as slowly as you can."
+  },
+  {
+    "term": "Overhead Press",
+    "category": "Lifts & Strength",
+    "definition": "Pressing a barbell from the shoulders to locked out overhead while standing. The overhead press builds shoulder and trunk strength.",
+    "cues": "Squeeze glutes, ribs down, head through at the top."
+  },
+  {
+    "term": "Power Clean",
+    "category": "Lifts & Strength",
+    "definition": "An Olympic lift from the floor: pull the bar explosively, then catch it on the shoulders in a partial squat. The power clean trains full-body power and is a testing-day lift.",
+    "cues": "Push the floor, extend fast, fast elbows under the bar."
+  },
+  {
+    "term": "Pull-Ups",
+    "category": "Lifts & Strength",
+    "definition": "Hanging from a bar and pulling your chin over it with an overhand grip. Pull-ups build upper-back and arm strength and are tested by reps on testing day.",
+    "cues": "Full hang at the bottom, chest to the bar, no kicking."
+  },
+  {
+    "term": "Push Press",
+    "category": "Lifts & Strength",
+    "definition": "An overhead press started with a quick dip and leg drive, so the legs help launch the bar up. The push press builds power through the whole body, not just the shoulders.",
+    "cues": "Dip straight down, drive hard, punch the bar up."
+  },
+  {
+    "term": "Romanian Deadlift",
+    "category": "Lifts & Strength",
+    "definition": "A hip hinge with the bar traveling down the thighs, knees soft, stopping when the hamstrings load, usually around mid-shin. The RDL is the program's main hamstring and glute strength lift.",
+    "cues": "Push the hips back, bar slides down the thighs, flat back."
+  },
+  {
+    "term": "Single-Leg Calf Raise",
+    "category": "Lifts & Strength",
+    "definition": "A heel raise on one leg, usually off a step for full range. Single-leg calf work builds the ankle stiffness and lower-leg strength that sprinting depends on.",
+    "cues": "Full stretch at the bottom, pause, press to the top."
+  },
+  {
+    "term": "Single-Leg Romanian Deadlift",
+    "category": "Lifts & Strength",
+    "definition": "A hip hinge balanced on one leg, the other leg extending behind as the torso tips forward. It builds hamstring strength, balance, and ankle control on one leg, the way sprinting demands.",
+    "cues": "Hips square, reach the back heel to the wall, stand tall."
+  },
+  {
+    "term": "Step-Up",
+    "category": "Lifts & Strength",
+    "definition": "Stepping onto a box with one leg and driving up through that leg alone. Step-ups build single-leg strength in a sprint-like position.",
+    "cues": "Whole foot on the box, drive through the top leg, stand tall."
+  },
+  {
+    "term": "Trap Bar Deadlift",
+    "category": "Lifts & Strength",
+    "definition": "A deadlift using a hexagonal trap bar you stand inside, handles at the sides. It is easier to learn than a straight-bar deadlift, kind to the back, and a testing-day lift.",
+    "cues": "Chest tall, push the floor away, stand all the way up."
+  },
+  {
+    "term": "Walking Lunge",
+    "category": "Lifts & Strength",
+    "definition": "Stepping forward into a lunge and continuing forward, alternating legs. Walking lunges build single-leg strength and hip mobility under load.",
+    "cues": "Torso tall, front knee over the ankle, push to the next step."
+  },
+  {
+    "term": "Alternating Bounds",
+    "category": "Plyometrics & Power",
+    "definition": "Powerful, exaggerated running strides that alternate legs and cover ground with big pushes. Bounds build elastic power and single-leg force for sprinting.",
+    "cues": "Powerful push, don't reach; land under you and go."
+  },
+  {
+    "term": "Box Jumps",
+    "category": "Plyometrics & Power",
+    "definition": "Jumping from the floor up onto a sturdy box, landing softly, then stepping back down. Box jumps build explosive leg power without hard landing impacts.",
+    "cues": "Explode up, land quiet and tall, step down; don't jump down."
+  },
+  {
+    "term": "Broad Jump",
+    "category": "Plyometrics & Power",
+    "definition": "A two-foot standing long jump for distance: swing, explode forward, land on two feet and stick it. The broad jump is a testing-day measure of horizontal power.",
+    "cues": "Big arm swing, explode out, land soft and stick it."
+  },
+  {
+    "term": "Countermovement Jump",
+    "category": "Plyometrics & Power",
+    "definition": "A vertical jump started with a quick dip down, then an explosive jump up. The countermovement jump is the classic measure of leg power and a plyo primer staple.",
+    "cues": "Quick dip, explode up, land quiet."
+  },
+  {
+    "term": "Depth Jumps",
+    "category": "Plyometrics & Power",
+    "definition": "Stepping off a box, landing, and immediately jumping as high or far as possible. Depth jumps are the most intense plyometric in the library: low reps, full rest, and only with a coach's clearance and clean landing form first.",
+    "cues": "Step off, don't jump off; land stiff and spring, quiet and fast."
+  },
+  {
+    "term": "Hurdle Hops",
+    "category": "Plyometrics & Power",
+    "definition": "Two-foot hops over a series of low hurdles with minimal ground time. Hurdle hops build ankle stiffness and elastic bounce.",
+    "cues": "Spring off the ground, tall posture, minimal contact time."
+  },
+  {
+    "term": "Jump Rope",
+    "category": "Plyometrics & Power",
+    "definition": "Skipping rope with quick, low contacts on the balls of the feet. Jump rope builds ankle stiffness, rhythm, and foot speed that carry straight into sprinting.",
+    "cues": "Stay tall, low quiet contacts, wrists turn the rope."
+  },
+  {
+    "term": "Medicine Ball Throws",
+    "category": "Plyometrics & Power",
+    "definition": "Explosive throws with a medicine ball (overhead, backward, or chest pass) for maximum distance or height. Throws train total-body power the way sprinting uses it.",
+    "cues": "Explode through the whole body; throw it like you mean it."
+  },
+  {
+    "term": "Pogo Hops",
+    "category": "Plyometrics & Power",
+    "definition": "Small, springy hops in place using mostly the ankles, with stiff legs and quick contacts. Pogos are the first plyo in the speed-day primer and build ankle spring.",
+    "cues": "Quiet, springy, stiff ankles; spring off, don't sink."
+  },
+  {
+    "term": "Single-Leg Hops",
+    "category": "Plyometrics & Power",
+    "definition": "Hopping repeatedly on one leg, forward or in place, landing and rebounding on the same leg. Single-leg hops build one-legged spring and stability; speed days only, and only when fresh.",
+    "cues": "Land under your hip, stiff ankle, quiet contact."
+  },
+  {
+    "term": "Tuck Jumps",
+    "category": "Plyometrics & Power",
+    "definition": "Repeated jumps pulling the knees up toward the chest at the top of each jump. Tuck jumps build power and fast hip flexion with quick ground contacts.",
+    "cues": "Explode up, knees to chest, land and go again; stay tall."
+  },
+  {
+    "term": "Vertical Jump",
+    "category": "Plyometrics & Power",
+    "definition": "A two-foot jump straight up for maximum height from a countermovement. The vertical jump is a testing-day measure of leg power and a marker of freshness across the season.",
+    "cues": "Quick dip, big arm swing, reach as high as you can."
+  },
+  {
+    "term": "90/90 Breathing (Downshift)",
+    "category": "Mobility, Activation & Core",
+    "definition": "Lying on your back with feet on a wall, knees and hips at 90 degrees, breathing slowly out through the mouth and in through the nose. This downshift drill calms the system down after practice and starts recovery.",
+    "cues": "Long slow exhale, ribs drop, breathe in through the nose."
+  },
+  {
+    "term": "90/90 Hip Rotations",
+    "category": "Mobility, Activation & Core",
+    "definition": "Seated with both knees bent at 90 degrees, rotating the knees side to side like windshield wipers. 90/90s train hip internal and external rotation, range sprinters need to stay healthy.",
+    "cues": "Sit tall, move slowly, keep both hips heavy on the floor."
+  },
+  {
+    "term": "Adductor Rockbacks",
+    "category": "Mobility, Activation & Core",
+    "definition": "From all fours with one leg extended to the side, rocking the hips back toward the heel. Rockbacks open the groin and inner thigh (the adductors), which work hard in sprinting.",
+    "cues": "Flat back, rock back slowly, breathe into the stretch."
+  },
+  {
+    "term": "Banded Clamshell",
+    "category": "Mobility, Activation & Core",
+    "definition": "Side-lying with a mini-band above the knees, opening the top knee like a clamshell while the feet stay together. Clamshells switch on the glute medius, the hip stabilizer that keeps the knees tracking straight, and serve as the mini-band activation piece in warm-ups.",
+    "cues": "Hips stacked and still, open from the glute, don't roll back."
+  },
+  {
+    "term": "Banded Hip Flexor March (Psoas March)",
+    "category": "Mobility, Activation & Core",
+    "definition": "Marching in place or against a wall with a mini-band around the feet, driving each knee up against the band. The psoas march strengthens the hip flexors through the exact range used in sprinting.",
+    "cues": "Stand tall, drive the knee up, control it down."
+  },
+  {
+    "term": "Bodyweight Squat",
+    "category": "Mobility, Activation & Core",
+    "definition": "An unloaded squat: sit the hips down between the heels and stand tall. It appears in the circuit-day warm-up to switch on the legs before lifting; ten clean reps beat ten sloppy ones.",
+    "cues": "Knees track over toes, chest tall."
+  },
+  {
+    "term": "Copenhagen Plank",
+    "category": "Mobility, Activation & Core",
+    "definition": "A side plank with the top leg supported on a bench and the bottom leg lifting to meet it. Copenhagen planks build adductor (groin) strength that protects sprinters from groin strains.",
+    "cues": "Straight line head to feet; lift the bottom leg with control."
+  },
+  {
+    "term": "Cossack Squat",
+    "category": "Mobility, Activation & Core",
+    "definition": "A wide-stance squat shifted all the way to one side, the other leg straight with the toes up. Cossack squats build hip mobility and single-leg strength through a deep range.",
+    "cues": "Sit into one hip, chest tall, heel down on the bent leg."
+  },
+  {
+    "term": "Couch Stretch",
+    "category": "Mobility, Activation & Core",
+    "definition": "A kneeling stretch with the back foot up on a couch or wall and the front foot planted, tucking the pelvis to stretch the hip flexor and quad. Famous because it works, and because it is intense.",
+    "cues": "Tuck the pelvis first, squeeze the glute, then lean in gently."
+  },
+  {
+    "term": "Dead Bug",
+    "category": "Mobility, Activation & Core",
+    "definition": "Lying on your back, arms up and knees at 90, slowly extending the opposite arm and leg while the low back stays glued to the floor. Dead bugs are the core switch-on in the circuit-day warm-up and a staple of core training.",
+    "cues": "Low back stays down, move slow, breathe out as you extend."
+  },
+  {
+    "term": "Deep Squat Mobility",
+    "category": "Mobility, Activation & Core",
+    "definition": "Sitting into the deepest comfortable squat and spending time there, sometimes with small shifts side to side. Deep squat time restores ankle, knee, and hip range in one position.",
+    "cues": "Heels down if you can, chest proud, breathe and settle."
+  },
+  {
+    "term": "Fire Hydrants",
+    "category": "Mobility, Activation & Core",
+    "definition": "On all fours, lifting one knee out to the side with the knee bent, like the name says. Fire hydrants wake up the glutes and take the hip through abduction and rotation.",
+    "cues": "Hips stay level and square; lift from the glute."
+  },
+  {
+    "term": "Foam Rolling",
+    "category": "Mobility, Activation & Core",
+    "definition": "Slowly rolling sore muscles (calves, quads, glutes, the IT band area) over a foam roller for a few minutes after practice. Foam rolling is part of the recovery routine: it eases soreness and helps you feel ready tomorrow.",
+    "cues": "Roll slow, pause on tender spots, breathe."
+  },
+  {
+    "term": "Hip Airplane",
+    "category": "Mobility, Activation & Core",
+    "definition": "Balancing on one leg with the torso hinged forward, rotating the pelvis open and closed over the standing leg. The hip airplane builds hip strength, control, and balance through rotation.",
+    "cues": "Hinge tall, rotate the belt buckle open then closed, stay balanced."
+  },
+  {
+    "term": "Hip and Ankle Mobility Flow",
+    "category": "Mobility, Activation & Core",
+    "definition": "A short follow-along flow that moves the hips and ankles through their full ranges, the two joints sprinters can least afford to lose. Used on recovery days and as an add-on after practice.",
+    "cues": "Move slowly, breathe, never force a range."
+  },
+  {
+    "term": "Hip CARs",
+    "category": "Mobility, Activation & Core",
+    "definition": "Controlled articular rotations: taking the hip joint slowly through the biggest circle it can make, in both directions. CARs keep the hip joint healthy and show you exactly where your range is.",
+    "cues": "Slowest rep wins; brace the trunk and don't cheat the circle."
+  },
+  {
+    "term": "Hip Flexor Stretch",
+    "category": "Mobility, Activation & Core",
+    "definition": "A half-kneeling stretch for the front of the hip: tuck the pelvis, squeeze the glute, then shift gently forward. Sprinting shortens the hip flexors daily; this gives the length back.",
+    "cues": "Tuck, squeeze the glute, then shift; no arching the back."
+  },
+  {
+    "term": "Hip Internal & External Rotation",
+    "category": "Mobility, Activation & Core",
+    "definition": "Drills that train the hip to rotate both ways, inward (internal) and outward (external), in seated, side-lying, or 90/90 positions. Rotation range is what keeps hips healthy through a season of sprinting.",
+    "cues": "Small, controlled, pain-free range; build it gradually."
+  },
+  {
+    "term": "McGill Curl-Up",
+    "category": "Mobility, Activation & Core",
+    "definition": "A low-back-friendly core drill from Dr. Stuart McGill's Big 3: lying on your back with one knee bent, lifting just the head and shoulders slightly while the low back stays neutral. It builds trunk endurance without beating up the spine.",
+    "cues": "Brace like you're about to be poked; lift head and shoulders only."
+  },
+  {
+    "term": "Mini-Band Lateral Walks",
+    "category": "Mobility, Activation & Core",
+    "definition": "Walking sideways in an athletic stance with a mini-band around the legs, hips level and feet straight. Lateral walks switch on the glutes before circuit and lifting days.",
+    "cues": "Hips level, feet straight, band stays tight."
+  },
+  {
+    "term": "Pallof Press",
+    "category": "Mobility, Activation & Core",
+    "definition": "Pressing a cable or band straight out from the chest while it tries to rotate you, and resisting. The Pallof press trains anti-rotation, the trunk stiffness that keeps sprint posture from twisting.",
+    "cues": "Ribs down, hips and shoulders square, press straight."
+  },
+  {
+    "term": "Pigeon / Figure-4 Stretch",
+    "category": "Mobility, Activation & Core",
+    "definition": "A stretch for the deep glutes and hip rotators: one shin across in front (pigeon) or the ankle over the opposite knee while lying on your back (figure-4). Both versions target the same tight spot sprinters carry.",
+    "cues": "Breathe and sink gradually; never force the knee down."
+  },
+  {
+    "term": "Post-Practice Mobility Flow",
+    "category": "Mobility, Activation & Core",
+    "definition": "A short hip-focused mobility sequence done after practice, while you are warm, moving the hips through flexion, rotation, and extension. Post-practice is the best time of day to gain range.",
+    "cues": "Easy effort; this is recovery, not another workout."
+  },
+  {
+    "term": "Side Plank",
+    "category": "Mobility, Activation & Core",
+    "definition": "Supporting the body on one forearm and the side of the foot, in one straight line, progressing with leg lifts or longer holds. Side planks build the lateral trunk strength that keeps the pelvis level at top speed.",
+    "cues": "Straight line from head to heels, hips stacked, breathe."
+  },
+  {
+    "term": "Static Stretching",
+    "category": "Mobility, Activation & Core",
+    "definition": "Holding stretches still for 20-60 seconds; the post-run routine for calves, quads, hamstrings, and hips. In this program, static stretching lives after practice and on recovery days, never before speed work.",
+    "cues": "Mild tension only, breathe, no bouncing."
+  },
+  {
+    "term": "Suitcase Carry",
+    "category": "Mobility, Activation & Core",
+    "definition": "Walking tall while holding a heavy weight in one hand, like a suitcase, without leaning. Suitcase carries build grip, trunk stiffness, and posture under load.",
+    "cues": "Walk tall, ribs down, don't lean away from the weight."
+  },
+  {
+    "term": "400m Predictor",
+    "category": "Program Terms",
+    "definition": "A quick estimate of 400m potential from 200m times: average your 3-5 best 200s, double it, and add about 4 seconds. Coaches use it to set a first-200 target: run the first half within about 1-1.5 seconds of that average best 200."
+  },
+  {
+    "term": "ACC (Acceleration Session)",
+    "category": "Program Terms",
+    "definition": "Session code for acceleration work: block starts, short drives, hills, sleds, and resisted runs (the first steps of the sprint). ACC sessions load the CNS heavily and sit on high days."
+  },
+  {
+    "term": "Base Phase (GPP)",
+    "category": "Program Terms",
+    "definition": "The first 4-6 weeks of the season: general preparation (GPP) with work capacity, general strength, tempo, hills, and low plyos. The base is built before any race-specific speed, and everything else stands on it."
+  },
+  {
+    "term": "Championship Phase",
+    "category": "Program Terms",
+    "definition": "The final 2-3 weeks of a cycle: sharpening and tapering toward the biggest meet. Volume drops, speed stays, and the goal is to arrive fast and fresh."
+  },
+  {
+    "term": "CNS Demand",
+    "category": "Program Terms",
+    "definition": "How hard a session taxes the central nervous system, the brain-and-nerves system that fires fast running. Sprinting, heavy lifting, and hard jumps are high-CNS; tempo, mobility, and easy work are low. The whole schedule is built around managing CNS demand."
+  },
+  {
+    "term": "Competitive Phase",
+    "category": "Program Terms",
+    "definition": "The middle racing block of the season (about 4-6 weeks), when meets are regular and training sharpens around them: speed stays high, volume comes down, and race modeling takes a bigger share."
+  },
+  {
+    "term": "Estimated 1RM (Epley)",
+    "category": "Program Terms",
+    "definition": "A calculated guess of your one-rep max from a set you actually lifted, using the Epley formula: weight x (1 + reps / 30). Example: 185 lb for 5 reps estimates about 216 lb. The app uses it on testing day so nobody has to attempt a true max."
+  },
+  {
+    "term": "High Day",
+    "category": "Program Terms",
+    "definition": "A hard training day: fast sprinting, heavy lifting, or high-impact plyos, anything that taxes the CNS. In the high-low system a high day is always followed by a low day; two high days in a row is how sprinters get hurt and slow."
+  },
+  {
+    "term": "Low Day",
+    "category": "Program Terms",
+    "definition": "An easy training day: tempo, cross-training, mobility, or recovery work that lets the CNS recharge. Low days are not wasted days; they are what make the next high day possible."
+  },
+  {
+    "term": "MAX (Maximum Velocity Session)",
+    "category": "Program Terms",
+    "definition": "Session code for maximum velocity work: fly runs and ins-and-outs at absolute top speed. MAX work is short, fresh, and fully rested, and it stops when form slips."
+  },
+  {
+    "term": "PLY (Plyometric Session)",
+    "category": "Program Terms",
+    "definition": "Session code for plyometrics: hops, bounds, and box work that build spring. PLY-01 is low impact; PLY-02 is the high-impact power day."
+  },
+  {
+    "term": "Pre-Competitive Phase",
+    "category": "Program Terms",
+    "definition": "The 4-week block between the base and the racing season: work gets faster and more specific, speed endurance appears, weights get heavier, and low plyos give way to real power work."
+  },
+  {
+    "term": "Pre-Meet Primer",
+    "category": "Program Terms",
+    "definition": "A short session the day before a meet (RM-05): light block starts and relaxed strides that sharpen you without costing anything. The primer leaves you feeling fast, not tired."
+  },
+  {
+    "term": "QTR (400m Group Session)",
+    "category": "Program Terms",
+    "definition": "Session code for the 400 group: the long work from the 400m framework that the 100/200 plan leaves out (500s and 600s, lactate days, split runs, and broken 400s). QTR sessions are only for athletes training for the 400."
+  },
+  {
+    "term": "REC (Recovery Session)",
+    "category": "Program Terms",
+    "definition": "Session code for recovery: active recovery days of walking, mobility, and easy movement (REC-01). Recovery is a planned part of training, not an accident."
+  },
+  {
+    "term": "RM (Race Modeling Session)",
+    "category": "Program Terms",
+    "definition": "Session code for race modeling: rehearsing pieces of the actual race at race speed (blocks to 60m, curve work, broken runs, simulations, and the pre-meet primer)."
+  },
+  {
+    "term": "SE (Speed Endurance Session)",
+    "category": "Program Terms",
+    "definition": "Session code for speed endurance: fast 80-150m reps that teach you to hold speed late in the 100 and 200."
+  },
+  {
+    "term": "SPE (Special Endurance Session)",
+    "category": "Program Terms",
+    "definition": "Session code for special endurance: the long, hard 200m-strength work (300m build-ups, fast relaxed 200s) borrowed from the 400m framework. SPE is the most demanding running in the 100/200 plan."
+  },
+  {
+    "term": "Stop Rule (3% Rule)",
+    "category": "Program Terms",
+    "definition": "The program's quality guardrail: if times are about 3% off your standard, or sprint form breaks down, the high session ends. Stopping early protects the next session; grinding out slow reps teaches slow running."
+  },
+  {
+    "term": "STR (Strength Session)",
+    "category": "Program Terms",
+    "definition": "Session code for strength training: the lifting sessions. Heavy lifting sits on the same days as fast sprinting, so hard days stay hard and easy days stay easy."
+  },
+  {
+    "term": "Taper",
+    "category": "Program Terms",
+    "definition": "The planned drop in training volume before a big meet, about 10 days in this program, while speed work stays sharp. Tapering trades fatigue for freshness so you peak on the day that counts."
+  },
+  {
+    "term": "TEM (Tempo Session)",
+    "category": "Program Terms",
+    "definition": "Session code for tempo: easy, steady running around 70% (extensive tempo 100s, fartlek, and recovery runs). TEM days are low days: they build fitness and recovery, not speed."
+  },
+  {
+    "term": "Testing Day",
+    "category": "Program Terms",
+    "definition": "A scheduled weight-room session where the core lifts and jumps are measured for the tracker: back squat, hang clean, power clean, bench press, trap bar deadlift, vertical jump, broad jump, and pull-ups. Results are entered as top sets and converted to estimated 1RMs; nobody attempts a true one-rep max."
+  },
+  {
+    "term": "WUP (Warm-Up Session)",
+    "category": "Program Terms",
+    "definition": "Session code for warm-ups: the set routines that start every day. WUP-01 is the full speed-day routine (20-25 min), WUP-02 the short pre-meet version (12-15 min), and WUP-03 the short tempo-day version (10 min)."
+  },
+  {
+    "term": "XT (Cross-Training Session)",
+    "category": "Program Terms",
+    "definition": "Session code for cross-training: no-running low-day work (pool running, bike intervals, a cardio circuit, a mobility and core day, or an easy swim). Same recovery job as tempo, zero pounding."
+  }
+]

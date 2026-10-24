@@ -1,0 +1,232 @@
+[
+ {
+  "bucket": "Local (DC Metro)",
+  "focus": "Both",
+  "format": "In-person clinic, 2 days (athlete + coach tracks)",
+  "location": "George Mason University, Fairfax, VA",
+  "name": "Ascent Track Clinics \u2014 Summer Track & Field Clinic at George Mason",
+  "notes": "Closest elite clinic to DC: training in every event group plus coaches-only classroom sessions with Boo Schexnayder, Kebba Tolbert and Andrew Gerard; 2027 dates listed as TBD on the site.",
+  "provider": "Ascent Track Clinics",
+  "url": "https://www.ascenttrackclinics.com/clinics/george-mason"
+ },
+ {
+  "bucket": "Local (DC Metro)",
+  "focus": "Both",
+  "format": "In-person clinic/convention, 2 days (annual, summer)",
+  "location": "Virginia (host site rotates; past editions in Harrisonburg, VA)",
+  "name": "Virginia Track Coaches Association (VTCA) Summer Coaches Clinic",
+  "notes": "Virginia's HS coaches association clinic \u2014 annual membership ($35/yr per the registration page) includes the summer clinic, with speakers across all event groups; dates/pricing on the site.",
+  "provider": "Virginia Track Coaches Association",
+  "url": "https://runsignup.com/MemberOrg/VTCA/Register"
+ },
+ {
+  "bucket": "Local (DC Metro)",
+  "focus": "Strength & Performance",
+  "format": "In-person state clinic, 1 day",
+  "location": "Maryland (past hosts include University of Maryland, College Park)",
+  "name": "NSCA Maryland State Clinic",
+  "notes": "NSCA's Maryland state event \u2014 the posted itinerary includes a session on autoregulation/long-term athletic development programming for high school athletes; check the page for the current date and pricing.",
+  "provider": "National Strength and Conditioning Association (NSCA)",
+  "url": "https://www.nsca.com/events/state-and-regional/maryland-state-clinic/"
+ },
+ {
+  "bucket": "Local (DC Metro)",
+  "focus": "Both",
+  "format": "Blended certification course, 22 hours (online modules + in-person school)",
+  "location": "Regional host sites nationwide \u2014 past schools at Johns Hopkins (Baltimore, MD) and Richmond, VA",
+  "name": "USATF Level 1 Program (Blended)",
+  "notes": "The cornerstone USATF coach certification covering sport science plus all event groups; Level 1 schools run regularly in the mid-Atlantic, so a DC coach can usually drive to one \u2014 check the USATF calendar on the site for current dates/pricing.",
+  "provider": "USA Track & Field (USATF)",
+  "url": "https://www.USATF.org/programs/coaches/coaching-education/overview-usatf-cecs"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Both",
+  "format": "In-person convention, 4 days (Dec 14-17, 2026)",
+  "location": "Gaylord Texan Resort, Grapevine, TX",
+  "name": "USTFCCCA Convention 2026 (#USTFCCCA26)",
+  "notes": "The sport's premier coaching convention (1,500+ coaches): technical sessions, Spy Coaching (incl. Dan Pfaff in 2026) and 14 pro-development seminars; $450 if registered before Dec 1, $575 after, per USTFCCCA.",
+  "provider": "USTFCCCA",
+  "url": "https://www.ustfccca.org/2026/10/featured/convention-update-professional-development-opportunities-at-ustfccca26"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Strength & Performance",
+  "format": "In-person certification course, ~21 hours (offered around Convention and in summer)",
+  "location": "Grapevine, TX (with Convention) and rotating host sites",
+  "name": "Track & Field Academy Strength & Conditioning Coach Certification (Course 310)",
+  "notes": "Boo Schexnayder-led, NCACE-accredited S&C certification built specifically for track coaches \u2014 speed/power training, weight-room program design and testing; a natural complement to the CSCS. Dates/pricing on the site.",
+  "provider": "USTFCCCA Track & Field Academy",
+  "url": "https://web2.ustfccca.org/tfa/strength-conditioning-coach-certification/"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Sprints",
+  "format": "Blended advanced certification (Level 2: 32 hours; Level 3: year-long seminar + capstone)",
+  "location": "National host sites (past schools at IMG Academy, Bradenton, FL and Chula Vista, CA)",
+  "name": "USATF Level 2 & Level 3 Programs \u2014 Sprints/Hurdles/Relays",
+  "notes": "The event-specific rungs of the USATF pathway: Level 2 goes deep on sprints/hurdles/relays and writing a full training plan (needs Level 1 + 2 yrs coaching); Level 3 is the high-performance seminar tier.",
+  "provider": "USA Track & Field (USATF)",
+  "url": "https://www.USATF.org/programs/coaches/coaching-education/overview-usatf-cecs"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Both",
+  "format": "In-person immersion, 4 days",
+  "location": "ALTIS, Phoenix, AZ",
+  "name": "ALTIS Apprentice Coach Program (ACP)",
+  "notes": "Live inside an elite sprint training center: observe track and weight-room sessions and daily roundtables with Dan Pfaff, Stuart McMillan, Andreas Behm and Kevin Tyler; new session dates are posted on the ALTIS site (most recent listed: May 7-10, 2025).",
+  "provider": "ALTIS",
+  "url": "https://altis.world/product/apprentice-coach-program-may-7-10-2025/"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Sprints",
+  "format": "In-person clinic, 2 days (flagship + regional stops)",
+  "location": "Chicago, IL flagship; regional editions (past: Dallas, St. Louis, Tampa, Wichita)",
+  "name": "Track Football Consortium (TFC) Clinics",
+  "notes": "The Feed the Cats speed-first clinic circuit for HS track and football coaches \u2014 Holler, Korfist and guest sprint speakers; built around timed, recorded, ranked sprinting. Current dates/pricing on the site.",
+  "provider": "Track Football Consortium (Tony Holler & Chris Korfist)",
+  "url": "https://trackfootballconsortium.com/feed-the-cats-seminar/"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Strength & Performance",
+  "format": "In-person + online hybrid conference, 4 days (July)",
+  "location": "Rotating \u2014 2026: New Orleans, LA; 2027: Las Vegas, NV (Jul 7-10)",
+  "name": "NSCA National Conference (NSCACon)",
+  "notes": "NSCA's flagship event; since 2025 it absorbs the former Coaches Conference, so it carries the coach-focused practical content plus up to 3.0 CEUs \u2014 directly useful for keeping a CSCS current after the exam.",
+  "provider": "National Strength and Conditioning Association (NSCA)",
+  "url": "https://www.nsca.com/events/national-conferences/"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Both",
+  "format": "In-person annual conference (application-based) + online master class series",
+  "location": "Rice University, Houston, TX",
+  "name": "GAIN Network Annual Conference & Master Classes",
+  "notes": "Vern Gambetta's small, application-only professional network for S&C coaches, sport coaches and therapists \u2014 heavy on athletic development and training design discussion rather than lectures. Dates/pricing on the site.",
+  "provider": "GAIN Network (Vern Gambetta)",
+  "url": "https://thegainnetwork.com/events/gain2021/"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Strength & Performance",
+  "format": "In-person mentorship courses (multi-day, phased 1-3)",
+  "location": "Exos HQ, Phoenix, AZ + international host sites",
+  "name": "Exos Performance Mentorships (Phase 1-3)",
+  "notes": "Hands-on immersion in the Exos training system (mindset, nutrition, movement, recovery); Phase 1 at Exos HQ Phoenix is listed for Mar 8, 2027 on the events page, with Phase 2/3 following \u2014 no prerequisites for Phase 1.",
+  "provider": "Exos",
+  "url": "https://exoslearn.inspire360.com/workshops?utm_id=120226874059240251"
+ },
+ {
+  "bucket": "National (U.S.)",
+  "focus": "Strength & Performance",
+  "format": "In-person state clinics (1 day) + annual national convention",
+  "location": "State host sites nationwide + rotating national site",
+  "name": "NHSSCA State Clinics & National Convention",
+  "notes": "The only S&C association built specifically for high school coaches \u2014 the 2026 Illinois clinic agenda pairs Tony Holler on getting fast in limited indoor space with weight-room speed sessions; check the site for the current state clinic list and convention dates.",
+  "provider": "National High School Strength Coaches Association (NHSSCA)",
+  "url": "https://nhssca.us/event/2026-nhssca-illinois-state-clinic/"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Sprints",
+  "format": "Online, self-paced (12 modules, ~24 hours of content, lifetime access)",
+  "location": "Online",
+  "name": "ALTIS Coaching the Short Sprints",
+  "notes": "Dan Pfaff and the ALTIS staff's flagship sprint course: technical models for the 60/100/200m, block-start progressions, programming and error correction \u2014 arguably the single most on-target course for a HS sprint coach. Price on the site.",
+  "provider": "ALTIS",
+  "url": "https://altis.world/product/altis-coaching-the-short-sprints/"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Both",
+  "format": "Online courses + membership video library (new videos monthly)",
+  "location": "Online",
+  "name": "ALTIS Digital Education & ALTIS Connect",
+  "notes": "The wider ALTIS catalog beyond the sprints course \u2014 digital courses from Pfaff, McMillan and guests, plus the Connect library of behind-the-scenes training footage and 'Poolside Chats' (14-day free trial noted on the page).",
+  "provider": "ALTIS",
+  "url": "https://altis.world/digital-education/"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Both",
+  "format": "Online, self-paced certification course (15 hours)",
+  "location": "Online",
+  "name": "Track & Field Academy Online Courses \u2014 TFTC Online",
+  "notes": "The Track & Field Technical Certification taught fully online: training design plus technical instruction for every event group, sprints/hurdles/relays included; stacks toward the Academy's Master's Endorsement. Price on the site.",
+  "provider": "USTFCCCA Track & Field Academy",
+  "url": "https://web2.ustfccca.org/tfa/tfa-online-courses/"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Strength & Performance",
+  "format": "Online, self-paced study course with 160+ activities and end-of-course exam",
+  "location": "Online",
+  "name": "CSCS Online Study/CE Course (5th Edition)",
+  "notes": "The official NSCA/Human Kinetics companion to Essentials of Strength Training and Conditioning built to mirror the CSCS exam blueprint \u2014 direct prep support for the Oct 30 exam, and it doubles as CEUs once certified.",
+  "provider": "NSCA / Human Kinetics",
+  "url": "https://us.humankinetics.com/products/nsca-s-certified-strength-and-conditioning-specialist-cscs-5th-edition-online-study-ce-course-with-ebook"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Strength & Performance",
+  "format": "Online, self-paced courses and certification",
+  "location": "Online",
+  "name": "Exos Online Courses & Performance Specialist (XPS) Certification",
+  "notes": "Exos's online catalog: the full XPS certification (listed at $1,130 on the Exos course store) plus targeted courses sprint coaches will use, including 'The 0.10 Second Difference' on speed development and Advanced Strength and Power with Dan Baker.",
+  "provider": "Exos",
+  "url": "https://www.teamexos.com/cscca-online-courses"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Strength & Performance",
+  "format": "Blended: 2-day in-person course or online format + USAW Learning Academy modules",
+  "location": "Host sites nationwide + online",
+  "name": "USA Weightlifting Level 1 Coach Course",
+  "notes": "Teaches USAW's five-stage progressions for the snatch, clean and jerk plus squats/presses and error correction \u2014 sharpens coaching of the power lifts HS sprinters actually use in the weight room; course listings run ~$549, with current schedule on the USAW site.",
+  "provider": "USA Weightlifting (USAW)",
+  "url": "https://www.tri-statetraining.com/events/usaw-level-1-parsippany-nj"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Strength & Performance",
+  "format": "Online certification courses (L1 ~5 hrs, L2 ~7 hrs) via FMS Academy",
+  "location": "Online",
+  "name": "FMS Level 1 & Level 2 (Functional Movement Screen)",
+  "notes": "Movement screening and corrective-exercise system (Gray Cook's FMS): L1 teaches the screen, L2 the corrective progressions \u2014 useful for spotting the mobility/stability issues behind the aches-and-pains log. Pricing on the site.",
+  "provider": "Functional Movement Systems",
+  "url": "https://www.functionalmovement.com/fmsacademy/Fitness"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Both",
+  "format": "Online, self-paced course (~5 clock hours) with certificate",
+  "location": "Online",
+  "name": "Coaching Track and Field (NFHS Learning Center)",
+  "notes": "Developed by USATF with the NFHS and hosted by Olympians Dan O'Brien and Hyleas Fountain \u2014 fundamentals of running, jumping and throwing mechanics; counts toward the USATF Coaches Registry education standard and NFHS coaching credentials.",
+  "provider": "NFHS Learning Center / USATF",
+  "url": "https://nfhslearn.com/courses/coaching-track-and-field"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Sprints",
+  "format": "Online video courses, self-paced (multi-course certification series)",
+  "location": "Online",
+  "name": "Feed the Cats Certification Courses (Holler Shop)",
+  "notes": "Tony Holler's full Feed the Cats course library (sprint-based training, plus guest courses like Chris Korfist's 'Stiffness' and Alec Holler's hurdling) \u2014 the online companion to the TFC clinics, aimed squarely at HS coaches. Prices on the site.",
+  "provider": "Track Football Consortium / Tony Holler",
+  "url": "https://trackfootballconsortium.com/holler/"
+ },
+ {
+  "bucket": "Online",
+  "focus": "Sprints",
+  "format": "Online articles/Q&As, free, self-paced",
+  "location": "Online",
+  "name": "SimpliFaster Coach Education Articles & Freelap Friday Five",
+  "notes": "Free, deep archive of practitioner-written speed and S&C content (timing with Freelap, sprint programming, HS program case studies) \u2014 the best no-cost continuing education in the sprint space; new material posts weekly.",
+  "provider": "SimpliFaster / Freelap USA",
+  "url": "https://simplifaster.com/table-of-contents/"
+ }
+]

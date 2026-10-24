@@ -78,6 +78,25 @@ accounts, no athlete typing.
   tapping it plays the video in the app without loading anything heavy
   until you tap. Handy mid-test-day: two taps and the athlete sees the
   lift done right.
+- **Videos**: a section that is just the videos — a 102-video demo
+  library in seven categories (Warm-Ups & Drills, Lifts & Weight Room,
+  Sprint Mechanics & Speed, Plyometrics, Hip Mobility & Strength,
+  Core & Trunk, Recovery & Mobility). Filter by category, search by
+  movement or name, and tap any card to play the video in place. Every
+  exercise on the three warm-up cards has a matching demo here.
+- **Definitions**: a plain-language glossary of the whole program —
+  138 entries in six categories (Types of Running, Sprint Drills &
+  Warm-Up, Lifts & Strength, Plyometrics & Power, Mobility, Activation
+  & Core, Program Terms). Every exercise, every type of running, and
+  every session code is defined, with the coaching cue where there is
+  one. Filter by category or search the term and definition text.
+- **Coach Education**: trainings and courses for sprint and strength
+  coaches — 23 researched entries in three buckets (Local (DC Metro),
+  National (U.S.), Online), each tagged by focus (Sprints, Strength &
+  Performance, or Both) with its format, location, a plain-language
+  note, and a link to the provider's own page. Filter by bucket or
+  focus, or search the list. Its source of truth is
+  `track/sprinter-workout-database/coach_education.json`.
 - **Warm-Up Cards & Nutrition**: the three printable warm-up cards (Light,
   Speed Day, Circuit Day) live in their own section, each with a print
   button that prints just that card on one Letter page, ready to laminate.
@@ -89,6 +108,14 @@ accounts, no athlete typing.
 - **CSV exports**: one-click spreadsheet downloads (coach-only) — testing
   results with raw entries and estimated 1RMs, the weekly tracker, and the
   roster.
+- **Equipment inventory** (coach-only): a tracker for the program's gear
+  — every item with its category (blocks, hurdles, throws implements,
+  timing & tech, and more), quantity, condition (Good, Fair, or Replace),
+  location, and a note. A summary strip at the top calls out the item
+  count, the total units, and how many items are flagged Replace. Starts
+  empty; the coach builds it item by item, edits in place, and deletes
+  with a confirm step. Items are saved in the app's data store like the
+  rest of the team data.
   The Nutrition section is six plain-language fueling cards for high
   school sprinters — the everyday plate (fuel follows the training day),
   the pre-practice timing ladder, recovery fueling, hydration, a meet-day
@@ -183,7 +210,18 @@ that gets backed up) so the file survives restarts on its own.
   build script copies it in, and will preserve the bundled copy if the
   source ever goes missing). **Never delete it from `content/`** — those
   24 videos were researched and verified one by one, and a content
-  refresh must not wipe them out.
+  refresh must not wipe them out. The same goes for
+  `video_library.json`, the 102-video library behind the Videos
+  section: its source of truth is
+  `track/sprinter-workout-database/video_library.json`, copied in (and
+  preserved) by the build script the same way. And the same goes for
+  `glossary.json`, the 138-entry glossary behind the Definitions tab:
+  its source of truth is `track/sprinter-workout-database/glossary.json`,
+  copied in (and preserved) by the build script the same way. And the
+  same goes for `coach_education.json`, the 23-entry list behind the
+  Coach Education tab: its source of truth is
+  `track/sprinter-workout-database/coach_education.json`, copied in
+  (and preserved) by the build script the same way.
 - `scripts/build-content.py` — refreshes `content/` from the workout
   database and season plan folders after you edit them. Run it, then
   commit the updated `content/` files.
