@@ -175,6 +175,7 @@ backed up.
 | `PORT` | Which port the site listens on. Hosts set this for you. | `3000` |
 | `DATA_DIR` | Folder where accounts, logs, and swaps are stored. | `./data` (inside the app folder) |
 | `SESSION_SECRET` | Secret that signs login cookies. Set a long random one when you deploy. If you skip it, the app makes one up and keeps it in the data folder. | auto-generated |
+| `COACH_INVITE_EMAILS` | Comma-separated emails to seed as assistant-coach invites at startup, so a friend is invited even before the head coach has registered. Seeding happens once per email: if the head coach later removes an invite in the app, restarts never bring it back. | _(empty)_ |
 
 ## Data & backups
 

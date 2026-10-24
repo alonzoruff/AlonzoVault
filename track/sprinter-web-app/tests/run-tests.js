@@ -771,6 +771,80 @@ async function main() {
     r.json.items.length === 2 && !r.json.items.some(i => i.id === invBatons),
     r.json.items && r.json.items.length);
 
+  /* ---------------- assistant coach invites ---------------- */
+  r = await api(athlete, 'GET', '/api/coach-invites');
+  check('athlete is 403 on the invite list', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/coach-invites', { email: 'sneak@test.com' });
+  check('athlete cannot invite (403)', r.status === 403, r.status);
+  r = await api(coach, 'GET', '/api/me');
+  check('/api/me marks the first account as owner', r.json.isOwner === true, r.json);
+  const ownerId = r.json.id;
+
+  // Invite BEFORE registration, with messy case and spacing.
+  r = await api(coach, 'POST', '/api/coach-invites', { email: '  NewCoach@Test.com ' });
+  check('owner invite is 200', r.status === 200, r.status);
+  check('invite email is trimmed + lowercased', (r.json.invites || []).includes('newcoach@test.com'), r.json.invites);
+  r = await api(coach, 'POST', '/api/coach-invites', { email: 'NEWCOACH@test.com' });
+  check('duplicate invite (different case) is a no-op', r.status === 200 && r.json.alreadyInvited === true, r.json);
+  r = await api(coach, 'GET', '/api/coach-invites');
+  check('invite list still holds exactly one entry', (r.json.invites || []).filter(e => e === 'newcoach@test.com').length === 1, r.json.invites);
+  r = await api(coach, 'POST', '/api/coach-invites', { email: 'not-an-email' });
+  check('invite with a bad email is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/coach-invites', { email: 'coach@test.com' });
+  check('inviting the owner email is 400', r.status === 400, r.status);
+
+  // The invited email registers straight into coach access.
+  r = await api(null, 'POST', '/api/register', { email: 'NewCoach@Test.com', password: 'testpass123' });
+  check('invite-before-registration lands as coach', r.status === 201 && r.json.role === 'coach', r.json);
+  check('invited coach is not the owner', r.json.isOwner === false, r.json);
+  const assistant = cookieOf(r);
+  r = await api(assistant, 'GET', '/api/groups');
+  check('assistant coach reaches team data (200)', r.status === 200, r.status);
+
+  // A non-owner coach can view invites but never manage them.
+  r = await api(assistant, 'GET', '/api/coach-invites');
+  check('non-owner coach can view invites + coaches', r.status === 200 && Array.isArray(r.json.invites) && (r.json.coaches || []).some(u => u.email === 'newcoach@test.com'), r.json);
+  r = await api(assistant, 'POST', '/api/coach-invites', { email: 'third@test.com' });
+  check('non-owner coach cannot invite (403)', r.status === 403, r.status);
+  r = await api(assistant, 'DELETE', '/api/coach-invites/newcoach@test.com');
+  check('non-owner coach cannot remove (403)', r.status === 403, r.status);
+
+  // The owner can never be downgraded or removed, by either route.
+  r = await api(coach, 'PUT', '/api/users/' + ownerId + '/role', { role: 'athlete' });
+  check('owner cannot be downgraded via the role endpoint (400)', r.status === 400, r.status);
+  r = await api(coach, 'DELETE', '/api/coach-invites/coach@test.com');
+  check('owner cannot be removed via invites (400)', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/me');
+  check('owner is still coach after both attempts', r.json.role === 'coach', r.json);
+
+  // Invite AFTER registration upgrades the existing account at once —
+  // the athlete's original session cookie sees it on the next request,
+  // because roles resolve fresh from the store per request.
+  r = await api(coach, 'POST', '/api/coach-invites', { email: 'Athlete@Test.com' });
+  check('inviting an existing account is 200 + upgraded', r.status === 200 && r.json.upgraded === true, r.json);
+  r = await api(athlete, 'GET', '/api/me');
+  check('upgraded account reads coach on its next request', r.json.role === 'coach', r.json);
+  r = await api(athlete, 'GET', '/api/groups');
+  check('upgraded account reaches team data', r.status === 200, r.status);
+
+  // Revoking downgrades immediately: team endpoints 403 again.
+  r = await api(coach, 'DELETE', '/api/coach-invites/' + encodeURIComponent('ATHLETE@test.com'));
+  check('revoke reports the downgrade', r.status === 200 && r.json.downgraded === true, r.json);
+  r = await api(athlete, 'GET', '/api/groups');
+  check('revoked account is 403 on team data again', r.status === 403, r.status);
+  r = await api(athlete, 'GET', '/api/me');
+  check('revoked account reads athlete again', r.json.role === 'athlete', r.json);
+
+  // Removing a pending invite means a later registration is athlete.
+  r = await api(coach, 'POST', '/api/coach-invites', { email: 'pending@test.com' });
+  check('pending invite is added', r.status === 200, r.status);
+  r = await api(coach, 'DELETE', '/api/coach-invites/pending@test.com');
+  check('pending invite is removed', r.status === 200 && r.json.removedInvite === true, r.json);
+  r = await api(null, 'POST', '/api/register', { email: 'pending@test.com', password: 'testpass123' });
+  check('registering after the invite was revoked is athlete', r.status === 201 && r.json.role === 'athlete', r.json);
+  r = await api(coach, 'DELETE', '/api/coach-invites/ghost@test.com');
+  check('removing an unknown email is 404', r.status === 404, r.status);
+
   return { coach, inventoryId: invBlocks };
 }
 
@@ -810,6 +884,85 @@ async function waitForServer(tries = 60) {
     check('inventory survives a server restart',
       rr.status === 200 && rr.json.items.some(i => i.id === ctx.inventoryId),
       rr.json && rr.json.items && rr.json.items.length);
+
+    /* Env-seeded invites (COACH_INVITE_EMAILS): a fresh store gets the
+       invites, a seeded email registers as coach, and a seeded invite
+       the owner removes does NOT come back after a restart with the
+       same env. Runs its own server/port/data dir so the main suite's
+       store is untouched. */
+    {
+      const SEED_BASE = 'http://127.0.0.1:3218';
+      const seedApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+        const res = await fetch(SEED_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const SEED_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-seed-'));
+      const seedEnv = Object.assign({}, process.env, {
+        PORT: '3218', DATA_DIR: SEED_DIR, SESSION_SECRET: 'seed-secret',
+        COACH_INVITE_EMAILS: ' Friend@Test.com , second@test.com ',
+      });
+      let seedLog = '';
+      const startSeed = () => {
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: seedEnv, stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', d => { seedLog += d; });
+        c.stderr.on('data', d => { seedLog += d; });
+        return c;
+      };
+      const waitSeed = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(SEED_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      let seedChild = startSeed();
+      try {
+        check('seed server starts with COACH_INVITE_EMAILS', await waitSeed(), seedLog);
+        let sr = await seedApi(null, 'POST', '/api/register', { email: 'owner@test.com', password: 'testpass123' });
+        check('seed store: first account is owner coach', sr.status === 201 && sr.json.role === 'coach' && sr.json.isOwner === true, sr.json);
+        const seedOwner = cookieOf(sr);
+        sr = await seedApi(seedOwner, 'GET', '/api/coach-invites');
+        check('env invites are seeded, trimmed + lowercased',
+          sr.status === 200 && (sr.json.invites || []).includes('friend@test.com') && (sr.json.invites || []).includes('second@test.com'),
+          sr.json && sr.json.invites);
+        sr = await seedApi(null, 'POST', '/api/register', { email: 'friend@test.com', password: 'testpass123' });
+        check('a seeded invite registers as coach', sr.status === 201 && sr.json.role === 'coach', sr.json);
+        sr = await seedApi(seedOwner, 'DELETE', '/api/coach-invites/second@test.com');
+        check('owner can remove a seeded invite', sr.status === 200 && sr.json.removedInvite === true, sr.json);
+        seedChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        seedChild = startSeed();
+        check('seed server restarts with the same env', await waitSeed(), seedLog);
+        sr = await seedApi(null, 'POST', '/api/login', { email: 'owner@test.com', password: 'testpass123' });
+        const seedOwner2 = cookieOf(sr);
+        sr = await seedApi(seedOwner2, 'GET', '/api/coach-invites');
+        check('removed seeded invite does NOT resurrect after restart',
+          sr.status === 200 && !(sr.json.invites || []).includes('second@test.com') && (sr.json.invites || []).includes('friend@test.com'),
+          sr.json && sr.json.invites);
+        check('seeded list has no duplicates after restart',
+          sr.status === 200 && (sr.json.invites || []).length === 1, sr.json && sr.json.invites);
+        sr = await seedApi(null, 'POST', '/api/register', { email: 'second@test.com', password: 'testpass123' });
+        check('registering a removed seeded invite is athlete', sr.status === 201 && sr.json.role === 'athlete', sr.json);
+      } finally {
+        seedChild.kill('SIGKILL');
+        fs.rmSync(SEED_DIR, { recursive: true, force: true });
+      }
+    }
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {

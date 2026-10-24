@@ -11,15 +11,24 @@
  *   SESSION_SECRET  Secret used to sign login cookies. If not set, a random
  *                   one is generated once and kept in DATA_DIR so logins
  *                   survive restarts.
+ *   COACH_INVITE_EMAILS  Optional comma-separated emails to seed as
+ *                   assistant-coach invites at startup (e.g. so a friend
+ *                   is invited before the owner has even registered).
+ *                   Seeding is idempotent and removal-wins: once an
+ *                   email has been seeded it is never re-added, so an
+ *                   invite the owner removes in the app stays removed.
  *
  * MODEL — coach-input only. Athletes never log in and never enter data.
  * The coach keeps a roster of athlete PROFILES (name, training group,
  * event tags, Top Athlete star) and records everything himself:
  * assignment completions, testing-day results, weekly tracker numbers,
- * and aches & pains concerns. Login accounts exist only for coaches
- * (the first account registered is the coach; a coach can promote other
- * accounts). The per-account practice log and cross-training swaps are
- * the coach's own notebook and work as they always have.
+ * and aches & pains concerns. Login accounts exist only for coaches.
+ * The first account registered is the head coach (owner); the owner can
+ * invite assistant coaches by email, and an invited email registers
+ * with coach access to the same shared team data. Only the owner
+ * manages invites, and the owner can never lose coach access. The
+ * per-account practice log and cross-training swaps are the coach's
+ * own notebook and work as they always have.
  */
 'use strict';
 
@@ -64,6 +73,8 @@ let db = {
   concerns: {},
   mediaOverrides: {},
   inventory: [],
+  coachInvites: [],
+  coachInvitesSeeded: [],
 };
 
 function migrate() {
@@ -82,8 +93,21 @@ function migrate() {
   db.concerns = db.concerns || {};
   db.mediaOverrides = db.mediaOverrides || {};
   db.inventory = Array.isArray(db.inventory) ? db.inventory : [];
+  // Assistant-coach invites: normalized (trimmed, lowercased) emails the
+  // owner has granted coach access to. Kept deduped on every load.
+  db.coachInvites = Array.isArray(db.coachInvites)
+    ? [...new Set(db.coachInvites.map(e => String(e || '').trim().toLowerCase()).filter(Boolean))]
+    : [];
+  // Emails already seeded from COACH_INVITE_EMAILS once — the memory
+  // that makes env seeding removal-wins (see seedCoachInvitesFromEnv).
+  db.coachInvitesSeeded = Array.isArray(db.coachInvitesSeeded)
+    ? [...new Set(db.coachInvitesSeeded.map(e => String(e || '').trim().toLowerCase()).filter(Boolean))]
+    : [];
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
+    // The first account is the head coach (owner). Stores written
+    // before invites existed have no marker — the first user owns it.
+    if (u.isOwner === undefined) u.isOwner = i === 0;
     if (!db.logs[u.id]) db.logs[u.id] = [];
     if (!db.swaps[u.id]) db.swaps[u.id] = {};
   });
@@ -110,6 +134,28 @@ function saveDb() {
   fs.renameSync(tmp, DB_FILE);
 }
 loadDb();
+
+/* Seed assistant-coach invites from COACH_INVITE_EMAILS (comma-
+   separated). Idempotent and removal-wins: an email is merged into
+   db.coachInvites only the first time it is ever seeded, and that
+   first seeding is remembered in db.coachInvitesSeeded. After that
+   the stored invite list is the source of truth — if the owner
+   removes a seeded invite in the app, restarts never resurrect it.
+   Invoked once below, just before the server starts listening. */
+function seedCoachInvitesFromEnv() {
+  const raw = process.env.COACH_INVITE_EMAILS || '';
+  const emails = [...new Set(raw.split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(s => EMAIL_RE.test(s)))];
+  let changed = false;
+  for (const email of emails) {
+    if (db.coachInvitesSeeded.includes(email)) continue;
+    db.coachInvitesSeeded.push(email);
+    if (!db.coachInvites.includes(email)) db.coachInvites.push(email);
+    changed = true;
+  }
+  if (changed) saveDb();
+}
 
 /* ------------------------------------------------------------------ */
 /* Passwords (scrypt) and sessions (signed cookie)                     */
@@ -442,7 +488,9 @@ function publicProfile(pr) {
     events: pr.events || [], topAthlete: !!pr.topAthlete, archived: !!pr.archived,
   };
 }
-function publicUser(u) { return { id: u.id, email: u.email, role: u.role }; }
+function publicUser(u) { return { id: u.id, email: u.email, role: u.role, isOwner: !!u.isOwner }; }
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function userByEmail(email) { return db.users.find(u => u.email === email) || null; }
 /* An assignment = coach override if one exists, else the plan default. */
 function resolveAssignment(groupId, dateString) {
   const ov = db.overrides[groupId + '|' + dateString];
@@ -581,7 +629,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const email = clean(body.email, 200).toLowerCase();
     const password = typeof body.password === 'string' ? body.password : '';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!EMAIL_RE.test(email)) {
       return sendJson(res, 400, { error: 'Please enter a valid email address.' });
     }
     if (password.length < 8) {
@@ -590,12 +638,17 @@ async function handleApi(req, res, url) {
     if (db.users.some(u => u.email === email)) {
       return sendJson(res, 409, { error: 'An account with that email already exists. Try logging in.' });
     }
+    const firstAccount = db.users.length === 0;
     const user = {
       id: crypto.randomUUID(),
       email,
       passHash: hashPassword(password),
       createdAt: new Date().toISOString(),
-      role: db.users.length === 0 ? 'coach' : 'athlete',
+      // First account: head coach (owner). An email the owner invited
+      // registers straight into coach access; everyone else is an
+      // athlete-role account (no team-data access).
+      role: firstAccount || db.coachInvites.includes(email) ? 'coach' : 'athlete',
+      isOwner: firstAccount,
     };
     db.users.push(user);
     db.logs[user.id] = [];
@@ -724,9 +777,73 @@ async function handleApi(req, res, url) {
     if (body.role !== 'coach' && body.role !== 'athlete') {
       return sendJson(res, 400, { error: 'Role must be coach or athlete.' });
     }
+    if (target.isOwner && body.role !== 'coach') {
+      return sendJson(res, 400, { error: 'The head coach account cannot lose coach access.' });
+    }
     target.role = body.role;
     saveDb();
     return sendJson(res, 200, { user: publicUser(target) });
+  }
+
+  /* ---------- assistant coach invites (owner-managed) ----------
+     The invite list is the standing grant of coach access: an invited
+     email registers as a coach, and an invited existing account is
+     upgraded on the spot. Removing an invite revokes it — a matching
+     non-owner account drops back to athlete immediately, because the
+     session resolves the user (and role) fresh from the store on
+     every request. Only the owner manages invites; other coaches can
+     view the list but get a 403 on add/remove. */
+  function invitesPayload() {
+    return {
+      invites: db.coachInvites.slice(),
+      coaches: db.users.filter(u => u.role === 'coach').map(publicUser),
+    };
+  }
+  if (p === '/api/coach-invites' && req.method === 'GET') {
+    return sendJson(res, 200, invitesPayload());
+  }
+  if (p === '/api/coach-invites' && req.method === 'POST') {
+    if (!user.isOwner) {
+      return sendJson(res, 403, { error: 'Only the head coach can invite assistant coaches.' });
+    }
+    const body = await readBody(req);
+    const email = clean(body.email, 200).toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      return sendJson(res, 400, { error: 'Please enter a valid email address.' });
+    }
+    const existing = userByEmail(email);
+    if (existing && existing.isOwner) {
+      return sendJson(res, 400, { error: 'That is the head coach\'s own email — it already has coach access.' });
+    }
+    const alreadyInvited = db.coachInvites.includes(email);
+    if (!alreadyInvited) db.coachInvites.push(email);
+    let upgraded = false;
+    if (existing && existing.role !== 'coach') { existing.role = 'coach'; upgraded = true; }
+    saveDb();
+    return sendJson(res, 200, Object.assign(
+      { ok: true, email, alreadyInvited, upgraded, user: existing ? publicUser(existing) : null },
+      invitesPayload()));
+  }
+  const inviteMatch = p.match(/^\/api\/coach-invites\/(.+)$/);
+  if (inviteMatch && req.method === 'DELETE') {
+    if (!user.isOwner) {
+      return sendJson(res, 403, { error: 'Only the head coach can remove coach access.' });
+    }
+    const email = decodeURIComponent(inviteMatch[1]).trim().toLowerCase();
+    const existing = userByEmail(email);
+    if (existing && existing.isOwner) {
+      return sendJson(res, 400, { error: 'The head coach cannot be removed.' });
+    }
+    const removedInvite = db.coachInvites.includes(email);
+    if (!removedInvite && !existing) {
+      return sendJson(res, 404, { error: 'No invite or account for that email.' });
+    }
+    db.coachInvites = db.coachInvites.filter(e => e !== email);
+    let downgraded = false;
+    if (existing && existing.role === 'coach') { existing.role = 'athlete'; downgraded = true; }
+    saveDb();
+    return sendJson(res, 200, Object.assign(
+      { ok: true, email, removedInvite, downgraded }, invitesPayload()));
   }
 
   /* ---------- groups ---------- */
@@ -1508,6 +1625,8 @@ function serveStatic(req, res, url) {
     res.end(data);
   });
 }
+
+seedCoachInvitesFromEnv();
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');

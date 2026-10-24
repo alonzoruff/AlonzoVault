@@ -715,8 +715,10 @@ function renderAccount() {
       <p>${state.user.role === 'coach' ? '<span class="badge high">COACH ACCOUNT</span>' : '<span class="badge low">NOT A COACH ACCOUNT</span>'}</p>
       <p class="muted">Accounts are for coaches only — athletes never log in. The coach records everything: groups and rosters, assignments, testing results, weekly numbers, and health concerns. Your personal log entries and cross-training swaps save to this account.</p>
       <button class="btn" id="acct-logout" type="button">Log out</button></div>
-      <div id="coach-accounts"></div>`;
+      <div id="coach-accounts"></div>
+      <div id="coach-invites"></div>`;
     renderCoachAccounts();
+    renderCoachInvites();
     const out = async () => { await apiPost('/api/logout'); state.user = null; await refreshUserData(); syncAuthUi(); };
     $('#chip-logout').addEventListener('click', out);
     $('#acct-logout').addEventListener('click', out);
@@ -971,7 +973,7 @@ async function renderCoachAccounts() {
     el.innerHTML = `<div class="card"><h3>Coach accounts</h3>
       <p class="muted">Accounts are for coaches only. Promote another account here if a second coach needs access.</p>
       ${data.users.map(u => `<div class="roster-row"><span>${esc(u.email)} ${u.role === 'coach' ? '<span class="badge high">COACH</span>' : '<span class="badge plain">NO ACCESS</span>'}</span>
-      ${u.id !== state.user.id ? `<button class="btn secondary" data-role-toggle="${u.id}" data-role="${u.role === 'coach' ? 'athlete' : 'coach'}" type="button">${u.role === 'coach' ? 'Remove coach access' : 'Make coach'}</button>` : '<span class="muted">you</span>'}</div>`).join('')}
+      ${u.isOwner ? '<span class="muted">head coach</span>' : (u.id !== state.user.id ? `<button class="btn secondary" data-role-toggle="${u.id}" data-role="${u.role === 'coach' ? 'athlete' : 'coach'}" type="button">${u.role === 'coach' ? 'Remove coach access' : 'Make coach'}</button>` : '<span class="muted">you</span>')}</div>`).join('')}
     </div>`;
     el.querySelectorAll('[data-role-toggle]').forEach(b => b.addEventListener('click', async () => {
       try {
@@ -979,6 +981,51 @@ async function renderCoachAccounts() {
         renderCoachAccounts();
       } catch (err) { alert(err.message); }
     }));
+  } catch (_) { el.innerHTML = ''; }
+}
+
+/* ---------------- assistant coaches (owner-managed invites) ---------------- */
+async function renderCoachInvites() {
+  const el = $('#coach-invites');
+  if (!el || !isCoachUser()) return;
+  try {
+    const data = await api('/api/coach-invites');
+    const isOwner = !!(state.user && state.user.isOwner);
+    const coaches = data.coaches || [];
+    const coachEmails = new Set(coaches.map(u => u.email));
+    const pending = (data.invites || []).filter(e => !coachEmails.has(e));
+    let html = `<div class="card"><h3>Assistant coaches</h3>
+      <p class="muted">An invited coach shares full access to this team's data — roster, testing, weekly numbers, and health concerns. Invite by email; when they create an account with that email, they land as a coach.</p>`;
+    if (isOwner) {
+      html += `<form id="invite-form">
+        <label>Email <input type="email" id="invite-email" required autocomplete="email" placeholder="assistant@school.edu"></label>
+        <button class="btn primary" type="submit">Invite coach</button>
+        <p class="error" id="invite-err"></p>
+      </form>`;
+    } else {
+      html += `<p class="muted">Only the head coach manages invites.</p>`;
+    }
+    html += coaches.map(u => `<div class="roster-row"><span>${esc(u.email)} <span class="badge high">COACH</span>${u.isOwner ? ' <span class="badge plain">HEAD COACH</span>' : ''}</span>
+      ${isOwner && !u.isOwner ? `<button class="btn secondary" data-invite-remove="${esc(u.email)}" type="button">Remove coach access</button>` : (u.isOwner ? '<span class="muted">owner</span>' : '<span class="muted">invited coach</span>')}</div>`).join('');
+    html += pending.map(e => `<div class="roster-row"><span>${esc(e)} <span class="badge plain">INVITED — NOT REGISTERED YET</span></span>
+      ${isOwner ? `<button class="btn secondary" data-invite-remove="${esc(e)}" type="button">Remove invite</button>` : ''}</div>`).join('');
+    html += `</div>`;
+    el.innerHTML = html;
+    if (isOwner) {
+      $('#invite-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        try {
+          await apiPost('/api/coach-invites', { email: $('#invite-email').value });
+          renderCoachInvites(); renderCoachAccounts();
+        } catch (err) { $('#invite-err').textContent = err.message; }
+      });
+      el.querySelectorAll('[data-invite-remove]').forEach(b => b.addEventListener('click', async () => {
+        try {
+          await apiDel('/api/coach-invites/' + encodeURIComponent(b.dataset.inviteRemove));
+          renderCoachInvites(); renderCoachAccounts();
+        } catch (err) { alert(err.message); }
+      }));
+    }
   } catch (_) { el.innerHTML = ''; }
 }
 
