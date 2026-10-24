@@ -6,7 +6,7 @@ A card catalog of sprint workouts. Every workout has a code (like ACC-03) and a 
 that says what it is, how far, how hard, and how much rest. Nothing lives only in
 somebody's head anymore — it is written down, searchable, and backed up on GitHub.
 
-## The 9 workout types, in simple terms
+## The workout types, in simple terms
 
 - **ACC — first steps.** Getting out and up to speed. Starts, hills, sleds, T-APEX resisted runs.
 - **MAX — top speed.** The fastest running there is. Short, full rest, stop when form slips.
@@ -17,6 +17,11 @@ somebody's head anymore — it is written down, searchable, and backed up on Git
 - **STR — weights.** Lifting. Heavy days sit on the same days as fast sprinting.
 - **PLY — jumps.** Hops, bounds, box work. Builds spring.
 - **REC — rest.** Walking, mobility, easy movement. A real part of the plan, not a day off by accident.
+- **WUP — warm-ups.** The set routines that start every day: the full 20-25 minute version, a short pre-meet version, and a short low-day version.
+- **XT — cross-training.** No-running work for low days: pool running, bike, a cardio circuit, a mobility and core day, an easy swim. Same recovery job as tempo, zero pounding.
+- **QTR — the 400 group.** The long work from Coach Dunham's 400m framework that the 100/200 plan
+  leaves out: 500s and 600s, lactate days, split runs, and practicing the 400 race itself.
+  The full story is in `DUNHAM_400M_FRAMEWORK.md` in this same folder.
 
 ## The one rule that runs everything
 

@@ -1,0 +1,1 @@
+{"description":"Standalone web app: searchable sprint workout library, 29-week season plan, and per-user practice logs with accounts.","engines":{"node":">=18"},"license":"UNLICENSED","main":"server.js","name":"sprinter-workout-app","private":true,"scripts":{"start":"node server.js"},"type":"commonjs","version":"1.0.0"}

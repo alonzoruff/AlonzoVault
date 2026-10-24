@@ -1,0 +1,7 @@
+# User data created at runtime (accounts, logs, swaps, session secret).
+# Never commit this — it is private and it belongs to the server, not the repo.
+data/
+
+node_modules/
+*.log
+.DS_Store

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sprinter Workout App — St. John's College High School</title>
+<meta name="description" content="St. John's College High School — Cadets Track & Field. A searchable library of sprint workouts, a 29-week season plan, and a practice log.">
+<meta name="theme-color" content="#CC0033">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/assets/sjc-logo-header.svg" type="image/svg+xml">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Sprinter">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-block">
+      <img class="site-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
+      <div class="identity">St. John's College High School — Cadets Track &amp; Field</div>
+      <div class="app-name">Sprinter Workout App</div>
+    </div>
+    <div id="account-chip" class="account-chip"></div>
+  </div>
+  <nav class="tabs" id="main-tabs">
+    <button data-view="home" class="tab active">Today</button>
+    <button data-view="library" class="tab">Workouts</button>
+    <button data-view="season" class="tab">Season Plan</button>
+    <button data-view="log" class="tab">My Log</button>
+    <button data-view="more" class="tab">More</button>
+  </nav>
+</header>
+
+<main id="app">
+  <!-- TODAY -->
+  <section id="view-home" class="view active">
+    <div id="home-content"><p class="muted">Loading…</p></div>
+  </section>
+
+  <!-- LIBRARY -->
+  <section id="view-library" class="view">
+    <h1>Workout library</h1>
+    <div class="filters card">
+      <input id="lib-search" type="search" placeholder="Search by name or code (try “fly” or MAX-01)">
+      <div class="filter-row">
+        <select id="lib-quality"><option value="">All types</option></select>
+        <select id="lib-phase"><option value="">All phases</option></select>
+        <select id="lib-cns">
+          <option value="">Hard + easy days</option>
+          <option value="high">Hard days (high CNS)</option>
+          <option value="low">Easy days (low CNS)</option>
+        </select>
+      </div>
+      <p id="lib-count" class="muted"></p>
+    </div>
+    <div id="lib-list"></div>
+    <div id="lib-detail"></div>
+  </section>
+
+  <!-- SEASON -->
+  <section id="view-season" class="view">
+    <h1>Season plan 2026-27</h1>
+    <p class="muted">29 weeks. Mini peak <strong>Sat Feb 20, 2027</strong> (indoor championships) · Major peak <strong>Sat May 15, 2027</strong> (outdoor championships).</p>
+    <div class="card">
+      <label for="week-jump">Jump to week</label>
+      <div class="filter-row">
+        <select id="week-jump"></select>
+        <button id="week-today" class="btn secondary" type="button">Current week</button>
+      </div>
+    </div>
+    <div id="season-week"></div>
+    <details class="card doc">
+      <summary><strong>About this plan</strong> — where it comes from, the rules, the tapers</summary>
+      <div id="season-doc"></div>
+    </details>
+  </section>
+
+  <!-- LOG -->
+  <section id="view-log" class="view">
+    <h1>My practice log</h1>
+    <div id="log-gate"></div>
+    <div id="log-main" hidden>
+      <form id="log-form" class="card">
+        <h2>Add an entry</h2>
+        <label>Date <input type="date" id="log-date" required></label>
+        <label>Workout <select id="log-session"></select></label>
+        <label>Athlete / group <input type="text" id="log-group" placeholder="e.g. Varsity sprint group"></label>
+        <label>What actually happened <textarea id="log-happened" rows="3" placeholder="What really ran, any changes from the plan"></textarea></label>
+        <label>Times / marks <input type="text" id="log-marks" placeholder="e.g. Best fly 10m: 1.02"></label>
+        <label>How it felt
+          <select id="log-feel">
+            <option value="">—</option>
+            <option value="1">1 — rough</option>
+            <option value="2">2</option>
+            <option value="3">3 — solid</option>
+            <option value="4">4</option>
+            <option value="5">5 — great</option>
+          </select>
+        </label>
+        <label>Notes <textarea id="log-notes" rows="2"></textarea></label>
+        <button class="btn primary" type="submit">Save entry</button>
+        <p id="log-form-msg" class="muted"></p>
+      </form>
+      <div id="log-list"></div>
+    </div>
+  </section>
+
+  <!-- MORE -->
+  <section id="view-more" class="view">
+    <h1>More</h1>
+    <div class="menu-list">
+      <button class="menu-item" data-goto="drills">Warm-up drills <span>16 drills, Parts A &amp; B</span></button>
+      <button class="menu-item" data-goto="qtr">400m Training <span>The full 400m framework and the QTR sessions</span></button>
+      <button class="menu-item" data-goto="guide">How to use this <span>The system in plain words</span></button>
+      <button class="menu-item" data-goto="account">Account <span id="menu-account-note">Log in or create an account</span></button>
+    </div>
+  </section>
+
+  <!-- DRILLS -->
+  <section id="view-drills" class="view">
+    <button class="btn secondary back" data-goto="more">← More</button>
+    <h1>Warm-up drills</h1>
+    <p class="muted">The standard warm-up series. Part A warms up, Part B mobilizes and drills sprint mechanics.</p>
+    <div id="drill-list"></div>
+  </section>
+
+  <!-- 400M TRAINING -->
+  <section id="view-qtr" class="view">
+    <button class="btn secondary back" data-goto="more">← More</button>
+    <h1>400m Training</h1>
+    <p class="muted">The long work the 100/200 plan leaves out: 500s and 600s, lactate days, split runs, and practicing the 400 race itself. Sessions are the QTR rows in the workout library.</p>
+    <div id="qtr-list"></div>
+    <div class="card doc" id="qtr-doc"></div>
+  </section>
+
+  <!-- GUIDE -->
+  <section id="view-guide" class="view">
+    <button class="btn secondary back" data-goto="more">← More</button>
+    <h1>How to use this</h1>
+    <div class="card doc" id="guide-doc"></div>
+  </section>
+
+  <!-- ACCOUNT -->
+  <section id="view-account" class="view">
+    <button class="btn secondary back" data-goto="more">← More</button>
+    <h1>Account</h1>
+    <div id="account-main"></div>
+  </section>
+</main>
+
+<footer class="footer muted">
+  <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
+  <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
+  <div>Your log entries and swaps are private to your account.</div>
+</footer>
+
+<script src="/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  }
+</script>
+</body>
+</html>
