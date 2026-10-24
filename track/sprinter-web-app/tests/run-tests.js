@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v11',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v11"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v12',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v12"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);

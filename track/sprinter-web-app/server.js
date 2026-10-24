@@ -73,6 +73,7 @@ let db = {
   concerns: {},
   mediaOverrides: {},
   inventory: [],
+  warmupCardEdits: {},
   coachInvites: [],
   coachInvitesSeeded: [],
 };
@@ -93,6 +94,11 @@ function migrate() {
   db.concerns = db.concerns || {};
   db.mediaOverrides = db.mediaOverrides || {};
   db.inventory = Array.isArray(db.inventory) ? db.inventory : [];
+  // Coach edits to the warm-up cards: { cardId: { sections: [...] } }.
+  // Only cards a coach has actually edited appear here; anything else
+  // renders the shipped card from public/index.html.
+  db.warmupCardEdits = (db.warmupCardEdits && typeof db.warmupCardEdits === 'object' && !Array.isArray(db.warmupCardEdits))
+    ? db.warmupCardEdits : {};
   // Assistant-coach invites: normalized (trimmed, lowercased) emails the
   // owner has granted coach access to. Kept deduped on every load.
   db.coachInvites = Array.isArray(db.coachInvites)
@@ -422,6 +428,64 @@ function validateInventory(body, partial) {
   return { fields };
 }
 
+/* Warm-up cards: the three cards (Light / Speed Day / Circuit Day)
+   ship as fixed HTML in public/index.html — four list sections each.
+   Coaches can edit the item lists in the app; a save replaces the
+   card's items wholesale and lives here as an override, so future
+   content rebuilds never touch it and deleting the override restores
+   the shipped card exactly. */
+const WARMUP_CARDS = {
+  'wu-card-1': { sections: 4 },
+  'wu-card-2': { sections: 4 },
+  'wu-card-3': { sections: 4 },
+};
+const WU_MAX_PER_SECTION = 30;
+const WU_MAX_PER_CARD = 80;
+const WU_NAME_MAX = 80;
+const WU_DETAIL_MAX = 240;
+/* Validate a card-edit payload: { sections: [ { items: [{name,
+   detail}] } ] } with one entry per shipped section. Returns
+   { sections } (trimmed, stored shape) or { error }. */
+function validateWarmupCardEdits(body, cardId) {
+  const meta = WARMUP_CARDS[cardId];
+  if (!meta) return { error: 'Unknown warm-up card.' };
+  if (!body || !Array.isArray(body.sections) || body.sections.length !== meta.sections) {
+    return { error: 'Card edits must cover all ' + meta.sections + ' sections of the card.' };
+  }
+  let total = 0;
+  const sections = [];
+  for (const sec of body.sections) {
+    if (!sec || !Array.isArray(sec.items)) return { error: 'Each section needs an item list.' };
+    if (sec.items.length > WU_MAX_PER_SECTION) {
+      return { error: 'Too many items in one section (' + WU_MAX_PER_SECTION + ' max).' };
+    }
+    const items = [];
+    for (const raw of sec.items) {
+      if (!raw || typeof raw !== 'object' || typeof raw.name !== 'string' || !raw.name.trim()) {
+        return { error: 'Each item needs a name.' };
+      }
+      if (raw.name.trim().length > WU_NAME_MAX) {
+        return { error: 'Item names are capped at ' + WU_NAME_MAX + ' characters.' };
+      }
+      let detail = '';
+      if (raw.detail !== undefined && raw.detail !== null) {
+        if (typeof raw.detail !== 'string') return { error: 'Item details must be text.' };
+        detail = raw.detail.trim();
+        if (detail.length > WU_DETAIL_MAX) {
+          return { error: 'Item details are capped at ' + WU_DETAIL_MAX + ' characters.' };
+        }
+      }
+      items.push({ name: raw.name.trim(), detail });
+      total++;
+    }
+    sections.push({ items });
+  }
+  if (total > WU_MAX_PER_CARD) {
+    return { error: 'Too many items on one card (' + WU_MAX_PER_CARD + ' max).' };
+  }
+  return { sections };
+}
+
 /* ------------------------------------------------------------------ */
 /* Dates + season plan resolution                                      */
 /* ------------------------------------------------------------------ */
@@ -623,6 +687,12 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/content' && req.method === 'GET') {
     return sendJson(res, 200, CONTENT);
+  }
+
+  /* Warm-up card edits are public to read (the cards themselves are
+     public) — only cards a coach has edited appear here. */
+  if (p === '/api/warmup-cards' && req.method === 'GET') {
+    return sendJson(res, 200, { cards: db.warmupCardEdits });
   }
 
   if (p === '/api/register' && req.method === 'POST') {
@@ -1519,6 +1589,39 @@ async function handleApi(req, res, url) {
     found.updatedAt = new Date().toISOString();
     saveDb();
     return sendJson(res, 200, { concern: found });
+  }
+
+  /* ---------- warm-up card editor (coach-managed) ---------- */
+  if (p === '/api/coach/warmup-cards' && req.method === 'GET') {
+    const cards = Object.keys(WARMUP_CARDS).map(id => ({
+      id,
+      edited: Object.prototype.hasOwnProperty.call(db.warmupCardEdits, id),
+      sections: db.warmupCardEdits[id] ? db.warmupCardEdits[id].sections : null,
+    }));
+    return sendJson(res, 200, { cards });
+  }
+  const wuEditMatch = p.match(/^\/api\/coach\/warmup-cards\/([^/]+)$/);
+  if (wuEditMatch && req.method === 'PUT') {
+    const cardId = decodeURIComponent(wuEditMatch[1]);
+    if (!WARMUP_CARDS[cardId]) {
+      return sendJson(res, 400, { error: 'Unknown warm-up card.' });
+    }
+    const body = await readBody(req);
+    const v = validateWarmupCardEdits(body, cardId);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    db.warmupCardEdits[cardId] = { sections: v.sections };
+    saveDb();
+    return sendJson(res, 200, { ok: true, cardId, sections: v.sections });
+  }
+  if (wuEditMatch && req.method === 'DELETE') {
+    const cardId = decodeURIComponent(wuEditMatch[1]);
+    if (!WARMUP_CARDS[cardId]) {
+      return sendJson(res, 400, { error: 'Unknown warm-up card.' });
+    }
+    const reset = Object.prototype.hasOwnProperty.call(db.warmupCardEdits, cardId);
+    delete db.warmupCardEdits[cardId];
+    saveDb();
+    return sendJson(res, 200, { ok: true, cardId, reset });
   }
 
   /* ---------- movement demo media (coach-managed) ---------- */
