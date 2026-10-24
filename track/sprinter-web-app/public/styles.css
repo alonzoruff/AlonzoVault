@@ -148,48 +148,48 @@ details.card summary { cursor: pointer; }
   position: absolute; left: 50%; bottom: 24px;
   height: 86px; width: auto; max-width: 60vw;
   transform: translateX(-50%);
-  animation: heroTravel 8s linear infinite, heroFade 8s linear infinite;
+  animation: heroTravel 12s linear infinite, heroFade 12s linear infinite;
 }
 .hero-lanes { position: absolute; left: 10px; right: 10px; bottom: 8px; display: grid; gap: 6px; }
 .lane-line { height: 3px; overflow: hidden; border-radius: 2px; }
 .lane-strip {
   height: 100%; width: calc(100% + 56px);
   background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.5) 0 34px, transparent 34px 56px);
-  animation: laneMove .8s linear infinite;
+  animation: laneMove 1.2s linear infinite;
 }
 .lane-strip.ls-b {
   background-image: repeating-linear-gradient(90deg, rgba(204,0,51,.9) 0 34px, transparent 34px 56px);
-  animation-duration: 1s;
+  animation-duration: 1.5s;
 }
-.lane-strip.ls-c { animation-duration: 1.25s; opacity: .65; }
+.lane-strip.ls-c { animation-duration: 1.875s; opacity: .65; }
 @keyframes laneMove { to { transform: translateX(-56px); } }
 
-/* Block-start hero sequence: ONE 8s master timeline drives every limb
+/* Block-start hero sequence: ONE 12s master timeline drives every limb
    from shared pose tables, so opposite arm/leg pairs stay phase-locked
    forever (same duration, far limbs offset exactly half a stride, each
    arm keyed to the opposite leg). Sequence: set in the blocks -> explosive
    drive at ~45 degrees with low heel recovery -> tall upright max-velocity
    strides -> fade out and reset to the blocks. */
-.athlete { transform-box: view-box; transform-origin: 55px 52px; animation: athleteMove 8s linear infinite; }
-.head { transform-box: view-box; transform-origin: 73px 30px; animation: headMove 8s linear infinite; }
+.athlete { transform-box: view-box; transform-origin: 55px 52px; animation: athleteMove 12s linear infinite; }
+.head { transform-box: view-box; transform-origin: 73px 30px; animation: headMove 12s linear infinite; }
 .leg, .shin, .arm, .fore { transform-box: view-box; }
 .o-hip { transform-origin: 55px 52px; }
 .o-shoulder { transform-origin: 71px 33px; }
 .o-knee-n { transform-origin: 64px 66px; }
 .o-elbow-n { transform-origin: 59px 45px; }
-.leg-near { animation: thighNear 8s linear infinite; }
-.leg-far { animation: thighFar 8s linear infinite; }
-.shin-near { animation: shinNear 8s linear infinite; }
-.shin-far { animation: shinFar 8s linear infinite; }
-.arm-near { animation: armNear 8s linear infinite; }
-.arm-far { animation: armFar 8s linear infinite; }
-.fore-near { animation: foreNear 8s linear infinite; }
-.fore-far { animation: foreFar 8s linear infinite; }
-.runner-shadow { transform-box: fill-box; transform-origin: center; animation: shadowMove 8s linear infinite; }
-.streaks { animation: streakGate 8s linear infinite; }
-.streak { stroke: var(--gray); stroke-width: 3; stroke-linecap: round; opacity: 0; animation: streakMove .8s linear infinite; }
-.streak.s2 { animation-delay: .27s; }
-.streak.s3 { animation-delay: .53s; }
+.leg-near { animation: thighNear 12s linear infinite; }
+.leg-far { animation: thighFar 12s linear infinite; }
+.shin-near { animation: shinNear 12s linear infinite; }
+.shin-far { animation: shinFar 12s linear infinite; }
+.arm-near { animation: armNear 12s linear infinite; }
+.arm-far { animation: armFar 12s linear infinite; }
+.fore-near { animation: foreNear 12s linear infinite; }
+.fore-far { animation: foreFar 12s linear infinite; }
+.runner-shadow { transform-box: fill-box; transform-origin: center; animation: shadowMove 12s linear infinite; }
+.streaks { animation: streakGate 12s linear infinite; }
+.streak { stroke: var(--gray); stroke-width: 3; stroke-linecap: round; opacity: 0; animation: streakMove 1.2s linear infinite; }
+.streak.s2 { animation-delay: .405s; }
+.streak.s3 { animation-delay: .795s; }
 @keyframes streakMove {
   0% { transform: translateX(8px); opacity: 0; }
   35% { opacity: .5; }
