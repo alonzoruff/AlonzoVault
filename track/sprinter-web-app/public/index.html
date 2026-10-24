@@ -36,12 +36,73 @@
 <main id="app">
   <!-- TODAY -->
   <section id="view-home" class="view active">
+    <div class="hero" aria-hidden="true">
+      <div class="blocks">
+        <svg viewBox="0 0 58 34" focusable="false" aria-hidden="true">
+          <rect x="40" y="4" width="3" height="26" fill="#ffffff" opacity=".8"/>
+          <rect x="2" y="29" width="34" height="3" rx="1.5" fill="#3a4046"/>
+          <polygon points="9,29 17,29 15,17 8,19" fill="#CC0033"/>
+          <polygon points="8,19 15,17 16,20 9,22" fill="#d7dade"/>
+          <polygon points="20,29 28,29 25,16 18,18" fill="#CC0033"/>
+          <polygon points="18,18 25,16 26,19 19,21" fill="#d7dade"/>
+        </svg>
+      </div>
+      <svg class="runner" viewBox="0 0 120 96" focusable="false" aria-hidden="true">
+        <ellipse class="runner-shadow" cx="57" cy="90" rx="27" ry="3.2" fill="#000000"/>
+        <g class="streaks">
+          <line class="streak s1" x1="4" y1="30" x2="30" y2="30"/>
+          <line class="streak s2" x1="2" y1="44" x2="24" y2="44"/>
+          <line class="streak s3" x1="6" y1="58" x2="28" y2="58"/>
+        </g>
+        <g class="athlete">
+          <g class="arm arm-far o-shoulder">
+            <line x1="71" y1="33" x2="59" y2="45" stroke="#4a5158" stroke-width="5.5" stroke-linecap="round"/>
+            <g class="fore fore-far o-elbow-n">
+              <line x1="59" y1="45" x2="71" y2="51" stroke="#4a5158" stroke-width="4.5" stroke-linecap="round"/>
+            </g>
+          </g>
+          <g class="leg leg-far o-hip">
+            <line x1="55" y1="52" x2="64" y2="66" stroke="#4a5158" stroke-width="7" stroke-linecap="round"/>
+            <g class="shin shin-far o-knee-n">
+              <line x1="64" y1="66" x2="58" y2="86" stroke="#4a5158" stroke-width="5.5" stroke-linecap="round"/>
+              <line x1="58" y1="86" x2="66" y2="88" stroke="#CC0033" stroke-width="4.5" stroke-linecap="round" opacity="0.75"/>
+            </g>
+          </g>
+          <line x1="55" y1="52" x2="71" y2="33" stroke="#CC0033" stroke-width="10" stroke-linecap="round"/>
+          <rect x="59.5" y="37" width="7" height="10" rx="1.2" fill="#ffffff" opacity="0.92" transform="rotate(40 63 42)"/>
+          <circle cx="55" cy="52" r="6" fill="#20242a"/>
+          <g class="head">
+            <circle cx="78" cy="25" r="6.2" fill="#20242a"/>
+            <line x1="72.6" y1="21.6" x2="83.4" y2="22.6" stroke="#CC0033" stroke-width="2.6" stroke-linecap="round"/>
+          </g>
+          <g class="leg leg-near o-hip">
+            <line x1="55" y1="52" x2="64" y2="66" stroke="#20242a" stroke-width="7.5" stroke-linecap="round"/>
+            <g class="shin shin-near o-knee-n">
+              <line x1="64" y1="66" x2="58" y2="86" stroke="#20242a" stroke-width="6" stroke-linecap="round"/>
+              <line x1="58" y1="86" x2="66" y2="88" stroke="#CC0033" stroke-width="5" stroke-linecap="round"/>
+            </g>
+          </g>
+          <g class="arm arm-near o-shoulder">
+            <line x1="71" y1="33" x2="59" y2="45" stroke="#20242a" stroke-width="6" stroke-linecap="round"/>
+            <g class="fore fore-near o-elbow-n">
+              <line x1="59" y1="45" x2="71" y2="51" stroke="#20242a" stroke-width="5" stroke-linecap="round"/>
+            </g>
+          </g>
+        </g>
+      </svg>
+      <div class="hero-lanes">
+        <div class="lane-line"><div class="lane-strip ls-a"></div></div>
+        <div class="lane-line"><div class="lane-strip ls-b"></div></div>
+        <div class="lane-line"><div class="lane-strip ls-c"></div></div>
+      </div>
+    </div>
     <div id="home-content"><p class="muted">Loading…</p></div>
   </section>
 
   <!-- LIBRARY -->
   <section id="view-library" class="view">
     <h1>Workout library</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="filters card">
       <input id="lib-search" type="search" placeholder="Search by name or code (try “fly” or MAX-01)">
       <div class="filter-row">
@@ -62,6 +123,7 @@
   <!-- SEASON -->
   <section id="view-season" class="view">
     <h1>Season plan 2026-27</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <p class="muted">29 weeks. Mini peak <strong>Sat Feb 20, 2027</strong> (indoor championships) · Major peak <strong>Sat May 15, 2027</strong> (outdoor championships).</p>
     <div class="card">
       <label for="week-jump">Jump to week</label>
@@ -80,6 +142,7 @@
   <!-- LOG -->
   <section id="view-log" class="view">
     <h1>My practice log</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div id="log-gate"></div>
     <div id="log-main" hidden>
       <form id="log-form" class="card">
@@ -110,6 +173,7 @@
   <!-- MORE -->
   <section id="view-more" class="view">
     <h1>More</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="menu-list">
       <button class="menu-item" data-goto="drills">Warm-up drills <span>16 drills, Parts A &amp; B</span></button>
       <button class="menu-item" data-goto="qtr">400m Training <span>The full 400m framework and the QTR sessions</span></button>
@@ -122,6 +186,7 @@
   <section id="view-drills" class="view">
     <button class="btn secondary back" data-goto="more">← More</button>
     <h1>Warm-up drills</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <p class="muted">The standard warm-up series. Part A warms up, Part B mobilizes and drills sprint mechanics.</p>
     <div id="drill-list"></div>
   </section>
@@ -130,6 +195,7 @@
   <section id="view-qtr" class="view">
     <button class="btn secondary back" data-goto="more">← More</button>
     <h1>400m Training</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <p class="muted">The long work the 100/200 plan leaves out: 500s and 600s, lactate days, split runs, and practicing the 400 race itself. Sessions are the QTR rows in the workout library.</p>
     <div id="qtr-list"></div>
     <div class="card doc" id="qtr-doc"></div>
@@ -139,6 +205,7 @@
   <section id="view-guide" class="view">
     <button class="btn secondary back" data-goto="more">← More</button>
     <h1>How to use this</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="card doc" id="guide-doc"></div>
   </section>
 
@@ -146,6 +213,7 @@
   <section id="view-account" class="view">
     <button class="btn secondary back" data-goto="more">← More</button>
     <h1>Account</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div id="account-main"></div>
   </section>
 </main>

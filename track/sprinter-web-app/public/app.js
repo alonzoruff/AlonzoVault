@@ -165,6 +165,22 @@ function showView(name) {
 $$('#main-tabs .tab').forEach(t => t.addEventListener('click', () => showView(t.dataset.view)));
 $$('[data-goto]').forEach(b => b.addEventListener('click', () => showView(b.dataset.goto)));
 
+/* ---------------- motion helpers ---------------- */
+const LANE_DIVIDER = '<div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>';
+const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function countUp(el) {
+  const target = parseInt(el.dataset.count, 10);
+  if (isNaN(target)) return;
+  if (prefersReducedMotion) { el.textContent = String(target); return; }
+  const dur = 900;
+  const start = performance.now();
+  (function tick(now) {
+    const p = Math.min(1, ((now || start) - start) / dur);
+    el.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3))));
+    if (p < 1) requestAnimationFrame(tick);
+  })(start);
+}
+
 /* ---------------- shared session rendering ---------------- */
 function badge(cns) {
   return cns === 'high'
@@ -251,9 +267,14 @@ function renderHome() {
 
   $('#home-content').innerHTML = `
     <h1>Today</h1>
+    ${LANE_DIVIDER}
     <p>${statusLine}</p>
     <div class="card">
-      <strong>${c.sessions.length} workouts · ${c.drills.length} drills · ${weeks.length} weeks</strong>
+      <div class="hero-stats">
+        <div class="hero-stat"><span class="stat-num" data-count="${c.sessions.length}">0</span><span class="stat-label">workouts</span></div>
+        <div class="hero-stat"><span class="stat-num" data-count="${c.drills.length}">0</span><span class="stat-label">drills</span></div>
+        <div class="hero-stat"><span class="stat-num" data-count="${weeks.length}">0</span><span class="stat-label">weeks</span></div>
+      </div>
       <p class="muted" style="margin-bottom:0">Mini peak Sat Feb 20, 2027 · Major peak Sat May 15, 2027. Hard days and easy days take turns — never two hard days in a row.</p>
     </div>
     <div class="card">
@@ -262,10 +283,11 @@ function renderHome() {
       <button class="btn primary" id="home-search-btn" type="button">Search the library</button>
     </div>
     <h2>Week ${wk.week} · ${esc(wk.phase)} · ${esc(wk.load)}</h2>
+    ${LANE_DIVIDER}
     <p class="muted">${fmtRange(wk)} — ${esc(wk.focus)}</p>
     ${daysHtml}
     <button class="btn" id="home-open-season" type="button">Open the full season plan</button>
-    ${state.user ? '<h2>Your latest log entries</h2><div id="home-logs"></div>' : '<div class="card"><strong>Keep a practice log.</strong><p class="muted">Create a free account to save what your group actually ran, and to save cross-training swaps. <button class="btn secondary" data-goto="account" type="button">Go to account</button></p></div>'}
+    ${state.user ? '<h2>Your latest log entries</h2>' + LANE_DIVIDER + '<div id="home-logs"></div>' : '<div class="card"><strong>Keep a practice log.</strong><p class="muted">Create a free account to save what your group actually ran, and to save cross-training swaps. <button class="btn secondary" data-goto="account" type="button">Go to account</button></p></div>'}
   `;
   $('#home-search-btn').addEventListener('click', () => {
     state.libQuery = $('#home-search').value;
@@ -273,6 +295,7 @@ function renderHome() {
     showView('library'); renderLibrary();
   });
   $('#home-open-season').addEventListener('click', () => { state.week = wkNum; renderSeason(); showView('season'); });
+  $$('#home-content .stat-num').forEach(countUp);
   const gotoBtn = $('#home-content [data-goto]');
   if (gotoBtn) gotoBtn.addEventListener('click', () => showView(gotoBtn.dataset.goto));
   if (state.user) renderHomeLogs();
@@ -365,6 +388,7 @@ function renderDrills() {
   const catName = { general: 'Part A — general warm-up', dynamic_stretch: 'Part B — dynamic mobility', sprint_drill: 'Part B — sprint drills' };
   $('#drill-list').innerHTML = Object.keys(byCat).map(cat => `
     <h2>${esc(catName[cat] || cat)}</h2>
+    ${LANE_DIVIDER}
     ${byCat[cat].map(d => `<div class="card">
       <strong>${esc(d.id.replace('DRL-', 'Drill '))} · ${esc(d.name)}</strong>
       <div class="muted">${esc(d.distance_or_reps)}</div>
@@ -390,6 +414,7 @@ function renderSeason() {
     : `<div class="ok-note">✓ Spacing check passed: every hard day this week is at least 48 hours from the next one.</div>`;
   $('#season-week').innerHTML = `
     <h2>Week ${wk.week} · ${esc(wk.phase)} · ${esc(wk.load)}</h2>
+    ${LANE_DIVIDER}
     <p class="muted">${fmtRange(wk)} — ${esc(wk.focus)}</p>
     ${spacingHtml}
     ${DAY_KEYS.map(dk => dayCardHtml(wk, dk, dayInfo(wk, dk), { swappable: true })).join('')}
@@ -442,7 +467,7 @@ function renderLog() {
   gate.innerHTML = '';
   main.hidden = false;
   $('#log-list').innerHTML = state.logs.length
-    ? '<h2>Your entries</h2>' + state.logs.map(logEntryHtml).join('')
+    ? '<h2>Your entries</h2>' + LANE_DIVIDER + state.logs.map(logEntryHtml).join('')
     : '<p class="muted">No entries yet. Your first practice is a good place to start.</p>';
   $$('#log-list [data-del-log]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('Delete this entry?')) return;
