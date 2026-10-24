@@ -289,6 +289,7 @@ function renderHome() {
     <h1>Today</h1>
     ${LANE_DIVIDER}
     <p>${statusLine}</p>
+    ${isCoachUser() ? '<div id="coach-today"></div>' : ''}
     <div class="card">
       <div class="hero-stats">
         <div class="hero-stat"><span class="stat-num" data-count="${c.sessions.length}">0</span><span class="stat-label">workouts</span></div>
@@ -319,6 +320,47 @@ function renderHome() {
   const gotoBtn = $('#home-content [data-goto]');
   if (gotoBtn) gotoBtn.addEventListener('click', () => showView(gotoBtn.dataset.goto));
   if (state.user) renderHomeLogs();
+  if (isCoachUser()) renderCoachToday();
+}
+
+/* Coach summary panel on Today: today's assignments + completion
+   counts per group, and open health flags, worst first. */
+async function renderCoachToday() {
+  const el = $('#coach-today');
+  if (!el) return;
+  let data;
+  try { data = await api('/api/coach/today'); }
+  catch (_) { el.innerHTML = ''; return; }
+  const planLabel = data.week
+    ? `Week ${data.week} · ${esc(data.phase || '')} · ${esc(data.dayName || '')}`
+    : 'Outside the season plan';
+  const groupsHtml = data.groups.length ? data.groups.map(g => `
+    <div class="roster-row">
+      <span><strong>${esc(g.group.name)}</strong> — ${g.assignment.sessionId
+        ? `<a class="code-link" data-code="${esc(g.assignment.sessionId)}">${esc(g.assignment.sessionId)}</a> ${esc(g.assignment.sessionName)}`
+        : esc(g.assignment.planText || 'Rest day')}
+      ${g.assignment.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : ''}</span>
+      <span class="muted">${g.completed} of ${g.total} done</span>
+    </div>`).join('') : '<p class="muted">No groups yet — set them up in Groups.</p>';
+  const open = data.healthFlags || [];
+  const healthHtml = open.length ? open.slice(0, 8).map(c => `
+    <div class="roster-row">
+      <span>${c.flagged ? '🚩 ' : ''}<strong>${esc(c.athleteName)}</strong> — ${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}), pain ${c.pain}/10${c.impact === 'stopped' ? ' · stopped training' : ''}</span>
+      <span class="badge ${c.status === 'new' ? 'high' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
+    </div>`).join('') + (open.length > 8 ? `<p class="muted">…and ${open.length - 8} more open in Health.</p>` : '')
+    : '<p class="muted">No open health flags. Good news.</p>';
+  el.innerHTML = `<div class="card">
+    <h2>Coach summary</h2>
+    <p class="muted">${esc(fmtDate(parseDate(data.date)))} · ${planLabel}</p>
+    <h3>Today's assignments</h3>
+    ${groupsHtml}
+    <p><button class="btn secondary" id="ct-open-coach" type="button">Open today's checklist</button></p>
+    <h3>Health flags${open.length ? ` (${open.length} open)` : ''}</h3>
+    ${healthHtml}
+    <p><button class="btn secondary" id="ct-open-health" type="button">Open Health</button></p>
+  </div>`;
+  $('#ct-open-coach').addEventListener('click', () => { state.feedDate = data.date; renderCoach(); showView('coach'); });
+  $('#ct-open-health').addEventListener('click', () => { renderHealth(); showView('health'); });
 }
 function renderHomeLogs() {
   const el = $('#home-logs');
@@ -851,6 +893,7 @@ async function renderGroups() {
       <label>Search <input type="search" id="pf-q" value="${esc(state.pfQ)}" placeholder="Athlete name"></label>
       <label class="check-line"><input type="checkbox" id="pf-top" ${state.pfTop ? 'checked' : ''}> Top Athletes only</label>
       <p class="muted">${list.length} athlete${list.length === 1 ? '' : 's'} shown · ${activeProfiles().length} on the roster</p>
+      <p><a class="btn secondary" href="/api/export/roster.csv">Download roster (CSV)</a></p>
     </div>
     ${groupSections || '<p class="muted">No athletes match. Add one below or import the roster.</p>'}
     <form class="card" id="profile-form">
@@ -1135,6 +1178,11 @@ async function renderTesting() {
       </label>
       ${day ? `<button class="btn danger" id="td-delete" type="button">Delete this test day</button>` : ''}
     </div>` : '<div class="card"><p class="muted">No test days yet. Create the first one above.</p></div>'}
+    <div class="card">
+      <h2>Export</h2>
+      <p class="muted">Every result from every test day in one spreadsheet — raw entries plus estimated 1RMs.</p>
+      <a class="btn secondary" href="/api/export/testing.csv">Download testing results (CSV)</a>
+    </div>
     ${day ? `
     <div class="card">
       <h2>${esc(day.title)} — progress</h2>
@@ -1289,6 +1337,7 @@ async function renderTop() {
           <button class="btn primary" data-weekly-save="${pr.id}" type="button" style="width:auto">Save</button></span></div>`;
       }).join('')}
       <p class="muted">Saving overwrites that week's number — one value per athlete per week.</p>
+      <p><a class="btn secondary" href="/api/export/weekly.csv">Download weekly tracker (CSV)</a></p>
     </div>
     <div class="card">
       <h2>Each athlete</h2>

@@ -62,6 +62,7 @@ h2 { font-size: 18px; margin: 4px 0 10px; }
 }
 .btn.primary { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; width: 100%; }
 .btn.secondary { background: #fff; }
+a.btn { display: inline-block; text-decoration: none; }
 .btn.danger { color: var(--high); border-color: #f0c4c0; }
 button.back { margin-bottom: 10px; }
 input[type="search"], input[type="text"], input[type="email"], input[type="password"],

@@ -46,3 +46,20 @@ shutil.copy(os.path.join(DB, "DUNHAM_400M_FRAMEWORK.md"), os.path.join(OUT, "fra
 shutil.copy(os.path.join(DB, "HOW_TO_USE.md"), os.path.join(OUT, "guide.md"))
 shutil.copy(os.path.join(PLAN, "README.md"), os.path.join(OUT, "season.md"))
 print("markdown copied")
+
+# Movement demo media: the SOURCE OF TRUTH is the vault database copy
+# (track/sprinter-workout-database/movement_media.json), never the file
+# in content/. Copy it in like everything else — and if the source is
+# ever missing, PRESERVE the bundled copy instead of dropping it. The
+# 24 demo videos in this file were researched and verified one by one;
+# a content refresh must never wipe them out.
+media_src = os.path.join(DB, "movement_media.json")
+media_out = os.path.join(OUT, "movement_media.json")
+if os.path.exists(media_src):
+    shutil.copy(media_src, media_out)
+    print("movement media:", len(json.load(open(media_out))), "entries (from source of truth)")
+elif os.path.exists(media_out):
+    print("movement media: WARNING — source of truth missing, kept existing bundled copy with",
+          len(json.load(open(media_out))), "entries")
+else:
+    print("movement media: none found (the app runs fine without it)")

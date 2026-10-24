@@ -81,6 +81,14 @@ accounts, no athlete typing.
 - **Warm-Up Cards & Nutrition**: the three printable warm-up cards (Light,
   Speed Day, Circuit Day) live in their own section, each with a print
   button that prints just that card on one Letter page, ready to laminate.
+- **Coach Today summary**: for a signed-in coach, the home view opens with
+  a summary for today — season-plan week/day, every group's assignment
+  (coach overrides marked) with completion counts, and open health flags
+  (New or Monitoring concerns, pain 7+ or training-stopping entries first)
+  with one-tap links into the checklist and Health.
+- **CSV exports**: one-click spreadsheet downloads (coach-only) — testing
+  results with raw entries and estimated 1RMs, the weekly tracker, and the
+  roster.
   The Nutrition section is six plain-language fueling cards for high
   school sprinters — the everyday plate (fuel follows the training day),
   the pre-practice timing ladder, recovery fueling, hydration, a meet-day
@@ -141,6 +149,27 @@ backed up.
 | `DATA_DIR` | Folder where accounts, logs, and swaps are stored. | `./data` (inside the app folder) |
 | `SESSION_SECRET` | Secret that signs login cookies. Set a long random one when you deploy. If you skip it, the app makes one up and keeps it in the data folder. | auto-generated |
 
+## Data & backups
+
+Everything the coach system saves — accounts, the roster, groups,
+assignments and completions, test results, weekly numbers, aches & pains
+concerns, your logs and swaps — lives in **one file: `db.json` inside
+the DATA_DIR folder** (by default, a `data/` folder inside the app).
+There is no separate database to manage.
+
+That simplicity has one sharp edge: **on Render's free tier the disk is
+temporary.** When the service restarts or redeploys, the data folder can
+be wiped and every record goes with it. The app code and the workout
+library in GitHub are never at risk — only the data file is.
+
+The owner's safety net is boring and effective: **back up `db.json`.**
+Every so often (and before any hosting change), download or copy that
+one file somewhere safe — your computer, Google Drive, anywhere that
+isn't the host. Restoring is just as simple: put the file back in the
+data folder and restart. Once the site matters day to day, the real fix
+is Render's paid persistent disk (or pointing `DATA_DIR` at any folder
+that gets backed up) so the file survives restarts on its own.
+
 ## The files, in plain words
 
 - `server.js` — the whole engine: serves the pages, runs the accounts,
@@ -148,10 +177,20 @@ backed up.
 - `public/` — what people see: the pages, styling, and app logic, plus
   the official SJC logo in `public/assets/`.
 - `content/` — the workouts, drills, season plan, and written guides,
-  copied in so the app stands on its own.
+  copied in so the app stands on its own. One file in here gets special
+  handling: `movement_media.json`, the demo-video library. Its source of
+  truth is `track/sprinter-workout-database/movement_media.json` (the
+  build script copies it in, and will preserve the bundled copy if the
+  source ever goes missing). **Never delete it from `content/`** — those
+  24 videos were researched and verified one by one, and a content
+  refresh must not wipe them out.
 - `scripts/build-content.py` — refreshes `content/` from the workout
   database and season plan folders after you edit them. Run it, then
   commit the updated `content/` files.
+- `tests/` — the automated test suite for the server (`node
+  tests/run-tests.js`). It starts the app on a throwaway port with a
+  temporary data folder, checks the whole coach system end to end, and
+  cleans up after itself.
 - `data/` — created the first time the app runs. Holds accounts, logs,
   and swaps. It is **never** committed to GitHub (it's in `.gitignore`)
   because it's private and it belongs to the live server.

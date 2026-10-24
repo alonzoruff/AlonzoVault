@@ -289,8 +289,13 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 function parseDateStr(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
   if (!m) return null;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isNaN(d.getTime()) ? null : d;
+  const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
+  const d = new Date(y, mo - 1, da);
+  // Date() silently rolls impossible dates over (2026-02-30 becomes
+  // Mar 2, month 13 becomes next January). Reject anything that does
+  // not round-trip, so bad calendar dates get a clean 400 everywhere.
+  if (d.getFullYear() !== y || d.getMonth() !== mo - 1 || d.getDate() !== da) return null;
+  return d;
 }
 function dateStr(d) {
   const p = (n) => String(n).padStart(2, '0');
@@ -313,6 +318,7 @@ function planDayFor(dateString) {
   const d = parseDateStr(dateString);
   if (!d) return null;
   const weeks = CONTENT.weeks;
+  if (!weeks.length) return null;
   let wk = weeks.find(w => dateString >= w.start && dateString <= w.end);
   if (!wk) wk = dateString < weeks[0].start ? weeks[0] : weeks[weeks.length - 1];
   const dayKey = DAY_KEYS[(d.getDay() + 6) % 7];
@@ -398,6 +404,22 @@ function sendJson(res, status, obj, extraHeaders) {
   }, extraHeaders || {}));
   res.end(body);
 }
+/* CSV downloads: quote any cell containing a comma, quote, or newline
+   (RFC 4180 — inner quotes are doubled). */
+function csvCell(v) {
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function sendCsv(res, filename, rows) {
+  const body = rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  res.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="' + filename + '"',
+    'Content-Length': Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+const numStr = (v) => (v === null || v === undefined ? '' : String(Math.round(v * 100) / 100));
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -410,7 +432,13 @@ function readBody(req) {
     req.on('end', () => {
       const raw = Buffer.concat(chunks).toString('utf8');
       if (!raw) return resolve({});
-      try { resolve(JSON.parse(raw)); } catch (_) { reject(new Error('bad json')); }
+      try {
+        const parsed = JSON.parse(raw);
+        // Bodies like `null`, `42`, or `[1,2]` are valid JSON but not a
+        // usable request object — normalize them to {} so handlers answer
+        // with their normal field-level 400s instead of throwing.
+        resolve(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {});
+      } catch (_) { reject(new Error('bad json')); }
     });
     req.on('error', reject);
   });
@@ -628,6 +656,10 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const name = clean(body.name, 60);
     if (!name) return sendJson(res, 400, { error: 'Group needs a name.' });
+    const clash = groupByName(name);
+    if (clash && clash.id !== g.id) {
+      return sendJson(res, 409, { error: 'Another group already has that name.' });
+    }
     g.name = name;
     saveDb();
     return sendJson(res, 200, { group: { id: g.id, name: g.name } });
@@ -683,6 +715,9 @@ async function handleApi(req, res, url) {
       text = await readTextBody(req);
     }
     if (!text.trim()) return sendJson(res, 400, { error: 'Paste the roster lines first.' });
+    if (text.split(/\r?\n/).filter(l => l.trim()).length > 500) {
+      return sendJson(res, 400, { error: 'That is more than 500 roster lines — split it into smaller pastes.' });
+    }
     const parseCsvLine = (line) => {
       const out = [];
       let cur = '', inQ = false;
@@ -734,27 +769,39 @@ async function handleApi(req, res, url) {
         report.errors.push({ line: idx + 1, text: line, reason: 'Use "Last, First | Group | events | Top" per line, or start with a name,group,events,top CSV header.' });
         return;
       }
-      const { firstName, lastName } = splitName(namePart);
+      const rawName = splitName(namePart);
+      const firstName = clean(rawName.firstName, 40);
+      const lastName = clean(rawName.lastName, 40);
+      groupName = clean(groupName, 60);
       if (!firstName || !lastName || !groupName) {
         report.errors.push({ line: idx + 1, text: line, reason: 'Missing a first name, last name, or group.' });
         return;
       }
+      // One profile per athlete, period: a name that is already on the
+      // roster — in ANY group — is a duplicate, so re-importing a roster
+      // (or importing one whose groups were renamed) can never split an
+      // athlete's records across two profiles.
       let group = groupByName(groupName);
+      const existingByName = db.profiles.find(pr =>
+        pr.firstName.toLowerCase() === firstName.toLowerCase() &&
+        pr.lastName.toLowerCase() === lastName.toLowerCase());
+      if (existingByName) {
+        const inThisGroup = !!group && existingByName.groupId === group.id;
+        const otherGroup = existingByName.groupId ? groupById(existingByName.groupId) : null;
+        report.skipped.push({
+          line: idx + 1, text: line,
+          reason: inThisGroup
+            ? 'Already on the roster in that group — skipped.'
+            : 'Already on the roster' + (otherGroup ? ' in ' + otherGroup.name : '') + ' — skipped. Move them in the app if the group changed.',
+        });
+        return;
+      }
       if (!group) {
         group = { id: crypto.randomUUID(), name: groupName, createdAt: new Date().toISOString() };
         db.groups.push(group);
         report.groupsCreated++;
       }
-      const dupeKey = (firstName + '|' + lastName + '|' + group.id).toLowerCase();
-      const exists = db.profiles.some(pr =>
-        pr.firstName.toLowerCase() === firstName.toLowerCase() &&
-        pr.lastName.toLowerCase() === lastName.toLowerCase() &&
-        pr.groupId === group.id);
-      if (exists || seenInImport.has(dupeKey)) {
-        report.skipped.push({ line: idx + 1, text: line, reason: 'Already on the roster in that group — skipped.' });
-        return;
-      }
-      seenInImport.add(dupeKey);
+      seenInImport.add((firstName + '|' + lastName + '|' + group.id).toLowerCase());
       const events = cleanEvents(String(eventsPart).split(/[,;]/).map(s => s.trim()).filter(Boolean));
       const topAthlete = /^(yes|y|true|top|★|\*)$/i.test(String(topPart || '').trim());
       db.profiles.push({
@@ -878,6 +925,117 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { date, groups: db.groups.map(feedFor), unassigned: feedFor(null) });
   }
 
+  /* ---------- coach Today summary (home panel) ---------- */
+  if (p === '/api/coach/today' && req.method === 'GET') {
+    const date = todayStr();
+    const plan = planDayFor(date);
+    const d = parseDateStr(date);
+    const groups = db.groups.map(g => {
+      const a = resolveAssignment(g.id, date);
+      const members = db.profiles.filter(pr => !pr.archived && pr.groupId === g.id);
+      const done = members.filter(pr => completionFor(pr.id, date)).length;
+      return {
+        group: { id: g.id, name: g.name },
+        assignment: {
+          sessionId: a.sessionId, sessionName: a.sessionName, source: a.source,
+          note: a.note || '', planText: a.planText || '', warmup: a.warmup || null,
+        },
+        completed: done, total: members.length,
+      };
+    });
+    // Open health flags: New or Monitoring concerns, worst first.
+    const healthFlags = [];
+    for (const pr of db.profiles) {
+      if (pr.archived) continue;
+      for (const c of db.concerns[pr.id] || []) {
+        if (c.status !== 'new' && c.status !== 'monitoring') continue;
+        healthFlags.push(Object.assign({}, c, {
+          athleteName: pr.firstName + ' ' + pr.lastName,
+          flagged: c.pain >= 7 || c.impact === 'stopped',
+        }));
+      }
+    }
+    healthFlags.sort((a, b) => {
+      if (a.flagged !== b.flagged) return a.flagged ? -1 : 1;
+      return a.createdAt < b.createdAt ? 1 : -1;
+    });
+    return sendJson(res, 200, {
+      date,
+      dayName: d ? d.toLocaleDateString('en-US', { weekday: 'long' }) : '',
+      week: plan ? plan.week : null,
+      phase: plan ? plan.phase : null,
+      dayKey: plan ? plan.dayKey : null,
+      planText: plan ? plan.planText : '',
+      groups,
+      healthFlags,
+    });
+  }
+
+  /* ---------- CSV exports (coach-only downloads) ---------- */
+  if (p === '/api/export/testing.csv' && req.method === 'GET') {
+    const rows = [['Test Day', 'Date', 'Athlete', 'Group', 'Test', 'Raw Entry', 'Est. 1RM (lb)']];
+    const days = db.testDays.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (const day of days) {
+      const dayRows = [];
+      for (const pr of db.profiles) {
+        const pub = publicProfile(pr);
+        for (const r of db.testResults[pr.id] || []) {
+          if (r.testDayId !== day.id) continue;
+          const test = findTest(r.testKey);
+          const raw = test && test.kind === 'lift'
+            ? numStr(r.weight) + (r.reps ? ' × ' + r.reps : '')
+            : numStr(r.value) + (test ? ' ' + test.unit : '');
+          dayRows.push({
+            testOrder: day.testKeys.indexOf(r.testKey),
+            athlete: pub.name,
+            row: [day.title, day.date, pub.name, pub.groupName || '', test ? test.name : r.testKey,
+              raw, test && test.kind === 'lift' ? numStr(displayValue(r)) : ''],
+          });
+        }
+      }
+      dayRows.sort((a, b) => a.testOrder - b.testOrder || a.athlete.localeCompare(b.athlete));
+      for (const dr of dayRows) rows.push(dr.row);
+    }
+    return sendCsv(res, 'testing-results.csv', rows);
+  }
+
+  if (p === '/api/export/weekly.csv' && req.method === 'GET') {
+    const rows = [['Athlete', 'Metric', 'Week (Monday)', 'Value', 'Unit']];
+    const entries = [];
+    for (const pr of db.profiles) {
+      const byMetric = db.weekly[pr.id] || {};
+      for (const key of Object.keys(byMetric)) {
+        const metric = findWeeklyMetric(key);
+        for (const week of Object.keys(byMetric[key]).sort()) {
+          entries.push({
+            athlete: pr.firstName + ' ' + pr.lastName,
+            metricName: metric ? metric.name : key,
+            week,
+            row: [pr.firstName + ' ' + pr.lastName, metric ? metric.name : key, week,
+              numStr(byMetric[key][week]), metric ? metric.unit : ''],
+          });
+        }
+      }
+    }
+    entries.sort((a, b) =>
+      a.athlete.localeCompare(b.athlete) ||
+      a.metricName.localeCompare(b.metricName) ||
+      (a.week < b.week ? -1 : a.week > b.week ? 1 : 0));
+    for (const e of entries) rows.push(e.row);
+    return sendCsv(res, 'weekly-tracker.csv', rows);
+  }
+
+  if (p === '/api/export/roster.csv' && req.method === 'GET') {
+    const rows = [['Name', 'Group', 'Events', 'Top Athlete']];
+    const list = db.profiles.filter(pr => !pr.archived)
+      .sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+    for (const pr of list) {
+      const pub = publicProfile(pr);
+      rows.push([pub.name, pub.groupName || '', (pr.events || []).join('; '), pr.topAthlete ? 'yes' : 'no']);
+    }
+    return sendCsv(res, 'roster.csv', rows);
+  }
+
   /* ---------- testing tracker (coach entry only) ---------- */
   if (p === '/api/tests' && req.method === 'GET') {
     return sendJson(res, 200, { tests: allTests() });
@@ -970,6 +1128,9 @@ async function handleApi(req, res, url) {
   if (p === '/api/results' && req.method === 'GET') {
     const dayParam = clean(q.get('testDayId') || '', 80);
     const profParam = clean(q.get('profileId') || '', 80);
+    if (profParam && !profileById(profParam)) {
+      return sendJson(res, 404, { error: 'Profile not found.' });
+    }
     let results = [];
     const ids = profParam ? [profParam] : db.profiles.map(pr => pr.id);
     for (const pid of ids) {
@@ -1219,7 +1380,9 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname.startsWith('/api/')) {
     handleApi(req, res, url).catch(() => {
-      if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' });
+      // The socket may already be gone (e.g., an oversized body was
+      // destroyed mid-read) — never let the error reply itself throw.
+      try { if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' }); } catch (_) { /* gone */ }
     });
   } else {
     serveStatic(req, res, url);
