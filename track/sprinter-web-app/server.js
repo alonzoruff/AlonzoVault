@@ -342,6 +342,7 @@ function loadContent() {
     videoLibrary: loadVideoLibrary(),
     glossary: loadGlossary(),
     coachEducation: loadCoachEducation(),
+    exerciseLibrary: loadExerciseLibrary(),
   };
 }
 /* The Videos section library (content/video_library.json). Loaded
@@ -376,6 +377,34 @@ function loadGlossary() {
           : { term: e.term, category: e.category, definition: e.definition });
     }
   } catch (_) { /* no glossary bundled — that is fine */ }
+  return [];
+}
+/* The Exercise Library list (content/instagram_movements.json) —
+   movements mined from AJ's saved Instagram training posts. Same
+   tolerant loading as the glossary: a missing or malformed file
+   means an empty library, never a crashed server. Entries missing a
+   display field or a usable source link are dropped; the sources
+   array is kept (cleaned) so the card can note how many posts a
+   movement was saved from. */
+function loadExerciseLibrary() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'instagram_movements.json'), 'utf8'));
+    if (Array.isArray(parsed)) {
+      return parsed.filter(m => m && typeof m === 'object'
+        && typeof m.name === 'string' && m.name.trim()
+        && typeof m.trains === 'string' && m.trains.trim()
+        && typeof m.equipment === 'string' && m.equipment.trim()
+        && typeof m.cues === 'string' && m.cues.trim()
+        && typeof m.sourceUrl === 'string' && /^https:\/\//.test(m.sourceUrl)
+        && typeof m.sourceUsername === 'string' && m.sourceUsername.trim())
+        .map(m => ({
+          ...m,
+          sources: (Array.isArray(m.sources) ? m.sources : [])
+            .filter(s => s && typeof s.sourceUrl === 'string' && /^https:\/\//.test(s.sourceUrl)
+              && typeof s.sourceUsername === 'string' && s.sourceUsername.trim()),
+        }));
+    }
+  } catch (_) { /* no exercise library bundled — that is fine */ }
   return [];
 }
 /* The Coach Education tab list (content/coach_education.json). Same

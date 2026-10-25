@@ -68,8 +68,8 @@ async function main() {
   /* ---------------- content + auth ---------------- */
   let r = await api(null, 'GET', '/api/content');
   check('content loads', r.status === 200);
-  check('content counts are 49/16/29',
-    r.json.sessions.length === 49 && r.json.drills.length === 16 && r.json.weeks.length === 29,
+  check('content counts are 57/16/29 (49 library + 8 Instagram sessions)',
+    r.json.sessions.length === 57 && r.json.drills.length === 16 && r.json.weeks.length === 29,
     [r.json.sessions.length, r.json.drills.length, r.json.weeks.length]);
   r = await api(null, 'GET', '/');
   check('home page serves', r.status === 200);
@@ -193,6 +193,112 @@ async function main() {
   check('coach education filter/search wiring is in the served JS',
     appJs.status === 200 && appJs.text.includes('renderEducation') &&
     appJs.text.includes('data-edubucket') && appJs.text.includes('edu-focus'));
+
+  /* ---------------- instagram-mined content ----------------
+     The Exercise Library (Learn) serves the 85 movements mined
+     from AJ's saved Instagram training posts, and the 8 mined
+     workouts ride along as library sessions IG-01..IG-08 — the
+     original 49 sessions untouched, in front, in order. Every
+     number in an IG session is one the source post stated. */
+  const exlib = contentJson.exerciseLibrary;
+  check('exercise library serves an array', Array.isArray(exlib), typeof exlib);
+  check('exercise library has 85 movements', Array.isArray(exlib) && exlib.length === 85,
+    Array.isArray(exlib) ? exlib.length : 'not an array');
+  if (Array.isArray(exlib)) {
+    check('every movement has name/trains/equipment/cues and an https instagram source link',
+      exlib.every(m => ['name', 'trains', 'equipment', 'cues', 'sourceUsername']
+        .every(f => typeof m[f] === 'string' && m[f].trim().length > 0)
+        && /^https:\/\/www\.instagram\.com\//.test(m.sourceUrl || '')),
+      exlib.find(m => !/^https:\/\/www\.instagram\.com\//.test(m.sourceUrl || '')));
+    check('movement names are unique', new Set(exlib.map(m => m.name)).size === 85);
+    check('movements keep their trains/equipment as clean fields (later tagging stage)',
+      exlib.every(m => typeof m.trains === 'string' && typeof m.equipment === 'string'));
+    const nordic = exlib.find(m => m.name === 'Nordic Hamstring Curl');
+    check('a movement saved from two posts keeps both sources, primary first',
+      !!nordic && Array.isArray(nordic.sources) && nordic.sources.length === 2 &&
+      nordic.sourceUrl === nordic.sources[0].sourceUrl &&
+      nordic.sourceUsername === 'brayllln' &&
+      nordic.sources[1].sourceUsername === 'dereksamuelmpt',
+      nordic && nordic.sources);
+    check('spot movements are in the library (wall drill, block start, band-assisted pull-up)',
+      ['Wall Drill (Acceleration Wall Series)', 'Block Start', 'Band-Assisted Pull-Up']
+        .every(n => exlib.some(m => m.name === n)));
+  }
+  check('exercise library view markers are in the served page',
+    pageHtml.status === 200 && pageHtml.text.includes('id="view-exercises"') &&
+    pageHtml.text.includes('data-view="exercises"') && pageHtml.text.includes('id="ex-list"') &&
+    pageHtml.text.includes('id="ex-count"'));
+  check('exercise library wiring is in the served JS (alphabetical render, source links, multi-source note)',
+    appJs.status === 200 && appJs.text.includes('renderExercises') &&
+    appJs.text.includes('exCardHtml') && appJs.text.includes('exerciseLibrary') &&
+    appJs.text.includes('localeCompare') && appJs.text.includes('more') &&
+    appJs.text.includes("name === 'exercises'"));
+  const allSessions = contentJson.sessions;
+  const igSessions = allSessions.filter(s => s.id.startsWith('IG-'));
+  const origIds = ['ACC-01', 'ACC-02', 'ACC-03', 'ACC-04', 'MAX-01', 'MAX-02', 'MAX-03',
+    'SE-01', 'SE-02', 'SE-03', 'SE-04', 'SE-05', 'SE-06', 'SPE-01', 'SPE-02',
+    'TEM-01', 'TEM-02', 'TEM-03', 'TEM-04', 'RM-01', 'RM-02', 'RM-03', 'RM-04', 'RM-05',
+    'STR-01', 'STR-02', 'PLY-01', 'PLY-02', 'REC-01',
+    'QTR-01', 'QTR-02', 'QTR-03', 'QTR-04', 'QTR-05', 'QTR-06', 'QTR-07', 'QTR-08',
+    'QTR-09', 'QTR-10', 'QTR-11', 'QTR-12', 'WUP-01', 'WUP-02', 'WUP-03',
+    'XT-01', 'XT-02', 'XT-03', 'XT-04', 'XT-05'];
+  check('the original 49 sessions are intact and first, in order',
+    allSessions.slice(0, 49).map(s => s.id).join(',') === origIds.join(','),
+    allSessions.slice(0, 49).map(s => s.id).join(','));
+  check('IG-01..IG-08 follow the library sessions',
+    igSessions.map(s => s.id).join(',') === 'IG-01,IG-02,IG-03,IG-04,IG-05,IG-06,IG-07,IG-08',
+    igSessions.map(s => s.id));
+  check('every IG session carries its instagram source, structure and runner blocks',
+    igSessions.length === 8 && igSessions.every(s =>
+      /^https:\/\/www\.instagram\.com\//.test(s.source_url || '') &&
+      typeof s.source_username === 'string' && s.source_username.length > 0 &&
+      Array.isArray(s.structure) && s.structure.length > 0 &&
+      s.structure.every(b => typeof b.block === 'string' && Array.isArray(b.lines) && b.lines.length > 0) &&
+      Array.isArray(s.blocks) && s.blocks.length > 0),
+    igSessions.map(s => s.id));
+  const ig07 = igSessions.find(s => s.id === 'IG-07');
+  check('IG-07 structure lines carry only the stated numbers (4 x 10 with the 2 sec pause)',
+    !!ig07 && ig07.structure[0].lines[0] === 'Cable Rope Pushdown — 4 × 10 (2 sec pause)' &&
+    ig07.structure[0].lines[1] === 'Cable Kickback — 3 × 15 per arm' &&
+    ig07.rest === '40 sec', ig07 && ig07.structure[0].lines);
+  const ig01 = igSessions.find(s => s.id === 'IG-01');
+  check('IG-01 states plainly that no sets/reps were given',
+    !!ig01 && /no sets or reps stated/.test(ig01.reps) && ig01.quality === 'warm_up', ig01 && ig01.reps);
+  const ig02 = igSessions.find(s => s.id === 'IG-02');
+  check('IG-02 is the high-CNS max-velocity day its post describes',
+    !!ig02 && ig02.quality === 'max_velocity' && ig02.cns_demand === 'high' &&
+    /10% velocity decrement/.test(ig02.reps), ig02 && ig02.reps);
+  check('IG session detail renders structure and a linked From Instagram line',
+    appJs.text.includes('sessionStructureHtml') && appJs.text.includes('From Instagram:') &&
+    appJs.text.includes('s.source_url'));
+  /* IG runner walks, through the same extracted runner core the
+     custom-workout tests use: sessions carrying blocks launch with
+     those blocks verbatim. */
+  const igCoreMatch = appJs.text.match(/\/\* RUNNER-CORE-BEGIN \*\/([\s\S]*?)\/\* RUNNER-CORE-END \*\//);
+  if (igCoreMatch) {
+    const igCore = new Function(igCoreMatch[1] +
+      '\nreturn { buildRunnerSteps, sessionToRunnerPlan };')();
+    const absSteps = igCore.buildRunnerSteps(igCore.sessionToRunnerPlan(
+      igSessions.find(s => s.id === 'IG-08')));
+    check('IG-08 runs as 4 rounds of 5 exercises with 120s round rests (23 steps)',
+      absSteps.filter(s => s.type === 'exercise').length === 20 &&
+      absSteps.filter(s => s.type === 'rest').length === 3 &&
+      absSteps.filter(s => s.type === 'rest').every(s => s.seconds === 120) &&
+      absSteps.length === 23, absSteps.length);
+    const triSteps = igCore.buildRunnerSteps(igCore.sessionToRunnerPlan(
+      igSessions.find(s => s.id === 'IG-07')));
+    check('IG-07 runs every stated set (19 exercise steps, 40s rests)',
+      triSteps.filter(s => s.type === 'exercise').length === 19 &&
+      triSteps[0].name === 'Cable Rope Pushdown' && triSteps[0].reps === '10 · 2 sec pause' &&
+      triSteps.filter(s => s.type === 'rest').every(s => s.seconds === 40), triSteps.length);
+    const conSteps = igCore.buildRunnerSteps(igCore.sessionToRunnerPlan(
+      igSessions.find(s => s.id === 'IG-03')));
+    check('IG-03 runs as a single pass through all 5 contrast variations (10 steps, no invented rests)',
+      conSteps.length === 10 && conSteps.every(s => s.type === 'exercise'), conSteps.length);
+    check('IG sessions launch through their own blocks, not the spec mapping',
+      igCore.sessionToRunnerPlan(igSessions.find(s => s.id === 'IG-06')).blocks ===
+      igSessions.find(s => s.id === 'IG-06').blocks);
+  }
   check('inventory view markers are in the served page',
     pageHtml.status === 200 && pageHtml.text.includes('id="view-inventory"') &&
     pageHtml.text.includes('data-view="inventory"') && pageHtml.text.includes('id="inventory-main"'));
@@ -230,8 +336,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v29',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v29"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v30',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v30"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -1913,16 +2019,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v29'") &&
-    swJs.text.includes("sprinter-app-v29"));
+    appJs.text.includes("const APP_VERSION = 'v30'") &&
+    swJs.text.includes("sprinter-app-v30"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v29"') &&
-    pageHtml.text.includes('Cadets Sprint · App v29') &&
+    pageHtml.text.includes('data-app-version="v30"') &&
+    pageHtml.text.includes('Cadets Sprint · App v30') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&

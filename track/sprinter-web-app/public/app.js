@@ -102,8 +102,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v29';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v29';
+const APP_VERSION = 'v30';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v30';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -289,12 +289,12 @@ function md(src) {
 const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
-  videos: 'learn', definitions: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
+  videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
-  learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
+  learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
   coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
 };
 function renderSubnav(name, area) {
@@ -337,6 +337,7 @@ function showView(name) {
   if (name === 'meetday') renderMeetDay();
   if (name === 'records') renderRecords();
   if (name === 'custom') renderCustomWorkouts();
+  if (name === 'exercises') renderExercises();
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -384,6 +385,18 @@ function labelQuality(q) {
 function labelPhase(p) {
   return ({ base: 'Base phase', pre_competitive: 'Pre-competitive', competitive: 'Competitive', championship: 'Championship', any: 'Any phase' })[p] || p;
 }
+/* The block/exercise structure carried by the Instagram-mined
+   sessions (IG-01..IG-08): block headings, the block's stated
+   rounds/rests line, and one faithful line per exercise — only the
+   numbers the source post stated. Library sessions have no
+   structure field and render exactly as before. */
+function sessionStructureHtml(s) {
+  if (!Array.isArray(s.structure) || !s.structure.length) return '';
+  return s.structure.map(b => `
+    <h3>${esc(b.block)}</h3>
+    ${b.meta ? `<p class="muted">${esc(b.meta)}</p>` : ''}
+    <ul class="nu-list">${(b.lines || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul>`).join('');
+}
 function sessionDetailHtml(s) {
   const row = (k, v) => v ? `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
   return `<div class="card">
@@ -404,7 +417,9 @@ function sessionDetailHtml(s) {
       ${row('Before next hard day', s.min_hours_before_next_high ? 'wait ' + s.min_hours_before_next_high + ' h' : '')}
     </dl>
     <h3>Coaching cues</h3><p>${esc(s.coaching_cues)}</p>
+    ${sessionStructureHtml(s)}
     <p class="muted">Source: ${esc(s.source)}</p>
+    ${s.source_url ? `<p class="muted">From Instagram: <a href="${esc(s.source_url)}" target="_blank" rel="noopener">@${esc(s.source_username || '')}</a></p>` : ''}
   </div>`;
 }
 const DETAIL_FROM_LABELS = { home: 'Today', season: 'Season Plan', coach: "Today's Checklist", log: 'My Log' };
@@ -845,6 +860,44 @@ function renderDefinitions() {
   list.innerHTML = rows.length
     ? rows.map(defCardHtml).join('')
     : '<p class="muted">No definitions match. Try a different search or category.</p>';
+}
+
+/* ---------------- exercise library ----------------
+   Movements mined from AJ's saved Instagram training posts
+   (content/instagram_movements.json, served as exerciseLibrary).
+   A plain alphabetical list for now — name, what it trains, the
+   equipment, the coaching cues, and a link back to the source post
+   (with a note when a movement was saved from more than one post).
+   Categories/tags/search build on this list in a later stage. */
+function exCardHtml(m) {
+  const count = Array.isArray(m.sources) ? m.sources.length : 0;
+  const more = count > 1
+    ? ` <span class="muted">(+${count - 1} more ${count === 2 ? 'source' : 'sources'})</span>`
+    : '';
+  return `<article class="def-card">
+    <div class="def-head">
+      <h3 class="def-term">${esc(m.name)}</h3>
+    </div>
+    <p class="def-text"><strong>Trains:</strong> ${esc(m.trains)}</p>
+    <p class="def-text"><strong>Equipment:</strong> ${esc(m.equipment)}</p>
+    <p class="def-cue"><strong>Cues:</strong> ${esc(m.cues)}</p>
+    <p class="muted">Source: <a href="${esc(m.sourceUrl)}" target="_blank" rel="noopener">@${esc(m.sourceUsername)}</a>${more}</p>
+  </article>`;
+}
+function renderExercises() {
+  const list = $('#ex-list');
+  if (!list) return;
+  const lib = ((state.content && state.content.exerciseLibrary) || []).slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const countEl = $('#ex-count');
+  if (countEl) {
+    countEl.textContent = lib.length
+      ? `${lib.length} movements, A–Z.`
+      : 'The exercise library has not loaded.';
+  }
+  list.innerHTML = lib.length
+    ? lib.map(exCardHtml).join('')
+    : '<p class="muted">No movements yet.</p>';
 }
 
 /* ---------------- coach education ---------------- */
@@ -2853,6 +2906,13 @@ function parseRestSeconds(text) {
    - Anything else (warm-ups, recovery, prose circuits): a single
      step that puts the session itself on the screen. */
 function sessionToRunnerPlan(s) {
+  /* Sessions that carry their own runner blocks (the Instagram-
+     mined workouts, whose block structure the spec fields cannot
+     express) launch with those blocks verbatim. Spec sessions have
+     no blocks field and take the best-effort mapping below. */
+  if (s && Array.isArray(s.blocks) && s.blocks.length) {
+    return { title: s.id + ' · ' + s.name, blocks: s.blocks };
+  }
   const title = s.id + ' · ' + s.name;
   const dist = s.rep_distance_m ? s.rep_distance_m + 'm' : '';
   const workName = dist ? 'Run ' + dist : s.name;
@@ -4866,6 +4926,7 @@ function tvStopTimers() {
   renderQtr();
   renderVideos();
   renderDefinitions();
+  renderExercises();
   renderEducation();
   $('#guide-doc').innerHTML = md(state.content.guide);
   $('#season-doc').innerHTML = md(state.content.season);

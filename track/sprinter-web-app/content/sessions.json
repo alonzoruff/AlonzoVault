@@ -929,5 +929,594 @@
   "min_hours_before_next_high": 0,
   "coaching_cues": "Easy laps, any stroke, never breathless. Flushes the legs and resets the nervous system after race weekends.",
   "source": "Cross-training library (added Oct 23, 2026)"
+ },
+ {
+  "id": "IG-01",
+  "name": "Pro Athlete Pre-Lift Warm-Up (5 Movements)",
+  "quality": "warm_up",
+  "phase": "any",
+  "level": "all",
+  "reps": "5 movements in sequence (no sets or reps stated)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Daily maintenance and mobility done before the dynamic warm-up; rotated every 3-4 weeks",
+  "source": "Instagram \u2014 @joeybergles (saved post)",
+  "source_url": "https://www.instagram.com/reel/DXp-6_yPm6Q/",
+  "source_username": "joeybergles",
+  "structure": [
+   {
+    "block": "Warm-up sequence",
+    "lines": [
+     "Butterfly PAILs/RAILs",
+     "ELDOA L5-S1",
+     "Acupuncture Mat Standing",
+     "Prone Shoulder Abduction with Internal Rotation",
+     "Psoas Fascial Stretch"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Butterfly PAILs/RAILs",
+      "reps": ""
+     },
+     {
+      "name": "ELDOA L5-S1",
+      "reps": ""
+     },
+     {
+      "name": "Acupuncture Mat Standing",
+      "reps": ""
+     },
+     {
+      "name": "Prone Shoulder Abduction with Internal Rotation",
+      "reps": ""
+     },
+     {
+      "name": "Psoas Fascial Stretch",
+      "reps": ""
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-02",
+  "name": "High Day: Max Velocity, Plyos and Fly 10s (Week 5 Day 3)",
+  "quality": "max_velocity",
+  "phase": "any",
+  "level": "all",
+  "reps": "Max velocity sprints (stop at 10% velocity decrement), plyometrics, S-curve runs, fly 10s (20 yd build-in), lower body lift (contents not specified in the post)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "track",
+  "footwear": "",
+  "equipment": "",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "High CNS day built around max velocity work with a 10 percent velocity-decrement cutoff, plyometrics, curved runs and a lower body lift",
+  "source": "Instagram \u2014 @mattgebert1 (saved post)",
+  "source_url": "https://www.instagram.com/reel/DGl7ZBQy-5d/",
+  "source_username": "mattgebert1",
+  "structure": [
+   {
+    "block": "Session in order",
+    "lines": [
+     "Max Velocity Sprints (stop at 10% velocity decrement)",
+     "Plyometrics",
+     "S-Curve Runs",
+     "Fly 10 (20 yd build-in)",
+     "Lower Body Lift (contents not specified in the post)"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Max Velocity Sprints",
+      "reps": "stop at 10% velocity decrement"
+     },
+     {
+      "name": "Plyometrics",
+      "reps": ""
+     },
+     {
+      "name": "S-Curve Runs",
+      "reps": ""
+     },
+     {
+      "name": "Fly 10",
+      "reps": "20 yd build-in"
+     },
+     {
+      "name": "Lower Body Lift",
+      "reps": "contents not specified in the post"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-03",
+  "name": "5 Contrast Training Variations for Power",
+  "quality": "plyometric",
+  "phase": "any",
+  "level": "all",
+  "reps": "5 variations, 2 movements each (sets and reps not stated)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Complex/contrast training: pair a heavy or loaded strength movement with a matched explosive jump or throw",
+  "source": "Instagram \u2014 @overtimeathletes (saved post)",
+  "source_url": "https://www.instagram.com/p/C8ov2UyuOE_/",
+  "source_username": "overtimeathletes",
+  "structure": [
+   {
+    "block": "Variation 1",
+    "lines": [
+     "Trap Bar Jump",
+     "Max Effort Approach Box Jump"
+    ]
+   },
+   {
+    "block": "Variation 2",
+    "lines": [
+     "Split Stance Romanian Deadlift",
+     "Standing Triple Jump"
+    ]
+   },
+   {
+    "block": "Variation 3",
+    "lines": [
+     "Close Grip Press",
+     "Kneeling Medicine Ball Broad Toss"
+    ]
+   },
+   {
+    "block": "Variation 4",
+    "lines": [
+     "Dumbbell Step-Up",
+     "Sprinter Step-Up Launch"
+    ]
+   },
+   {
+    "block": "Variation 5",
+    "lines": [
+     "Trap Bar Jump",
+     "Hurdle Jumps"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Trap Bar Jump",
+      "reps": ""
+     },
+     {
+      "name": "Max Effort Approach Box Jump",
+      "reps": ""
+     }
+    ]
+   },
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Split Stance Romanian Deadlift",
+      "reps": ""
+     },
+     {
+      "name": "Standing Triple Jump",
+      "reps": ""
+     }
+    ]
+   },
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Close Grip Press",
+      "reps": ""
+     },
+     {
+      "name": "Kneeling Medicine Ball Broad Toss",
+      "reps": ""
+     }
+    ]
+   },
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Dumbbell Step-Up",
+      "reps": ""
+     },
+     {
+      "name": "Sprinter Step-Up Launch",
+      "reps": ""
+     }
+    ]
+   },
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Trap Bar Jump",
+      "reps": ""
+     },
+     {
+      "name": "Hurdle Jumps",
+      "reps": ""
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-04",
+  "name": "Power Potentiation Pairing: Pin Squat Partial + Broad Jumps",
+  "quality": "strength",
+  "phase": "any",
+  "level": "all",
+  "reps": "A1 pin front squat partial + A2 consecutive broad jumps, 3 hops in a row (sets and reps not stated)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Post-activation potentiation: a heavy partial squat paired with consecutive broad jumps",
+  "source": "Instagram \u2014 @joeybergles (saved post)",
+  "source_url": "https://www.instagram.com/reel/C8avo4UMwl7/",
+  "source_username": "joeybergles",
+  "structure": [
+   {
+    "block": "Pairing",
+    "lines": [
+     "A1: Pin Front Squat Partial",
+     "A2: Consecutive Broad Jumps (3 hops in a row)"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Pin Front Squat Partial",
+      "reps": "A1"
+     },
+     {
+      "name": "Consecutive Broad Jumps",
+      "reps": "3 hops in a row"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-05",
+  "name": "Quick First Step Routine, Part 1",
+  "quality": "acceleration",
+  "phase": "any",
+  "level": "all",
+  "reps": "6 movements in the order shown (sets and reps not stated)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "bands, barbell, hurdles, medicine ball",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "First-step quickness: unilateral power, cleans, step-up speed, hurdle plyos and a slam finisher, in the order shown",
+  "source": "Instagram \u2014 @basedfasho (saved post)",
+  "source_url": "https://www.instagram.com/reel/DDfXe00RHPc/",
+  "source_username": "basedfasho",
+  "structure": [
+   {
+    "block": "Sequence",
+    "lines": [
+     "Banded Explosive Lunge",
+     "Single-Leg Clean",
+     "Barbell Step-Up",
+     "Banded Quick Step-Up",
+     "Hurdle Hops",
+     "Medicine Ball Slam"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Banded Explosive Lunge",
+      "reps": ""
+     },
+     {
+      "name": "Single-Leg Clean",
+      "reps": ""
+     },
+     {
+      "name": "Barbell Step-Up",
+      "reps": ""
+     },
+     {
+      "name": "Banded Quick Step-Up",
+      "reps": ""
+     },
+     {
+      "name": "Hurdle Hops",
+      "reps": ""
+     },
+     {
+      "name": "Medicine Ball Slam",
+      "reps": ""
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-06",
+  "name": "10-Minute Hip Mobility Routine",
+  "quality": "recovery",
+  "phase": "any",
+  "level": "all",
+  "reps": "Rotating hip crossovers 10/side, couch stretch 1 min/leg, lacrosse ball rollout 1 min/foot, T-spine rotations 10/side, figure-4 stretch 1 min/leg",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "lacrosse ball",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Daily hip mobility for athletes with tight hips; about 10 minutes",
+  "source": "Instagram \u2014 @apexmandan (saved post)",
+  "source_url": "https://www.instagram.com/reel/C5y8PHBuhrb/",
+  "source_username": "apexmandan",
+  "structure": [
+   {
+    "block": "Routine",
+    "lines": [
+     "Rotating Hip Crossovers \u2014 10 per side",
+     "Couch Stretch \u2014 1 min per leg",
+     "Lacrosse Ball Rollout \u2014 1 min per foot",
+     "T-Spine Rotations \u2014 10 per side",
+     "Figure-4 Stretch \u2014 1 min per leg"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Rotating Hip Crossovers",
+      "reps": "10 per side"
+     },
+     {
+      "name": "Couch Stretch",
+      "reps": "1 min per leg"
+     },
+     {
+      "name": "Lacrosse Ball Rollout",
+      "reps": "1 min per foot"
+     },
+     {
+      "name": "T-Spine Rotations",
+      "reps": "10 per side"
+     },
+     {
+      "name": "Figure-4 Stretch",
+      "reps": "1 min per leg"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-07",
+  "name": "Tricep Blast (Cable Workout)",
+  "quality": "strength",
+  "phase": "any",
+  "level": "all",
+  "reps": "Rope pushdown 4 \u00d7 10, kickback 3 \u00d7 15/arm, pushdown 4 \u00d7 10, single-arm pull 4 \u00d7 12/arm, reverse single-arm pull 4 \u00d7 12/arm",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "40 sec",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "cable machine",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Triceps hypertrophy with constant cable tension; squeeze at lockout",
+  "source": "Instagram \u2014 @marvinachi (saved post)",
+  "source_url": "https://www.instagram.com/p/CSHZ54GrYcc/",
+  "source_username": "marvinachi",
+  "structure": [
+   {
+    "block": "Main work",
+    "lines": [
+     "Cable Rope Pushdown \u2014 4 \u00d7 10 (2 sec pause)",
+     "Cable Kickback \u2014 3 \u00d7 15 per arm",
+     "Cable Pushdown \u2014 4 \u00d7 10 (2 sec pause)",
+     "Single-Arm Cable Pull \u2014 4 \u00d7 12 per arm",
+     "Reverse Single-Arm Cable Pull \u2014 4 \u00d7 12 per arm (superset with the single-arm pull, no rest between)"
+    ],
+    "meta": "rest 40 sec"
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 4,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Cable Rope Pushdown",
+      "reps": "10 \u00b7 2 sec pause"
+     }
+    ]
+   },
+   {
+    "rounds": 3,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Cable Kickback",
+      "reps": "15 per arm"
+     }
+    ]
+   },
+   {
+    "rounds": 4,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Cable Pushdown",
+      "reps": "10 \u00b7 2 sec pause"
+     }
+    ]
+   },
+   {
+    "rounds": 4,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Single-Arm Cable Pull",
+      "reps": "12 per arm"
+     }
+    ]
+   },
+   {
+    "rounds": 4,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Reverse Single-Arm Cable Pull",
+      "reps": "12 per arm \u00b7 superset with the single-arm pull, no rest between"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-08",
+  "name": "Home Abs Workout (No Equipment)",
+  "quality": "cross_training",
+  "phase": "any",
+  "level": "all",
+  "reps": "4 rounds \u00d7 15 reps per exercise (5 exercises)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "60 sec between exercises, 2 min between rounds",
+  "total_volume_m": 0,
+  "surface": "any",
+  "footwear": "",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Bodyweight core circuit for home training",
+  "source": "Instagram \u2014 @ryanspiteri (saved post)",
+  "source_url": "https://www.instagram.com/p/B96rvQFgH29/",
+  "source_username": "ryanspiteri",
+  "structure": [
+   {
+    "block": "Circuit",
+    "lines": [
+     "Side Bridge \u2014 15 reps each",
+     "Leg Pull-In \u2014 15 reps each",
+     "Plank \u2014 15 reps each",
+     "Ankle Touches \u2014 15 reps each",
+     "V-Ups \u2014 15 reps each"
+    ],
+    "meta": "4 rounds \u00b7 15 reps per exercise \u00b7 60 sec between exercises \u00b7 2 min between rounds"
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 4,
+    "restBetweenRounds": 120,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Side Bridge",
+      "reps": "15"
+     },
+     {
+      "name": "Leg Pull-In",
+      "reps": "15"
+     },
+     {
+      "name": "Plank",
+      "reps": "15"
+     },
+     {
+      "name": "Ankle Touches",
+      "reps": "15"
+     },
+     {
+      "name": "V-Ups",
+      "reps": "15"
+     }
+    ]
+   }
+  ]
  }
 ]
