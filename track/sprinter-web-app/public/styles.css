@@ -1944,6 +1944,17 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .grid-table td.cell-error { background: #fdf0f3; }
 .grid-table td.cell-error input { border-color: var(--red); }
 .grid-err-list { color: var(--red-dark); margin: 4px 0; padding-left: 20px; }
+
+/* In-place row updates: a brief saved flash on the row that was
+   just written, and an inline error flag when a save is refused —
+   the row itself is never repainted as saved before confirmation. */
+@keyframes rowSavedFlash {
+  0% { background: #e7f6ec; }
+  100% { background: transparent; }
+}
+.row-saved { animation: rowSavedFlash 1.8s ease-out; border-radius: 8px; }
+.row-errored { outline: 2px solid var(--red); outline-offset: 2px; border-radius: 8px; }
+.row-err { display: block; margin-top: 4px; }
 .report-card .rc-head h3 { margin: 0 0 2px; font-size: 20px; }
 .report-card h4 { margin: 14px 0 6px; }
 .rc-line { margin: 8px 0; }

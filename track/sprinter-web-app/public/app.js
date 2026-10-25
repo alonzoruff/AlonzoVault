@@ -101,6 +101,34 @@ const apiPut = (path, body) => api(path, {
 });
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
+/* ------------- in-place row updates -------------
+   Coach data-entry saves update just the affected row in place
+   instead of re-rendering the whole view, so scroll position,
+   keyboard focus, and unsaved edits in other rows survive a save.
+   A row is only ever painted as saved AFTER the server confirms;
+   a failed save flags the row and leaves every typed value alone. */
+function flashSaved(row) {
+  if (!row) return;
+  row.classList.remove('row-saved');
+  void row.offsetWidth; /* restart the animation on repeat saves */
+  row.classList.add('row-saved');
+  setTimeout(() => row.classList.remove('row-saved'), 1800);
+}
+function showRowError(row, msg) {
+  if (!row) return;
+  clearRowError(row);
+  const e = document.createElement('span');
+  e.className = 'error row-err';
+  e.textContent = msg;
+  row.appendChild(e);
+  row.classList.add('row-errored');
+}
+function clearRowError(row) {
+  if (!row) return;
+  row.querySelectorAll('.row-err').forEach(e => e.remove());
+  row.classList.remove('row-errored');
+}
+
 /* ---------------- dates ---------------- */
 function parseDate(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
 function fmtDate(d) { return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }); }
@@ -1904,6 +1932,59 @@ async function renderCoach() {
   catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   const sessionOpts = (sel) => '<option value="">— pick a workout —</option>' + state.content.sessions.map(s =>
     `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${s.id} · ${esc(s.name)}</option>`).join('');
+  /* Checklist rows update in place: mark/unmark swaps only this
+     row's contents after the server confirms, so scroll, focus,
+     and half-typed marks in other rows survive the save. */
+  const memberById = new Map();
+  for (const blk of feed.groups) for (const m of blk.members || []) memberById.set(m.profile.id, m);
+  const checkRowInner = (m) => `
+          <span>${m.completed ? '✅' : '⬜'} <strong>${esc(m.profile.name)}</strong> ${m.profile.topAthlete ? '<span class="badge star">★</span>' : ''}
+          ${m.completed && m.completion ? `<span class="muted">${esc(m.completion.marks || '')}${m.completion.feel ? ' · felt ' + m.completion.feel + '/5' : ''}</span>` : ''}</span>
+          ${m.completed
+            ? `<button class="btn secondary" data-unmark="${m.profile.id}" type="button">Undo</button>`
+            : `<span class="check-inputs"><input type="text" id="cm-${m.profile.id}" placeholder="marks (optional)">
+               <select id="cf-${m.profile.id}">${FEEL_OPTIONS}</select>
+               <button class="btn primary" data-mark="${m.profile.id}" type="button" style="width:auto">Mark done</button></span>`}`;
+  const checkRowHtml = (m) => `<div class="roster-row check-row" data-check-row="${m.profile.id}">${checkRowInner(m)}</div>`;
+  const wireCheckRow = (row) => {
+    const markBtn = row.querySelector('[data-mark]');
+    if (markBtn) markBtn.addEventListener('click', async () => {
+      const pid = markBtn.dataset.mark;
+      const m = memberById.get(pid);
+      const marksEl = row.querySelector('input[type="text"]');
+      const feelEl = row.querySelector('select');
+      const marks = marksEl ? marksEl.value : '';
+      const feel = feelEl && feelEl.value ? parseInt(feelEl.value, 10) : null;
+      clearRowError(row);
+      try {
+        await apiPost('/api/completions', { profileId: pid, date: state.feedDate, marks, feel });
+        if (m) { m.completed = true; m.completion = { marks, feel }; }
+        row.innerHTML = checkRowInner(m || { profile: { id: pid, name: '' }, completed: true, completion: { marks, feel } });
+        wireCheckRow(row);
+        flashSaved(row);
+        const rows = Array.from(el.querySelectorAll('[data-check-row]'));
+        const idx = rows.indexOf(row);
+        const next = rows.slice(idx + 1).concat(rows.slice(0, idx)).find(r => r.querySelector('[data-mark]'));
+        const target = next ? next.querySelector('input[type="text"]') : row.querySelector('[data-unmark]');
+        if (target) target.focus();
+      } catch (err) { showRowError(row, err.message); }
+    });
+    const unmarkBtn = row.querySelector('[data-unmark]');
+    if (unmarkBtn) unmarkBtn.addEventListener('click', async () => {
+      const pid = unmarkBtn.dataset.unmark;
+      const m = memberById.get(pid);
+      clearRowError(row);
+      try {
+        await apiPost('/api/completions', { profileId: pid, date: state.feedDate, completed: false });
+        if (m) { m.completed = false; m.completion = null; }
+        row.innerHTML = checkRowInner(m || { profile: { id: pid, name: '' }, completed: false });
+        wireCheckRow(row);
+        flashSaved(row);
+        const inp = row.querySelector('input[type="text"]');
+        if (inp) inp.focus();
+      } catch (err) { showRowError(row, err.message); }
+    });
+  };
   const groupCard = (blk) => {
     if (!blk.group) {
       return `<div class="card"><h3>No group</h3>
@@ -1929,16 +2010,7 @@ async function renderCoach() {
         </div>
       </details>
       <h4>Who got it done</h4>
-      ${blk.members.length ? blk.members.map(m => `
-        <div class="roster-row check-row">
-          <span>${m.completed ? '✅' : '⬜'} <strong>${esc(m.profile.name)}</strong> ${m.profile.topAthlete ? '<span class="badge star">★</span>' : ''}
-          ${m.completed && m.completion ? `<span class="muted">${esc(m.completion.marks || '')}${m.completion.feel ? ' · felt ' + m.completion.feel + '/5' : ''}</span>` : ''}</span>
-          ${m.completed
-            ? `<button class="btn secondary" data-unmark="${m.profile.id}" type="button">Undo</button>`
-            : `<span class="check-inputs"><input type="text" id="cm-${m.profile.id}" placeholder="marks (optional)">
-               <select id="cf-${m.profile.id}">${FEEL_OPTIONS}</select>
-               <button class="btn primary" data-mark="${m.profile.id}" type="button" style="width:auto">Mark done</button></span>`}
-        </div>`).join('') : '<p class="muted">No athletes in this group yet.</p>'}
+      ${blk.members.length ? blk.members.map(m => checkRowHtml(m)).join('') : '<p class="muted">No athletes in this group yet.</p>'}
     </div>`;
   };
   el.innerHTML = `
@@ -1979,23 +2051,7 @@ async function renderCoach() {
       renderCoach();
     } catch (err) { alert(err.message); }
   }));
-  el.querySelectorAll('[data-mark]').forEach(b => b.addEventListener('click', async () => {
-    const pid = b.dataset.mark;
-    try {
-      await apiPost('/api/completions', {
-        profileId: pid, date: state.feedDate,
-        marks: $('#cm-' + CSS.escape(pid)).value,
-        feel: $('#cf-' + CSS.escape(pid)).value ? parseInt($('#cf-' + CSS.escape(pid)).value, 10) : null,
-      });
-      renderCoach();
-    } catch (err) { alert(err.message); }
-  }));
-  el.querySelectorAll('[data-unmark]').forEach(b => b.addEventListener('click', async () => {
-    try {
-      await apiPost('/api/completions', { profileId: b.dataset.unmark, date: state.feedDate, completed: false });
-      renderCoach();
-    } catch (err) { alert(err.message); }
-  }));
+  el.querySelectorAll('[data-check-row]').forEach(wireCheckRow);
 }
 
 /* ---------------- testing tracker ---------------- */
@@ -2029,7 +2085,7 @@ async function renderTesting() {
   const resultFor = (pid, key) => dayResults.find(r => r.profileId === pid && r.testKey === key);
   const dayTests = day ? day.testKeys.map(k => tests.find(t => t.key === k)).filter(Boolean) : [];
   const testInputs = (test, current, pid) => {
-    const cur = current ? `<div class="muted">Now: ${resultRawText(current, test)}${test.kind === 'lift' ? ` · est. 1RM ${fmtNum(current.display || current.est1rm)} lb` : ''}</div>` : '';
+    const cur = current ? `<div class="muted rapid-now">Now: ${resultRawText(current, test)}${test.kind === 'lift' ? ` · est. 1RM ${fmtNum(current.display || current.est1rm)} lb` : ''}</div>` : '';
     if (test.kind === 'lift') {
       return `${cur}<div class="filter-row">
         <label>Weight (lb) <input type="number" step="any" min="0" id="rw-${pid}-${test.key}" value="${current ? esc(current.weight) : ''}"></label>
@@ -2039,6 +2095,28 @@ async function renderTesting() {
     return `${cur}<div class="filter-row">
       <label>Result (${esc(test.unit)}) <input type="number" step="any" min="0" id="rv-${pid}-${test.key}" value="${current ? esc(current.value) : ''}"></label>
       <button class="btn primary" data-save-result="${pid}:${test.key}" type="button" style="width:auto">Save</button></div>`;
+  };
+  /* Ranked tables are a derived zone: saves refresh ONLY this
+     zone in place (see refreshRankedInPlace), never the whole
+     Testing view, so entry focus/scroll elsewhere is untouched. */
+  const renderRankedHtml = () => dayTests.map(t => {
+        const rows = dayResults.filter(r => r.testKey === t.key).slice()
+          .sort((a, b) => t.better === 'lower' ? (a.display || 0) - (b.display || 0) : (b.display || 0) - (a.display || 0));
+        return `<h3>${esc(t.name)} ${demoHtml(t.key, t.name)}</h3>
+        ${rows.length ? `<div class="table-wrap"><table class="ranked">
+          <thead><tr><th>#</th><th>Athlete</th><th>Result</th>${t.kind === 'lift' ? '<th>Est. 1RM</th>' : ''}</tr></thead>
+          <tbody>${rows.map((r, i) => {
+            const pr = state.profiles.find(x => x.id === r.profileId);
+            return `<tr><td>${i + 1}</td><td>${esc(pr ? pr.name : '?')}</td><td>${resultRawText(r, t)}</td>${t.kind === 'lift' ? `<td><strong>${fmtNum(r.display)} lb</strong></td>` : ''}</tr>`;
+          }).join('')}</tbody></table></div>` : '<p class="muted">No results yet.</p>'}`;
+      }).join('');
+  const refreshRankedInPlace = () => {
+    const z = $('#ranked-zone');
+    if (z) z.innerHTML = renderRankedHtml();
+  };
+  const setProgressCell = (pid, key, has) => {
+    const td = el.querySelector('[data-progress-cell="' + pid + ':' + key + '"]');
+    if (td) td.innerHTML = has ? '✅' : '<span class="muted">·</span>';
   };
   el.innerHTML = `
     <form class="card" id="testday-form">
@@ -2082,7 +2160,7 @@ async function renderTesting() {
       <div class="table-wrap"><table class="matrix">
         <thead><tr><th>Athlete</th>${dayTests.map(t => `<th>${esc(t.name)}</th>`).join('')}</tr></thead>
         <tbody>
-        ${activeProfiles().map(pr => `<tr><td>${esc(pr.name)}</td>${dayTests.map(t => `<td>${resultFor(pr.id, t.key) ? '✅' : '<span class="muted">·</span>'}</td>`).join('')}</tr>`).join('')}
+        ${activeProfiles().map(pr => `<tr><td>${esc(pr.name)}</td>${dayTests.map(t => `<td data-progress-cell="${pr.id}:${t.key}">${resultFor(pr.id, t.key) ? '✅' : '<span class="muted">·</span>'}</td>`).join('')}</tr>`).join('')}
         </tbody>
       </table></div>
     </div>
@@ -2102,20 +2180,11 @@ async function renderTesting() {
       <p><button class="btn primary" id="grid-save" type="button" style="width:auto">Save the whole grid</button></p>
       <p class="error" id="grid-err"></p>
       <ul class="grid-err-list" id="grid-err-list"></ul>
+      <p class="muted" id="grid-ok"></p>
     </div>
     <div class="card">
       <h2>Ranked — ${esc(day.title)}</h2>
-      ${dayTests.map(t => {
-        const rows = dayResults.filter(r => r.testKey === t.key).slice()
-          .sort((a, b) => t.better === 'lower' ? (a.display || 0) - (b.display || 0) : (b.display || 0) - (a.display || 0));
-        return `<h3>${esc(t.name)} ${demoHtml(t.key, t.name)}</h3>
-        ${rows.length ? `<div class="table-wrap"><table class="ranked">
-          <thead><tr><th>#</th><th>Athlete</th><th>Result</th>${t.kind === 'lift' ? '<th>Est. 1RM</th>' : ''}</tr></thead>
-          <tbody>${rows.map((r, i) => {
-            const pr = state.profiles.find(x => x.id === r.profileId);
-            return `<tr><td>${i + 1}</td><td>${esc(pr ? pr.name : '?')}</td><td>${resultRawText(r, t)}</td>${t.kind === 'lift' ? `<td><strong>${fmtNum(r.display)} lb</strong></td>` : ''}</tr>`;
-          }).join('')}</tbody></table></div>` : '<p class="muted">No results yet.</p>'}`;
-      }).join('')}
+      <div id="ranked-zone">${renderRankedHtml()}</div>
     </div>
     <div class="card">
       <h2>Athlete history</h2>
@@ -2147,6 +2216,52 @@ async function renderTesting() {
     catch (err) { alert(err.message); }
   });
   if (!day) return;
+  /* Rapid entry saves update only the saved test's block in
+     place (plus the progress cell and the ranked zone) — other
+     tests' half-typed values, scroll, and focus all survive. */
+  const applyResultInPlace = (pid, test, result) => {
+    const saved = Object.assign({}, result, {
+      display: result.display != null ? result.display
+        : (result.est1rm != null ? result.est1rm : result.value),
+    });
+    const i = dayResults.findIndex(r => r.profileId === pid && r.testKey === test.key);
+    if (i >= 0) dayResults[i] = saved; else dayResults.push(saved);
+    setProgressCell(pid, test.key, true);
+    refreshRankedInPlace();
+  };
+  const wireRapidBlock = (block) => {
+    const b = block.querySelector('[data-save-result]');
+    if (!b) return;
+    b.addEventListener('click', async () => {
+      const [p2, key] = b.dataset.saveResult.split(':');
+      const test = tests.find(t => t.key === key);
+      const body = { profileId: p2, testDayId: day.id, testKey: key };
+      clearRowError(block);
+      try {
+        if (test.kind === 'lift') {
+          body.weight = block.querySelector('[id^="rw-"]').value;
+          const reps = block.querySelector('[id^="rr-"]').value;
+          if (reps) body.reps = parseInt(reps, 10);
+        } else {
+          body.value = block.querySelector('[id^="rv-"]').value;
+        }
+        const out = await apiPost('/api/results', body);
+        applyResultInPlace(p2, test, out.result);
+        block.innerHTML = `
+          <div class="roster-row"><strong>${esc(test.name)}</strong> ${demoHtml(test.key, test.name)}</div>
+          ${testInputs(test, resultFor(p2, key), p2)}`;
+        wireRapidBlock(block);
+        flashSaved(block);
+        if (state.histAthleteId === p2) renderHist();
+        const blocks = Array.from(document.querySelectorAll('[data-rapid-block]'));
+        const idx = blocks.indexOf(block);
+        const next = blocks.slice(idx + 1).concat(blocks.slice(0, idx))
+          .find(bl => bl !== block);
+        const target = (next && next.querySelector('input')) || block.querySelector('input');
+        if (target) target.focus();
+      } catch (err) { showRowError(block, err.message); }
+    });
+  };
   const renderRapid = () => {
     const zone = $('#rapid-zone');
     const pid = $('#rapid-athlete').value;
@@ -2154,26 +2269,11 @@ async function renderTesting() {
     if (!pid) { zone.innerHTML = '<p class="muted">Pick an athlete to start entering.</p>'; return; }
     const pr = state.profiles.find(x => x.id === pid);
     zone.innerHTML = `<h3>${esc(pr ? pr.name : '')}</h3>` + dayTests.map(t => `
-      <div class="rapid-test">
+      <div class="rapid-test" data-rapid-block="${pid}:${t.key}">
         <div class="roster-row"><strong>${esc(t.name)}</strong> ${demoHtml(t.key, t.name)}</div>
         ${testInputs(t, resultFor(pid, t.key), pid)}
       </div>`).join('');
-    zone.querySelectorAll('[data-save-result]').forEach(b => b.addEventListener('click', async () => {
-      const [p2, key] = b.dataset.saveResult.split(':');
-      const test = tests.find(t => t.key === key);
-      const body = { profileId: p2, testDayId: day.id, testKey: key };
-      try {
-        if (test.kind === 'lift') {
-          body.weight = $('#rw-' + CSS.escape(p2) + '-' + CSS.escape(key)).value;
-          const reps = $('#rr-' + CSS.escape(p2) + '-' + CSS.escape(key)).value;
-          if (reps) body.reps = parseInt(reps, 10);
-        } else {
-          body.value = $('#rv-' + CSS.escape(p2) + '-' + CSS.escape(key)).value;
-        }
-        await apiPost('/api/results', body);
-        renderTesting();
-      } catch (err) { alert(err.message); }
-    }));
+    zone.querySelectorAll('[data-rapid-block]').forEach(wireRapidBlock);
   };
   const ra = $('#rapid-athlete');
   if (ra) { ra.addEventListener('change', renderRapid); renderRapid(); }
@@ -2206,6 +2306,8 @@ async function renderTesting() {
     const listEl = $('#grid-err-list');
     errEl.textContent = '';
     listEl.innerHTML = '';
+    const okPrev = $('#grid-ok');
+    if (okPrev) okPrev.textContent = '';
     gridZone.querySelectorAll('.cell-error').forEach(td => td.classList.remove('cell-error'));
     const entries = [], clear = [];
     for (const pr of gridRows()) {
@@ -2251,10 +2353,34 @@ async function renderTesting() {
             if (td) td.classList.add('cell-error');
             return `<li>${esc(pr ? pr.name : ce.profileId)} — ${esc(t ? t.name : ce.testKey)}: ${esc(ce.error)}</li>`;
           }).join('');
+          const firstBad = gridZone.querySelector('td.cell-error input');
+          if (firstBad) firstBad.focus();
         }
         return;
       }
-      renderTesting();
+      /* Bulk save confirmed (all-or-nothing server-side): fold
+         the confirmed results into the local day data and refresh
+         only the derived zones — the grid inputs themselves are
+         never repainted, so unsaved cells, scroll, and focus
+         survive; nothing was painted as saved before this point. */
+      for (const r of (data.results || [])) {
+        const saved = Object.assign({}, r, {
+          display: r.display != null ? r.display : (r.est1rm != null ? r.est1rm : r.value),
+        });
+        const i = dayResults.findIndex(x => x.profileId === r.profileId && x.testKey === r.testKey);
+        if (i >= 0) dayResults[i] = saved; else dayResults.push(saved);
+        setProgressCell(r.profileId, r.testKey, true);
+      }
+      for (const c of clear) {
+        const i = dayResults.findIndex(x => x.profileId === c.profileId && x.testKey === c.testKey);
+        if (i >= 0) dayResults.splice(i, 1);
+        setProgressCell(c.profileId, c.testKey, false);
+      }
+      refreshRankedInPlace();
+      if (state.histAthleteId) renderHist();
+      const okEl = $('#grid-ok');
+      if (okEl) okEl.textContent = `Saved ${data.saved} result${data.saved === 1 ? '' : 's'}${data.cleared ? `, cleared ${data.cleared}` : ''} — progress and standings above are updated.`;
+      flashSaved(gridZone);
     } catch (err) { errEl.textContent = err.message; }
   });
   const renderHist = async () => {
@@ -2296,6 +2422,23 @@ async function renderTop() {
   if (!state.topWeek) state.topWeek = mondayStr();
   const metric = metrics.find(m => m.key === state.topMetric);
   const entryMetricObj = metrics.find(m => m.key === state.entryMetric);
+  /* This athlete's own charts block — rebuilt in place after a
+     weekly save (it sits below the entry rows, so entry scroll
+     and focus are untouched). */
+  const athleteChartsHtml = (pr) => {
+    const charts = metrics.map(m => {
+      const pts = seriesFromEntries(dash.entries[pr.id], m.key);
+      if (!pts.length) return '';
+      const stats = seriesStats(pts, m);
+      return `<h4>${esc(m.name)} <span class="muted">best ${stats.best !== null ? fmtNum(stats.best) + ' ' + esc(m.unit) : '—'}</span> ${deltaHtml(m, stats)}</h4>
+        ${lineChart([{ label: pr.name, color: '#CC0033', points: pts }], m, true)}`;
+    }).join('');
+    return `<h3>${esc(pr.name)} ${eventBadges(pr)}</h3>${charts || '<p class="muted">No weekly numbers yet.</p>'}`;
+  };
+  const refreshAthleteChartsInPlace = (pr) => {
+    const box = el.querySelector('[data-athlete-charts="' + pr.id + '"]');
+    if (box) box.innerHTML = athleteChartsHtml(pr);
+  };
   let overlay = { athletes: [] };
   try { overlay = await api('/api/weekly/overlay?metricId=' + encodeURIComponent(state.topMetric)); } catch (_) { /* ignore */ }
   const tops = dash.topAthletes;
@@ -2308,6 +2451,7 @@ async function renderTop() {
       <div class="legend">
         ${overlay.athletes.map((a, i) => `<div class="roster-row"><span><span class="swatch" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span> ${esc(a.name)}${a.best !== null ? ` · best ${fmtNum(a.best)} ${esc(metric.unit)}` : ''}</span>${deltaHtml(metric, a)}</div>`).join('')}
       </div>
+      <p class="muted" id="compare-cue"></p>
     </div>
     <div class="card">
       <h2>Enter this week's numbers</h2>
@@ -2317,7 +2461,7 @@ async function renderTop() {
       </div>
       ${tops.map(pr => {
         const cur = ((dash.entries[pr.id] || {})[state.entryMetric] || {})[state.topWeek];
-        return `<div class="roster-row"><span>${esc(pr.name)} ${cur !== undefined ? `<span class="muted">now ${fmtNum(cur)} ${esc(entryMetricObj.unit)}</span>` : ''}</span>
+        return `<div class="roster-row" data-weekly-row="${pr.id}"><span>${esc(pr.name)} <span class="muted weekly-now" data-weekly-now="${pr.id}">${cur !== undefined ? `now ${fmtNum(cur)} ${esc(entryMetricObj.unit)}` : ''}</span></span>
           <span class="check-inputs"><input type="number" step="any" min="0" id="wv-${pr.id}" value="${cur !== undefined ? esc(cur) : ''}" placeholder="${esc(entryMetricObj.unit)}">
           <button class="btn primary" data-weekly-save="${pr.id}" type="button" style="width:auto">Save</button></span></div>`;
       }).join('')}
@@ -2326,16 +2470,7 @@ async function renderTop() {
     </div>
     <div class="card">
       <h2>Each athlete</h2>
-      ${tops.map(pr => {
-        const charts = metrics.map(m => {
-          const pts = seriesFromEntries(dash.entries[pr.id], m.key);
-          if (!pts.length) return '';
-          const stats = seriesStats(pts, m);
-          return `<h4>${esc(m.name)} <span class="muted">best ${stats.best !== null ? fmtNum(stats.best) + ' ' + esc(m.unit) : '—'}</span> ${deltaHtml(m, stats)}</h4>
-            ${lineChart([{ label: pr.name, color: '#CC0033', points: pts }], m, true)}`;
-        }).join('');
-        return `<h3>${esc(pr.name)} ${eventBadges(pr)}</h3>${charts || '<p class="muted">No weekly numbers yet.</p>'}`;
-      }).join('')}
+      ${tops.map(pr => `<div data-athlete-charts="${pr.id}">${athleteChartsHtml(pr)}</div>`).join('')}
     </div>` : `<div class="card"><strong>No Top Athletes yet.</strong>
       <p class="muted">Star athletes in the Groups view (★ Star on a profile) and they will show up here with their weekly graphs.</p></div>`}
     <form class="card" id="custommetric-form">
@@ -2354,13 +2489,37 @@ async function renderTop() {
   if (tw) tw.addEventListener('change', () => { state.topWeek = tw.value; renderTop(); });
   const tem = $('#top-entry-metric');
   if (tem) tem.addEventListener('change', () => { state.entryMetric = tem.value; renderTop(); });
+  /* Weekly saves update just the athlete's row in place (plus
+     that athlete's own charts below) — the compare overlay above
+     the entry card is NOT rebuilt, because repainting it would
+     shift the entry rows mid-entry; when the saved metric is the
+     compared one, a visible cue says it refreshes on re-entry. */
   el.querySelectorAll('[data-weekly-save]').forEach(b => b.addEventListener('click', async () => {
     const pid = b.dataset.weeklySave;
-    const val = $('#wv-' + CSS.escape(pid)).value;
+    const row = b.closest('[data-weekly-row]');
+    const inp = row ? row.querySelector('input') : null;
+    const val = inp ? inp.value : '';
+    clearRowError(row);
     try {
-      await apiPut('/api/weekly/entry', { profileId: pid, metricId: state.entryMetric, week: state.topWeek, value: val === '' ? '' : Number(val) });
-      renderTop();
-    } catch (err) { alert(err.message); }
+      const out = await apiPut('/api/weekly/entry', { profileId: pid, metricId: state.entryMetric, week: state.topWeek, value: val === '' ? '' : Number(val) });
+      dash.entries[pid] = dash.entries[pid] || {};
+      dash.entries[pid][state.entryMetric] = dash.entries[pid][state.entryMetric] || {};
+      dash.entries[pid][state.entryMetric][state.topWeek] = out.value;
+      const nowEl = row ? row.querySelector('[data-weekly-now]') : null;
+      if (nowEl) nowEl.textContent = `now ${fmtNum(out.value)} ${entryMetricObj.unit}`;
+      const prObj = tops.find(x => x.id === pid);
+      if (prObj) refreshAthleteChartsInPlace(prObj);
+      if (state.topMetric === state.entryMetric) {
+        const cue = $('#compare-cue');
+        if (cue) cue.textContent = 'Standings updated — the compare chart refreshes when you reopen this view.';
+      }
+      flashSaved(row);
+      const rows = Array.from(el.querySelectorAll('[data-weekly-row]'));
+      const idx = rows.indexOf(row);
+      const next = rows[idx + 1] || rows[idx - 1];
+      const target = next ? next.querySelector('input') : inp;
+      if (target) target.focus();
+    } catch (err) { showRowError(row, err.message); }
   }));
   $('#custommetric-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -3705,7 +3864,7 @@ async function renderMeetDay() {
       <h2>Meets</h2>
       ${meets.length ? `<div class="table-wrap"><table class="ranked">
         <thead><tr><th>Meet</th><th>Date</th><th>Location</th><th>Entries</th><th>Results</th><th>PRs</th><th></th></tr></thead>
-        <tbody>${meets.map(m => `<tr${m.id === state.meetDayId ? ' class="selected"' : ''}><td><strong>${esc(m.name)}</strong></td><td>${esc(m.date)}</td><td>${esc(m.location || '')}</td><td>${m.summary.entries}</td><td>${m.summary.resultsEntered}</td><td>${m.summary.prs}</td>
+        <tbody>${meets.map(m => `<tr${m.id === state.meetDayId ? ' class="selected"' : ''}><td><strong>${esc(m.name)}</strong></td><td>${esc(m.date)}</td><td>${esc(m.location || '')}</td><td data-meet-count="entries:${m.id}">${m.summary.entries}</td><td data-meet-count="results:${m.id}">${m.summary.resultsEntered}</td><td data-meet-count="prs:${m.id}">${m.summary.prs}</td>
           <td><button class="btn secondary" data-md-open="${m.id}" type="button" style="width:auto;padding:2px 10px">Open</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="muted">No meets yet — create the first one above.</p>'}
     </div>`;
@@ -3728,10 +3887,10 @@ async function renderMeetDay() {
     html += `
     <div class="card">
       <h2>${esc(m.name)}</h2>
-      <p class="rc-line">${esc(m.date)}${m.location ? ' · ' + esc(m.location) : ''} — <strong>${s.resultsEntered}</strong> result${s.resultsEntered === 1 ? '' : 's'} in · <strong>${s.prs}</strong> PR${s.prs === 1 ? '' : 's'} · <strong>${s.entries}</strong> entr${s.entries === 1 ? 'y' : 'ies'}</p>
-      <label class="check-line"><input type="checkbox" disabled ${c.entriesAdded ? 'checked' : ''}> Entries added</label>
-      <label class="check-line"><input type="checkbox" disabled ${c.everyEventHasResult ? 'checked' : ''}> Every entered event has at least one result</label>
-      <label class="check-line"><input type="checkbox" disabled ${c.allResultsEntered ? 'checked' : ''}> All results entered</label>
+      <p class="rc-line" id="md-summary-line">${esc(m.date)}${m.location ? ' · ' + esc(m.location) : ''} — <strong>${s.resultsEntered}</strong> result${s.resultsEntered === 1 ? '' : 's'} in · <strong>${s.prs}</strong> PR${s.prs === 1 ? '' : 's'} · <strong>${s.entries}</strong> entr${s.entries === 1 ? 'y' : 'ies'}</p>
+      <label class="check-line"><input type="checkbox" disabled data-md-check="entriesAdded" ${c.entriesAdded ? 'checked' : ''}> Entries added</label>
+      <label class="check-line"><input type="checkbox" disabled data-md-check="everyEventHasResult" ${c.everyEventHasResult ? 'checked' : ''}> Every entered event has at least one result</label>
+      <label class="check-line"><input type="checkbox" disabled data-md-check="allResultsEntered" ${c.allResultsEntered ? 'checked' : ''}> All results entered</label>
       <form id="md-edit-form">
         <div class="filter-row">
           <label>Name <input type="text" id="md-edit-name" value="${esc(m.name)}" required></label>
@@ -3758,7 +3917,7 @@ async function renderMeetDay() {
         <div class="table-wrap"><table class="ranked"><tbody>
           ${detail.entries.filter(e => e.event === ev.key).map(e => {
             const r = resultFor(e.profileId, ev.key);
-            return `<tr><td>${esc(e.athleteName)}</td><td>${r ? '<strong>' + esc(r.mark) + '</strong>' : '<span class="muted">no result yet</span>'}</td>
+            return `<tr><td>${esc(e.athleteName)}</td><td data-entry-result-for="${e.profileId}:${ev.key}">${r ? '<strong>' + esc(r.mark) + '</strong>' : '<span class="muted">no result yet</span>'}</td>
             <td><button class="btn danger" data-md-entry-del="${e.id}" type="button" style="width:auto;padding:2px 10px">Remove</button></td></tr>`;
           }).join('')}
         </tbody></table></div>`).join('')
@@ -3773,7 +3932,7 @@ async function renderMeetDay() {
       <p class="muted" id="md-qr-hint">${markHint(qrEv.type)}</p>
       ${detail.entries.filter(e => e.event === qrEvent).map(e => {
         const r = resultFor(e.profileId, qrEvent);
-        return `<div class="filter-row"><label>${esc(e.athleteName)}${flagBadge(e.profileId)} <input type="text" data-md-mark="${e.profileId}" value="${r ? esc(r.mark) : ''}" placeholder="mark"></label></div>`;
+        return `<div class="filter-row" data-qr-row="${e.profileId}"><label>${esc(e.athleteName)}<span data-qr-badge="${e.profileId}">${flagBadge(e.profileId)}</span> <input type="text" data-md-mark="${e.profileId}" value="${r ? esc(r.mark) : ''}" placeholder="mark"></label></div>`;
       }).join('')}
       <button class="btn primary" id="md-qr-save" type="button">Save results</button>
       <p class="error" id="md-qr-err"></p>
@@ -3855,6 +4014,7 @@ async function renderMeetDay() {
     });
     const errEl = $('#md-qr-err');
     if (!marks.length) { errEl.textContent = 'Type at least one mark first.'; return; }
+    errEl.textContent = '';
     try {
       const out = await apiPost('/api/meets/' + encodeURIComponent(state.meetDayId) + '/results', {
         event: qrSel.value,
@@ -3864,7 +4024,42 @@ async function renderMeetDay() {
       for (const sv of out.saved) byProfile[sv.profileId] = sv.prStatus;
       state.meetDayFlags = { event: qrSel.value, byProfile };
       state.meetDayEvent = qrSel.value;
-      renderMeetDay();
+      /* In place: badges, entry-table marks, summary counts, and
+         checklist all update from the server's own response —
+         the typed marks, scroll, and focus are never repainted.
+         (The batch is validated whole server-side, so on error
+         nothing above runs and every typed mark survives.) */
+      el.querySelectorAll('[data-qr-badge]').forEach(slot => {
+        const st = byProfile[slot.dataset.qrBadge];
+        slot.innerHTML = st === 'pr' ? ' <span class="badge star">PR ★</span>'
+          : st === 'first' ? ' <span class="badge plain">First mark</span>' : '';
+      });
+      for (const sv of out.saved) {
+        const td = el.querySelector('[data-entry-result-for="' + sv.profileId + ':' + qrSel.value + '"]');
+        if (td) td.innerHTML = '<strong>' + esc(sv.mark) + '</strong>';
+        const i = detail.results.findIndex(r => r.profileId === sv.profileId && r.event === qrSel.value);
+        if (i >= 0) detail.results[i] = sv; else detail.results.push(sv);
+        flashSaved(el.querySelector('[data-qr-row="' + sv.profileId + '"]'));
+      }
+      if (out.summary) {
+        const line = $('#md-summary-line');
+        if (line) line.innerHTML = `${esc(m.date)}${m.location ? ' · ' + esc(m.location) : ''} — <strong>${out.summary.resultsEntered}</strong> result${out.summary.resultsEntered === 1 ? '' : 's'} in · <strong>${out.summary.prs}</strong> PR${out.summary.prs === 1 ? '' : 's'} · <strong>${out.summary.entries}</strong> entr${out.summary.entries === 1 ? 'y' : 'ies'}`;
+        const setCount = (kind, v) => {
+          const cell = el.querySelector('[data-meet-count="' + kind + ':' + state.meetDayId + '"]');
+          if (cell) cell.textContent = v;
+        };
+        setCount('entries', out.summary.entries);
+        setCount('results', out.summary.resultsEntered);
+        setCount('prs', out.summary.prs);
+      }
+      if (out.checklist) {
+        for (const k of ['entriesAdded', 'everyEventHasResult', 'allResultsEntered']) {
+          const cb = el.querySelector('[data-md-check="' + k + '"]');
+          if (cb) cb.checked = !!out.checklist[k];
+        }
+      }
+      const empty = Array.from(el.querySelectorAll('[data-md-mark]')).find(i => !i.value.trim());
+      if (empty) empty.focus();
     } catch (err) { errEl.textContent = err.message; }
   });
 }

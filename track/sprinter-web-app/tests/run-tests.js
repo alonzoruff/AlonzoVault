@@ -229,8 +229,58 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v25',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v25"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v26',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v26"), swJs.text.slice(0, 80));
+
+  /* ---- In-place row updates regression guards ----
+     Each save handler segment is sliced out of the served app.js.
+     If a handler ever falls back to re-rendering its whole view,
+     these checks fail — a full re-render drops scroll position,
+     keyboard focus, and unsaved edits in other rows. */
+  const seg = (startMark, endMark) => {
+    const a = appJs.text.indexOf(startMark);
+    const b = endMark ? appJs.text.indexOf(endMark, a + 1) : -1;
+    return a >= 0 && (endMark == null || b > a) ? appJs.text.slice(a, endMark == null ? undefined : b) : '';
+  };
+  check('app JS parses as valid JavaScript',
+    (() => { try { new (require('vm').Script)(appJs.text); return true; } catch (_) { return false; } })());
+  check('in-place helpers exist (saved flash + per-row error flag)',
+    appJs.text.includes('function flashSaved(') &&
+    appJs.text.includes('function showRowError(') &&
+    appJs.text.includes('function clearRowError('));
+  const checkSeg = seg('const wireCheckRow', 'const groupCard');
+  check('checklist: rows carry data-check-row identity',
+    appJs.text.includes('data-check-row="${m.profile.id}"'));
+  check('checklist: mark/unmark saves in place (no full renderCoach in handler)',
+    checkSeg.includes("apiPost('/api/completions'") && checkSeg.includes('flashSaved(row)') &&
+    checkSeg.includes('showRowError(row') && !checkSeg.includes('renderCoach('), checkSeg.slice(0, 120));
+  const applySeg = seg('const applyResultInPlace', 'const wireRapidBlock');
+  check('testing: saved result folds into day data + progress cell + ranked zone in place',
+    applySeg.includes('dayResults') && applySeg.includes('setProgressCell') &&
+    applySeg.includes('refreshRankedInPlace()'));
+  const rapidSeg = seg('const wireRapidBlock', 'const renderRapid');
+  check('testing rapid: single save updates only its block (no full renderTesting in handler)',
+    rapidSeg.includes("apiPost('/api/results'") && rapidSeg.includes('applyResultInPlace') &&
+    rapidSeg.includes('showRowError(block') && rapidSeg.includes('flashSaved(block)') &&
+    !rapidSeg.includes('renderTesting('), rapidSeg.slice(0, 120));
+  const gridSeg = seg("gridSave.addEventListener", 'const renderHist');
+  check('testing grid: bulk success updates derived zones in place (no full renderTesting)',
+    gridSeg.includes('refreshRankedInPlace()') && gridSeg.includes('setProgressCell') &&
+    gridSeg.includes('grid-ok') && !gridSeg.includes('renderTesting('), gridSeg.slice(0, 120));
+  check('testing grid: bulk failure focuses the first errored cell in place',
+    gridSeg.includes('td.cell-error input') && gridSeg.includes('firstBad.focus()'));
+  const weeklySeg = seg("querySelectorAll('[data-weekly-save]')", "$('#custommetric-form')");
+  check('top athletes: weekly save updates its row + athlete charts in place (no full renderTop)',
+    weeklySeg.includes("apiPut('/api/weekly/entry'") && weeklySeg.includes('data-weekly-now') &&
+    weeklySeg.includes('refreshAthleteChartsInPlace') && weeklySeg.includes('showRowError(row') &&
+    !weeklySeg.includes('renderTop('), weeklySeg.slice(0, 120));
+  check('top athletes: compare chart refresh is deferred with a visible cue',
+    weeklySeg.includes('compare-cue') && weeklySeg.includes('Standings updated'));
+  const qrSeg = seg("qrSave.addEventListener", 'async function renderRecords');
+  check('meet day: quick-result save updates badges/marks/summary/checklist in place (no full renderMeetDay)',
+    qrSeg.includes('data-qr-badge') && qrSeg.includes('data-entry-result-for') &&
+    qrSeg.includes('out.summary') && qrSeg.includes('out.checklist') &&
+    qrSeg.includes("state.meetDayFlags") && !qrSeg.includes('renderMeetDay('), qrSeg.slice(0, 120));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
