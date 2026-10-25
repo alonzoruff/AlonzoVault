@@ -37,6 +37,9 @@ const state = {
   media: {},
   wuOverrides: {},
   wuEdit: null,
+  tvPanel: 0,
+  tvPaused: false,
+  tvData: null,
   profiles: [],
   pfGroup: '',
   pfEvent: '',
@@ -197,12 +200,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train',
   videos: 'learn', definitions: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['health', 'Aches & Pains'], ['inventory', 'Inventory']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -218,6 +221,10 @@ function showView(name) {
   const area = VIEW_AREA[name] || 'home';
   $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
   renderSubnav(name, area);
+  /* The TV board takes over the whole screen: body.tv-mode hides
+     the app chrome (CSS), and its timers run only while it shows. */
+  document.body.classList.toggle('tv-mode', name === 'tv');
+  if (name === 'tv') enterTvBoard(); else exitTvBoard();
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -1566,11 +1573,17 @@ async function renderCoach() {
   };
   el.innerHTML = `
     <div class="card">
+      <h3>Weight room TV</h3>
+      <p class="muted">Put today's sessions, the leaderboard, and the warm-up card on the weight-room TV — big type, rotating on its own.</p>
+      <p><button class="btn secondary" id="coach-open-tv" type="button">Open the TV board</button></p>
+    </div>
+    <div class="card">
       <label>Date <input type="date" id="feed-date" value="${esc(state.feedDate)}"></label>
       <p class="muted">Each group gets the season plan's workout by default. Override it when the day calls for something else, then check off who completed it — marks and feel land on the athlete's record.</p>
     </div>
     ${feed.groups.map(groupCard).join('')}
     ${groupCard(feed.unassigned)}`;
+  $('#coach-open-tv').addEventListener('click', () => showView('tv'));
   $('#feed-date').addEventListener('change', (e) => { state.feedDate = e.target.value; renderCoach(); });
   el.querySelectorAll('[data-override]').forEach(b => b.addEventListener('click', async () => {
     const gid = b.dataset.override;
@@ -2168,6 +2181,309 @@ $('#log-form').addEventListener('submit', async (e) => {
     renderLog(); renderHome();
   } catch (err) { msg.textContent = err.message; }
 });
+
+/* ================================================================
+   TV BOARD — the weight-room display. Coach-only: it reads the
+   same coach endpoints as the checklist (today's assignments),
+   the weekly tracker, and testing, and rotates three large-type
+   panels — Today, Leaderboard, Warm-Up. It shows names and
+   performance marks only: no aches-and-pains data is ever
+   fetched or rendered here. A coach signs in on the TV browser
+   once and the session cookie keeps the board live; the board
+   re-fetches its data every few minutes while it is open.
+   ================================================================ */
+const TV_ROTATE_MS = 20000;            /* ~20 seconds per panel */
+const TV_REFRESH_MS = 5 * 60 * 1000;   /* re-fetch every ~5 min */
+const TV_PANEL_NAMES = ['Today', 'Leaderboard', 'Warm-Up'];
+let tvRotateTimer = null;
+let tvRefreshTimer = null;
+let tvWired = false;
+
+/* Today's plan cell, resolved exactly the way the home view does
+   it (the current week is clamped to the season edges). */
+function tvTodayInfo() {
+  if (!state.content) return null;
+  const wk = state.content.weeks.find(w => w.week === currentWeekNum());
+  if (!wk) return null;
+  return dayInfo(wk, DAY_KEYS[(todayLocal().getDay() + 6) % 7]);
+}
+/* Which printed warm-up card fits today, mirroring the "Use on"
+   line printed on each card: the speed card on high and meet
+   days, the circuit card on strength days, the light card on
+   everything else. Null on a rest day. */
+function tvCardIdForToday() {
+  const info = tvTodayInfo();
+  if (!info || info.isOff) return null;
+  if (info.isMeet || info.isHigh) return 'wu-card-2';
+  const main = info.codes.map(c => state.sessions.get(c)).find(Boolean);
+  if (main && main.quality === 'strength') return 'wu-card-3';
+  if (info.warmup && WARMUP_CARD_FOR[info.warmup]) return WARMUP_CARD_FOR[info.warmup];
+  return 'wu-card-1';
+}
+
+/* Leaderboard: each athlete's best mark per metric, merged from
+   the weekly Top Athletes tracker and from testing results —
+   wherever the coach recorded it. Best marks only, top five. */
+const TV_BOARDS = [
+  { title: 'Fly 30m', unit: 'sec', lower: true, weekly: 'fly-30m' },
+  { title: 'Vertical Jump', unit: 'in', weekly: 'vertical-jump', test: 'vertical-jump' },
+  { title: 'Broad Jump', unit: 'in', weekly: 'broad-jump', test: 'broad-jump' },
+  { title: 'Back Squat est. 1RM', unit: 'lb', weekly: 'back-squat-1rm', test: 'back-squat' },
+  { title: 'Hang Clean est. 1RM', unit: 'lb', weekly: 'hang-clean-1rm', test: 'hang-clean' },
+  { title: 'Bench Press est. 1RM', unit: 'lb', weekly: 'bench-press-1rm', test: 'bench-press' },
+  { title: 'Pull-ups', unit: 'reps', test: 'pull-ups' },
+  { title: 'Trap Bar Deadlift est. 1RM', unit: 'lb', test: 'trap-bar-deadlift' },
+  { title: 'Power Clean est. 1RM', unit: 'lb', test: 'power-clean' },
+];
+function tvBoards() {
+  const d = state.tvData;
+  if (!d) return [];
+  const marks = {}; /* board title -> Map(profileId -> {name, value}) */
+  const put = (cfg, id, name, value) => {
+    if (value === null || value === undefined || isNaN(value)) return;
+    const m = (marks[cfg.title] = marks[cfg.title] || new Map());
+    const cur = m.get(id);
+    if (!cur || (cfg.lower ? value < cur.value : value > cur.value)) m.set(id, { name, value });
+  };
+  for (const cfg of TV_BOARDS) {
+    if (cfg.weekly) {
+      for (const t of d.dash.topAthletes || []) {
+        const byWeek = ((d.dash.entries || {})[t.id] || {})[cfg.weekly] || {};
+        const vals = Object.values(byWeek);
+        if (!vals.length) continue;
+        put(cfg, t.id, t.name, cfg.lower ? Math.min(...vals) : Math.max(...vals));
+      }
+    }
+    if (cfg.test) {
+      for (const r of d.results || []) {
+        if (r.testKey !== cfg.test) continue;
+        const pr = state.profiles.find(p => p.id === r.profileId);
+        if (!pr || pr.archived) continue;
+        put(cfg, r.profileId, pr.name, r.display != null ? r.display : r.value);
+      }
+    }
+  }
+  return TV_BOARDS
+    .map(cfg => {
+      const rows = Array.from((marks[cfg.title] || new Map()).values())
+        .sort((a, b) => (cfg.lower ? a.value - b.value : b.value - a.value))
+        .slice(0, 5);
+      return rows.length ? { title: cfg.title, unit: cfg.unit, rows } : null;
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function tvPanelTodayHtml() {
+  const t = state.tvData.today;
+  const dateLine = parseDate(t.date).toLocaleDateString(undefined,
+    { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const weekLine = t.week ? `Week ${t.week} · ${esc(t.phase || '')}` : 'Outside the season plan';
+  let groupsHtml = '';
+  if (t.groups && t.groups.length) {
+    groupsHtml = t.groups.map(g => {
+      const a = g.assignment || {};
+      const sessionLine = a.sessionId
+        ? `<span class="tv-code">${esc(a.sessionId)}</span> ${esc(a.sessionName || '')}`
+        : esc(a.planText || 'Rest day');
+      const meta = [];
+      if (a.warmup) meta.push('Warm-up: ' + esc(a.warmup));
+      if (g.total) meta.push(g.completed + ' of ' + g.total + ' done');
+      if (a.source === 'override') meta.push('Coach\u2019s pick');
+      return `<div class="tv-group">
+        <div class="tv-group-name">${esc(g.group.name)}</div>
+        <div class="tv-group-session">${sessionLine}</div>
+        ${meta.length ? `<div class="tv-group-meta">${meta.join(' · ')}</div>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    /* No groups yet: the plan's own session for today still shows,
+       so the board is useful from day one. */
+    const info = tvTodayInfo();
+    const names = info ? info.codes.map(c => {
+      const s = state.sessions.get(c);
+      return s ? `<span class="tv-code">${esc(c)}</span> ${esc(s.name)}` : esc(c);
+    }).join('<br>') : '';
+    groupsHtml = `<div class="tv-group">
+      <div class="tv-group-name">Today\u2019s session</div>
+      <div class="tv-group-session">${names || esc(t.planText || 'Rest day')}</div>
+      <div class="tv-group-meta">From the season plan — set up groups in Roster &amp; Groups to split this board by group.</div>
+    </div>`;
+  }
+  const cardId = tvCardIdForToday();
+  const cardEl = cardId ? document.getElementById(cardId) : null;
+  const cardH2 = cardEl ? cardEl.querySelector('.wu-title-row h2') : null;
+  const cardTitle = cardH2 ? cardH2.textContent.replace(/\s+/g, ' ').trim() : '';
+  const info = tvTodayInfo();
+  const warmLine = info && info.warmup
+    ? `<div class="tv-warm-line">Warm-up: <strong>${esc(info.warmup)}</strong>${cardTitle ? ' — the ' + esc(cardTitle) + ' card' : ''} · full card on the Warm-Up panel</div>`
+    : '';
+  return `<div class="tv-panel" data-tv-panel="0">
+    <div class="tv-date">${esc(dateLine)}</div>
+    <div class="tv-weekline">${weekLine}</div>
+    <div class="tv-groups">${groupsHtml}</div>
+    ${warmLine}
+  </div>`;
+}
+
+function tvPanelLeaderboardHtml() {
+  const boards = tvBoards();
+  if (!boards.length) {
+    return `<div class="tv-panel" data-tv-panel="1">
+      <h2 class="tv-h">Leaderboard</h2>
+      <div class="tv-empty">
+        <p class="tv-empty-big">Testing results will appear here.</p>
+        <p class="tv-empty-sub">Enter numbers in Testing or Top Athletes and this board fills in — best marks only, top five per lift, jump, and sprint.</p>
+      </div>
+    </div>`;
+  }
+  return `<div class="tv-panel" data-tv-panel="1">
+    <h2 class="tv-h">Leaderboard</h2>
+    <div class="tv-boards">${boards.map(b => `
+      <div class="tv-board">
+        <div class="tv-board-title">${esc(b.title)}</div>
+        ${b.rows.map((r, i) => `<div class="tv-board-row"><span class="tv-rank">${i + 1}</span><span class="tv-board-name">${esc(r.name)}</span><span class="tv-board-mark">${esc(fmtNum(r.value))} ${esc(b.unit)}</span></div>`).join('')}
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function tvPanelWarmupHtml() {
+  return `<div class="tv-panel" data-tv-panel="2">
+    <h2 class="tv-h">Today\u2019s Warm-Up</h2>
+    <div id="tv-warmup-slot"></div>
+  </div>`;
+}
+/* The warm-up panel is the app's own printed card, cloned live —
+   so coach edits to a card (the card editor) show up here too.
+   Buttons and editor chrome are stripped from the clone. */
+function tvFillWarmupClone() {
+  const slot = $('#tv-warmup-slot');
+  if (!slot) return;
+  const cardId = tvCardIdForToday();
+  const src = cardId ? document.getElementById(cardId) : null;
+  if (!src) {
+    slot.innerHTML = `<div class="tv-empty">
+      <p class="tv-empty-big">Rest day — no warm-up today.</p>
+      <p class="tv-empty-sub">The right card appears here automatically on training days.</p>
+    </div>`;
+    return;
+  }
+  const clone = src.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  clone.querySelectorAll('.wu-edit-ui, [data-print-card]').forEach(n => n.remove());
+  clone.classList.add('tv-wu-clone');
+  slot.appendChild(clone);
+}
+
+async function renderTvBoard() {
+  const el = $('#tv-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The weight-room TV board lives here.'); return; }
+  try {
+    const [today, dash, testsR, resultsR] = await Promise.all([
+      api('/api/coach/today'),
+      api('/api/weekly/dashboard').catch(() => ({ topAthletes: [], metrics: [], entries: {} })),
+      api('/api/tests').catch(() => ({ tests: [] })),
+      api('/api/results').catch(() => ({ results: [] })),
+    ]);
+    await refreshProfiles();
+    state.tvData = { today, dash, tests: testsR.tests || [], results: resultsR.results || [] };
+  } catch (_) {
+    /* A failed refresh keeps the last good board on screen. */
+    if (!state.tvData) {
+      el.innerHTML = `<div class="tv-empty">
+        <p class="tv-empty-big">The board could not load.</p>
+        <p class="tv-empty-sub">Check the connection — it retries on its own every few minutes.</p>
+      </div>`;
+      return;
+    }
+  }
+  drawTvBoard();
+}
+function drawTvBoard() {
+  const el = $('#tv-main');
+  if (!el || !state.tvData) return;
+  el.innerHTML = tvPanelTodayHtml() + tvPanelLeaderboardHtml() + tvPanelWarmupHtml();
+  tvFillWarmupClone();
+  tvWireControls();
+  drawTvPanels();
+  tvUpdateClock();
+}
+function drawTvPanels() {
+  $$('#tv-main .tv-panel').forEach(p => {
+    p.classList.toggle('active', Number(p.dataset.tvPanel) === state.tvPanel);
+  });
+  const dots = $('#tv-dots');
+  if (dots) {
+    dots.innerHTML = TV_PANEL_NAMES.map((n, i) =>
+      `<button type="button" class="tv-dot${i === state.tvPanel ? ' active' : ''}" data-tv-dot="${i}">${n}</button>`).join('');
+    dots.querySelectorAll('[data-tv-dot]').forEach(b => b.addEventListener('click', () => {
+      state.tvPanel = Number(b.dataset.tvDot);
+      state.tvPaused = true; tvSyncPauseBtn(); drawTvPanels();
+    }));
+  }
+}
+function tvSetPanel(i) { state.tvPanel = ((i % 3) + 3) % 3; drawTvPanels(); }
+function tvAdvance(dir) { tvSetPanel(state.tvPanel + dir); }
+function tvUpdateClock() {
+  const c = $('#tv-clock');
+  if (c) c.textContent = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+function tvSyncPauseBtn() {
+  const b = $('#tv-pause');
+  if (b) b.textContent = state.tvPaused ? 'Resume rotation' : 'Pause';
+}
+function tvWireControls() {
+  if (tvWired) return;
+  tvWired = true;
+  const exit = $('#tv-exit');
+  if (exit) exit.addEventListener('click', () => showView('coachhub'));
+  const prev = $('#tv-prev');
+  if (prev) prev.addEventListener('click', () => { state.tvPaused = true; tvSyncPauseBtn(); tvAdvance(-1); });
+  const next = $('#tv-next');
+  if (next) next.addEventListener('click', () => { state.tvPaused = true; tvSyncPauseBtn(); tvAdvance(1); });
+  const pause = $('#tv-pause');
+  if (pause) pause.addEventListener('click', () => { state.tvPaused = !state.tvPaused; tvSyncPauseBtn(); });
+  const full = $('#tv-full');
+  if (full) full.addEventListener('click', () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    } catch (_) { /* full screen is a nicety, never an error */ }
+  });
+  /* A tap anywhere on the panels pauses the rotation, so a coach
+     can hold a panel up while the room reads it. */
+  const view = $('#view-tv');
+  if (view) view.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.tv-bottom') || e.target.closest('.tv-top')) return;
+    if (!state.tvPaused) { state.tvPaused = true; tvSyncPauseBtn(); }
+  });
+}
+function enterTvBoard() {
+  state.tvPaused = false;
+  tvSyncPauseBtn();
+  renderTvBoard();
+  tvStartTimers();
+}
+function exitTvBoard() { tvStopTimers(); }
+function tvStartTimers() {
+  tvStopTimers();
+  /* Reduced motion: no auto-rotation at all — panels move only
+     when someone taps Prev / Next or a panel name. */
+  if (!prefersReducedMotion) {
+    tvRotateTimer = setInterval(() => {
+      if (!state.tvPaused) tvAdvance(1);
+      tvUpdateClock();
+    }, TV_ROTATE_MS);
+  }
+  tvRefreshTimer = setInterval(() => { renderTvBoard(); }, TV_REFRESH_MS);
+}
+function tvStopTimers() {
+  if (tvRotateTimer) { clearInterval(tvRotateTimer); tvRotateTimer = null; }
+  if (tvRefreshTimer) { clearInterval(tvRefreshTimer); tvRefreshTimer = null; }
+}
 
 /* ---------------- boot ---------------- */
 (async function boot() {

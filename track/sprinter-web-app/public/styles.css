@@ -1633,6 +1633,112 @@ svg.chart { width: 100%; height: auto; display: block; }
 .nu-list { margin: 0; padding-left: 20px; }
 .nu-list li { padding: 3.5px 0; }
 
+/* ================================================================
+   TV board: the full-screen weight-room display (coach-only).
+   Dark and high contrast with very large type — headings 40px+
+   and body 24px+ at 1080p — and it degrades to a scrollable,
+   still-large layout on smaller screens.
+   ================================================================ */
+body.tv-mode { background: #101216; padding-bottom: 0; }
+body.tv-mode .topbar,
+body.tv-mode .tabbar,
+body.tv-mode .footer { display: none !important; }
+body.tv-mode main { max-width: none; margin: 0; padding: 0; }
+body.tv-mode #view-tv.active {
+  position: fixed; inset: 0; z-index: 80;
+  background: #101216; color: #f2f3f5;
+}
+.tv-shell { display: flex; flex-direction: column; height: 100%; }
+.tv-top {
+  flex: none; display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 16px 32px; border-bottom: 4px solid var(--red);
+}
+.tv-brand { font-size: 20px; font-weight: 800; letter-spacing: .02em; color: #fff; }
+.tv-brand span { color: var(--gray); font-weight: 600; }
+.tv-top-right { display: flex; align-items: center; gap: 18px; }
+.tv-clock { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.btn.tv-exit, .btn.tv-ctl {
+  background: #1d2026; border: 1px solid #3a3f47; color: #f2f3f5;
+  font-size: 17px; padding: 10px 18px; min-height: 48px; width: auto;
+}
+.btn.tv-exit { background: var(--red); border-color: var(--red); font-weight: 700; }
+.tv-main { flex: 1; position: relative; min-height: 0; }
+.tv-loading { font-size: 26px; color: var(--gray); padding: 40px 44px; }
+.tv-panel { position: absolute; inset: 0; padding: 30px 44px; overflow-y: auto; display: none; }
+.tv-panel.active { display: block; }
+.tv-h { font-size: max(42px, 3.4vw); margin: 0 0 22px; color: #fff; }
+.tv-date { font-size: max(44px, 3.8vw); font-weight: 800; line-height: 1.1; color: #fff; }
+.tv-weekline { font-size: max(26px, 2vw); color: var(--gray); font-weight: 700; margin: 10px 0 28px; }
+.tv-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(430px, 100%), 1fr)); gap: 20px; }
+.tv-group {
+  background: #1a1d22; border: 1px solid #2c313a; border-top: 6px solid var(--red);
+  border-radius: 14px; padding: 22px 26px;
+}
+.tv-group-name { font-size: max(32px, 2.6vw); font-weight: 800; color: #fff; margin-bottom: 8px; }
+.tv-group-session { font-size: max(26px, 2.1vw); line-height: 1.35; }
+.tv-code { color: #ff7086; font-weight: 800; }
+.tv-group-meta { font-size: max(21px, 1.6vw); color: var(--gray); margin-top: 12px; font-weight: 600; }
+.tv-warm-line { font-size: max(24px, 1.9vw); margin-top: 30px; }
+.tv-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr)); gap: 20px; }
+.tv-board {
+  background: #1a1d22; border: 1px solid #2c313a; border-top: 6px solid var(--red);
+  border-radius: 14px; padding: 18px 24px 12px;
+}
+.tv-board-title { font-size: max(27px, 2.1vw); font-weight: 800; color: #fff; margin-bottom: 8px; }
+.tv-board-row {
+  display: flex; align-items: baseline; gap: 14px;
+  padding: 7px 0; border-top: 1px solid #2c313a; font-size: max(24px, 1.9vw);
+}
+.tv-rank { font-weight: 800; color: #ff7086; min-width: 1.1em; }
+.tv-board-name { flex: 1; min-width: 0; }
+.tv-board-mark { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tv-empty { padding: 7vh 0; text-align: center; }
+.tv-empty-big { font-size: max(38px, 3.4vw); font-weight: 800; color: #fff; margin: 0; }
+.tv-empty-sub { font-size: max(23px, 1.8vw); color: var(--gray); max-width: 920px; margin: 16px auto 0; }
+.tv-bottom {
+  flex: none; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid #2c313a; background: #14161a;
+}
+.tv-dots { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.tv-dot {
+  border: 1px solid #3a3f47; background: #1d2026; color: #c9ccd1;
+  border-radius: 999px; padding: 10px 18px; font-size: 16px; font-weight: 700;
+  cursor: pointer; min-height: 48px;
+}
+.tv-dot.active { background: var(--red); border-color: var(--red); color: #fff; }
+/* The warm-up panel is the printed card itself, cloned live and
+   scaled up — its own white card keeps full contrast on the dark
+   board, and coach card edits show because the clone is live. */
+.tv-wu-clone { max-width: none; margin: 0; padding: 26px 30px; font-size: 20px; }
+.tv-wu-clone .wu-brand { font-size: 14px; }
+.tv-wu-clone h2 { font-size: 46px; }
+.tv-wu-clone .wu-num { font-size: 19px; }
+.tv-wu-clone .wu-sub { font-size: 19px; }
+.tv-wu-clone .wu-time strong { font-size: 34px; }
+.tv-wu-clone .wu-time span { font-size: 13px; }
+.tv-wu-clone .wu-tags span { font-size: 13.5px; padding: 4px 11px; }
+.tv-wu-clone .wu-sec h3 { font-size: 23px; }
+.tv-wu-clone .wu-sec h3 em { font-size: 17px; }
+.tv-wu-clone .wu-step { width: 32px; height: 32px; font-size: 18px; }
+.tv-wu-clone .wu-list li { padding: 6px 0 6px 30px; }
+.tv-wu-clone .wu-list li::before { top: 12px; }
+.tv-wu-clone .wu-foot { font-size: 14px; }
+@media (min-width: 1100px) {
+  .tv-wu-clone { display: grid; grid-template-columns: 1fr 1fr; column-gap: 38px; align-items: start; }
+  .tv-wu-clone .wu-head,
+  .tv-wu-clone .wu-rule,
+  .tv-wu-clone .wu-coach,
+  .tv-wu-clone .wu-foot { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .tv-top { padding: 12px 16px; }
+  .tv-brand { font-size: 15px; }
+  .tv-brand span { display: block; }
+  .tv-clock { font-size: 24px; }
+  .tv-panel { padding: 20px 16px; }
+}
+
 /* Print: one warm-up card per Letter page, nothing else */
 @media print {
   body.printing-card .topbar,

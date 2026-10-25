@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v12',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v12"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v13',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v13"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1011,6 +1011,49 @@ async function main() {
   r = await api(coach, 'PUT', '/api/coach/warmup-cards/wu-card-1', wuEdit1);
   check('coach re-saves the card 1 edit for the restart check', r.status === 200, r.status);
 
+  /* ---------------- TV board (weight-room display) ----------------
+     A coach-only display view that is a pure client of the existing
+     coach endpoints — it adds no server surface — so the checks
+     cover the served page/JS wiring, the gates on the endpoints it
+     reads, and the hard privacy rule: its render path never touches
+     the aches-and-pains data. */
+  check('TV board view is in the served page',
+    pageHtml.text.includes('id="view-tv"') && pageHtml.text.includes('id="tv-main"') &&
+    pageHtml.text.includes('id="tv-exit"') && pageHtml.text.includes('Exit TV board'));
+  check('TV board is reachable from the Coach hub and the coach sub-nav',
+    pageHtml.text.includes('data-view="tv"') && appJs.text.includes("['tv', 'TV Board']") &&
+    appJs.text.includes("tv: 'coachhub'"));
+  check('TV board entry button is on the coach checklist view',
+    appJs.text.includes('coach-open-tv') && appJs.text.includes("showView('tv')"));
+  const tvStart = appJs.text.indexOf('TV BOARD');
+  const tvEnd = appJs.text.indexOf('/* ---------------- boot', tvStart);
+  const tvCode = tvStart >= 0 && tvEnd > tvStart ? appJs.text.slice(tvStart, tvEnd) : '';
+  check('TV board code block is present in the served JS', tvCode.length > 500, tvCode.length);
+  check('TV board reads the coach today, weekly dashboard, tests and results endpoints',
+    tvCode.includes('/api/coach/today') && tvCode.includes('/api/weekly/dashboard') &&
+    tvCode.includes('/api/tests') && tvCode.includes('/api/results'));
+  check('TV board render path never references aches-and-pains data',
+    !tvCode.toLowerCase().includes('concern') && !tvCode.includes('healthFlags'));
+  check('TV board rotates panels (~20s) and pauses on interaction',
+    tvCode.includes('TV_ROTATE_MS = 20000') && tvCode.includes('setInterval') &&
+    tvCode.includes('tvPaused') && tvCode.includes('pointerdown'));
+  check('TV board honors reduced motion (no auto-rotation)',
+    tvCode.includes('prefersReducedMotion'));
+  check('TV board re-fetches its data about every 5 minutes',
+    tvCode.includes('TV_REFRESH_MS = 5 * 60 * 1000'));
+  check('TV board warm-up panel clones the live printed card (coach edits included)',
+    tvCode.includes('cloneNode') && tvCode.includes('tvCardIdForToday'));
+  check('TV board leaderboard has the empty-state placeholder',
+    tvCode.includes('Testing results will appear here'));
+  r = await api(coach, 'GET', '/api/results');
+  check('TV board data source: coach can read all results',
+    r.status === 200 && Array.isArray(r.json.results) && r.json.results.length >= 1,
+    r.json && r.json.results && r.json.results.length);
+  r = await api(athlete, 'GET', '/api/results');
+  check('athlete is 403 on the results the TV board reads', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/results');
+  check('results without login is 401', r.status === 401, r.status);
+
   return { coach, inventoryId: invBlocks };
 }
 
@@ -1127,6 +1170,21 @@ async function waitForServer(tries = 60) {
           sr.json && sr.json.invites);
         check('seeded list has no duplicates after restart',
           sr.status === 200 && (sr.json.invites || []).length === 1, sr.json && sr.json.invites);
+        /* TV board empty state, data layer: on a fresh store the
+           board's sources are empty (leaderboard placeholder), while
+           the plan-based Today panel still resolves a season week. */
+        sr = await seedApi(seedOwner2, 'GET', '/api/weekly/dashboard');
+        check('fresh store: TV board weekly source is empty',
+          sr.status === 200 && Array.isArray(sr.json.topAthletes) && sr.json.topAthletes.length === 0 &&
+          Object.keys(sr.json.entries || {}).length === 0, sr.json && sr.json.topAthletes);
+        sr = await seedApi(seedOwner2, 'GET', '/api/results');
+        check('fresh store: TV board results source is empty',
+          sr.status === 200 && Array.isArray(sr.json.results) && sr.json.results.length === 0,
+          sr.json && sr.json.results && sr.json.results.length);
+        sr = await seedApi(seedOwner2, 'GET', '/api/coach/today');
+        check('fresh store: TV board today source still returns the plan day',
+          sr.status === 200 && Number.isInteger(sr.json.week) && Array.isArray(sr.json.groups) &&
+          sr.json.groups.length === 0, sr.json && sr.json.week);
         sr = await seedApi(null, 'POST', '/api/register', { email: 'second@test.com', password: 'testpass123' });
         check('registering a removed seeded invite is athlete', sr.status === 201 && sr.json.role === 'athlete', sr.json);
       } finally {

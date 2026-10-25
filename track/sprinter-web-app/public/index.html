@@ -135,6 +135,7 @@
     <p class="view-sub muted">Coach tools only — athletes never see this section. Everything for running the team lives here.</p>
     <div class="menu-list">
       <button type="button" class="menu-item" data-view="coach">Today's Checklist <span>Each group's workout for the day, with check-offs</span></button>
+      <button type="button" class="menu-item" data-view="tv">TV Board <span>The weight-room display: today, the leaderboard, and the warm-up</span></button>
       <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
       <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
       <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
@@ -643,6 +644,27 @@
     <p class="view-sub muted">Log in or create an account. Coaches manage coach accounts and assistant-coach invites here.</p>
     <p class="muted" id="menu-account-note">Log in or create an account</p>
     <div id="account-main"></div>
+  </section>
+
+  <!-- TV BOARD (coach-only weight-room display) -->
+  <section id="view-tv" class="view">
+    <div class="tv-shell">
+      <div class="tv-top">
+        <div class="tv-brand">ST. JOHN'S COLLEGE HIGH SCHOOL <span>CADETS TRACK &amp; FIELD — WEIGHT ROOM</span></div>
+        <div class="tv-top-right">
+          <div class="tv-clock" id="tv-clock"></div>
+          <button class="btn tv-exit" id="tv-exit" type="button">Exit TV board</button>
+        </div>
+      </div>
+      <div id="tv-main" class="tv-main"><p class="tv-loading">Loading the board…</p></div>
+      <div class="tv-bottom">
+        <button class="btn tv-ctl" id="tv-prev" type="button">← Prev</button>
+        <div class="tv-dots" id="tv-dots"></div>
+        <button class="btn tv-ctl" id="tv-pause" type="button">Pause</button>
+        <button class="btn tv-ctl" id="tv-next" type="button">Next →</button>
+        <button class="btn tv-ctl" id="tv-full" type="button">Full screen</button>
+      </div>
+    </div>
   </section>
 </main>
 
