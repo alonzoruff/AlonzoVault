@@ -3439,6 +3439,34 @@ async function handleApi(req, res, url) {
         byTestCount.set(r.testKey, (byTestCount.get(r.testKey) || 0) + 1);
       }
     }
+    /* Goals achieved that week: a goal counts when it stands
+       achieved (goalProgressFor, the tracker's own definition) and
+       the first result that carried the athlete's running best to
+       the target is dated inside this week. */
+    let goalsAchieved = null;
+    if (Array.isArray(db.goals)) {
+      goalsAchieved = [];
+      for (const g of db.goals) {
+        if (!goalProgressFor(g).achieved) continue;
+        const ev = findMeetEvent(g.event);
+        const series = meetSeriesFor(g.profileId).find(s => s.event === g.event);
+        if (!ev || !series) continue;
+        let best = null, hit = null;
+        for (const pt of series.points) {
+          if (best === null || (ev.type === 'time' ? pt.value < best : pt.value > best)) best = pt.value;
+          if (ev.type === 'time' ? best <= g.targetValue : best >= g.targetValue) { hit = pt; break; }
+        }
+        if (hit && inWeek(hit.date)) {
+          const prof = profileById(g.profileId);
+          goalsAchieved.push({
+            profileId: g.profileId,
+            athleteName: prof ? prof.firstName + ' ' + prof.lastName : '',
+            event: g.event, eventName: ev.name,
+            target: g.targetText, mark: hit.mark, date: hit.date, meet: hit.meet,
+          });
+        }
+      }
+    }
     const performance = {
       meetResults: { count: weekResults.length, prs },
       testing: {
@@ -3446,6 +3474,7 @@ async function handleApi(req, res, url) {
         byTest: allTests().filter(t => byTestCount.has(t.key))
           .map(t => ({ testKey: t.key, name: t.name, unit: t.unit, count: byTestCount.get(t.key) })),
       },
+      goalsAchieved,
     };
 
     /* --- health: concerns opened that week (createdAt), concerns

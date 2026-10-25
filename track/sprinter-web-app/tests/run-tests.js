@@ -230,7 +230,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is bumped to v21',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v21"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v22"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -2511,6 +2511,22 @@ async function waitForServer(tries = 60) {
         const amy100 = dperf.meetResults.prs.find(pr => pr.profileId === amyP.id && pr.event === '100m');
         check('digest performance: a PR off a deep board is not flagged',
           !!amy100 && amy100.recordBoard === false && amy100.recordRank === 11, amy100);
+
+        /* Goals: amy's 200m target falls inside W2 (the 22.40);
+           ben's fell the week before (his 24.00 on Oct 31). */
+        await dApi(dCoach, 'POST', '/api/goals', { profileId: amyP.id, event: '200m', target: '22.50' });
+        await dApi(dCoach, 'POST', '/api/goals', { profileId: benP.id, event: '200m', target: '24.50' });
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + W2);
+        const dGoals = dr.json.performance.goalsAchieved;
+        check('digest performance: goals achieved that week, dated by the achieving result',
+          Array.isArray(dGoals) && dGoals.length === 1 && dGoals[0].profileId === amyP.id &&
+          dGoals[0].event === '200m' && dGoals[0].mark === '22.40' && dGoals[0].date === '2026-11-07',
+          dGoals);
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=2026-10-26');
+        const dGoals1 = dr.json.performance.goalsAchieved;
+        check('digest performance: last week owns the goal that fell then, not this week\u2019s',
+          Array.isArray(dGoals1) && dGoals1.length === 1 && dGoals1[0].profileId === benP.id &&
+          dGoals1[0].date === '2026-10-31', dGoals1);
 
         /* --- testing entered this week (server timestamps) --- */
         dr = await dApi(dCoach, 'POST', '/api/test-days', { date: lastMon, title: 'Digest Test Day', testKeys: ['vertical-jump', 'broad-jump'] });

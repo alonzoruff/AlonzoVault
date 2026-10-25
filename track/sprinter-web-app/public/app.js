@@ -3276,8 +3276,12 @@ async function renderDigest() {
   const testHtml = perf.testing.total
     ? `<p>${perf.testing.byTest.map(t => `<strong>${t.count}</strong> × ${esc(t.name)}`).join(' · ')} entered this week.</p>`
     : '';
-  const perfHtml = (perf.meetResults.count || perf.testing.total)
-    ? `<p class="muted">${perf.meetResults.count} meet result${perf.meetResults.count === 1 ? '' : 's'} recorded this week${perf.meetResults.prs.length ? `, ${perf.meetResults.prs.length} standing as PRs` : ''}.</p>${prHtml}${testHtml}`
+  const goalsHtml = (perf.goalsAchieved && perf.goalsAchieved.length)
+    ? `<p><strong>Goals hit this week:</strong></p><ul class="digest-list">${perf.goalsAchieved.map(g =>
+      `<li><strong>${esc(g.athleteName)}</strong> — ${esc(g.eventName)} goal of ${esc(g.target)} reached with <strong>${esc(g.mark)}</strong> (${esc(g.meet)}, ${esc(g.date)})</li>`).join('')}</ul>`
+    : '';
+  const perfHtml = (perf.meetResults.count || perf.testing.total || goalsHtml)
+    ? `<p class="muted">${perf.meetResults.count} meet result${perf.meetResults.count === 1 ? '' : 's'} recorded this week${perf.meetResults.prs.length ? `, ${perf.meetResults.prs.length} standing as PRs` : ''}.</p>${prHtml}${testHtml}${goalsHtml}`
     : '<p class="muted">No meet results or testing entered that week.</p>';
   const h = data.health;
   const healthHtml = `<div class="hero-stats">
