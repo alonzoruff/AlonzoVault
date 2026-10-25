@@ -433,8 +433,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v37',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v37"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v38',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v38"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2118,16 +2118,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v37'") &&
-    swJs.text.includes("sprinter-app-v37"));
+    appJs.text.includes("const APP_VERSION = 'v38'") &&
+    swJs.text.includes("sprinter-app-v38"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v37"') &&
-    pageHtml.text.includes('Cadets Sprint · App v37') &&
+    pageHtml.text.includes('data-app-version="v38"') &&
+    pageHtml.text.includes('Cadets Sprint · App v38') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
@@ -4513,6 +4513,301 @@ async function waitForServer(tries = 60) {
       } finally {
         dChild.kill('SIGKILL');
         fs.rmSync(D_DIR, { recursive: true, force: true });
+      }
+    }
+
+    /* Team leaderboard: a fresh store with exact fixtures — six
+       athletes deep on one test (top-5 truncation), a timed custom
+       test and ForceDecks-labeled tests (direction both ways), a
+       one-athlete test and event (no board under the >=2 gate),
+       meet PRs in a time event and a field event, and school
+       records set to an exact match (tags) and a quarter-inch
+       near miss (does not). The endpoint is computed, not stored,
+       so there is no persistence case to restart for. */
+    {
+      const LB_BASE = 'http://127.0.0.1:3221';
+      const lbApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+        const res = await fetch(LB_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const lbText = async (p) => {
+        const res = await fetch(LB_BASE + p);
+        return { status: res.status, text: await res.text() };
+      };
+      const LB_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-leaderboard-'));
+      let lbLog = '';
+      const lbChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+        env: Object.assign({}, process.env, {
+          PORT: '3221', DATA_DIR: LB_DIR, SESSION_SECRET: 'leaderboard-secret',
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      lbChild.stdout.on('data', d => { lbLog += d; });
+      lbChild.stderr.on('data', d => { lbLog += d; });
+      const waitLb = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(LB_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      try {
+        check('leaderboard server starts', await waitLb(), lbLog);
+
+        /* Served wiring (the shell is the same files on any store). */
+        const lbPage = await lbText('/');
+        check('leaderboard view is in the served page',
+          lbPage.status === 200 && lbPage.text.includes('id="view-leaderboard"') &&
+          lbPage.text.includes('id="leaderboard-main"') && lbPage.text.includes('data-view="leaderboard"'));
+        const lbJs = await lbText('/app.js');
+        check('leaderboard wiring is in the served JS (nav, sub-nav, render, endpoint)',
+          lbJs.status === 200 && lbJs.text.includes('renderLeaderboard') &&
+          lbJs.text.includes('/api/leaderboard') && lbJs.text.includes("['leaderboard', 'Leaderboard']") &&
+          lbJs.text.includes("leaderboard: 'train'") && lbJs.text.includes('Leaderboards appear once at least two athletes have results.'));
+        const lbTvStart = lbJs.text.indexOf('TV BOARD');
+        const lbTvEnd = lbJs.text.indexOf('/* ---------------- boot', lbTvStart);
+        const lbTvCode = lbTvStart >= 0 && lbTvEnd > lbTvStart ? lbJs.text.slice(lbTvStart, lbTvEnd) : '';
+        check('TV board render path stays free of the leaderboard',
+          lbTvCode.length > 500 && !lbTvCode.toLowerCase().includes('leaderboard') &&
+          !lbTvCode.includes('/api/leaderboard'), lbTvCode.length);
+
+        /* Accounts: the coach, then two athletes linked below. */
+        let lr = await lbApi(null, 'POST', '/api/register', { email: 'lcoach@test.com', password: 'testpass123' });
+        check('leaderboard store: first account is coach', lr.status === 201 && lr.json.role === 'coach', lr.json);
+        const lbCoach = cookieOf(lr);
+        lr = await lbApi(null, 'POST', '/api/register', { email: 'lia@test.com', password: 'testpass123' });
+        const lbLia = cookieOf(lr);
+        lr = await lbApi(null, 'POST', '/api/register', { email: 'max@test.com', password: 'testpass123' });
+        const lbMax = cookieOf(lr);
+
+        /* Auth + the empty state + the read-only surface. */
+        lr = await lbApi(null, 'GET', '/api/leaderboard');
+        check('leaderboard without login is 401', lr.status === 401, lr.status);
+        lr = await lbApi(lbCoach, 'GET', '/api/leaderboard');
+        check('leaderboard starts empty (no board qualifies yet)',
+          lr.status === 200 && Array.isArray(lr.json.testing) && lr.json.testing.length === 0 &&
+          Array.isArray(lr.json.meets) && lr.json.meets.length === 0, lr.json);
+        lr = await lbApi(lbLia, 'GET', '/api/leaderboard');
+        check('leaderboard is 200 for an athlete too', lr.status === 200, lr.status);
+        lr = await lbApi(lbLia, 'POST', '/api/leaderboard', {});
+        check('leaderboard write attempt by an athlete is 403 (read-only)', lr.status === 403, lr.status);
+        lr = await lbApi(lbCoach, 'POST', '/api/leaderboard', {});
+        check('leaderboard write attempt by a coach is 404 (no write side at all)', lr.status === 404, lr.status);
+
+        /* Roster fixtures. */
+        const mkProfile = async (firstName, lastName) => {
+          const pr = await lbApi(lbCoach, 'POST', '/api/profiles', { firstName, lastName, events: ['sprinter'] });
+          return pr.json.profile;
+        };
+        const liaP = await mkProfile('Lia', 'Leader');
+        const maxP = await mkProfile('Max', 'Second');
+        const pamP = await mkProfile('Pam', 'Third');
+        const quinnP = await mkProfile('Quinn', 'Fourth');
+        const rajP = await mkProfile('Raj', 'Fifth');
+        const sidP = await mkProfile('Sid', 'Sixth');
+        const tomP = await mkProfile('Tom', 'Solo');
+        check('leaderboard fixtures: seven profiles created',
+          [liaP, maxP, pamP, quinnP, rajP, sidP, tomP].every(p => p && p.id));
+        await lbApi(lbCoach, 'PUT', '/api/profiles/' + liaP.id + '/link', { email: 'lia@test.com' });
+        await lbApi(lbCoach, 'PUT', '/api/profiles/' + maxP.id + '/link', { email: 'max@test.com' });
+
+        /* A timed custom test (unit sec -> lower is better). */
+        lr = await lbApi(lbCoach, 'POST', '/api/tests', { name: '30m Sprint', unit: 'sec' });
+        check('leaderboard fixtures: timed custom test is lower-better',
+          lr.status === 201 && lr.json.test.better === 'lower', lr.json);
+        const sprintKey = lr.json.test.key;
+
+        /* Test day A: six deep on vertical jump, three on the
+           sprint and the bench, one on pull-ups. */
+        lr = await lbApi(lbCoach, 'POST', '/api/test-days', {
+          date: '2026-11-02', title: 'Leaderboard Day A',
+          testKeys: ['vertical-jump', sprintKey, 'bench-press', 'pull-ups'],
+        });
+        const lbDayA = lr.json.testDay.id;
+        const postResult = (profileId, testDayId, testKey, fields) =>
+          lbApi(lbCoach, 'POST', '/api/results', Object.assign({ profileId, testDayId, testKey }, fields));
+        const vjA = [[liaP, 28], [maxP, 26], [pamP, 25], [quinnP, 24], [rajP, 23], [sidP, 22]];
+        for (const [p, v] of vjA) await postResult(p.id, lbDayA, 'vertical-jump', { value: v });
+        await postResult(liaP.id, lbDayA, sprintKey, { value: 4.5 });
+        await postResult(maxP.id, lbDayA, sprintKey, { value: 4.2 });
+        await postResult(pamP.id, lbDayA, sprintKey, { value: 4.8 });
+        await postResult(liaP.id, lbDayA, 'bench-press', { weight: 100, reps: 1 });
+        await postResult(maxP.id, lbDayA, 'bench-press', { weight: 150 });
+        await postResult(tomP.id, lbDayA, 'pull-ups', { value: 12 });
+
+        /* Test day B: a later, weaker jump for Lia (her best stays
+           on day A) and a better one for Max (his best moves). */
+        lr = await lbApi(lbCoach, 'POST', '/api/test-days', {
+          date: '2026-12-01', title: 'Leaderboard Day B', testKeys: ['vertical-jump'],
+        });
+        const lbDayB = lr.json.testDay.id;
+        await postResult(liaP.id, lbDayB, 'vertical-jump', { value: 27 });
+        await postResult(maxP.id, lbDayB, 'vertical-jump', { value: 26.5 });
+
+        /* Device-labeled tests, filed the real way (ForceDecks
+           commit): jump height reads higher-better, the asymmetry
+           metric lower-better, two athletes deep. */
+        lr = await lbApi(lbCoach, 'POST', '/api/devices/forcedecks/commit', {
+          rows: [
+            { profileId: liaP.id, date: '2026-11-05', metrics: { 'Jump Height (cm)': 55, 'Asymmetry (%)': 12 } },
+            { profileId: maxP.id, date: '2026-11-05', metrics: { 'Jump Height (cm)': 60, 'Asymmetry (%)': 8 } },
+          ],
+        });
+        check('leaderboard fixtures: forcedecks commit files both rows',
+          lr.status === 200 && lr.json.filed === 2 && lr.json.results === 4, lr.json);
+
+        /* Meet results: a time event, a field event, and a
+           one-athlete event that must not produce a board. */
+        const postMeet = (profileId, date, meet, event, mark) =>
+          lbApi(lbCoach, 'POST', '/api/meet-results', { profileId, date, meet, event, mark });
+        await postMeet(liaP.id, '2026-11-20', 'Early Bird', '100m', '11.30');
+        await postMeet(liaP.id, '2026-12-05', 'Opener', '100m', '10.90');
+        await postMeet(maxP.id, '2026-12-05', 'Opener', '100m', '11.20');
+        await postMeet(pamP.id, '2026-12-05', 'Opener', '100m', '11.50');
+        await postMeet(maxP.id, '2026-12-05', 'Opener', 'long-jump', '21-06');
+        await postMeet(liaP.id, '2026-12-05', 'Opener', 'long-jump', '20-00');
+        await postMeet(tomP.id, '2026-12-05', 'Opener', 'long-jump', '19-00');
+        await postMeet(liaP.id, '2026-12-05', 'Opener', '400m', '55.00');
+
+        /* School records: an EXACT match for the 100m leader
+           (tags) and a quarter-inch near miss in the long jump
+           (must not tag). */
+        lr = await lbApi(lbCoach, 'POST', '/api/records', { event: '100m', name: 'Past Cadet', mark: '10.90', year: 2001, meet: 'States' });
+        check('leaderboard fixtures: 100m record posts', lr.status === 201, lr.status);
+        lr = await lbApi(lbCoach, 'POST', '/api/records', { event: 'long-jump', name: 'Past Cadet', mark: '21-06.5', year: 1999, meet: 'States' });
+        check('leaderboard fixtures: long jump record posts', lr.status === 201, lr.status);
+
+        /* --- the boards --- */
+        lr = await lbApi(lbCoach, 'GET', '/api/leaderboard');
+        check('leaderboard computes for the coach', lr.status === 200, lr.status);
+        const lb = lr.json;
+        const tBoard = (key) => lb.testing.find(b => b.testKey === key);
+        const mBoard = (key) => lb.meets.find(b => b.event === key);
+
+        check('testing boards come in canonical test order (defaults, then customs in creation order)',
+          JSON.stringify(lb.testing.map(b => b.name)) ===
+          JSON.stringify(['Bench Press', 'Vertical Jump', '30m Sprint', 'ForceDecks · Jump Height (cm)', 'ForceDecks · Asymmetry (%)']),
+          lb.testing.map(b => b.name));
+        check('meet boards come in canonical event order',
+          JSON.stringify(lb.meets.map(b => b.event)) === JSON.stringify(['100m', 'long-jump']),
+          lb.meets.map(b => b.event));
+
+        const vj = tBoard('vertical-jump');
+        check('vertical jump board: top 5 of 6 athletes, best marks ranked high-to-low',
+          !!vj && vj.leaders.length === 5 &&
+          vj.leaders.map(e => e.name).join('|') === 'Lia Leader|Max Second|Pam Third|Quinn Fourth|Raj Fifth' &&
+          vj.leaders.map(e => e.value).join('|') === '28|26.5|25|24|23' &&
+          vj.leaders.map(e => e.rank).join('|') === '1|2|3|4|5',
+          vj && vj.leaders);
+        check('vertical jump board: the 6th athlete is truncated off',
+          !!vj && !vj.leaders.some(e => e.profileId === sidP.id), vj && vj.leaders.map(e => e.name));
+        check('best-mark selection: Lia keeps her day-A best (28) over a later 27, with day A\'s date',
+          !!vj && vj.leaders[0].profileId === liaP.id && vj.leaders[0].value === 28 &&
+          vj.leaders[0].testDayDate === '2026-11-02', vj && vj.leaders[0]);
+        check('best-mark selection: Max\'s best moves to day B (26.5) with day B\'s date',
+          !!vj && vj.leaders[1].profileId === maxP.id && vj.leaders[1].value === 26.5 &&
+          vj.leaders[1].testDayDate === '2026-12-01', vj && vj.leaders[1]);
+
+        const sprint = tBoard(sprintKey);
+        check('timed custom test ranks lower-is-better (4.2 beats 4.5 beats 4.8)',
+          !!sprint && sprint.better === 'lower' &&
+          sprint.leaders.map(e => e.name).join('|') === 'Max Second|Lia Leader|Pam Third' &&
+          sprint.leaders.map(e => e.value).join('|') === '4.2|4.5|4.8',
+          sprint && sprint.leaders);
+        const bench = tBoard('bench-press');
+        check('lift board ranks by the shared display value (est. 1RM: 150 over 103)',
+          !!bench && bench.leaders.length === 2 &&
+          bench.leaders[0].profileId === maxP.id && bench.leaders[0].value === 150 &&
+          bench.leaders[1].profileId === liaP.id && bench.leaders[1].value === 103,
+          bench && bench.leaders);
+        const fdJump = lb.testing.find(b => b.name === 'ForceDecks · Jump Height (cm)');
+        check('device test board: ForceDecks jump height ranks higher-is-better',
+          !!fdJump && fdJump.leaders.length === 2 &&
+          fdJump.leaders[0].profileId === maxP.id && fdJump.leaders[0].value === 60 &&
+          fdJump.leaders[0].testDayDate === '2026-11-05' &&
+          fdJump.leaders[1].profileId === liaP.id && fdJump.leaders[1].value === 55,
+          fdJump && fdJump.leaders);
+        const fdAsym = lb.testing.find(b => b.name === 'ForceDecks · Asymmetry (%)');
+        check('device test board: ForceDecks asymmetry ranks lower-is-better',
+          !!fdAsym && fdAsym.better === 'lower' && fdAsym.leaders.length === 2 &&
+          fdAsym.leaders[0].profileId === maxP.id && fdAsym.leaders[0].value === 8 &&
+          fdAsym.leaders[1].profileId === liaP.id && fdAsym.leaders[1].value === 12,
+          fdAsym && fdAsym.leaders);
+        check('>=2 gate: a one-athlete test (pull-ups) produces no board',
+          !tBoard('pull-ups'), lb.testing.map(b => b.testKey));
+
+        const m100 = mBoard('100m');
+        check('100m board: PRs ranked low-to-high, PR (not latest) mark with its meet + date',
+          !!m100 && m100.leaders.length === 3 &&
+          m100.leaders.map(e => e.name).join('|') === 'Lia Leader|Max Second|Pam Third' &&
+          m100.leaders[0].mark === '10.90' && m100.leaders[0].meet === 'Opener' &&
+          m100.leaders[0].date === '2026-12-05',
+          m100 && m100.leaders);
+        check('school record tag: the leader whose PR exactly equals the record is tagged',
+          !!m100 && m100.leaders[0].schoolRecord === true &&
+          m100.leaders[1].schoolRecord === false && m100.leaders[2].schoolRecord === false,
+          m100 && m100.leaders);
+        const mlj = mBoard('long-jump');
+        check('long jump board: field event ranks high-to-low by parsed mark',
+          !!mlj && mlj.leaders.length === 3 &&
+          mlj.leaders.map(e => e.name).join('|') === 'Max Second|Lia Leader|Tom Solo' &&
+          mlj.leaders[0].mark === '21-06' && mlj.leaders[0].value === 258,
+          mlj && mlj.leaders);
+        check('school record tag: a quarter-inch near miss does NOT tag',
+          !!mlj && mlj.leaders.every(e => e.schoolRecord === false),
+          mlj && mlj.leaders);
+        check('>=2 gate: a one-athlete event (400m) produces no board',
+          !mBoard('400m'), lb.meets.map(b => b.event));
+
+        /* Athletes read the same boards (their own profileIds ride
+           along — that is what the client highlights as "you"). */
+        lr = await lbApi(lbLia, 'GET', '/api/leaderboard');
+        check('athlete reads the same boards as the coach',
+          lr.status === 200 && lr.json.testing.length === lb.testing.length &&
+          lr.json.meets.length === lb.meets.length &&
+          lr.json.testing.find(b => b.testKey === 'vertical-jump').leaders[0].profileId === liaP.id,
+          lr.json && lr.json.testing.length);
+        lr = await lbApi(lbMax, 'GET', '/api/leaderboard');
+        check('a second athlete reads the boards too',
+          lr.status === 200 && lr.json.meets.find(b => b.event === '100m').leaders.length === 3, lr.status);
+
+        /* Payload purity: performance keys only — no check-in,
+           health, attendance, notes, or goals data anywhere. */
+        const lbKeys = new Set();
+        (function walk(o) {
+          if (Array.isArray(o)) { o.forEach(walk); return; }
+          if (o && typeof o === 'object') {
+            for (const k of Object.keys(o)) { lbKeys.add(k); walk(o[k]); }
+          }
+        })(lb);
+        const forbidden = ['checkins', 'checkin', 'attendance', 'concerns', 'health',
+          'notes', 'coachNotes', 'goals', 'sleep', 'soreness', 'energy', 'wellness',
+          'email', 'password', 'passHash'];
+        check('leaderboard payload carries performance data only (no health/attendance/notes/goals keys)',
+          forbidden.every(k => !lbKeys.has(k)), [...lbKeys]);
+        check('leaderboard payload leaks no account emails',
+          !JSON.stringify(lb).includes('@test.com'), JSON.stringify(lb).slice(0, 120));
+
+        /* Deterministic: a second read returns the identical body. */
+        const lbAgain = (await lbApi(lbCoach, 'GET', '/api/leaderboard')).json;
+        check('leaderboard order is stable across reads',
+          JSON.stringify(lbAgain) === JSON.stringify(lb));
+      } finally {
+        lbChild.kill('SIGKILL');
+        fs.rmSync(LB_DIR, { recursive: true, force: true });
       }
     }
 

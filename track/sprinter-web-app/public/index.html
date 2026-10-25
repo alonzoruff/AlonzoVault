@@ -113,6 +113,7 @@
       <button type="button" class="menu-item" data-view="season">Season Plan <span>The week-by-week plan for the whole season</span></button>
       <button type="button" class="menu-item" data-view="cards">Warm-Up Cards <span>The three printed cards: light day, speed day, circuit day</span></button>
       <button type="button" class="menu-item" data-view="records">School Records <span>The all-time top 10 in every event</span></button>
+      <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked</span></button>
       <button type="button" class="menu-item" data-view="drills">Warm-Up Drills <span>The 16 standard drills, Parts A &amp; B</span></button>
       <button type="button" class="menu-item" data-view="qtr">400m Training <span>The full 400m framework and the QTR sessions</span></button>
     </div>
@@ -149,6 +150,7 @@
       <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book — present, late, excused, absent — and every athlete's record</span></button>
       <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
       <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
+      <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked — the same board the athletes see</span></button>
       <button type="button" class="menu-item" data-view="meets">Meet Results <span>Race and field marks, PRs, and the team PR board</span></button>
       <button type="button" class="menu-item" data-view="meetday">Meet Day <span>Run the meet: entries by event, a live checklist, and fast results with PR flags</span></button>
       <button type="button" class="menu-item" data-view="goals">Goals <span>Season target marks for every athlete, with progress from their real results</span></button>
@@ -734,6 +736,15 @@
     <div id="records-manage"></div>
   </section>
 
+  <!-- LEADERBOARD -->
+  <section id="view-leaderboard" class="view">
+    <h1>Leaderboard</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The team's best numbers, ranked — the top 5 in every test and meet event, from the marks already on record.</p>
+    <div id="leaderboard-main"></div>
+  </section>
+
   <!-- DRILLS -->
   <section id="view-drills" class="view">
     <button class="btn secondary back" data-goto="train">← Train</button>
@@ -877,7 +888,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v37">Cadets Sprint · App v37</div>
+  <div class="app-version" data-app-version="v38">Cadets Sprint · App v38</div>
 </footer>
 
 <script src="/app.js"></script>

@@ -122,8 +122,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v37';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v37';
+const APP_VERSION = 'v38';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v38';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -308,12 +308,12 @@ function md(src) {
    listener below routes them all. */
 const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
-  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
+  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub',
 };
 const GROUP_SUBNAV = {
-  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
   coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices']],
 };
@@ -360,6 +360,7 @@ function showView(name) {
   if (name === 'meets') renderMeets();
   if (name === 'meetday') renderMeetDay();
   if (name === 'records') renderRecords();
+  if (name === 'leaderboard') renderLeaderboard();
   if (name === 'custom') renderCustomWorkouts();
   if (name === 'programs') renderPrograms();
   if (name === 'calendar') renderCalendar();
@@ -5159,6 +5160,50 @@ async function renderRecords() {
       renderRecords();
     } catch (err) { alert(err.message); }
   }));
+}
+
+/* ================================================================
+   LEADERBOARD — the team's best marks, ranked. Everyone signed in
+   reads it (a motivation surface, under Train next to School
+   Records); the server computes it from testing results and meet
+   PRs only — /api/leaderboard carries no check-in, health,
+   attendance, notes, or goals data. Read-only: nothing is edited
+   here. The viewer's own row is highlighted when their account is
+   linked to a roster profile (the ranked table's .selected row,
+   the same treatment the Meet Day list gives its current meet).
+   ================================================================ */
+async function renderLeaderboard() {
+  const main = $('#leaderboard-main');
+  if (!main) return;
+  let data;
+  try { data = await api('/api/leaderboard'); }
+  catch (err) { main.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const mine = state.user ? state.user.profileId : null;
+  const rowCls = (e) => (mine && e.profileId === mine) ? ' class="selected"' : '';
+  const youTag = (e) => (mine && e.profileId === mine) ? ' <span class="muted">(you)</span>' : '';
+  const testingCards = (data.testing || []).map(b => `
+    <div class="card">
+      <h3>${esc(b.name)}</h3>
+      <div class="table-wrap"><table class="ranked">
+        <thead><tr><th>#</th><th>Athlete</th><th>Best</th><th>Date</th></tr></thead>
+        <tbody>${b.leaders.map(e => `<tr${rowCls(e)}><td>${e.rank}</td><td><strong>${esc(e.name)}</strong>${youTag(e)}</td><td><strong>${fmtNum(e.value)} ${esc(b.unit || '')}</strong></td><td>${e.testDayDate ? esc(e.testDayDate) : '—'}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>`).join('');
+  const meetCards = (data.meets || []).map(b => `
+    <div class="card">
+      <h3>${esc(b.name)}</h3>
+      <div class="table-wrap"><table class="ranked">
+        <thead><tr><th>#</th><th>Athlete</th><th>PR</th><th>Meet</th><th>Date</th></tr></thead>
+        <tbody>${b.leaders.map(e => `<tr${rowCls(e)}><td>${e.rank}</td><td><strong>${esc(e.name)}</strong>${youTag(e)}</td><td><strong>${esc(e.mark)}</strong>${e.schoolRecord ? ' <span class="badge star">SCHOOL RECORD</span>' : ''}</td><td>${esc(e.meet)}</td><td>${esc(e.date)}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>`).join('');
+  if (!testingCards && !meetCards) {
+    main.innerHTML = '<div class="card"><p class="muted">Leaderboards appear once at least two athletes have results.</p></div>';
+    return;
+  }
+  main.innerHTML = `
+    ${testingCards ? `<h2>Testing Leaders</h2>${LANE_DIVIDER}${testingCards}` : ''}
+    ${meetCards ? `<h2>Meet PR Leaders</h2>${LANE_DIVIDER}${meetCards}` : ''}`;
 }
 
 /* ================================================================

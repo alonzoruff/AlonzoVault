@@ -1028,6 +1028,95 @@ function rosterBestForEvent(eventKey) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Team leaderboard: testing leaders + meet PR leaders                 */
+/* ------------------------------------------------------------------ */
+/* A motivation surface, computed fresh per request from the same
+   stores and helpers everything else reads — testing bests come
+   out of testingHistoryFor (displayValue + the test's own
+   direction), meet PRs out of meetPrsFor, and the school-record
+   tag compares parsed values against rankedRecords — so a number
+   here can never disagree with the number anywhere else. Nothing
+   is stored. Performance data only: no check-ins, health,
+   attendance, notes, or goals ever enter this payload. Archived
+   profiles sit out, matching the team PR board and the
+   roster-best promotion source. A board exists only when at
+   least two athletes own a mark on it, and each board keeps its
+   top 5. Ties rank by who got there first (the earlier date),
+   then by name, so the order is stable across loads. */
+function rankLeaderEntries(entries, lower) {
+  return entries.slice().sort((a, b) =>
+    (lower ? a.value - b.value : b.value - a.value)
+    || (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0)
+    || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .slice(0, 5)
+    .map((e, i) => {
+      const out = Object.assign({}, e, { rank: i + 1 });
+      delete out.sortDate;
+      return out;
+    });
+}
+function leaderboardData() {
+  const active = db.profiles.filter(pr => !pr.archived);
+  /* Testing: one candidate per athlete per test — their best,
+     with the date of the test day it happened on. */
+  const testBuckets = new Map();
+  for (const pr of active) {
+    const name = pr.firstName + ' ' + pr.lastName;
+    for (const h of testingHistoryFor(pr.id)) {
+      const bestPoint = h.series.find(s => s.display === h.best);
+      if (!bestPoint) continue;
+      if (!testBuckets.has(h.testKey)) testBuckets.set(h.testKey, []);
+      testBuckets.get(h.testKey).push({
+        profileId: pr.id, name, value: h.best,
+        testDayDate: bestPoint.date, sortDate: bestPoint.date,
+      });
+    }
+  }
+  const testing = [];
+  for (const t of allTests()) {
+    const entries = testBuckets.get(t.key) || [];
+    if (entries.length < 2) continue;
+    testing.push({
+      testKey: t.key, name: t.name, unit: t.unit, kind: t.kind,
+      better: t.better || 'higher',
+      leaders: rankLeaderEntries(entries, t.better === 'lower'),
+    });
+  }
+  /* Meet PRs: one candidate per athlete per event — their PR. */
+  const meetBuckets = new Map();
+  for (const pr of active) {
+    const name = pr.firstName + ' ' + pr.lastName;
+    for (const prEntry of meetPrsFor(pr.id)) {
+      if (!meetBuckets.has(prEntry.event)) meetBuckets.set(prEntry.event, []);
+      meetBuckets.get(prEntry.event).push({
+        profileId: pr.id, name, mark: prEntry.mark, value: prEntry.value,
+        meet: prEntry.meet, date: prEntry.date, sortDate: prEntry.date,
+      });
+    }
+  }
+  const meets = [];
+  for (const ev of MEET_EVENTS) {
+    const entries = meetBuckets.get(ev.key) || [];
+    if (entries.length < 2) continue;
+    const leaders = rankLeaderEntries(entries, ev.type === 'time');
+    /* The school-record tag: the leader's parsed value equals the
+       record board's top parsed value for the event — exact
+       equality on normalized values, never a string comparison,
+       so a near miss (a quarter inch, a hundredth) never tags. */
+    const topRecord = rankedRecords(ev.key, 1)[0];
+    for (const l of leaders) {
+      l.schoolRecord = l.rank === 1 && !!topRecord && topRecord.value === l.value;
+    }
+    meets.push({
+      event: ev.key, name: ev.name, type: ev.type,
+      better: ev.type === 'time' ? 'lower' : 'higher',
+      leaders,
+    });
+  }
+  return { testing, meets };
+}
+
+/* ------------------------------------------------------------------ */
 /* Movement demo media: optional base file + coach overrides           */
 /* ------------------------------------------------------------------ */
 function loadMediaBase() {
@@ -2605,6 +2694,16 @@ async function handleApi(req, res, url) {
      PUT / DELETE lands on the same 403 as every other write. */
   if (p === '/api/announcements' && req.method === 'GET') {
     return sendJson(res, 200, { announcements: announcementsFor(user) });
+  }
+
+  /* ---------- team leaderboard (everyone signed in) ----------
+     Performance only: the team's best testing numbers and meet
+     PRs, ranked — computed per request by leaderboardData from
+     the shared helpers. Athletes seeing teammates' marks is the
+     point of the surface; nothing private rides along, and there
+     is no write side at all. */
+  if (p === '/api/leaderboard' && req.method === 'GET') {
+    return sendJson(res, 200, leaderboardData());
   }
 
   /* ================================================================ */
