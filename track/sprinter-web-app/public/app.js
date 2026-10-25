@@ -21,6 +21,8 @@ const state = {
   invCat: '',
   invQ: '',
   invEditId: null,
+  announcements: [],
+  annEditId: null,
   cwWorkouts: [],
   cwEditId: null,
   cwDraft: null,
@@ -114,8 +116,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v33';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v33';
+const APP_VERSION = 'v34';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v34';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -302,12 +304,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -335,6 +337,8 @@ function showView(name) {
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'home' || name === 'log') renderCheckin();
+  if (name === 'home') renderAnnouncePanel();
+  if (name === 'announce') renderAnnouncements();
   if (name === 'coach') renderCoach();
   if (name === 'groups') renderGroups();
   if (name === 'testing') renderTesting();
@@ -605,6 +609,7 @@ function renderHome() {
   if (gotoBtn) gotoBtn.addEventListener('click', () => showView(gotoBtn.dataset.goto));
   if (state.user) renderHomeLogs();
   if (isCoachUser()) renderCoachToday();
+  renderAnnouncePanel();
 }
 
 /* Coach summary panel on Today: today's assignments + completion
@@ -1118,7 +1123,7 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
-  renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderWellness(); renderCustomWorkouts();
+  renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderWellness(); renderAnnouncements(); renderCustomWorkouts();
   renderPrograms(); renderCalendar();
   renderWarmupCards();
   if (isCoach) loadMedia();
@@ -5167,6 +5172,123 @@ async function renderMyGoals() {
         </div>`).join('')
       : '<p class="muted">No goals set yet — when your coach sets a target mark for you, it shows up here with your progress toward it.</p>'}
   </div>`;
+}
+
+/* ================================================================
+   ANNOUNCEMENTS — one-way posts from the coaching staff.
+   Coaches write them in the Announcements view (whole team or
+   one group, optionally pinned); everyone signed in reads the
+   feed the server filtered for them on the Today page. There
+   are no replies, comments, or read receipts — by design.
+   ================================================================ */
+function announcePostHtml(a, manage) {
+  return `<div class="card">
+    <div class="roster-row">
+      <span>${a.pinned ? '<span class="badge plain">📌 PINNED</span> ' : ''}<strong>${a.audience === 'team' ? 'Whole team' : esc(a.groupName || 'Group')}</strong></span>
+      <span class="muted">${esc(fmtDate(parseDate(String(a.createdAt).slice(0, 10))))}</span>
+    </div>
+    ${a.title ? `<p><strong>${esc(a.title)}</strong></p>` : ''}
+    <p>${esc(a.body).replace(/\n/g, '<br>')}</p>
+    <p class="muted">${esc(a.authorLabel)}${a.updatedAt !== a.createdAt ? ' · edited ' + esc(fmtDate(parseDate(String(a.updatedAt).slice(0, 10)))) : ''}</p>
+    ${manage ? `<p><button class="btn secondary" data-ann-edit="${a.id}" type="button">Edit</button>
+      <button class="btn danger" data-ann-del="${a.id}" type="button">Delete</button></p>` : ''}
+  </div>`;
+}
+
+/* The Today-page panel. Athletes and coaches alike read the
+   feed the server filtered for them; a caller with nothing to
+   see gets no card at all (coaches get the quiet "post one"
+   prompt instead of an empty box). */
+async function renderAnnouncePanel() {
+  const slot = $('#announce-slot');
+  if (!slot) return;
+  if (!state.user) { slot.innerHTML = ''; return; }
+  let data;
+  try { data = await api('/api/announcements'); }
+  catch (_) { slot.innerHTML = ''; return; }
+  const posts = (data.announcements || []).slice(0, 5);
+  if (!posts.length) {
+    slot.innerHTML = isCoachUser()
+      ? `<div class="card"><h2>Announcements</h2><p class="muted">No announcements yet — post the first one for the team.</p><p><button class="btn secondary" id="ann-panel-new" type="button">New announcement</button></p></div>`
+      : '';
+  } else {
+    slot.innerHTML = `<h2>Announcements</h2>${LANE_DIVIDER}`
+      + posts.map(a => announcePostHtml(a, false)).join('')
+      + (isCoachUser() ? '<p><button class="btn secondary" id="ann-panel-new" type="button">New announcement</button></p>' : '');
+  }
+  const nb = $('#ann-panel-new');
+  if (nb) nb.addEventListener('click', () => showView('announce'));
+}
+
+/* The coach manager: compose form on top, every post below with
+   its audience, author, date, and pin state. Any coach can post
+   and manage; the feed endpoint already returns coaches the
+   full, unfiltered list in feed order (pinned, then newest). */
+async function renderAnnouncements() {
+  const el = $('#announce-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Team announcements live here.'); return; }
+  try {
+    const data = await api('/api/announcements');
+    state.announcements = data.announcements || [];
+  } catch (err) {
+    el.innerHTML = '<p class="error">Could not load announcements: ' + esc(err.message) + '</p>';
+    return;
+  }
+  const posts = state.announcements;
+  const editing = state.annEditId ? posts.find(a => a.id === state.annEditId) : null;
+  if (state.annEditId && !editing) state.annEditId = null;
+  const audOpts = (sel) => `<option value="team" ${sel === 'team' ? 'selected' : ''}>Whole team</option>`
+    + state.groups.map(g => `<option value="${g.id}" ${sel === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
+  el.innerHTML = `
+    <form class="card" id="ann-form">
+      <h2>${editing ? 'Edit announcement' : 'New announcement'}</h2>
+      <label>Title <span class="muted">(optional)</span> <input type="text" id="ann-title" maxlength="80" value="${editing ? esc(editing.title) : ''}" placeholder="e.g. Practice moved to 4 PM"></label>
+      <label>Message <textarea id="ann-body" rows="4" maxlength="2000" required placeholder="What does the team need to know?">${editing ? esc(editing.body) : ''}</textarea></label>
+      <div class="filter-row">
+        <label>Send to <select id="ann-audience">${audOpts(editing ? editing.audience : 'team')}</select></label>
+      </div>
+      <label class="check-line"><input type="checkbox" id="ann-pinned" ${editing && editing.pinned ? 'checked' : ''}> Pin to the top of the feed</label>
+      <button class="btn primary" type="submit">${editing ? 'Save changes' : 'Post announcement'}</button>
+      ${editing ? '<button class="btn secondary" id="ann-cancel" type="button">Cancel edit</button>' : ''}
+      <p class="error" id="ann-err"></p>
+    </form>
+    ${posts.length
+      ? posts.map(a => announcePostHtml(a, true)).join('')
+      : '<div class="card"><h2>No announcements yet</h2><p class="muted">Posts to the whole team — or to one group — show up here and on every athlete\'s Today page. Meet-week reminders, schedule changes, what to bring: one post and the whole team has it.</p></div>'}`;
+  el.querySelectorAll('[data-ann-edit]').forEach(b => b.addEventListener('click', () => {
+    state.annEditId = b.dataset.annEdit;
+    renderAnnouncements();
+    const f = $('#ann-form');
+    if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  el.querySelectorAll('[data-ann-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Delete this announcement? Athletes will no longer see it.')) return;
+    try {
+      await apiDel('/api/announcements/' + encodeURIComponent(b.dataset.annDel));
+      if (state.annEditId === b.dataset.annDel) state.annEditId = null;
+      renderAnnouncements();
+      renderAnnouncePanel();
+    } catch (err) { alert(err.message); }
+  }));
+  const cancelBtn = $('#ann-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { state.annEditId = null; renderAnnouncements(); });
+  $('#ann-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      title: $('#ann-title').value,
+      body: $('#ann-body').value,
+      audience: $('#ann-audience').value,
+      pinned: $('#ann-pinned').checked,
+    };
+    try {
+      if (state.annEditId) await apiPut('/api/announcements/' + encodeURIComponent(state.annEditId), payload);
+      else await apiPost('/api/announcements', payload);
+      state.annEditId = null;
+      renderAnnouncements();
+      renderAnnouncePanel();
+    } catch (err) { $('#ann-err').textContent = err.message; }
+  });
 }
 
 /* ================================================================

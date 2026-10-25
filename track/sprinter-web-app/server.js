@@ -93,6 +93,7 @@ let db = {
   checkins: {},
   attendance: {},
   coachNotes: {},
+  announcements: [],
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -188,6 +189,12 @@ function migrate() {
   // target marks, one ACTIVE goal per athlete per event (setting a
   // new target for a pair replaces the old one; no goal history).
   db.goals = Array.isArray(db.goals) ? db.goals : [];
+  // Coach announcements: one flat list of { id, title, body,
+  // audience, pinned, authorId, authorEmail, createdAt, updatedAt } —
+  // one-way coach-to-team posts. audience is 'team' or a group id;
+  // the read endpoint filters per caller, so a group post never
+  // reaches an athlete outside that group.
+  db.announcements = Array.isArray(db.announcements) ? db.announcements : [];
   // Coach-built training programs (reusable week-grid templates) and
   // their applications onto the team calendar. An application carries
   // an exact snapshot of every override it wrote, so removing it
@@ -801,6 +808,78 @@ function validateGoalInput(body) {
   const parsed = parseMeetMark(ev, rawTarget);
   if (parsed.error) return { status: 400, error: parsed.error };
   return { prof, ev, rawTarget, value: parsed.value };
+}
+
+/* ------------------------------------------------------------------ */
+/* Coach announcements (one-way coach -> team posts)                   */
+/* ------------------------------------------------------------------ */
+/* The wire shape of one announcement. `audience` is 'team' or a
+   group id; the label resolves the group's CURRENT name (a post
+   whose group was later deleted falls back to a neutral label).
+   The author presents the way the app presents coaches elsewhere:
+   by their coach email. */
+function publicAnnouncement(a) {
+  const g = a.audience !== 'team' ? groupById(a.audience) : null;
+  return {
+    id: a.id, title: a.title || '', body: a.body,
+    audience: a.audience,
+    audienceLabel: a.audience === 'team' ? 'Whole team' : (g ? g.name : 'A group'),
+    groupName: g ? g.name : null,
+    pinned: !!a.pinned,
+    authorId: a.authorId, authorEmail: a.authorEmail,
+    authorLabel: 'Coach · ' + a.authorEmail,
+    createdAt: a.createdAt, updatedAt: a.updatedAt,
+  };
+}
+/* Feed order: pinned first, then newest first. */
+function announcementOrder(a, b) {
+  if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+  return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
+}
+/* Who sees a post. Coaches see everything. An athlete sees team
+   posts plus posts addressed to their linked profile's group; an
+   unlinked athlete, or one whose profile has no group, sees team
+   posts only. Filtering happens here, server-side — a post an
+   athlete should not see never appears in their response. */
+function announcementVisibleTo(a, user) {
+  if (user.role === 'coach') return true;
+  if (a.audience === 'team') return true;
+  const prof = linkedProfileFor(user);
+  return !!prof && !!prof.groupId && prof.groupId === a.audience;
+}
+function announcementsFor(user) {
+  return db.announcements.filter(a => announcementVisibleTo(a, user))
+    .slice().sort(announcementOrder).map(publicAnnouncement);
+}
+/* Validate an announcement payload. full (base=null) for creates:
+   a non-empty body is required and the audience defaults to the
+   whole team. Edits pass the existing post; only the fields
+   present are re-validated, into a candidate first, so a bad
+   field changes nothing — the meet-results pattern. */
+function validateAnnouncementInput(body, base) {
+  const next = base
+    ? { title: base.title || '', body: base.body, audience: base.audience, pinned: !!base.pinned }
+    : { title: '', body: '', audience: 'team', pinned: false };
+  if (!base || body.title !== undefined) next.title = clean(body.title, 80);
+  if (!base || body.body !== undefined) {
+    const raw = typeof body.body === 'string' ? body.body.trim() : '';
+    if (!raw) return { error: 'An announcement needs a message.' };
+    if (raw.length > 2000) return { error: 'Announcements are capped at 2000 characters.' };
+    next.body = raw;
+  }
+  if (!base || body.audience !== undefined) {
+    if (body.audience === undefined) {
+      next.audience = 'team';
+    } else {
+      const aud = clean(body.audience, 80);
+      if (aud !== 'team' && !groupById(aud)) {
+        return { error: 'Audience must be the whole team or one of your groups.' };
+      }
+      next.audience = aud;
+    }
+  }
+  if (body.pinned !== undefined) next.pinned = !!body.pinned;
+  return { fields: next };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1972,6 +2051,17 @@ async function handleApi(req, res, url) {
       athleteName: prof.firstName + ' ' + prof.lastName,
       goals: goalsForProfile(prof.id),
     });
+  }
+
+  /* ---------- coach announcements (the read side) ----------
+     One-way posts from the coaching staff. Everyone signed in
+     reads the feed; the server filters it per caller (coaches see
+     all, athletes see the whole-team posts plus their own group's
+     — see announcementVisibleTo). The writes live in the coach
+     section below, behind the coach gate, so an athlete's POST /
+     PUT / DELETE lands on the same 403 as every other write. */
+  if (p === '/api/announcements' && req.method === 'GET') {
+    return sendJson(res, 200, { announcements: announcementsFor(user) });
   }
 
   /* ================================================================ */
@@ -3444,6 +3534,45 @@ async function handleApi(req, res, url) {
       return sendJson(res, 404, { error: 'Goal not found.' });
     }
     db.goals = db.goals.filter(g => g.id !== id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---------- coach announcements (the write side) ----------
+     Any coach (owner or assistant) can post and manage; the
+     author is recorded on the post itself. One-way only: there
+     is deliberately no reply, comment, or read-receipt surface. */
+  if (p === '/api/announcements' && req.method === 'POST') {
+    const body = await readBody(req);
+    const v = validateAnnouncementInput(body, null);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const now = new Date().toISOString();
+    const a = Object.assign({
+      id: crypto.randomUUID(), authorId: user.id, authorEmail: user.email,
+      createdAt: now, updatedAt: now,
+    }, v.fields);
+    db.announcements.push(a);
+    saveDb();
+    return sendJson(res, 201, { announcement: publicAnnouncement(a) });
+  }
+
+  const announcementMatch = p.match(/^\/api\/announcements\/([^/]+)$/);
+  if (announcementMatch && req.method === 'PUT') {
+    const a = db.announcements.find(x => x.id === decodeURIComponent(announcementMatch[1]));
+    if (!a) return sendJson(res, 404, { error: 'Announcement not found.' });
+    const body = await readBody(req);
+    const v = validateAnnouncementInput(body, a);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    Object.assign(a, v.fields, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { announcement: publicAnnouncement(a) });
+  }
+  if (announcementMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(announcementMatch[1]);
+    if (!db.announcements.some(x => x.id === id)) {
+      return sendJson(res, 404, { error: 'Announcement not found.' });
+    }
+    db.announcements = db.announcements.filter(x => x.id !== id);
     saveDb();
     return sendJson(res, 200, { ok: true });
   }

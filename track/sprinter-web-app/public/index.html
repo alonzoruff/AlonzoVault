@@ -99,6 +99,7 @@
     </div>
     <div id="checkin-slot"></div>
     <div id="goals-slot"></div>
+    <div id="announce-slot"></div>
     <div id="home-content" aria-busy="true"><div class="skel skel-card"></div><div class="skel skel-card"></div><div class="skel skel-card"></div></div>
   </section>
 
@@ -155,6 +156,7 @@
       <button type="button" class="menu-item" data-view="reports">Reports <span>Team trends, completion and load charts, and athlete report cards</span></button>
       <button type="button" class="menu-item" data-view="digest">Weekly Digest <span>Last week at a glance — check-ins, training, PRs, health — and the week coming</span></button>
       <button type="button" class="menu-item" data-view="wellness">Daily Wellness <span>Who checked in today — sleep, soreness, and energy, with flags</span></button>
+      <button type="button" class="menu-item" data-view="announce">Announcements <span>One-way posts to the whole team or a single group — athletes read them on Today</span></button>
       <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
       <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
       <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access — under Account</span></button>
@@ -677,6 +679,15 @@
     <div id="digest-main"></div>
   </section>
 
+  <!-- ANNOUNCEMENTS (coach) -->
+  <section id="view-announce" class="view">
+    <h1>Announcements</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One-way posts from the coaching staff — to the whole team, or to a single group. Athletes read them on their Today page. No replies, no read receipts. Coaches only.</p>
+    <div id="announce-main"></div>
+  </section>
+
   <!-- WELLNESS (coach) -->
   <section id="view-wellness" class="view">
     <h1>Daily Wellness</h1>
@@ -839,7 +850,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v33">Cadets Sprint · App v33</div>
+  <div class="app-version" data-app-version="v34">Cadets Sprint · App v34</div>
 </footer>
 
 <script src="/app.js"></script>

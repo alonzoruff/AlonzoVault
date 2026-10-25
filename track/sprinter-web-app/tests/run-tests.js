@@ -336,8 +336,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v33',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v33"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v34',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v34"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2012,6 +2012,8 @@ async function main() {
   check('TV board render path stays free of the Today Run buttons',
     !tvCode.includes('data-run-today') && !tvCode.includes('todayRunTargets') &&
     !tvCode.includes('run-today-btn') && !tvCode.includes('featuredRunSessionId'));
+  check('TV board render path stays free of announcements',
+    !tvCode.toLowerCase().includes('announce'));
 
   /* ---------------- Update delivery (kept through the rollback) -----
      The v28 update mechanics were functional, not part of the design
@@ -2019,16 +2021,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v33'") &&
-    swJs.text.includes("sprinter-app-v33"));
+    appJs.text.includes("const APP_VERSION = 'v34'") &&
+    swJs.text.includes("sprinter-app-v34"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v33"') &&
-    pageHtml.text.includes('Cadets Sprint · App v33') &&
+    pageHtml.text.includes('data-app-version="v34"') &&
+    pageHtml.text.includes('Cadets Sprint · App v34') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
@@ -3214,6 +3216,184 @@ async function main() {
     check('logged-out is 401 on ' + method + ' ' + pth.split('?')[0], r.status === 401, r.status);
   }
 
+  /* ---------------- coach announcements ----------------
+     One-way coach-to-team posts. The read endpoint filters
+     server-side per caller: coaches see all; an athlete sees the
+     team posts plus their own group's; an unlinked athlete, or a
+     linked one with no group, sees the team posts only. Own
+     fixtures (two groups, three linked athletes, one unlinked
+     account) so every feed count is exact. */
+  check('announcements view + Today slot are in the served page',
+    pageHtml.text.includes('id="view-announce"') && pageHtml.text.includes('id="announce-main"') &&
+    pageHtml.text.includes('id="announce-slot"') && pageHtml.text.includes('data-view="announce"'));
+  check('announcements wiring is in the served JS',
+    appJs.text.includes("['announce', 'Announcements']") && appJs.text.includes("announce: 'coachhub'") &&
+    appJs.text.includes('renderAnnouncements') && appJs.text.includes('renderAnnouncePanel') &&
+    appJs.text.includes('/api/announcements'));
+  const annPause = () => new Promise(res => setTimeout(res, 15));
+  r = await api(coach, 'POST', '/api/groups', { name: 'Announce A' });
+  const annGrpA = r.json.group;
+  r = await api(coach, 'POST', '/api/groups', { name: 'Announce B' });
+  const annGrpB = r.json.group;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Ana', lastName: 'Alpha', groupId: annGrpA.id, events: ['sprinter'] });
+  const anaP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Bob', lastName: 'Beta', groupId: annGrpB.id, events: ['sprinter'] });
+  const bobP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Uma', lastName: 'Free', events: [] });
+  const umaP = r.json.profile;
+  check('announcement fixtures: ungrouped profile carries no group',
+    !!umaP && (umaP.groupId === null || umaP.groupId === undefined), umaP);
+  await api(coach, 'PUT', '/api/profiles/' + anaP.id + '/link', { email: 'ana@test.com' });
+  await api(coach, 'PUT', '/api/profiles/' + bobP.id + '/link', { email: 'bob@test.com' });
+  await api(coach, 'PUT', '/api/profiles/' + umaP.id + '/link', { email: 'uma@test.com' });
+  r = await api(null, 'POST', '/api/register', { email: 'ana@test.com', password: 'testpass123' });
+  const ana = cookieOf(r);
+  r = await api(null, 'POST', '/api/register', { email: 'bob@test.com', password: 'testpass123' });
+  const bob = cookieOf(r);
+  r = await api(null, 'POST', '/api/register', { email: 'uma@test.com', password: 'testpass123' });
+  const uma = cookieOf(r);
+  r = await api(null, 'POST', '/api/register', { email: 'unl@test.com', password: 'testpass123' });
+  const unl = cookieOf(r);
+
+  /* Empty feed + auth gates. */
+  r = await api(coach, 'GET', '/api/announcements');
+  check('announcements feed starts empty for the coach',
+    r.status === 200 && Array.isArray(r.json.announcements) && r.json.announcements.length === 0, r.json);
+  r = await api(ana, 'GET', '/api/announcements');
+  check('announcements feed starts empty for an athlete too',
+    r.status === 200 && r.json.announcements.length === 0, r.json);
+  r = await api(null, 'GET', '/api/announcements');
+  check('announcements feed without login is 401', r.status === 401, r.status);
+  r = await api(null, 'POST', '/api/announcements', { body: 'hello' });
+  check('announcement create without login is 401', r.status === 401, r.status);
+  r = await api(ana, 'POST', '/api/announcements', { body: 'athlete post' });
+  check('athlete cannot create an announcement (403)', r.status === 403, r.status);
+
+  /* Validation: clean 400s, nothing half-saved. */
+  r = await api(coach, 'POST', '/api/announcements', {});
+  check('announcement with no body is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/announcements', { body: '   ' });
+  check('announcement with a blank body is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/announcements', { body: 'x'.repeat(2001) });
+  check('announcement body over 2000 chars is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/announcements', { body: 'fine', audience: 'no-such-group' });
+  check('announcement to an unknown audience is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/announcements');
+  check('failed announcement creates saved nothing', r.json.announcements.length === 0, r.json.announcements.length);
+
+  /* Creates: one team post, one group-A post, one pinned team
+     post (in that order, so feed order proves pinned-beats-newer
+     and newest-first among the unpinned). */
+  r = await api(coach, 'POST', '/api/announcements', { body: 'Team post one', title: 'Welcome' });
+  check('team announcement creates 201 with author + team audience recorded',
+    r.status === 201 && r.json.announcement.body === 'Team post one' &&
+    r.json.announcement.title === 'Welcome' && r.json.announcement.audience === 'team' &&
+    r.json.announcement.audienceLabel === 'Whole team' && r.json.announcement.pinned === false &&
+    r.json.announcement.authorEmail === 'coach@test.com' &&
+    (r.json.announcement.authorLabel || '').includes('coach@test.com'), r.json);
+  const annTeamOld = r.json.announcement;
+  await annPause();
+  r = await api(coach, 'POST', '/api/announcements', { body: 'Group A only', audience: annGrpA.id });
+  check('group announcement creates 201 with the group label resolved',
+    r.status === 201 && r.json.announcement.audience === annGrpA.id &&
+    r.json.announcement.audienceLabel === 'Announce A' && r.json.announcement.groupName === 'Announce A', r.json);
+  const annPostA = r.json.announcement;
+  await annPause();
+  r = await api(assistant, 'POST', '/api/announcements', { body: 'Pinned team post', pinned: true });
+  check('an assistant coach can post, and is recorded as the author',
+    r.status === 201 && r.json.announcement.pinned === true &&
+    r.json.announcement.authorEmail === 'newcoach@test.com', r.json);
+  const annPinned = r.json.announcement;
+  await annPause();
+  r = await api(coach, 'POST', '/api/announcements', { body: 'Group B only', audience: annGrpB.id });
+  const annPostB = r.json.announcement;
+  check('group B announcement creates 201', r.status === 201 && !!annPostB.id, r.status);
+  await annPause();
+  r = await api(coach, 'POST', '/api/announcements', { body: 'Long title post', title: 't'.repeat(120) });
+  check('an overlong title is cleaned to 80 chars, not rejected',
+    r.status === 201 && r.json.announcement.title.length === 80, r.json.announcement && r.json.announcement.title.length);
+  const annLongTitle = r.json.announcement;
+
+  /* The audience-filter matrix. */
+  const feedIds = async (ck) => (await api(ck, 'GET', '/api/announcements')).json.announcements.map(a => a.id);
+  r = await api(coach, 'GET', '/api/announcements');
+  check('coach feed: all 5 posts, pinned first, then newest first',
+    r.json.announcements.length === 5 &&
+    r.json.announcements[0].id === annPinned.id &&
+    r.json.announcements[1].id === annLongTitle.id &&
+    r.json.announcements[2].id === annPostB.id &&
+    r.json.announcements[3].id === annPostA.id &&
+    r.json.announcements[4].id === annTeamOld.id,
+    r.json.announcements.map(a => a.id));
+  check('group A athlete sees team posts + group A post, never group B',
+    JSON.stringify(await feedIds(ana)) ===
+    JSON.stringify([annPinned.id, annLongTitle.id, annPostA.id, annTeamOld.id]));
+  check('group B athlete sees team posts + group B post, never group A',
+    JSON.stringify(await feedIds(bob)) ===
+    JSON.stringify([annPinned.id, annLongTitle.id, annPostB.id, annTeamOld.id]));
+  check('linked athlete with no group sees team posts only',
+    JSON.stringify(await feedIds(uma)) ===
+    JSON.stringify([annPinned.id, annLongTitle.id, annTeamOld.id]));
+  check('unlinked athlete sees team posts only',
+    JSON.stringify(await feedIds(unl)) ===
+    JSON.stringify([annPinned.id, annLongTitle.id, annTeamOld.id]));
+  r = await api(ana, 'GET', '/api/announcements');
+  check('athlete feed carries the display shape (pin, audience label, author, dates)',
+    r.json.announcements[0].pinned === true &&
+    r.json.announcements[0].authorLabel.includes('newcoach@test.com') &&
+    typeof r.json.announcements[0].createdAt === 'string' &&
+    r.json.announcements.every(a => typeof a.body === 'string' && typeof a.audienceLabel === 'string'),
+    r.json.announcements[0]);
+
+  /* Athlete write attempts stay 403 on edit/delete too. */
+  r = await api(ana, 'PUT', '/api/announcements/' + annTeamOld.id, { body: 'hijack' });
+  check('athlete cannot edit an announcement (403)', r.status === 403, r.status);
+  r = await api(ana, 'DELETE', '/api/announcements/' + annTeamOld.id);
+  check('athlete cannot delete an announcement (403)', r.status === 403, r.status);
+  r = await api(null, 'PUT', '/api/announcements/' + annTeamOld.id, { body: 'hijack' });
+  check('announcement edit without login is 401', r.status === 401, r.status);
+
+  /* Edit: retarget the group-A post to group B and the filtered
+     feeds move with it; a bad edit changes nothing. */
+  r = await api(coach, 'PUT', '/api/announcements/' + annPostA.id, { audience: annGrpB.id, body: 'Now for group B' });
+  check('coach retargets a post to another group',
+    r.status === 200 && r.json.announcement.audience === annGrpB.id &&
+    r.json.announcement.body === 'Now for group B' && r.json.announcement.audienceLabel === 'Announce B', r.json);
+  check('after the retarget, group A athlete loses the post',
+    !(await feedIds(ana)).includes(annPostA.id));
+  check('after the retarget, group B athlete gains the post',
+    (await feedIds(bob)).includes(annPostA.id));
+  r = await api(coach, 'PUT', '/api/announcements/' + annPostA.id, { body: '' });
+  check('an edit with an empty body is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/announcements');
+  check('the failed edit changed nothing',
+    (r.json.announcements.find(a => a.id === annPostA.id) || {}).body === 'Now for group B', r.json.announcements.length);
+  r = await api(coach, 'PUT', '/api/announcements/no-such-id', { body: 'x' });
+  check('editing a missing announcement is 404', r.status === 404, r.status);
+
+  /* Pin toggle reorders the feed: pin the oldest team post and
+     it joins the top, ahead of the newer unpinned posts but
+     behind nothing pinned earlier... both pinned sort newest
+     first among themselves is NOT assumed — the pinned pair is
+     checked as a set at the top. */
+  r = await api(coach, 'PUT', '/api/announcements/' + annTeamOld.id, { pinned: true });
+  check('pin toggle saves', r.status === 200 && r.json.announcement.pinned === true, r.json);
+  r = await api(ana, 'GET', '/api/announcements');
+  const anaTop2 = r.json.announcements.slice(0, 2).map(a => a.id).sort();
+  check('athlete feed: both pinned posts sit on top',
+    JSON.stringify(anaTop2) === JSON.stringify([annPinned.id, annTeamOld.id].sort()) &&
+    r.json.announcements.slice(2).every(a => !a.pinned), r.json.announcements.map(a => a.id));
+  r = await api(coach, 'PUT', '/api/announcements/' + annTeamOld.id, { pinned: false });
+  check('unpin saves', r.status === 200 && r.json.announcement.pinned === false, r.json);
+
+  /* Delete: the post leaves every feed at once. */
+  r = await api(coach, 'DELETE', '/api/announcements/' + annLongTitle.id);
+  check('coach deletes an announcement', r.status === 200 && r.json.ok === true, r.json);
+  check('deleted post is gone from coach and athlete feeds',
+    !(await feedIds(coach)).includes(annLongTitle.id) && !(await feedIds(ana)).includes(annLongTitle.id));
+  r = await api(coach, 'DELETE', '/api/announcements/' + annLongTitle.id);
+  check('deleting the same announcement twice is 404', r.status === 404, r.status);
+
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id };
 }
 
@@ -3271,6 +3451,12 @@ async function waitForServer(tries = 60) {
     check('coach wellness view still aggregates after the restart',
       rWellCoach.status === 200 && rWellCoach.json.summary.checkedIn === 2,
       rWellCoach.json && rWellCoach.json.summary);
+    const rAnn = await api(ctx.coach, 'GET', '/api/announcements');
+    check('announcements survive a server restart',
+      rAnn.status === 200 && rAnn.json.announcements.length === 4 &&
+      rAnn.json.announcements.some(a => a.body === 'Team post one') &&
+      rAnn.json.announcements.some(a => a.body === 'Now for group B'),
+      rAnn.json && rAnn.json.announcements && rAnn.json.announcements.length);
     /* Deleting the seed must not resurrect it: delete it, restart
        once more on the same store, and the list stays empty. */
     const rd = await api(ctx.coach, 'DELETE', '/api/custom-workouts/' + ctx.seedId);
