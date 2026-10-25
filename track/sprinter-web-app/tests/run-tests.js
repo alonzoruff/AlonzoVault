@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v24',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v24"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v25',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v25"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -657,7 +657,7 @@ async function main() {
 
   /* ---------------- coach Today summary + CSV exports ---------------- */
   const pad2 = (n) => String(n).padStart(2, '0');
-  const nowD = new Date();
+  const nowD = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const today = nowD.getFullYear() + '-' + pad2(nowD.getMonth() + 1) + '-' + pad2(nowD.getDate());
 
   // A flagged, still-open concern for Jane (pain 9, stopped training).
@@ -1849,7 +1849,7 @@ async function main() {
      server's own today (reportToday), never hardcoded. */
   const pad2w = (n) => String(n).padStart(2, '0');
   const fmtDw = (d) => d.getFullYear() + '-' + pad2w(d.getMonth() + 1) + '-' + pad2w(d.getDate());
-  const reportToday = fmtDw(new Date());
+  const reportToday = fmtDw(new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })));
   const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return fmtDw(d); };
   const yDay = addDays(reportToday, -1);
   const y2Day = addDays(reportToday, -2);
@@ -2034,6 +2034,90 @@ async function main() {
   check('mine returns the last 7 days newest first with a 3-day streak',
     r.status === 200 && r.json.entries.length === 3 && r.json.entries[0].date === reportToday &&
     r.json.entries[2].date === y2Day && r.json.streak === 3, r.json);
+
+  /* ---------------- server hardening pass (Oct 24, late) ----------------
+     Regression guards for the server audit: host-UTC "today", role
+     changes by non-owners, the pain-concern lifecycle, duplicate
+     creates, and exports that spreadsheets would execute. */
+  const nyToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+  r = await api(coach, 'GET', '/api/coach/today');
+  check('server today is the America/New_York date, not the host date',
+    r.status === 200 && r.json.date === nyToday, r.json.date + ' vs ' + nyToday);
+  r = await api(coach, 'GET', '/api/coach/today?board=1');
+  check('the TV board payload carries no health data',
+    r.status === 200 && Array.isArray(r.json.healthFlags) && r.json.healthFlags.length === 0
+    && r.json.wellness === null && Array.isArray(r.json.groups), r.json);
+  r = await api(null, 'POST', '/api/register', { email: 'qa-assistant@test.com', password: 'testpass123' });
+  const asst = cookieOf(r);
+  r = await api(coach, 'GET', '/api/coaches');
+  const asstUser = r.json.users.find(u => u.email === 'qa-assistant@test.com');
+  const willUser = r.json.users.find(u => u.email === 'will@test.com');
+  r = await api(coach, 'PUT', '/api/users/' + asstUser.id + '/role', { role: 'coach' });
+  check('the head coach can promote an assistant', r.status === 200 && r.json.user.role === 'coach', r.json);
+  r = await api(asst, 'PUT', '/api/users/' + willUser.id + '/role', { role: 'coach' });
+  check('an assistant coach cannot change account roles', r.status === 403, r.status);
+  r = await api(coach, 'PUT', '/api/users/' + asstUser.id + '/role', { role: 'athlete' });
+  check('the head coach can demote the assistant back', r.status === 200 && r.json.user.role === 'athlete', r.json);
+  r = await api(coach, 'POST', '/api/profiles', { firstName: '=2+5', lastName: 'Hacker' });
+  check('a formula-named profile can be created', r.status === 201, r.status);
+  const hackerP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: '=2+5', lastName: 'Hacker' });
+  check('a duplicate roster profile is refused with 409', r.status === 409, r.status);
+  const rosterCsv = await apiText(coach, '/api/export/roster.csv');
+  check('roster CSV neutralizes spreadsheet formulas in names',
+    rosterCsv.status === 200 && rosterCsv.text.includes("'=2+5"), rosterCsv.text.slice(0, 200));
+  r = await api(coach, 'PUT', '/api/profiles/' + hackerP.id, { archived: true });
+  check('the formula-named profile archives cleanly', r.status === 200 && r.json.profile.archived === true, r.json);
+  r = await api(will, 'POST', '/api/logs', { date: '2026-02-30', happened: 'x' });
+  check('the personal log rejects impossible calendar dates', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/completions', { profileId: jane, date: '2026-11-01' });
+  check('a completion cannot be marked on a plan off day', r.status === 400, r.status);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: true, painText: '' });
+  check('hurts with no words still saves the check-in', r.status === 200 || r.status === 201, r.status);
+  r = await api(coach, 'GET', '/api/concerns');
+  let willConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
+  check('hurts with no words still files a concern', willConcerns.length === 1, willConcerns);
+  const qaConcernId = willConcerns[0].id;
+  r = await api(coach, 'PUT', '/api/concerns/' + qaConcernId, { status: 'monitoring' });
+  check('coach can move the concern to monitoring', r.status === 200 && r.json.concern.status === 'monitoring', r.json);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: false });
+  r = await api(coach, 'GET', '/api/concerns');
+  willConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
+  check('un-flagging keeps a monitored concern (link not severed)',
+    willConcerns.length === 1 && willConcerns[0].status === 'monitoring', willConcerns);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: true, painText: 'Still tight' });
+  r = await api(coach, 'GET', '/api/concerns');
+  willConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
+  check('re-flagging updates the same concern instead of filing a duplicate',
+    willConcerns.length === 1 && willConcerns[0].note === 'Still tight', willConcerns);
+  r = await api(coach, 'PUT', '/api/concerns/' + qaConcernId, { status: 'new' });
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: false });
+  r = await api(coach, 'GET', '/api/concerns');
+  check('lifecycle cleanup: un-flagging a still-new concern removes it',
+    r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete').length === 0,
+    r.json.concerns.length);
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Qa', lastName: 'Racer' });
+  const qaP = r.json.profile;
+  r = await api(coach, 'POST', '/api/meets', { name: 'QA Rename Meet', date: '2026-12-05' });
+  const qaMeet = r.json.meet;
+  check('meet created for the rename test', r.status === 201 && !!qaMeet, r.json);
+  r = await api(coach, 'POST', '/api/meets', { name: 'QA Rename Meet', date: '2026-12-05' });
+  check('a duplicate meet (same name and date) is refused with 409', r.status === 409, r.status);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: qaP.id, date: '2026-12-05', meet: 'QA Rename Meet', event: '100m', mark: '11.20' });
+  check('meet result saved under the original name', r.status === 201, r.status);
+  const qaResultId = r.json.result.id;
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: qaP.id, date: '2026-12-05', meet: 'QA Rename Meet', event: '100m', mark: '11.20' });
+  r = await api(coach, 'GET', '/api/meet-results?profileId=' + qaP.id);
+  check('re-posting the same meet result updates it instead of duplicating',
+    r.json.results.length === 1, r.json.results && r.json.results.length);
+  r = await api(coach, 'PUT', '/api/meets/' + qaMeet.id, { name: 'QA Renamed Meet' });
+  check('meet rename saves', r.status === 200 && r.json.meet.name === 'QA Renamed Meet', r.json);
+  r = await api(coach, 'GET', '/api/meets/' + qaMeet.id);
+  check('renaming a meet carries its results into the hub',
+    r.status === 200 && r.json.results.length === 1 && r.json.results[0].mark === '11.20', r.json);
+  r = await api(coach, 'DELETE', '/api/meet-results/' + qaResultId);
+  r = await api(coach, 'DELETE', '/api/meets/' + qaMeet.id);
+  r = await api(coach, 'PUT', '/api/profiles/' + qaP.id, { archived: true });
 
   /* Coach trends + reports aggregates on the fixture data. */
   r = await api(coach, 'GET', '/api/wellness/trends?days=7');
@@ -2516,7 +2600,7 @@ async function waitForServer(tries = 60) {
         await dApi(dCoach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
 
         /* --- check-ins, in the last completed week --- */
-        const todayS = dFmt(new Date());
+        const todayS = dFmt(new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })));
         const thisMon = dMonday(todayS);
         const lastMon = dAdd(thisMon, -7);
         const inLast = (n) => dAdd(lastMon, n);

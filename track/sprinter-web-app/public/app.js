@@ -4465,7 +4465,7 @@ async function renderTvBoard() {
   if (!el) return;
   if (!isCoachUser()) { gateHtml(el, 'The weight-room TV board lives here.'); return; }
   try {
-    const today = await api('/api/coach/today');
+    const today = await api('/api/coach/today?board=1');
     state.tvData = { today };
     state.tvLastOk = new Date();
     state.tvStale = false;

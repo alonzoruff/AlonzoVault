@@ -187,17 +187,29 @@ function migrate() {
 }
 function loadDb() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+  let raw;
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf8');
+    raw = fs.readFileSync(DB_FILE, 'utf8');
+  } catch (_) {
+    migrate(); /* first run: no file yet, keep the empty store */
+    return;
+  }
+  try {
     const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.users)) db = Object.assign(db, parsed);
-  } catch (_) { /* first run: keep the empty store */ }
+    if (!parsed || !Array.isArray(parsed.users)) throw new Error('unexpected store shape');
+    db = Object.assign(db, parsed);
+  } catch (err) {
+    const quarantine = DB_FILE + '.corrupt-' + Date.now();
+    try { fs.renameSync(DB_FILE, quarantine); } catch (_) {}
+    console.error('DATA STORE CORRUPT: original preserved at ' + quarantine
+      + ' — booting from an empty store. Restore that file to recover. (' + err.message + ')');
+  }
   migrate();
 }
 function saveDb() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const tmp = DB_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(db, null, 1));
+  fs.writeFileSync(tmp, JSON.stringify(db, null, 1), { mode: 0o600 });
   fs.renameSync(tmp, DB_FILE);
 }
 loadDb();
@@ -447,6 +459,7 @@ function validateResultFields(test, body) {
   if (test.kind === 'lift') {
     const w = num(body.weight !== undefined ? body.weight : body.value);
     if (w === null || w <= 0) return { error: 'Enter a valid weight in lb.' };
+    if (w > 1500) return { error: 'That weight is beyond the plausible range (max 1500 lb).' };
     weight = w;
     if (body.reps !== undefined && body.reps !== null && body.reps !== '') {
       const r = num(body.reps);
@@ -460,7 +473,7 @@ function validateResultFields(test, body) {
     }
   } else {
     const v = num(body.value);
-    if (v === null || v < 0) return { error: 'Enter a valid result.' };
+    if (v === null || v < 0 || (test.kind === 'measure' && v === 0)) return { error: 'Enter a valid result.' };
     value = v;
   }
   return { fields: { value, weight, reps, est1rm } };
@@ -634,6 +647,14 @@ function validateMeetResultInput(input) {
    Meet Day hub's quick results. Callers saveDb(). */
 function insertMeetResult(v, notes, enteredBy) {
   const now = new Date().toISOString();
+  const existing = db.meetResults.find(x => x.profileId === v.prof.id
+    && x.date === v.date && x.meet === v.meet && x.event === v.ev.key);
+  if (existing) {
+    Object.assign(existing, {
+      mark: v.rawMark, value: v.value, notes: clean(notes, 500), updatedAt: now,
+    });
+    return existing;
+  }
   const r = {
     id: crypto.randomUUID(), profileId: v.prof.id, date: v.date, meet: v.meet,
     event: v.ev.key, mark: v.rawMark, value: v.value,
@@ -842,7 +863,9 @@ function recordWouldRank(ev, value) {
 }
 function publicRecord(r) {
   const ev = findRecordEvent(r.event);
-  return Object.assign({}, r, { eventName: ev ? ev.name : r.event });
+  const out = Object.assign({}, r, { eventName: ev ? ev.name : r.event });
+  delete out.enteredBy;
+  return out;
 }
 /* Best current-roster meet mark for an event (the promotion source).
    Individual events only — relays have no meet-result source and
@@ -1099,7 +1122,8 @@ function dateStr(d) {
   const p = (n) => String(n).padStart(2, '0');
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
-function todayStr() { return dateStr(new Date()); }
+const NY_TODAY_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
+function todayStr() { return NY_TODAY_FMT.format(new Date()); }
 function mondayOf(dateString) {
   const d = parseDateStr(dateString);
   if (!d) return null;
@@ -1132,6 +1156,11 @@ function planDayFor(dateString) {
   return { week: wk.week, phase: wk.phase, dayKey, planText: text, codes, sessionId: codes[0] || null, isOff, isHigh, isMeet, isTest, warmup };
 }
 function groupById(id) { return db.groups.find(g => g.id === id) || null; }
+function profileNameTaken(firstName, lastName, exceptId) {
+  const f = String(firstName).toLowerCase(), l = String(lastName).toLowerCase();
+  return db.profiles.some(pr => !pr.archived && pr.id !== exceptId
+    && pr.firstName.toLowerCase() === f && pr.lastName.toLowerCase() === l);
+}
 function groupByName(name) {
   const n = String(name || '').trim().toLowerCase();
   return db.groups.find(g => g.name.toLowerCase() === n) || null;
@@ -1328,7 +1357,10 @@ function sendJson(res, status, obj, extraHeaders) {
 /* CSV downloads: quote any cell containing a comma, quote, or newline
    (RFC 4180 — inner quotes are doubled). */
 function csvCell(v) {
-  const s = v === null || v === undefined ? '' : String(v);
+  let s = v === null || v === undefined ? '' : String(v);
+  /* A text cell starting with = + - @ is a formula when the export is
+     opened in Excel/Sheets — an athlete named "=2+5" must stay text. */
+  if (typeof v === 'string' && /^\s*[=+\-@]/.test(s)) s = "'" + s;
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 function sendCsv(res, filename, rows) {
@@ -1516,7 +1548,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/logs' && req.method === 'POST') {
     const body = await readBody(req);
     const date = clean(body.date, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!parseDateStr(date)) {
       return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
     }
     const sessionId = clean(body.sessionId, 20);
@@ -1608,6 +1640,12 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/checkin' && req.method === 'POST') {
     const prof = linkedProfileFor(user);
+    if (prof && prof.archived) {
+      return sendJson(res, 403, {
+        error: 'This roster profile is archived. Ask your coach to restore it before checking in.',
+        notLinked: false,
+      });
+    }
     if (!prof) {
       return sendJson(res, 403, {
         error: 'Your account is not linked to the team roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can check in.',
@@ -1620,6 +1658,9 @@ async function handleApi(req, res, url) {
     if (date > todayStr()) return sendJson(res, 400, { error: 'You cannot check in for a day that has not happened yet.' });
     const v = validateCheckin(body);
     if (v.error) return sendJson(res, 400, { error: v.error });
+    if (date < addDaysStr(todayStr(), -14)) {
+      return sendJson(res, 400, { error: 'Check-ins can only be logged or changed within the last two weeks.' });
+    }
     const f = v.fields;
     db.checkins[prof.id] = db.checkins[prof.id] || {};
     const existing = db.checkins[prof.id][date] || null;
@@ -1639,10 +1680,11 @@ async function handleApi(req, res, url) {
        concern is removed too — but only while a coach has not
        picked it up yet (status still 'new'); once it is being
        monitored, the record stands on its own. */
-    if (f.hurts && f.painText) {
+    if (f.hurts) {
       let concern = entry.concernId
         ? (db.concerns[prof.id] || []).find(c => c.id === entry.concernId)
         : null;
+      if (concern && concern.status === 'cleared') concern = null;
       if (concern) {
         concern.note = f.painText;
         concern.updatedAt = now;
@@ -1652,8 +1694,14 @@ async function handleApi(req, res, url) {
     } else if (entry.concernId) {
       const list = db.concerns[prof.id] || [];
       const idx = list.findIndex(c => c.id === entry.concernId);
-      if (idx >= 0 && list[idx].status === 'new') list.splice(idx, 1);
-      entry.concernId = null;
+      if (idx >= 0 && list[idx].status === 'new') {
+        list.splice(idx, 1);
+        entry.concernId = null;
+      } else if (idx < 0) {
+        entry.concernId = null;
+      }
+      /* A concern a coach is already monitoring keeps its link, so
+         re-flagging later updates it instead of filing a duplicate. */
     }
     db.checkins[prof.id][date] = entry;
     saveDb();
@@ -1694,6 +1742,9 @@ async function handleApi(req, res, url) {
   if (userRoleMatch && req.method === 'PUT') {
     const target = db.users.find(u => u.id === decodeURIComponent(userRoleMatch[1]));
     if (!target) return sendJson(res, 404, { error: 'User not found.' });
+    if (!user.isOwner) {
+      return sendJson(res, 403, { error: 'Only the head coach can change account roles.' });
+    }
     const body = await readBody(req);
     if (body.role !== 'coach' && body.role !== 'athlete') {
       return sendJson(res, 400, { error: 'Role must be coach or athlete.' });
@@ -1756,8 +1807,8 @@ async function handleApi(req, res, url) {
       return sendJson(res, 400, { error: 'The head coach cannot be removed.' });
     }
     const removedInvite = db.coachInvites.includes(email);
-    if (!removedInvite && !existing) {
-      return sendJson(res, 404, { error: 'No invite or account for that email.' });
+    if (!removedInvite) {
+      return sendJson(res, 404, { error: 'That email has no invite to remove. To remove a coach account, use the role control in Coach Accounts.' });
     }
     db.coachInvites = db.coachInvites.filter(e => e !== email);
     let downgraded = false;
@@ -1825,6 +1876,9 @@ async function handleApi(req, res, url) {
     const firstName = clean(body.firstName, 40);
     const lastName = clean(body.lastName, 40);
     if (!firstName || !lastName) return sendJson(res, 400, { error: 'A profile needs a first and last name.' });
+    if (profileNameTaken(firstName, lastName, null)) {
+      return sendJson(res, 409, { error: 'An athlete with that name is already on the roster.' });
+    }
     const gid = body.groupId ? clean(body.groupId, 80) : null;
     if (gid && !groupById(gid)) return sendJson(res, 400, { error: 'Unknown group.' });
     const prof = {
@@ -1951,8 +2005,14 @@ async function handleApi(req, res, url) {
     const prof = profileById(decodeURIComponent(profileMatch[1]));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const body = await readBody(req);
-    if (body.firstName !== undefined) prof.firstName = clean(body.firstName, 40) || prof.firstName;
-    if (body.lastName !== undefined) prof.lastName = clean(body.lastName, 40) || prof.lastName;
+    const nextFirst = body.firstName !== undefined ? (clean(body.firstName, 40) || prof.firstName) : prof.firstName;
+    const nextLast = body.lastName !== undefined ? (clean(body.lastName, 40) || prof.lastName) : prof.lastName;
+    if ((nextFirst !== prof.firstName || nextLast !== prof.lastName)
+      && profileNameTaken(nextFirst, nextLast, prof.id)) {
+      return sendJson(res, 409, { error: 'Another athlete on the roster already has that name.' });
+    }
+    prof.firstName = nextFirst;
+    prof.lastName = nextLast;
     if (body.groupId !== undefined) {
       const gid = body.groupId ? clean(body.groupId, 80) : null;
       if (gid && !groupById(gid)) return sendJson(res, 400, { error: 'Unknown group.' });
@@ -2065,6 +2125,9 @@ async function handleApi(req, res, url) {
     }
     if (!prof.groupId) return sendJson(res, 400, { error: 'That athlete is not in a group, so there is no assignment to complete.' });
     const a = resolveAssignment(prof.groupId, date);
+    if (!a.sessionId && a.isOff) {
+      return sendJson(res, 400, { error: 'That day is an off day in the plan — there is no session to mark complete.' });
+    }
     let feel = parseInt(body.feel, 10);
     if (Number.isNaN(feel) || feel < 1 || feel > 5) feel = null;
     const rec = {
@@ -2119,6 +2182,7 @@ async function handleApi(req, res, url) {
         completed: done, total: members.length,
       };
     });
+    const boardOnly = q.get('board') === '1';
     // Open health flags: New or Monitoring concerns, worst first.
     const healthFlags = [];
     for (const pr of db.profiles) {
@@ -2143,8 +2207,8 @@ async function handleApi(req, res, url) {
       dayKey: plan ? plan.dayKey : null,
       planText: plan ? plan.planText : '',
       groups,
-      healthFlags,
-      wellness: wellnessTodaySummary(),
+      healthFlags: boardOnly ? [] : healthFlags,
+      wellness: boardOnly ? null : wellnessTodaySummary(),
     });
   }
 
@@ -2224,7 +2288,9 @@ async function handleApi(req, res, url) {
     if (!name || !unit) return sendJson(res, 400, { error: 'A custom test needs a name and a unit.' });
     let kind = clean(body.kind, 12);
     if (!['lift', 'measure', 'reps'].includes(kind)) kind = unit === 'lb' ? 'lift' : (unit === 'reps' ? 'reps' : 'measure');
-    const test = { key: 'custom-' + crypto.randomUUID().slice(0, 8), name, unit, kind };
+    const better = (body.better === 'lower' || body.better === 'higher')
+      ? body.better : (unit === 'sec' ? 'lower' : 'higher');
+    const test = { key: 'custom-' + crypto.randomUUID().slice(0, 8), name, unit, kind, better };
     db.customTests.push(test);
     saveDb();
     return sendJson(res, 201, { test: Object.assign({}, test, { custom: true }) });
@@ -2376,7 +2442,9 @@ async function handleApi(req, res, url) {
       for (const r of db.testResults[profParam] || []) {
         const d = displayValue(r);
         if (d === null) continue;
-        if (!pbs[r.testKey] || d > pbs[r.testKey].display) {
+        const tDef = findTest(r.testKey);
+        const isLower = !!tDef && tDef.better === 'lower';
+        if (!pbs[r.testKey] || (isLower ? d < pbs[r.testKey].display : d > pbs[r.testKey].display)) {
           pbs[r.testKey] = { display: d, testDayId: r.testDayId, resultId: r.id };
         }
       }
@@ -2428,7 +2496,9 @@ async function handleApi(req, res, url) {
       return sendJson(res, 400, { error: 'Week must be a Monday date (YYYY-MM-DD).' });
     }
     const value = num(body.value);
-    if (value === null || value < 0) return sendJson(res, 400, { error: 'Enter a valid number.' });
+    if (value === null || value < 0 || (value === 0 && metric.better === 'lower')) {
+      return sendJson(res, 400, { error: 'Enter a valid number above zero.' });
+    }
     db.weekly[prof.id] = db.weekly[prof.id] || {};
     db.weekly[prof.id][metric.key] = db.weekly[prof.id][metric.key] || {};
     db.weekly[prof.id][metric.key][week] = value;
@@ -2528,6 +2598,10 @@ async function handleApi(req, res, url) {
       if (!['new', 'monitoring', 'cleared'].includes(body.status)) {
         return sendJson(res, 400, { error: 'Status must be New, Monitoring, or Cleared.' });
       }
+      if (body.status === 'cleared' && found.status !== 'cleared') {
+        found.clearedAt = new Date().toISOString();
+      }
+      if (body.status !== 'cleared') found.clearedAt = null;
       found.status = body.status;
     }
     if (body.coachNote !== undefined) found.coachNote = clean(body.coachNote, 500);
@@ -2885,6 +2959,11 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const v = validateRecordFields(body, null);
     if (v.error) return sendJson(res, v.status, { error: v.error });
+    const f = v.fields;
+    if (db.schoolRecords.some(x => x.event === f.event && x.name === f.name
+      && x.mark === f.mark && (x.year || null) === (f.year || null))) {
+      return sendJson(res, 409, { error: 'That exact record is already on the board.' });
+    }
     const now = new Date().toISOString();
     const r = Object.assign({
       id: crypto.randomUUID(), enteredBy: user.id, createdAt: now, updatedAt: now,
@@ -2952,6 +3031,9 @@ async function handleApi(req, res, url) {
     if (!name) return sendJson(res, 400, { error: 'Name the meet.' });
     const date = clean(body.date, 10);
     if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (db.meets.some(x => x.name === name && x.date === date)) {
+      return sendJson(res, 409, { error: 'A meet with that name and date already exists.' });
+    }
     const m = {
       id: crypto.randomUUID(), name, date,
       location: clean(body.location, 80),
@@ -2991,7 +3073,13 @@ async function handleApi(req, res, url) {
       next.date = d;
     }
     if (body.location !== undefined) next.location = clean(body.location, 80);
+    const oldName = m.name, oldDate = m.date;
     Object.assign(m, next);
+    if (next.name !== oldName || next.date !== oldDate) {
+      for (const r of db.meetResults) {
+        if (r.meet === oldName && r.date === oldDate) { r.meet = next.name; r.date = next.date; }
+      }
+    }
     saveDb();
     return sendJson(res, 200, { meet: publicMeet(m) });
   }
@@ -3121,7 +3209,7 @@ async function handleApi(req, res, url) {
           points.push({ testDayId: day.id, date: day.date, title: day.title, median: medianOf(vals), count: vals.length });
         }
       }
-      return { testKey: t.key, name: t.name, unit: t.unit, kind: t.kind, points };
+      return { testKey: t.key, name: t.name, unit: t.unit, kind: t.kind, better: t.better || 'higher', points };
     });
     return sendJson(res, 200, { tests });
   }
@@ -3200,6 +3288,7 @@ async function handleApi(req, res, url) {
        the current roster size, and a per-day team-average trend for
        every day anyone checked in. */
     const rosterCount = db.profiles.filter(pr => !pr.archived).length;
+    const activeIds = new Set(db.profiles.filter(pr => !pr.archived).map(pr => pr.id));
     const weekCounts = {};
     const dayEntries = {};
     let ciTotal = 0;
@@ -3207,7 +3296,7 @@ async function handleApi(req, res, url) {
       for (const c of Object.values(db.checkins[pid] || {})) {
         ciTotal++;
         const mon = mondayOf(c.date);
-        if (mon) weekCounts[mon] = (weekCounts[mon] || 0) + 1;
+        if (mon && activeIds.has(pid)) weekCounts[mon] = (weekCounts[mon] || 0) + 1;
         (dayEntries[c.date] = dayEntries[c.date] || []).push(c);
       }
     }
@@ -3253,8 +3342,8 @@ async function handleApi(req, res, url) {
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       const displays = series.map(r => r.display).filter(d => d !== null && d !== undefined);
       return {
-        testKey: t.key, name: t.name, unit: t.unit, kind: t.kind, series,
-        best: displays.length ? Math.max.apply(null, displays) : null,
+        testKey: t.key, name: t.name, unit: t.unit, kind: t.kind, better: t.better || 'higher', series,
+        best: displays.length ? (t.better === 'lower' ? Math.min : Math.max).apply(null, displays) : null,
         latest: series.length ? series[series.length - 1].display : null,
         latestDate: series.length ? series[series.length - 1].date : null,
       };
@@ -3487,7 +3576,7 @@ async function handleApi(req, res, url) {
         if (c.status === 'new') openNow++;
         else if (c.status === 'monitoring') monitoringNow++;
         if (inWeek(String(c.createdAt || '').slice(0, 10))) opened++;
-        if (c.status === 'cleared' && inWeek(String(c.updatedAt || '').slice(0, 10))) cleared++;
+        if (c.status === 'cleared' && inWeek(String(c.clearedAt || c.updatedAt || '').slice(0, 10))) cleared++;
       }
     }
     const health = { opened, cleared, open: openNow, monitoring: monitoringNow };
