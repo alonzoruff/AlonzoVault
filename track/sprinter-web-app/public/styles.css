@@ -1876,6 +1876,64 @@ body.tv-mode #view-tv.active {
 .report-card h4 { margin: 14px 0 6px; }
 .rc-line { margin: 8px 0; }
 
+/* ---------------- custom workouts + runner mode ---------------- */
+.cw-block-line { margin: 4px 0; }
+.cw-ex-row { align-items: flex-end; }
+.cw-ex-row .btn { min-height: 44px; }
+.runner-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: #101216; color: #f5f5f7;
+  display: flex; flex-direction: column;
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+}
+.runner-overlay[hidden] { display: none; }
+body.runner-mode { overflow: hidden; }
+.runner-top {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+}
+.runner-workout { font-size: 17px; font-weight: 700; letter-spacing: .02em; color: #ffb3c2; }
+.btn.runner-exit {
+  width: auto; min-height: 48px; padding: 8px 22px;
+  background: transparent; color: #f5f5f7; border: 2px solid var(--red); font-weight: 700;
+}
+.runner-main {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 10px; min-height: 0; overflow-y: auto; width: 100%;
+}
+.runner-progress {
+  width: min(680px, 92%); height: 10px; border-radius: 5px;
+  background: #2a2d33; overflow: hidden;
+}
+.runner-progress-bar { height: 100%; background: var(--red); transition: width .3s ease; }
+.runner-step-count { color: var(--gray); font-size: 16px; margin: 0; }
+.runner-where { color: #ffb3c2; font-size: clamp(17px, 3.4vw, 24px); font-weight: 600; margin: 6px 0 0; }
+.runner-ex-name {
+  font-size: clamp(44px, 10vw, 96px); line-height: 1.05; margin: 4px 0 0; font-weight: 800;
+}
+.runner-ex-reps { font-size: clamp(34px, 7.5vw, 68px); color: var(--red); font-weight: 800; margin: 0; }
+.runner-rest-label {
+  font-size: clamp(40px, 9vw, 80px); letter-spacing: .18em; margin: 4px 0 0; font-weight: 800; color: var(--gray);
+}
+.runner-count {
+  font-size: clamp(84px, 22vw, 190px); line-height: 1; font-weight: 800; margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.runner-next { color: #c9ccd1; font-size: clamp(16px, 3.2vw, 23px); margin: 2px 0 0; }
+.runner-controls {
+  display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 18px;
+  width: min(760px, 100%);
+}
+.btn.runner-btn {
+  width: auto; flex: 1 1 150px; min-height: 64px; font-size: 20px; font-weight: 700; border-radius: 12px;
+}
+.btn.runner-btn.primary { background: var(--red); border-color: var(--red); color: #fff; flex-grow: 2; }
+.btn.runner-btn.secondary { background: #1d2026; color: #f5f5f7; border: 2px solid #3a3e46; }
+.btn.runner-btn[disabled] { opacity: .35; }
+.runner-done { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.runner-done-title { font-size: clamp(40px, 9vw, 76px); margin: 0; font-weight: 800; }
+.runner-done-stats { font-size: clamp(19px, 4vw, 28px); color: #c9ccd1; margin: 0; }
+.runner-done .btn.runner-btn { flex: none; padding: 0 44px; margin-top: 14px; }
+
 @media print {
   body.printing-report .topbar,
   body.printing-report .tabbar,

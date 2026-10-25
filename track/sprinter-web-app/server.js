@@ -18,11 +18,17 @@
  *                   email has been seeded it is never re-added, so an
  *                   invite the owner removes in the app stays removed.
  *
- * MODEL — coach-input only. Athletes never log in and never enter data.
+ * MODEL — team data is coach-input only, with one athlete surface.
  * The coach keeps a roster of athlete PROFILES (name, training group,
- * event tags, Top Athlete star) and records everything himself:
+ * event tags, Top Athlete star) and records almost everything himself:
  * assignment completions, testing-day results, weekly tracker numbers,
- * and aches & pains concerns. Login accounts exist only for coaches.
+ * and aches & pains concerns. The single exception is the daily
+ * wellness check-in: an athlete whose account email a coach has
+ * linked to their roster profile can log sleep, soreness, and energy
+ * once a day — and flag that something hurts, which files an
+ * athlete-reported concern for the coaches to pick up. Everything
+ * else an athlete account can do is read-only browsing, plus the
+ * personal practice log and cross-training swaps.
  * The first account registered is the head coach (owner); the owner can
  * invite assistant coaches by email, and an invited email registers
  * with coach access to the same shared team data. Only the owner
@@ -77,6 +83,8 @@ let db = {
   meetResults: [],
   coachInvites: [],
   coachInvitesSeeded: [],
+  athleteLinks: {},
+  checkins: {},
 };
 
 function migrate() {
@@ -105,6 +113,13 @@ function migrate() {
   // is the normalized number (seconds for times, inches for field
   // marks) that PR comparisons run on.
   db.meetResults = Array.isArray(db.meetResults) ? db.meetResults : [];
+  // Coach-built custom workouts for runner mode: a flat list of
+  // { id, title, blocks: [{ rounds, restBetweenRounds, restAfterBlock,
+  // exercises: [{ name, reps }] }], createdAt, updatedAt }. The seeded
+  // flag remembers that AJ's runner-test workout was planted once, so
+  // deleting it never brings it back.
+  db.customWorkouts = Array.isArray(db.customWorkouts) ? db.customWorkouts : [];
+  db.customWorkoutsSeeded = db.customWorkoutsSeeded === true;
   // Assistant-coach invites: normalized (trimmed, lowercased) emails the
   // owner has granted coach access to. Kept deduped on every load.
   db.coachInvites = Array.isArray(db.coachInvites)
@@ -115,11 +130,30 @@ function migrate() {
   db.coachInvitesSeeded = Array.isArray(db.coachInvitesSeeded)
     ? [...new Set(db.coachInvitesSeeded.map(e => String(e || '').trim().toLowerCase()).filter(Boolean))]
     : [];
+  // Athlete account links: { normalizedEmail: profileId }. A coach
+  // attaches an email to a roster profile; the account with that
+  // email is bound to the profile (user.profileId below) and can use
+  // the daily check-in. Keys are normalized on every load.
+  const rawLinks = (db.athleteLinks && typeof db.athleteLinks === 'object' && !Array.isArray(db.athleteLinks))
+    ? db.athleteLinks : {};
+  db.athleteLinks = {};
+  for (const [e, pid] of Object.entries(rawLinks)) {
+    const email = String(e || '').trim().toLowerCase();
+    if (email && typeof pid === 'string' && pid) db.athleteLinks[email] = pid;
+  }
+  // Daily check-ins: { profileId: { 'YYYY-MM-DD': checkin } }.
+  db.checkins = (db.checkins && typeof db.checkins === 'object' && !Array.isArray(db.checkins))
+    ? db.checkins : {};
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     // The first account is the head coach (owner). Stores written
     // before invites existed have no marker — the first user owns it.
     if (u.isOwner === undefined) u.isOwner = i === 0;
+    // The roster binding is a pure projection of the links table, so
+    // linking/unlinking takes effect on the very next request (the
+    // same fresh-from-store resolution coach invites rely on).
+    const lp = db.athleteLinks[u.email];
+    u.profileId = lp && db.profiles.some(pr => pr.id === lp) ? lp : null;
     if (!db.logs[u.id]) db.logs[u.id] = [];
     if (!db.swaps[u.id]) db.swaps[u.id] = {};
   });
@@ -167,6 +201,44 @@ function seedCoachInvitesFromEnv() {
     changed = true;
   }
   if (changed) saveDb();
+}
+
+/* Seed custom workout: the lifting circuit AJ handed over to test
+   runner mode with. Planted exactly once — the customWorkoutsSeeded
+   flag is the memory. If a coach deletes it, it stays deleted;
+   restarts never resurrect it. Rests are editable like everything
+   else: 90 seconds between rounds, 3 minutes after each block. */
+const CUSTOM_WORKOUT_SEED = {
+  title: 'Strength Circuit — Runner Test',
+  blocks: [
+    { rounds: 4, restBetweenRounds: 90, restAfterBlock: 180, exercises: [
+      { name: 'Hang Clean', reps: '3' },
+      { name: 'Band Jumps', reps: '10' },
+      { name: 'MB Slam', reps: '5 each side' },
+    ] },
+    { rounds: 4, restBetweenRounds: 90, restAfterBlock: 180, exercises: [
+      { name: 'Hex Bar Deadlift', reps: '5' },
+      { name: 'Pull-Ups', reps: 'max' },
+      { name: 'Bulgarian Split Squat', reps: '5 each' },
+      { name: 'DB Incline Press', reps: '5 each' },
+    ] },
+    { rounds: 4, restBetweenRounds: 90, restAfterBlock: 180, exercises: [
+      { name: 'Hip Thrust', reps: '5' },
+      { name: 'DB Row', reps: '5 each' },
+      { name: 'Back Extension', reps: '8' },
+      { name: 'Ab Wheel', reps: '5' },
+      { name: 'DB Incline', reps: '5' },
+    ] },
+  ],
+};
+function seedCustomWorkouts() {
+  if (db.customWorkoutsSeeded) return;
+  db.customWorkoutsSeeded = true;
+  const now = new Date().toISOString();
+  db.customWorkouts.push(Object.assign(
+    { id: crypto.randomUUID(), createdAt: now, updatedAt: now },
+    JSON.parse(JSON.stringify(CUSTOM_WORKOUT_SEED))));
+  saveDb();
 }
 
 /* ------------------------------------------------------------------ */
@@ -617,6 +689,60 @@ function validateInventory(body, partial) {
   return { fields };
 }
 
+/* Custom workouts (runner mode): a title plus ordered blocks. Each
+   block has ordered exercises ({ name, reps }) — reps is short free
+   text ("3", "max", "5 each side") — a rounds count, and two rests in
+   seconds: between rounds, and after the block. One shared validator
+   for create and update (updates replace the workout wholesale, the
+   editor always sends the whole thing). Returns { fields } holding
+   the trimmed, stored shape, or { error }. */
+function validateCustomWorkout(body) {
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  if (!title || title.length > 80) {
+    return { error: 'A custom workout needs a title of 1 to 80 characters.' };
+  }
+  if (!Array.isArray(body.blocks) || body.blocks.length < 1 || body.blocks.length > 8) {
+    return { error: 'A custom workout needs 1 to 8 blocks.' };
+  }
+  const blocks = [];
+  for (let i = 0; i < body.blocks.length; i++) {
+    const b = body.blocks[i] && typeof body.blocks[i] === 'object' ? body.blocks[i] : {};
+    const where = 'Block ' + (i + 1);
+    const rounds = num(b.rounds);
+    if (rounds === null || !Number.isInteger(rounds) || rounds < 1 || rounds > 10) {
+      return { error: where + ': rounds must be a whole number from 1 to 10.' };
+    }
+    const restBetweenRounds = num(b.restBetweenRounds);
+    if (restBetweenRounds === null || !Number.isInteger(restBetweenRounds)
+      || restBetweenRounds < 0 || restBetweenRounds > 600) {
+      return { error: where + ': rest between rounds must be a whole number of seconds from 0 to 600.' };
+    }
+    const restAfterBlock = num(b.restAfterBlock);
+    if (restAfterBlock === null || !Number.isInteger(restAfterBlock)
+      || restAfterBlock < 0 || restAfterBlock > 600) {
+      return { error: where + ': rest after the block must be a whole number of seconds from 0 to 600.' };
+    }
+    if (!Array.isArray(b.exercises) || b.exercises.length < 1 || b.exercises.length > 10) {
+      return { error: where + ' needs 1 to 10 exercises.' };
+    }
+    const exercises = [];
+    for (let j = 0; j < b.exercises.length; j++) {
+      const e = b.exercises[j] && typeof b.exercises[j] === 'object' ? b.exercises[j] : {};
+      const name = typeof e.name === 'string' ? e.name.trim() : '';
+      if (!name || name.length > 60) {
+        return { error: where + ', exercise ' + (j + 1) + ': a name of 1 to 60 characters is required.' };
+      }
+      const reps = typeof e.reps === 'string' ? e.reps.trim() : '';
+      if (!reps || reps.length > 24) {
+        return { error: where + ', exercise ' + (j + 1) + ': reps of 1 to 24 characters are required (try "3", "max", or "5 each").' };
+      }
+      exercises.push({ name, reps });
+    }
+    blocks.push({ rounds, restBetweenRounds, restAfterBlock, exercises });
+  }
+  return { fields: { title, blocks } };
+}
+
 /* Warm-up cards: the three cards (Light / Speed Day / Circuit Day)
    ship as fixed HTML in public/index.html — four list sections each.
    Coaches can edit the item lists in the app; a save replaces the
@@ -732,6 +858,13 @@ function groupByName(name) {
   return db.groups.find(g => g.name.toLowerCase() === n) || null;
 }
 function profileById(id) { return db.profiles.find(pr => pr.id === id) || null; }
+/* The account email a coach has linked to a roster profile, if any. */
+function linkedEmailForProfile(profileId) {
+  for (const [email, pid] of Object.entries(db.athleteLinks)) {
+    if (pid === profileId) return email;
+  }
+  return null;
+}
 function publicProfile(pr) {
   const g = pr.groupId ? groupById(pr.groupId) : null;
   return {
@@ -739,9 +872,12 @@ function publicProfile(pr) {
     name: (pr.firstName + ' ' + pr.lastName).trim(),
     groupId: pr.groupId || null, groupName: g ? g.name : null,
     events: pr.events || [], topAthlete: !!pr.topAthlete, archived: !!pr.archived,
+    linkedEmail: linkedEmailForProfile(pr.id),
   };
 }
-function publicUser(u) { return { id: u.id, email: u.email, role: u.role, isOwner: !!u.isOwner }; }
+function publicUser(u) {
+  return { id: u.id, email: u.email, role: u.role, isOwner: !!u.isOwner, profileId: u.profileId || null };
+}
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function userByEmail(email) { return db.users.find(u => u.email === email) || null; }
 /* An assignment = coach override if one exists, else the plan default. */
@@ -767,6 +903,117 @@ function resolveAssignment(groupId, dateString) {
 }
 function completionFor(profileId, dateString) {
   return db.completions[profileId + '|' + dateString] || null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Daily wellness check-in (the one athlete-entered surface)         */
+/* ------------------------------------------------------------------ */
+/* Flag rules, shared by the athlete view, the coach Wellness view,
+   and the Coach Today line so a flag means the same thing everywhere:
+   slept under 6 hours, soreness 4 or 5, energy 1 or 2. */
+function checkinFlags(c) {
+  const flags = [];
+  if (c.sleep < 6) flags.push('low-sleep');
+  if (c.soreness >= 4) flags.push('high-soreness');
+  if (c.energy <= 2) flags.push('low-energy');
+  return flags;
+}
+function publicCheckin(c) {
+  return {
+    date: c.date, sleep: c.sleep, soreness: c.soreness, energy: c.energy,
+    hurts: !!c.hurts, painText: c.painText || '', note: c.note || '',
+    flags: checkinFlags(c), updatedAt: c.updatedAt,
+  };
+}
+/* The roster profile this account is bound to, if a coach linked it. */
+function linkedProfileFor(user) {
+  return user && user.profileId ? profileById(user.profileId) : null;
+}
+/* Consecutive checked-in days ending today — or yesterday, when
+   today's check-in simply has not happened yet. */
+function checkinStreak(profileId) {
+  const byDate = db.checkins[profileId] || {};
+  let cursor = todayStr();
+  if (!byDate[cursor]) cursor = addDaysStr(cursor, -1);
+  if (!cursor || !byDate[cursor]) return 0;
+  let n = 0;
+  while (cursor && byDate[cursor]) { n++; cursor = addDaysStr(cursor, -1); }
+  return n;
+}
+/* File an athlete-reported concern in the existing Aches & Pains
+   store. The athlete only gives words ("right hamstring is tight"),
+   so the structured coach fields take neutral values: area/feeling
+   "other", no pain score (null — the coach sets one when they pick
+   it up), and source 'athlete' marks it as self-reported wherever
+   concerns are shown. Returns the new concern's id. */
+function createAthleteConcern(prof, date, painText, userId) {
+  const now = new Date().toISOString();
+  const concern = {
+    id: crypto.randomUUID(), profileId: prof.id,
+    area: 'other', side: 'na', feeling: 'other', pain: null,
+    started: date, impact: 'none',
+    note: painText, status: 'new', coachNote: '',
+    source: 'athlete', reportedBy: userId || null, checkinDate: date,
+    createdAt: now, updatedAt: now,
+  };
+  db.concerns[prof.id] = db.concerns[prof.id] || [];
+  db.concerns[prof.id].push(concern);
+  return concern.id;
+}
+/* The check-in validation rules, in one place: sleep 3–13 hours in
+   half-hour steps, soreness/energy whole numbers 1–5, pain text up
+   to 240 chars, note up to 500. Returns { fields } or { error }. */
+function validateCheckin(body) {
+  const sleep = num(body.sleep);
+  if (sleep === null || sleep < 3 || sleep > 13
+    || Math.abs(sleep * 2 - Math.round(sleep * 2)) > 1e-9) {
+    return { error: 'Sleep must be between 3 and 13 hours, in half-hour steps.' };
+  }
+  const soreness = num(body.soreness);
+  if (soreness === null || !Number.isInteger(soreness) || soreness < 1 || soreness > 5) {
+    return { error: 'Soreness must be a whole number from 1 to 5.' };
+  }
+  const energy = num(body.energy);
+  if (energy === null || !Number.isInteger(energy) || energy < 1 || energy > 5) {
+    return { error: 'Energy must be a whole number from 1 to 5.' };
+  }
+  if (body.painText !== undefined && body.painText !== null && typeof body.painText !== 'string') {
+    return { error: 'Say what hurts in words.' };
+  }
+  if (typeof body.painText === 'string' && body.painText.length > 240) {
+    return { error: 'Keep the pain note to 240 characters or less.' };
+  }
+  if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') {
+    return { error: 'The note must be text.' };
+  }
+  if (typeof body.note === 'string' && body.note.length > 500) {
+    return { error: 'Keep the note to 500 characters or less.' };
+  }
+  return {
+    fields: {
+      sleep, soreness, energy,
+      hurts: !!body.hurts,
+      painText: clean(body.painText, 240),
+      note: clean(body.note, 500),
+    },
+  };
+}
+/* Today's check-in headline for the Coach Today summary. */
+function wellnessTodaySummary() {
+  const date = todayStr();
+  const roster = db.profiles.filter(pr => !pr.archived);
+  let checkedIn = 0;
+  const flagged = [];
+  for (const pr of roster) {
+    const c = (db.checkins[pr.id] || {})[date];
+    if (!c) continue;
+    checkedIn++;
+    const flags = checkinFlags(c);
+    if (flags.length) {
+      flagged.push({ profileId: pr.id, name: pr.firstName + ' ' + pr.lastName, flags });
+    }
+  }
+  return { date, checkedIn, total: roster.length, flagged };
 }
 function weeklySeriesFor(profileId, metric) {
   const byWeek = (db.weekly[profileId] || {})[metric.key] || {};
@@ -908,7 +1155,12 @@ async function handleApi(req, res, url) {
       // athlete-role account (no team-data access).
       role: firstAccount || db.coachInvites.includes(email) ? 'coach' : 'athlete',
       isOwner: firstAccount,
+      profileId: null,
     };
+    // If a coach already linked this email to a roster profile, the
+    // new account is born bound to it (daily check-in works at once).
+    const linkPid = db.athleteLinks[email];
+    if (linkPid && profileById(linkPid)) user.profileId = linkPid;
     db.users.push(user);
     db.logs[user.id] = [];
     db.swaps[user.id] = {};
@@ -1013,6 +1265,91 @@ async function handleApi(req, res, url) {
     else db.swaps[user.id][key] = xt;
     saveDb();
     return sendJson(res, 200, { swaps: db.swaps[user.id] });
+  }
+
+  /* ---------- daily wellness check-in (athlete-entered) ----------
+     The one thing an athlete writes about the team: how they slept,
+     how sore they are, their energy — once a day. It only works for
+     an account a coach has linked to a roster profile; the profile
+     always comes from the caller's own binding, never from the
+     request, so writing (or reading) anyone else's check-in is
+     impossible by construction. */
+  if (p === '/api/checkin/today' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    const date = todayStr();
+    if (!prof) return sendJson(res, 200, { linked: false, date, checkin: null });
+    const entry = (db.checkins[prof.id] || {})[date] || null;
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      date, checkin: entry ? publicCheckin(entry) : null,
+    });
+  }
+
+  if (p === '/api/checkin/mine' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    if (!prof) return sendJson(res, 200, { linked: false, entries: [], streak: 0 });
+    const entries = Object.values(db.checkins[prof.id] || {})
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      .slice(0, 7)
+      .map(publicCheckin);
+    return sendJson(res, 200, { linked: true, entries, streak: checkinStreak(prof.id) });
+  }
+
+  if (p === '/api/checkin' && req.method === 'POST') {
+    const prof = linkedProfileFor(user);
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the team roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can check in.',
+        notLinked: true,
+      });
+    }
+    const body = await readBody(req);
+    const date = body.date !== undefined ? clean(body.date, 10) : todayStr();
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (date > todayStr()) return sendJson(res, 400, { error: 'You cannot check in for a day that has not happened yet.' });
+    const v = validateCheckin(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const f = v.fields;
+    db.checkins[prof.id] = db.checkins[prof.id] || {};
+    const existing = db.checkins[prof.id][date] || null;
+    const now = new Date().toISOString();
+    const entry = existing || {
+      profileId: prof.id, date, concernId: null, createdAt: now,
+    };
+    Object.assign(entry, {
+      sleep: f.sleep, soreness: f.soreness, energy: f.energy,
+      hurts: f.hurts, painText: f.hurts ? f.painText : '',
+      note: f.note, updatedAt: now,
+    });
+    /* Pain integration: "something hurts" + words files ONE
+       athlete-reported concern per check-in day. Re-submitting the
+       same day updates that same concern's text instead of filing a
+       second one. If the athlete edits the report away, the linked
+       concern is removed too — but only while a coach has not
+       picked it up yet (status still 'new'); once it is being
+       monitored, the record stands on its own. */
+    if (f.hurts && f.painText) {
+      let concern = entry.concernId
+        ? (db.concerns[prof.id] || []).find(c => c.id === entry.concernId)
+        : null;
+      if (concern) {
+        concern.note = f.painText;
+        concern.updatedAt = now;
+      } else {
+        entry.concernId = createAthleteConcern(prof, date, f.painText, user.id);
+      }
+    } else if (entry.concernId) {
+      const list = db.concerns[prof.id] || [];
+      const idx = list.findIndex(c => c.id === entry.concernId);
+      if (idx >= 0 && list[idx].status === 'new') list.splice(idx, 1);
+      entry.concernId = null;
+    }
+    db.checkins[prof.id][date] = entry;
+    saveDb();
+    return sendJson(res, existing ? 200 : 201, {
+      ok: true, created: !existing, checkin: publicCheckin(entry),
+    });
   }
 
   /* ================================================================ */
@@ -1325,6 +1662,50 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* ---------- athlete account links (coach-managed) ----------
+     Attach an email to a roster profile and that athlete's account
+     is bound to the profile: an existing account binds on the spot,
+     a future registration with that email is born bound. One email
+     links to exactly one profile, and one profile carries one
+     email — re-linking a profile replaces its old email. Unlinking
+     keeps the account; it just loses the binding (and with it,
+     check-in access) on the next request. */
+  const profileLinkMatch = p.match(/^\/api\/profiles\/([^/]+)\/link$/);
+  if (profileLinkMatch && req.method === 'PUT') {
+    const prof = profileById(decodeURIComponent(profileLinkMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const body = await readBody(req);
+    const email = clean(body.email, 200).toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      return sendJson(res, 400, { error: 'Please enter a valid email address.' });
+    }
+    const holder = db.athleteLinks[email];
+    if (holder && holder !== prof.id) {
+      return sendJson(res, 409, { error: 'That email is already linked to another athlete on the roster.' });
+    }
+    for (const e of Object.keys(db.athleteLinks)) {
+      if (db.athleteLinks[e] === prof.id) delete db.athleteLinks[e];
+    }
+    db.athleteLinks[email] = prof.id;
+    const acct = userByEmail(email);
+    if (acct) acct.profileId = prof.id;
+    saveDb();
+    return sendJson(res, 200, {
+      ok: true, email, accountLinked: !!acct, profile: publicProfile(prof),
+    });
+  }
+  if (profileLinkMatch && req.method === 'DELETE') {
+    const prof = profileById(decodeURIComponent(profileLinkMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    let wasLinked = false;
+    for (const e of Object.keys(db.athleteLinks)) {
+      if (db.athleteLinks[e] === prof.id) { delete db.athleteLinks[e]; wasLinked = true; }
+    }
+    for (const u of db.users) if (u.profileId === prof.id) u.profileId = null;
+    saveDb();
+    return sendJson(res, 200, { ok: true, wasLinked, profile: publicProfile(prof) });
+  }
+
   /* ---------- assignments + coach-marked completions ---------- */
   if (p === '/api/assignments/override' && req.method === 'POST') {
     const body = await readBody(req);
@@ -1438,6 +1819,7 @@ async function handleApi(req, res, url) {
       planText: plan ? plan.planText : '',
       groups,
       healthFlags,
+      wellness: wellnessTodaySummary(),
     });
   }
 
@@ -1836,6 +2218,72 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { concern: found });
   }
 
+  /* ---------- daily wellness (coach view of the check-ins) ---------- */
+  function wellnessRoster() {
+    return db.profiles.filter(pr => !pr.archived)
+      .slice()
+      .sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+  }
+  function wellnessAvg(rows, key) {
+    if (!rows.length) return null;
+    return round2(rows.reduce((s, c) => s + c[key], 0) / rows.length);
+  }
+  if (p === '/api/wellness/today' && req.method === 'GET') {
+    const date = todayStr();
+    const rows = wellnessRoster().map(pr => {
+      const c = (db.checkins[pr.id] || {})[date] || null;
+      return {
+        profile: publicProfile(pr),
+        checkedIn: !!c,
+        checkin: c ? publicCheckin(c) : null,
+        flags: c ? checkinFlags(c) : [],
+      };
+    });
+    const done = rows.filter(rw => rw.checkedIn).map(rw => rw.checkin);
+    return sendJson(res, 200, {
+      date,
+      summary: {
+        total: rows.length,
+        checkedIn: done.length,
+        participation: rows.length ? Math.round((done.length / rows.length) * 100) : 0,
+        flagged: rows.filter(rw => rw.flags.length).length,
+        avgSleep: wellnessAvg(done, 'sleep'),
+        avgSoreness: wellnessAvg(done, 'soreness'),
+        avgEnergy: wellnessAvg(done, 'energy'),
+      },
+      rows,
+    });
+  }
+  if (p === '/api/wellness/trends' && req.method === 'GET') {
+    let days = parseInt(q.get('days') || '7', 10);
+    if (!Number.isInteger(days) || days < 1) days = 7;
+    if (days > 31) days = 31;
+    const dates = [];
+    for (let i = days - 1; i >= 0; i--) dates.push(addDaysStr(todayStr(), -i));
+    const roster = wellnessRoster();
+    const athletes = roster.map(pr => ({
+      profile: publicProfile(pr),
+      days: dates.map(d => {
+        const c = (db.checkins[pr.id] || {})[d] || null;
+        return {
+          date: d,
+          sleep: c ? c.sleep : null, soreness: c ? c.soreness : null, energy: c ? c.energy : null,
+          flags: c ? checkinFlags(c) : [],
+        };
+      }),
+    }));
+    const team = dates.map(d => {
+      const cs = roster.map(pr => (db.checkins[pr.id] || {})[d]).filter(Boolean);
+      return {
+        date: d, checkedIn: cs.length,
+        avgSleep: wellnessAvg(cs, 'sleep'),
+        avgSoreness: wellnessAvg(cs, 'soreness'),
+        avgEnergy: wellnessAvg(cs, 'energy'),
+      };
+    });
+    return sendJson(res, 200, { days, dates, athletes, team });
+  }
+
   /* ---------- meet results (coach entry only) ---------- */
   if (p === '/api/meet-events' && req.method === 'GET') {
     return sendJson(res, 200, { events: MEET_EVENTS.map(meetEventView) });
@@ -2078,7 +2526,42 @@ async function handleApi(req, res, url) {
       }
     }
     const byMonth = Object.keys(monthCounts).sort().map(m => ({ month: m, opened: monthCounts[m] }));
-    return sendJson(res, 200, { total, byStatus, byMonth });
+    /* Daily check-in aggregates, additive to the payload above:
+       participation per season-style week (Monday bucket) against
+       the current roster size, and a per-day team-average trend for
+       every day anyone checked in. */
+    const rosterCount = db.profiles.filter(pr => !pr.archived).length;
+    const weekCounts = {};
+    const dayEntries = {};
+    let ciTotal = 0;
+    for (const pid of Object.keys(db.checkins)) {
+      for (const c of Object.values(db.checkins[pid] || {})) {
+        ciTotal++;
+        const mon = mondayOf(c.date);
+        if (mon) weekCounts[mon] = (weekCounts[mon] || 0) + 1;
+        (dayEntries[c.date] = dayEntries[c.date] || []).push(c);
+      }
+    }
+    const participationByWeek = Object.keys(weekCounts).sort().map(mon => {
+      const count = weekCounts[mon];
+      const possible = rosterCount * 7;
+      return {
+        week: mon, checkins: count, possible,
+        percent: possible ? Math.round((count / possible) * 100) : 0,
+      };
+    });
+    const dailyTrend = Object.keys(dayEntries).sort().map(d => {
+      const cs = dayEntries[d];
+      const avgOf = (k) => round2(cs.reduce((s, c) => s + c[k], 0) / cs.length);
+      return {
+        date: d, count: cs.length,
+        avgSleep: avgOf('sleep'), avgSoreness: avgOf('soreness'), avgEnergy: avgOf('energy'),
+      };
+    });
+    return sendJson(res, 200, {
+      total, byStatus, byMonth,
+      checkins: { totalCheckins: ciTotal, participationByWeek, dailyTrend },
+    });
   }
 
   const athleteReportMatch = p.match(/^\/api\/reports\/athlete\/([^/]+)$/);
@@ -2262,6 +2745,48 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
+  /* ---------- custom workouts (coach-built, for runner mode) ------
+     Coach-only like everything in this section: athletes get a 403
+     on read and write alike. Runner mode itself is a client-side
+     display over this data, so it inherits the same gate. */
+  if (p === '/api/custom-workouts' && req.method === 'GET') {
+    const workouts = db.customWorkouts.slice()
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+    return sendJson(res, 200, { workouts });
+  }
+  if (p === '/api/custom-workouts' && req.method === 'POST') {
+    const body = await readBody(req);
+    const v = validateCustomWorkout(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const workout = Object.assign({
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+    }, v.fields, { updatedAt: new Date().toISOString() });
+    db.customWorkouts.push(workout);
+    saveDb();
+    return sendJson(res, 201, { workout });
+  }
+  const customWorkoutMatch = p.match(/^\/api\/custom-workouts\/([^/]+)$/);
+  if (customWorkoutMatch && req.method === 'PUT') {
+    const workout = db.customWorkouts.find(w => w.id === decodeURIComponent(customWorkoutMatch[1]));
+    if (!workout) return sendJson(res, 404, { error: 'Custom workout not found.' });
+    const body = await readBody(req);
+    const v = validateCustomWorkout(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    Object.assign(workout, v.fields, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { workout });
+  }
+  if (customWorkoutMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(customWorkoutMatch[1]);
+    if (!db.customWorkouts.some(w => w.id === id)) {
+      return sendJson(res, 404, { error: 'Custom workout not found.' });
+    }
+    db.customWorkouts = db.customWorkouts.filter(w => w.id !== id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
   void coachOnly;
   return sendJson(res, 404, { error: 'not found' });
 }
@@ -2298,6 +2823,7 @@ function serveStatic(req, res, url) {
 }
 
 seedCoachInvitesFromEnv();
+seedCustomWorkouts();
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');

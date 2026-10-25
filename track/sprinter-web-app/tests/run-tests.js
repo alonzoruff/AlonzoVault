@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v14',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v15"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v16',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v16"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1302,7 +1302,139 @@ async function main() {
     appJs.text.includes('/api/results/bulk') && appJs.text.includes('/api/reports/athlete/') &&
     appJs.text.includes('/api/meet-results'));
 
-  return { coach, inventoryId: invBlocks };
+  /* ---------------- custom workouts + runner mode ---------------- */
+  r = await api(coach, 'GET', '/api/custom-workouts');
+  check('custom workouts list is 200 for a coach', r.status === 200, r.status);
+  check('seed workout is planted exactly once',
+    (r.json.workouts || []).length === 1 &&
+    r.json.workouts[0].title === 'Strength Circuit — Runner Test',
+    (r.json.workouts || []).map(w => w.title));
+  const seed = r.json.workouts[0];
+  check('seed has 3 blocks of 4 rounds with 90s / 180s rests',
+    seed.blocks.length === 3 &&
+    seed.blocks.every(b => b.rounds === 4 && b.restBetweenRounds === 90 && b.restAfterBlock === 180));
+  check('seed block exercise counts are 3 / 4 / 5',
+    seed.blocks.map(b => b.exercises.length).join(',') === '3,4,5',
+    seed.blocks.map(b => b.exercises.length));
+  check('seed exercises match AJ\'s mock, in order',
+    seed.blocks[0].exercises.map(e => e.name).join('|') === 'Hang Clean|Band Jumps|MB Slam' &&
+    seed.blocks[1].exercises.map(e => e.name).join('|') === 'Hex Bar Deadlift|Pull-Ups|Bulgarian Split Squat|DB Incline Press' &&
+    seed.blocks[2].exercises.map(e => e.name).join('|') === 'Hip Thrust|DB Row|Back Extension|Ab Wheel|DB Incline');
+  check('seed reps match the mock (incl. max and each-side)',
+    seed.blocks[0].exercises[0].reps === '3' &&
+    seed.blocks[0].exercises[2].reps === '5 each side' &&
+    seed.blocks[1].exercises[1].reps === 'max' &&
+    seed.blocks[1].exercises[2].reps === '5 each' &&
+    seed.blocks[2].exercises[4].name === 'DB Incline' && seed.blocks[2].exercises[4].reps === '5');
+
+  r = await api(athlete, 'GET', '/api/custom-workouts');
+  check('athlete is 403 reading custom workouts', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/custom-workouts',
+    { title: 'Nope', blocks: [{ rounds: 1, restBetweenRounds: 0, restAfterBlock: 0, exercises: [{ name: 'X', reps: '1' }] }] });
+  check('athlete is 403 creating a custom workout', r.status === 403, r.status);
+  r = await api(athlete, 'PUT', '/api/custom-workouts/' + seed.id,
+    { title: 'Nope', blocks: [{ rounds: 1, restBetweenRounds: 0, restAfterBlock: 0, exercises: [{ name: 'X', reps: '1' }] }] });
+  check('athlete is 403 updating a custom workout', r.status === 403, r.status);
+  r = await api(athlete, 'DELETE', '/api/custom-workouts/' + seed.id);
+  check('athlete is 403 deleting a custom workout', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/custom-workouts');
+  check('custom workouts without login are 401', r.status === 401, r.status);
+
+  const cwBody = { title: 'Test Circuit', blocks: [{ rounds: 2, restBetweenRounds: 30, restAfterBlock: 60, exercises: [{ name: 'Squat', reps: '5' }, { name: 'Push-Up', reps: 'max' }] }] };
+  r = await api(coach, 'POST', '/api/custom-workouts', cwBody);
+  check('custom workout create is 201', r.status === 201, r.status);
+  const cwId = r.json.workout.id;
+  check('created workout round-trips its shape',
+    r.json.workout.title === 'Test Circuit' && r.json.workout.blocks[0].rounds === 2 &&
+    r.json.workout.blocks[0].exercises.length === 2 &&
+    r.json.workout.blocks[0].exercises[1].reps === 'max', r.json.workout);
+  r = await api(coach, 'PUT', '/api/custom-workouts/' + cwId,
+    { title: 'Test Circuit v2', blocks: cwBody.blocks });
+  check('custom workout update is 200 with the new title',
+    r.status === 200 && r.json.workout.title === 'Test Circuit v2', r.status);
+  r = await api(coach, 'PUT', '/api/custom-workouts/does-not-exist', cwBody);
+  check('updating an unknown custom workout is 404', r.status === 404, r.status);
+  r = await api(coach, 'DELETE', '/api/custom-workouts/' + cwId);
+  check('custom workout delete is 200', r.status === 200, r.status);
+  r = await api(coach, 'DELETE', '/api/custom-workouts/' + cwId);
+  check('deleting a custom workout twice is 404', r.status === 404, r.status);
+
+  const goodBlock = { rounds: 2, restBetweenRounds: 30, restAfterBlock: 30, exercises: [{ name: 'Squat', reps: '5' }] };
+  const cwBad = async (label, body) => {
+    const rr = await api(coach, 'POST', '/api/custom-workouts', body);
+    check('custom workout validation: ' + label, rr.status === 400, rr.status);
+  };
+  await cwBad('blank title', { title: '  ', blocks: [goodBlock] });
+  await cwBad('title over 80 chars', { title: 'x'.repeat(81), blocks: [goodBlock] });
+  await cwBad('no blocks', { title: 'T', blocks: [] });
+  await cwBad('9 blocks', { title: 'T', blocks: Array(9).fill(goodBlock) });
+  await cwBad('blocks not an array', { title: 'T', blocks: 'nope' });
+  await cwBad('rounds 0', { title: 'T', blocks: [{ ...goodBlock, rounds: 0 }] });
+  await cwBad('rounds 11', { title: 'T', blocks: [{ ...goodBlock, rounds: 11 }] });
+  await cwBad('rounds not whole', { title: 'T', blocks: [{ ...goodBlock, rounds: 2.5 }] });
+  await cwBad('rest between rounds 601', { title: 'T', blocks: [{ ...goodBlock, restBetweenRounds: 601 }] });
+  await cwBad('rest after block -1', { title: 'T', blocks: [{ ...goodBlock, restAfterBlock: -1 }] });
+  await cwBad('no exercises in a block', { title: 'T', blocks: [{ ...goodBlock, exercises: [] }] });
+  await cwBad('11 exercises in a block', { title: 'T', blocks: [{ ...goodBlock, exercises: Array(11).fill({ name: 'X', reps: '1' }) }] });
+  await cwBad('blank exercise name', { title: 'T', blocks: [{ ...goodBlock, exercises: [{ name: ' ', reps: '1' }] }] });
+  await cwBad('exercise name over 60 chars', { title: 'T', blocks: [{ ...goodBlock, exercises: [{ name: 'x'.repeat(61), reps: '1' }] }] });
+  await cwBad('blank reps', { title: 'T', blocks: [{ ...goodBlock, exercises: [{ name: 'X', reps: '' }] }] });
+  await cwBad('reps over 24 chars', { title: 'T', blocks: [{ ...goodBlock, exercises: [{ name: 'X', reps: 'x'.repeat(25) }] }] });
+  r = await api(coach, 'GET', '/api/custom-workouts');
+  check('failed validations created nothing (only the seed remains)',
+    (r.json.workouts || []).length === 1, (r.json.workouts || []).length);
+
+  /* Runner step sequence — verified against the pure core shipped
+     in app.js (extracted between its markers and evaluated). */
+  const coreMatch = appJs.text.match(/\/\* RUNNER-CORE-BEGIN \*\/([\s\S]*?)\/\* RUNNER-CORE-END \*\//);
+  check('runner core section is in the shipped JS', !!coreMatch);
+  if (coreMatch) {
+    const core = new Function(coreMatch[1] +
+      '\nreturn { buildRunnerSteps, sessionToRunnerPlan, parseRestSeconds };')();
+    const steps = core.buildRunnerSteps(seed);
+    const exSteps = steps.filter(s => s.type === 'exercise');
+    const restSteps = steps.filter(s => s.type === 'rest');
+    check('seed runner walk is 48 exercise steps', exSteps.length === 48, exSteps.length);
+    check('seed runner walk inserts 11 rest steps (59 total)',
+      restSteps.length === 11 && steps.length === 59, steps.length);
+    check('first round flows circuit-style, then a 90s round rest',
+      steps.slice(0, 3).map(s => s.name).join('|') === 'Hang Clean|Band Jumps|MB Slam' &&
+      steps[3].type === 'rest' && steps[3].kind === 'round' && steps[3].seconds === 90);
+    check('a 180s block rest follows block 1, then block 2 opens',
+      steps[15].type === 'rest' && steps[15].kind === 'block' && steps[15].seconds === 180 &&
+      steps[16].type === 'exercise' && steps[16].name === 'Hex Bar Deadlift');
+    check('the walk ends on the last exercise (no trailing rest)',
+      steps[steps.length - 1].type === 'exercise' && steps[steps.length - 1].name === 'DB Incline');
+    check('exercise steps carry block and round positions',
+      exSteps[0].block === 0 && exSteps[0].round === 1 &&
+      exSteps[47].block === 2 && exSteps[47].round === 4);
+    const acc = contentJson.sessions.find(s => s.id === 'ACC-01');
+    const accPlan = core.sessionToRunnerPlan(acc);
+    const accSteps = core.buildRunnerSteps(accPlan);
+    check('ACC-01 maps to 8 rounds of one work step with 150s rests',
+      accPlan.blocks.length === 1 && accPlan.blocks[0].rounds === 8 &&
+      accPlan.blocks[0].exercises[0].name === 'Run 30m' &&
+      accPlan.blocks[0].exercises[0].reps === '@ 98%' &&
+      accPlan.blocks[0].restBetweenRounds === 150 &&
+      accSteps.filter(s => s.type === 'exercise').length === 8, accPlan.blocks);
+    const wup = contentJson.sessions.find(s => s.id === 'WUP-02');
+    const wupSteps = core.buildRunnerSteps(core.sessionToRunnerPlan(wup));
+    check('a prose warm-up session maps to a single runner step',
+      wupSteps.length === 1 && wupSteps[0].type === 'exercise', wupSteps.length);
+    check('rest parsing: 6-8 min is 420, walk back is 60, continuous is 0',
+      core.parseRestSeconds('6-8 min') === 420 &&
+      core.parseRestSeconds('walk back') === 60 &&
+      core.parseRestSeconds('continuous flow') === 0);
+  }
+  check('custom workouts view + runner overlay are in the served page',
+    pageHtml.text.includes('id="view-custom"') && pageHtml.text.includes('data-view="custom"') &&
+    pageHtml.text.includes('id="runner-overlay"') && pageHtml.text.includes('id="runner-main"'));
+  check('runner + custom workouts wiring is in the served JS',
+    appJs.text.includes('renderCustomWorkouts') && appJs.text.includes('openRunner') &&
+    appJs.text.includes('/api/custom-workouts') && appJs.text.includes('detail-run') &&
+    appJs.text.includes('runnerAdvance') && appJs.text.includes('runnerTogglePause'));
+
+  return { coach, inventoryId: invBlocks, seedId: seed.id };
 }
 
 async function waitForServer(tries = 60) {
@@ -1346,6 +1478,23 @@ async function waitForServer(tries = 60) {
       rw.status === 200 && !!rw.json.cards['wu-card-1'] &&
       JSON.stringify(rw.json.cards['wu-card-1']).includes('Test Marker Drill'),
       rw.json && Object.keys(rw.json.cards || {}));
+    const rc = await api(ctx.coach, 'GET', '/api/custom-workouts');
+    check('custom workouts survive a server restart, seed still exactly once',
+      rc.status === 200 && (rc.json.workouts || []).length === 1 &&
+      rc.json.workouts[0].id === ctx.seedId,
+      rc.json && (rc.json.workouts || []).length);
+    /* Deleting the seed must not resurrect it: delete it, restart
+       once more on the same store, and the list stays empty. */
+    const rd = await api(ctx.coach, 'DELETE', '/api/custom-workouts/' + ctx.seedId);
+    check('seed workout deletes before the resurrection check', rd.status === 200, rd.status);
+    child.kill('SIGKILL');
+    await new Promise(res => setTimeout(res, 300));
+    child = startServer();
+    if (!await waitForServer()) throw new Error('server did not restart (2nd).\n' + serverLog);
+    const rc2 = await api(ctx.coach, 'GET', '/api/custom-workouts');
+    check('deleted seed does NOT resurrect after a restart',
+      rc2.status === 200 && (rc2.json.workouts || []).length === 0,
+      rc2.json && (rc2.json.workouts || []).length);
 
     /* Env-seeded invites (COACH_INVITE_EMAILS): a fresh store gets the
        invites, a seeded email registers as coach, and a seeded invite

@@ -21,6 +21,9 @@ const state = {
   invCat: '',
   invQ: '',
   invEditId: null,
+  cwWorkouts: [],
+  cwEditId: null,
+  cwDraft: null,
   detailId: null,
   groups: [],
   roster: null,
@@ -49,6 +52,9 @@ const state = {
   meetEvents: [],
   meetEditId: null,
   meetProgAthlete: null,
+  checkinToday: null,
+  checkinMine: null,
+  ciMsg: '',
   profiles: [],
   pfGroup: '',
   pfEvent: '',
@@ -209,12 +215,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train',
   videos: 'learn', definitions: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', reports: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', reports: 'coachhub', custom: 'coachhub', wellness: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['reports', 'Reports'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['reports', 'Reports'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -236,6 +242,7 @@ function showView(name) {
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'reports') renderReports();
   if (name === 'meets') renderMeets();
+  if (name === 'custom') renderCustomWorkouts();
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -287,6 +294,7 @@ function sessionDetailHtml(s) {
   const row = (k, v) => v ? `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
   return `<div class="card">
     <button class="btn secondary" id="detail-back" type="button">← Back to list</button>
+    <button class="btn primary" id="detail-run" type="button">Run this workout</button>
     <h2><span class="code-link">${esc(s.id)}</span> · ${esc(s.name)}</h2>
     <p>${badge(s.cns_demand)} <span class="badge plain">${esc(labelQuality(s.quality))}</span> <span class="badge plain">${esc(labelPhase(s.phase))}</span></p>
     <dl class="detail-grid">
@@ -313,6 +321,8 @@ function openSession(id) {
   $('#lib-count').textContent = '';
   $('#lib-detail').innerHTML = sessionDetailHtml(s);
   $('#detail-back').addEventListener('click', () => { $('#lib-detail').innerHTML = ''; renderLibrary(); });
+  const runBtn = $('#detail-run');
+  if (runBtn) runBtn.addEventListener('click', () => openRunner(sessionToRunnerPlan(s)));
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -877,7 +887,7 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
-  renderMeets(); renderReports();
+  renderMeets(); renderReports(); renderCustomWorkouts();
   renderWarmupCards();
   if (isCoach) loadMedia();
 }
@@ -2217,6 +2227,490 @@ async function renderInventory() {
       state.invEditId = null;
       renderInventory();
     } catch (err) { $('#inv-err').textContent = err.message; }
+  });
+}
+
+/* RUNNER-CORE-BEGIN */
+/* Runner mode — pure step-building. No DOM in this section: the
+   test suite loads it directly to verify the step sequences.
+   A runner plan is { title, blocks: [{ rounds, restBetweenRounds,
+   restAfterBlock, exercises: [{ name, reps }] }] } — exactly the
+   shape of a coach-built custom workout, and the shape library
+   sessions are mapped into by sessionToRunnerPlan below.
+   buildRunnerSteps flattens a plan into the walk: every exercise
+   of every round, a rest step after each round (the block's
+   rest-between-rounds) and after each block except the last (the
+   block's rest-after). Zero-second rests are skipped entirely, so
+   a no-rest block flows straight through. */
+function buildRunnerSteps(plan) {
+  const steps = [];
+  const blocks = (plan && plan.blocks) || [];
+  blocks.forEach((block, bi) => {
+    const exercises = block.exercises || [];
+    const rounds = Math.max(1, block.rounds || 1);
+    for (let round = 1; round <= rounds; round++) {
+      exercises.forEach((ex, ei) => {
+        steps.push({
+          type: 'exercise', block: bi, blocks: blocks.length,
+          round, rounds, exIndex: ei, name: ex.name, reps: ex.reps,
+        });
+      });
+      if (round < rounds && block.restBetweenRounds > 0) {
+        steps.push({ type: 'rest', kind: 'round', block: bi, blocks: blocks.length, afterRound: round, seconds: block.restBetweenRounds });
+      }
+    }
+    if (bi < blocks.length - 1 && block.restAfterBlock > 0) {
+      steps.push({ type: 'rest', kind: 'block', block: bi, blocks: blocks.length, seconds: block.restAfterBlock });
+    }
+  });
+  return steps;
+}
+/* Best-effort seconds from a session's free-text rest ("2-3 min",
+   "30-45 sec between reps, 6 min between sets", "walk back",
+   "full"). A minutes figure wins when one exists — on multi-part
+   rests it is the between-sets / full recovery that ends a round. */
+function parseRestSeconds(text) {
+  const t = String(text || '').toLowerCase();
+  const mins = [...t.matchAll(/(\d+)\s*(?:-\s*(\d+))?\s*min/g)];
+  if (mins.length) {
+    const m = mins[mins.length - 1];
+    const lo = parseInt(m[1], 10);
+    const hi = m[2] ? parseInt(m[2], 10) : lo;
+    return Math.round(((lo + hi) / 2) * 60);
+  }
+  const secs = t.match(/(\d+)\s*(?:-\s*(\d+))?\s*sec/);
+  if (secs) {
+    const lo = parseInt(secs[1], 10);
+    const hi = secs[2] ? parseInt(secs[2], 10) : lo;
+    return Math.round((lo + hi) / 2);
+  }
+  if (/walk ?back/.test(t)) return 60;
+  if (/full/.test(t)) return 180;
+  if (/continuous|circuit|n\/a|none|as needed/.test(t)) return 0;
+  return 120;
+}
+/* Map a library session onto a runner plan. Sessions are spec
+   sheets, not exercise lists, so the mapping is best-effort:
+   - "N sets x M" (no '+' and no distance after the x): N rounds of
+     M work steps — or one work step per set when the session has no
+     rep distance, since its work is described in prose.
+   - A leading count or range ("6-8", "8", "2 sets"): that many
+     rounds (upper bound of a range) of one work step — "Run 30m
+     @ 98%" built from the rep distance and intensity.
+   - Anything else (warm-ups, recovery, prose circuits): a single
+     step that puts the session itself on the screen. */
+function sessionToRunnerPlan(s) {
+  const title = s.id + ' · ' + s.name;
+  const dist = s.rep_distance_m ? s.rep_distance_m + 'm' : '';
+  const workName = dist ? 'Run ' + dist : s.name;
+  const workReps = s.intensity_pct ? '@ ' + s.intensity_pct + '%' : '';
+  const restSec = parseRestSeconds(s.rest);
+  const repsText = String(s.reps || '');
+  const hi = (a, b) => parseInt(b || a, 10);
+  if (!/\+/.test(repsText) && !/x\s*\d+\s*m/i.test(repsText)) {
+    const m = repsText.match(/(\d+)\s*(?:-\s*(\d+))?\s*(?:sets?\s*(?:of\s*)?)?x\s*(\d+)\s*(?:-\s*(\d+))?/i);
+    if (m) {
+      const sets = Math.min(10, Math.max(1, hi(m[1], m[2])));
+      const per = dist ? Math.min(10, Math.max(1, hi(m[3], m[4]))) : 1;
+      const exercises = [];
+      for (let i = 0; i < per; i++) exercises.push({ name: workName, reps: workReps || repsText });
+      return { title, blocks: [{ rounds: sets, restBetweenRounds: restSec, restAfterBlock: 0, exercises }] };
+    }
+  }
+  const m2 = repsText.match(/^(\d+)\s*(?:-\s*(\d+))?\s*(sets?|rounds?)?\b/i);
+  if (m2) {
+    const count = hi(m2[1], m2[2]);
+    if (count >= 2 && count <= 20) {
+      return { title, blocks: [{ rounds: count, restBetweenRounds: restSec, restAfterBlock: 0, exercises: [{ name: workName, reps: workReps || repsText }] }] };
+    }
+  }
+  return { title, blocks: [{ rounds: 1, restBetweenRounds: 0, restAfterBlock: 0, exercises: [{ name: s.name, reps: repsText }] }] };
+}
+/* RUNNER-CORE-END */
+
+/* ---------------- runner mode (display) ----------------
+   A full-screen walk through a workout: the current exercise huge,
+   one big advance button, honest rest timers (timestamp-based, so
+   a backgrounded tab cannot corrupt them). Opened from a custom
+   workout's Run it button or a library session's Run this workout. */
+const runner = {
+  open: false, plan: null, steps: [], idx: 0,
+  startedAt: 0, endsAt: 0, remaining: 0, paused: false, tickId: null, audioCtx: null,
+};
+function repsLabel(reps) {
+  const r = String(reps || '').trim();
+  if (/^\d+$/.test(r)) return r + ' reps';
+  if (/^max$/i.test(r)) return 'MAX reps';
+  return r;
+}
+function fmtCountdown(totalSeconds) {
+  const s = Math.max(0, Math.ceil(totalSeconds));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function fmtElapsed(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function runnerBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = runner.audioCtx || (runner.audioCtx = new Ctx());
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.12, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    o.start(); o.stop(ctx.currentTime + 0.45);
+  } catch (_) { /* sound is a nicety, never an error */ }
+}
+function openRunner(plan) {
+  runner.plan = plan;
+  runner.steps = buildRunnerSteps(plan);
+  runner.idx = 0;
+  runner.startedAt = Date.now();
+  runner.paused = false;
+  runner.open = true;
+  const ov = $('#runner-overlay');
+  if (!ov) return;
+  ov.hidden = false;
+  document.body.classList.add('runner-mode');
+  $('#runner-workout').textContent = plan.title;
+  document.addEventListener('keydown', runnerKey);
+  renderRunnerStep();
+}
+function closeRunner() {
+  runnerStopTick();
+  runner.open = false;
+  const ov = $('#runner-overlay');
+  if (ov) ov.hidden = true;
+  document.body.classList.remove('runner-mode');
+  document.removeEventListener('keydown', runnerKey);
+}
+function runnerStopTick() {
+  if (runner.tickId) { clearInterval(runner.tickId); runner.tickId = null; }
+}
+function runnerKey(e) {
+  if (!runner.open) return;
+  if (e.key === 'Escape') { closeRunner(); return; }
+  if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); runnerAdvance(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); runnerBack(); }
+  else if (e.key === 'p' || e.key === 'P') { runnerTogglePause(); }
+}
+function runnerAdvance() {
+  if (!runner.open) return;
+  runnerStopTick();
+  runner.paused = false;
+  runner.idx++;
+  renderRunnerStep();
+}
+function runnerBack() {
+  if (!runner.open) return;
+  runnerStopTick();
+  runner.paused = false;
+  if (runner.idx > 0) runner.idx--;
+  renderRunnerStep();
+}
+function runnerTogglePause() {
+  const step = runner.steps[runner.idx];
+  if (!step || step.type !== 'rest') return;
+  const btn = $('#runner-pause');
+  if (runner.paused) {
+    runner.endsAt = Date.now() + runner.remaining * 1000;
+    runner.paused = false;
+    runnerStartTick();
+    if (btn) btn.textContent = 'Pause';
+  } else {
+    runner.remaining = Math.max(0, (runner.endsAt - Date.now()) / 1000);
+    runnerStopTick();
+    runner.paused = true;
+    if (btn) btn.textContent = 'Resume';
+  }
+}
+function runnerAddTime(sec) {
+  const step = runner.steps[runner.idx];
+  if (!step || step.type !== 'rest') return;
+  if (runner.paused) {
+    runner.remaining += sec;
+  } else {
+    runner.endsAt += sec * 1000;
+  }
+  runnerPaintCountdown();
+}
+function runnerStartTick() {
+  runnerStopTick();
+  runnerPaintCountdown();
+  runner.tickId = setInterval(() => {
+    const left = (runner.endsAt - Date.now()) / 1000;
+    if (left <= 0) {
+      runnerStopTick();
+      runnerBeep();
+      runnerAdvance();
+      return;
+    }
+    runnerPaintCountdown();
+  }, 200);
+}
+function runnerPaintCountdown() {
+  const el = $('#runner-count');
+  if (!el) return;
+  const left = runner.paused ? runner.remaining : (runner.endsAt - Date.now()) / 1000;
+  el.textContent = fmtCountdown(left);
+}
+function runnerNextExercise(fromIdx) {
+  for (let i = fromIdx + 1; i < runner.steps.length; i++) {
+    if (runner.steps[i].type === 'exercise') return runner.steps[i];
+  }
+  return null;
+}
+function renderRunnerStep() {
+  runnerStopTick();
+  const main = $('#runner-main');
+  if (!main) return;
+  const total = runner.steps.length;
+  if (runner.idx >= total) {
+    const exCount = runner.steps.filter(s => s.type === 'exercise').length;
+    main.innerHTML = `
+      <div class="runner-done">
+        <p class="runner-where">${esc(runner.plan.title)}</p>
+        <h2 class="runner-done-title">Workout complete</h2>
+        <p class="runner-done-stats">${exCount} exercises · Total time ${fmtElapsed(Date.now() - runner.startedAt)}</p>
+        <button class="btn runner-btn primary" id="runner-done-btn" type="button">Done</button>
+      </div>`;
+    $('#runner-done-btn').addEventListener('click', closeRunner);
+    runnerBeep();
+    return;
+  }
+  const step = runner.steps[runner.idx];
+  const pct = Math.round((runner.idx / total) * 100);
+  const head = `
+    <div class="runner-progress"><div class="runner-progress-bar" style="width:${pct}%"></div></div>
+    <p class="runner-step-count">Step ${runner.idx + 1} of ${total}</p>`;
+  if (step.type === 'exercise') {
+    const nxt = runner.steps[runner.idx + 1];
+    const nxtEx = runnerNextExercise(runner.idx);
+    let nextText;
+    if (!nxt) nextText = 'Last one — finish strong.';
+    else if (nxt.type === 'rest' && nxtEx) nextText = 'Next: rest ' + fmtCountdown(nxt.seconds) + ', then ' + esc(nxtEx.name) + ' × ' + esc(repsLabel(nxtEx.reps));
+    else if (nxtEx) nextText = 'Next: ' + esc(nxtEx.name) + ' × ' + esc(repsLabel(nxtEx.reps));
+    else nextText = '';
+    main.innerHTML = head + `
+      <p class="runner-where">Block ${step.block + 1} of ${step.blocks} · Round ${step.round} of ${step.rounds}</p>
+      <h2 class="runner-ex-name">${esc(step.name)}</h2>
+      <p class="runner-ex-reps">× ${esc(repsLabel(step.reps))}</p>
+      <p class="runner-next">${nextText}</p>
+      <div class="runner-controls">
+        <button class="btn runner-btn secondary" id="runner-back" type="button" ${runner.idx === 0 ? 'disabled' : ''}>← Back</button>
+        <button class="btn runner-btn primary" id="runner-advance" type="button">Done — next →</button>
+      </div>`;
+    $('#runner-advance').addEventListener('click', runnerAdvance);
+    const back = $('#runner-back');
+    if (back) back.addEventListener('click', runnerBack);
+  } else {
+    const nxtEx = runnerNextExercise(runner.idx);
+    const nextText = nxtEx
+      ? 'Up next: Block ' + (nxtEx.block + 1) + ' · Round ' + nxtEx.round + ' — ' + esc(nxtEx.name) + ' × ' + esc(repsLabel(nxtEx.reps))
+      : 'Up next: finish.';
+    main.innerHTML = head + `
+      <p class="runner-where">Block ${step.block + 1} of ${step.blocks} · ${step.kind === 'round' ? 'Round ' + step.afterRound + ' done' : 'Block done — nice work'}</p>
+      <h2 class="runner-rest-label">REST</h2>
+      <p class="runner-count" id="runner-count">${fmtCountdown(step.seconds)}</p>
+      <p class="runner-next">${nextText}</p>
+      <div class="runner-controls">
+        <button class="btn runner-btn secondary" id="runner-back" type="button">← Back</button>
+        <button class="btn runner-btn secondary" id="runner-pause" type="button">Pause</button>
+        <button class="btn runner-btn secondary" id="runner-plus10" type="button">+10s</button>
+        <button class="btn runner-btn primary" id="runner-skip" type="button">Skip rest →</button>
+      </div>`;
+    $('#runner-back').addEventListener('click', runnerBack);
+    $('#runner-pause').addEventListener('click', runnerTogglePause);
+    $('#runner-plus10').addEventListener('click', () => runnerAddTime(10));
+    $('#runner-skip').addEventListener('click', runnerAdvance);
+    runner.remaining = step.seconds;
+    runner.endsAt = Date.now() + step.seconds * 1000;
+    runner.paused = false;
+    runnerStartTick();
+  }
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest('#runner-overlay')) ae.blur();
+}
+(function wireRunner() {
+  const exit = $('#runner-exit');
+  if (exit) exit.addEventListener('click', closeRunner);
+})();
+
+/* ---------------- custom workouts (coach) ---------------- */
+function cwBlankDraft() {
+  return { title: '', blocks: [{ rounds: 4, restBetweenRounds: 90, restAfterBlock: 120, exercises: [{ name: '', reps: '' }] }] };
+}
+function cwNum(v) {
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? '' : n;
+}
+/* Read the editor form back into the draft, so re-renders (auth
+   syncs, add/remove clicks) never lose what the coach has typed. */
+function cwScrapeForm() {
+  const form = $('#cw-form');
+  if (!form || !state.cwDraft) return;
+  const titleEl = $('#cw-title');
+  if (titleEl) state.cwDraft.title = titleEl.value;
+  state.cwDraft.blocks = $$('#cw-form .cw-block').map(blockEl => ({
+    rounds: cwNum(blockEl.querySelector('.cw-rounds').value),
+    restBetweenRounds: cwNum(blockEl.querySelector('.cw-rest-round').value),
+    restAfterBlock: cwNum(blockEl.querySelector('.cw-rest-block').value),
+    exercises: Array.from(blockEl.querySelectorAll('.cw-ex-row')).map(row => ({
+      name: row.querySelector('.cw-ex-name').value,
+      reps: row.querySelector('.cw-ex-reps').value,
+    })),
+  }));
+}
+async function renderCustomWorkouts() {
+  const el = $('#custom-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Custom workouts live here.'); return; }
+  if ($('#cw-form')) cwScrapeForm();
+  try {
+    const data = await api('/api/custom-workouts');
+    state.cwWorkouts = data.workouts || [];
+  } catch (err) {
+    el.innerHTML = '<p class="error">Could not load custom workouts: ' + esc(err.message) + '</p>';
+    return;
+  }
+  const workouts = state.cwWorkouts;
+  const editing = state.cwEditId && state.cwEditId !== 'new'
+    ? workouts.find(w => w.id === state.cwEditId) : null;
+  if (state.cwEditId && state.cwEditId !== 'new' && !editing) { state.cwEditId = null; state.cwDraft = null; }
+  if (state.cwEditId && !state.cwDraft) {
+    state.cwDraft = editing
+      ? JSON.parse(JSON.stringify({ title: editing.title, blocks: editing.blocks }))
+      : cwBlankDraft();
+  }
+  const card = (w) => {
+    const steps = buildRunnerSteps(w);
+    const exSteps = steps.filter(s => s.type === 'exercise').length;
+    const summaries = w.blocks.map((b, i) =>
+      `<p class="cw-block-line"><strong>Block ${i + 1}</strong> — ${b.exercises.map(e => esc(e.name) + ' × ' + esc(e.reps)).join(', ')} · ${b.rounds} rounds · rest ${b.restBetweenRounds}s between rounds, ${b.restAfterBlock}s after</p>`).join('');
+    return `
+    <div class="card cw-card">
+      <div class="roster-row">
+        <span><strong>${esc(w.title)}</strong></span>
+        <span class="roster-actions">
+          <button class="btn primary" data-cw-run="${w.id}" type="button">Run it</button>
+          <button class="btn secondary" data-cw-edit="${w.id}" type="button">Edit</button>
+          <button class="btn danger" data-cw-del="${w.id}" type="button">Delete</button>
+        </span>
+      </div>
+      <p class="muted">${w.blocks.length} blocks · ${exSteps} exercise steps in runner mode</p>
+      ${summaries}
+    </div>`;
+  };
+  let formHtml = '';
+  if (state.cwEditId) {
+    const d = state.cwDraft;
+    const blockHtml = (b, i) => `
+      <div class="cw-block card">
+        <div class="roster-row">
+          <strong>Block ${i + 1}</strong>
+          <button class="btn danger" data-cw-delblock="${i}" type="button">Remove block</button>
+        </div>
+        <div class="filter-row">
+          <label>Rounds <input type="number" class="cw-rounds" min="1" max="10" value="${b.rounds}"></label>
+          <label>Rest between rounds (sec) <input type="number" class="cw-rest-round" min="0" max="600" value="${b.restBetweenRounds}"></label>
+          <label>Rest after block (sec) <input type="number" class="cw-rest-block" min="0" max="600" value="${b.restAfterBlock}"></label>
+        </div>
+        ${b.exercises.map((e, j) => `
+        <div class="cw-ex-row filter-row">
+          <label>Exercise <input type="text" class="cw-ex-name" value="${esc(e.name)}" placeholder="e.g. Hang Clean"></label>
+          <label>Reps <input type="text" class="cw-ex-reps" value="${esc(e.reps)}" placeholder="3, max, 5 each…"></label>
+          <button class="btn danger" data-cw-delex="${i}:${j}" type="button">Remove</button>
+        </div>`).join('')}
+        <button class="btn secondary" data-cw-addex="${i}" type="button">+ Add exercise</button>
+      </div>`;
+    formHtml = `
+    <form class="card" id="cw-form">
+      <h2>${state.cwEditId === 'new' ? 'New custom workout' : 'Edit workout'}</h2>
+      <label>Title <input type="text" id="cw-title" value="${esc(d.title)}" placeholder="e.g. Friday lift — heavy circuit"></label>
+      ${d.blocks.map(blockHtml).join('')}
+      <button class="btn secondary" id="cw-addblock" type="button">+ Add block</button>
+      <button class="btn primary" type="submit">${state.cwEditId === 'new' ? 'Save workout' : 'Save changes'}</button>
+      <button class="btn secondary" id="cw-cancel" type="button">Cancel</button>
+      <p class="error" id="cw-err"></p>
+    </form>`;
+  }
+  el.innerHTML = `
+    ${workouts.length === 0
+      ? '<div class="card"><h2>No custom workouts yet</h2><p class="muted">Build the first one below: give it a title, lay out the blocks and rounds, set the rests — then Run it and the screen walks the room through it.</p></div>'
+      : workouts.map(card).join('')}
+    ${state.cwEditId ? '' : '<button class="btn primary" id="cw-new" type="button">+ New custom workout</button>'}
+    ${formHtml}`;
+  el.querySelectorAll('[data-cw-run]').forEach(b => b.addEventListener('click', () => {
+    const w = state.cwWorkouts.find(x => x.id === b.dataset.cwRun);
+    if (w) openRunner({ title: w.title, blocks: w.blocks });
+  }));
+  el.querySelectorAll('[data-cw-edit]').forEach(b => b.addEventListener('click', () => {
+    state.cwEditId = b.dataset.cwEdit;
+    state.cwDraft = null;
+    renderCustomWorkouts();
+  }));
+  el.querySelectorAll('[data-cw-del]').forEach(b => b.addEventListener('click', async () => {
+    const w = state.cwWorkouts.find(x => x.id === b.dataset.cwDel);
+    if (!confirm('Delete "' + (w ? w.title : 'this workout') + '"?')) return;
+    try {
+      await apiDel('/api/custom-workouts/' + encodeURIComponent(b.dataset.cwDel));
+      if (state.cwEditId === b.dataset.cwDel) { state.cwEditId = null; state.cwDraft = null; }
+      renderCustomWorkouts();
+    } catch (err) { alert(err.message); }
+  }));
+  const newBtn = $('#cw-new');
+  if (newBtn) newBtn.addEventListener('click', () => {
+    state.cwEditId = 'new';
+    state.cwDraft = null;
+    renderCustomWorkouts();
+  });
+  if (!state.cwEditId) return;
+  const cancel = $('#cw-cancel');
+  if (cancel) cancel.addEventListener('click', () => { state.cwEditId = null; state.cwDraft = null; renderCustomWorkouts(); });
+  const addBlock = $('#cw-addblock');
+  if (addBlock) addBlock.addEventListener('click', () => {
+    cwScrapeForm();
+    state.cwDraft.blocks.push({ rounds: 4, restBetweenRounds: 90, restAfterBlock: 120, exercises: [{ name: '', reps: '' }] });
+    renderCustomWorkouts();
+  });
+  el.querySelectorAll('[data-cw-delblock]').forEach(b => b.addEventListener('click', () => {
+    cwScrapeForm();
+    state.cwDraft.blocks.splice(parseInt(b.dataset.cwDelblock, 10), 1);
+    renderCustomWorkouts();
+  }));
+  el.querySelectorAll('[data-cw-addex]').forEach(b => b.addEventListener('click', () => {
+    cwScrapeForm();
+    state.cwDraft.blocks[parseInt(b.dataset.cwAddex, 10)].exercises.push({ name: '', reps: '' });
+    renderCustomWorkouts();
+  }));
+  el.querySelectorAll('[data-cw-delex]').forEach(b => b.addEventListener('click', () => {
+    cwScrapeForm();
+    const [bi, ei] = b.dataset.cwDelex.split(':').map(n => parseInt(n, 10));
+    state.cwDraft.blocks[bi].exercises.splice(ei, 1);
+    renderCustomWorkouts();
+  }));
+  $('#cw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    cwScrapeForm();
+    const d = state.cwDraft;
+    const payload = {
+      title: d.title,
+      blocks: d.blocks.map(b => ({
+        rounds: b.rounds, restBetweenRounds: b.restBetweenRounds, restAfterBlock: b.restAfterBlock,
+        exercises: b.exercises,
+      })),
+    };
+    try {
+      if (state.cwEditId === 'new') await apiPost('/api/custom-workouts', payload);
+      else await apiPut('/api/custom-workouts/' + encodeURIComponent(state.cwEditId), payload);
+      state.cwEditId = null;
+      state.cwDraft = null;
+      renderCustomWorkouts();
+    } catch (err) { $('#cw-err').textContent = err.message; }
   });
 }
 
