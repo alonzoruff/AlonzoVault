@@ -336,8 +336,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v32',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v32"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v33',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v33"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2019,16 +2019,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v32'") &&
-    swJs.text.includes("sprinter-app-v32"));
+    appJs.text.includes("const APP_VERSION = 'v33'") &&
+    swJs.text.includes("sprinter-app-v33"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v32"') &&
-    pageHtml.text.includes('Cadets Sprint · App v32') &&
+    pageHtml.text.includes('data-app-version="v33"') &&
+    pageHtml.text.includes('Cadets Sprint · App v33') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
@@ -3007,6 +3007,212 @@ async function main() {
   check('ams note is gone after delete', r.json.notes.length === 0, r.json.notes);
   r = await api(coach, 'DELETE', '/api/ams/athlete/' + benP.id + '/notes/' + benNote);
   check('ams note delete twice is 404', r.status === 404, r.status);
+
+  /* ---------------- programs + team calendar ----------------
+     Templates (CRUD + atomic validation), applications that write
+     ordinary coach overrides through resolveAssignment, precise
+     undo that keeps hand-edited days, and a server-resolved month
+     grid. Fixtures are two dedicated groups; the season week of
+     2026-11-02 plans ACC-01 + STR-01 on Monday, so the program's
+     MAX-01 + PLY-01 Monday can only have come from the apply. */
+  check('programs + calendar views are in the served page',
+    pageHtml.text.includes('id="view-programs"') && pageHtml.text.includes('id="programs-main"') &&
+    pageHtml.text.includes('id="view-calendar"') && pageHtml.text.includes('id="calendar-main"') &&
+    pageHtml.text.includes('data-view="programs"') && pageHtml.text.includes('data-view="calendar"'));
+  check('programs + calendar wiring is in the served JS',
+    appJs.text.includes("['programs', 'Programs']") && appJs.text.includes("['calendar', 'Calendar']") &&
+    appJs.text.includes("programs: 'coachhub'") && appJs.text.includes("calendar: 'coachhub'") &&
+    appJs.text.includes("if (name === 'programs') renderPrograms();") &&
+    appJs.text.includes("if (name === 'calendar') renderCalendar();") &&
+    appJs.text.includes('/api/programs') && appJs.text.includes('/api/program-applications') &&
+    appJs.text.includes('/api/calendar?month='));
+  {
+    const pcTvStart = appJs.text.indexOf('TV BOARD');
+    const pcTvEnd = appJs.text.indexOf('/* ---------------- boot', pcTvStart);
+    const pcTvCode = pcTvStart >= 0 && pcTvEnd > pcTvStart ? appJs.text.slice(pcTvStart, pcTvEnd) : '';
+    check('TV render path has no program or calendar references',
+      pcTvCode.length > 500 && !pcTvCode.includes('/api/programs') &&
+      !pcTvCode.includes('/api/calendar') && !pcTvCode.includes('renderPrograms') &&
+      !pcTvCode.includes('renderCalendar'), pcTvCode.length);
+  }
+  r = await api(coach, 'POST', '/api/groups', { name: 'Program Sprinters' });
+  const gProgS = r.json.group.id;
+  r = await api(coach, 'POST', '/api/groups', { name: 'Program Distance' });
+  const gProgD = r.json.group.id;
+
+  /* CRUD + validation, on a throwaway program. */
+  r = await api(coach, 'POST', '/api/programs', { weeks: [{ mon: ['ACC-01'] }] });
+  check('program without a name is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/programs', { name: 'Empty', weeks: [] });
+  check('program with zero weeks is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/programs', {
+    name: 'Too long', weeks: Array.from({ length: 17 }, () => ({})),
+  });
+  check('program over 16 weeks is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/programs');
+  const progCountBefore = r.json.programs.length;
+  r = await api(coach, 'POST', '/api/programs', { name: 'Bad code', weeks: [{ mon: ['XXX-99'] }] });
+  check('program with an unknown session code is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/programs');
+  check('a rejected program saves nothing (atomic validation)',
+    r.json.programs.length === progCountBefore, r.json.programs.length);
+  r = await api(coach, 'POST', '/api/programs', {
+    name: 'CRUD Block', note: 'throwaway',
+    weeks: [{ mon: ['ACC-01'] }, { fri: ['TEM-01', 'PLY-01'] }],
+  });
+  check('program create is 201 with normalized weeks',
+    r.status === 201 && !!r.json.program.id && r.json.program.weeks.length === 2 &&
+    Array.isArray(r.json.program.weeks[0].tue) && r.json.program.weeks[0].tue.length === 0 &&
+    JSON.stringify(r.json.program.weeks[1].fri) === JSON.stringify(['TEM-01', 'PLY-01']), r.json);
+  const progCrud = r.json.program.id;
+  r = await api(coach, 'GET', '/api/programs/' + progCrud);
+  check('program reads back by id', r.status === 200 && r.json.program.name === 'CRUD Block', r.status);
+  r = await api(coach, 'PUT', '/api/programs/' + progCrud, {
+    name: 'CRUD Block', weeks: [{ mon: ['NOPE-01'] }],
+  });
+  check('program edit with an unknown code is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/programs/' + progCrud);
+  check('a rejected edit changes nothing',
+    r.json.program.weeks.length === 2 && r.json.program.name === 'CRUD Block', r.json.program);
+  r = await api(coach, 'PUT', '/api/programs/' + progCrud, {
+    name: 'CRUD Block v2', note: '', weeks: [{ wed: ['MAX-01'] }],
+  });
+  check('program edit saves wholesale',
+    r.status === 200 && r.json.program.name === 'CRUD Block v2' && r.json.program.weeks.length === 1, r.json);
+  r = await api(coach, 'DELETE', '/api/programs/' + progCrud);
+  check('program delete is 200', r.status === 200 && r.json.ok === true, r.status);
+  r = await api(coach, 'GET', '/api/programs/' + progCrud);
+  check('a deleted program is 404', r.status === 404, r.status);
+
+  /* Apply: Wednesday start normalizes to its Monday; two-code days
+     survive; resolution everywhere agrees. */
+  const progWeeks = [
+    { mon: ['MAX-01', 'PLY-01'], wed: ['TEM-03'] },
+    { mon: ['ACC-02'], fri: ['STR-01', 'TEM-01'] },
+  ];
+  r = await api(coach, 'POST', '/api/programs', { name: 'Test Block', weeks: progWeeks });
+  const progBlock = r.json.program.id;
+  r = await api(coach, 'POST', '/api/programs/' + progBlock + '/apply', { startDate: '2026-11-04', target: 'Program Distance' });
+  check('apply to one group writes its four coded days',
+    r.status === 201 && r.json.applied === 4 && r.json.application.target === 'Program Distance', r.json);
+  const appDist = r.json.application.id;
+  check('apply normalizes a Wednesday start to that Monday',
+    r.json.startDate === '2026-11-02' && r.json.normalized === true &&
+    r.json.application.startDate === '2026-11-02' &&
+    JSON.stringify(r.json.application.dates) === JSON.stringify(['2026-11-02', '2026-11-04', '2026-11-09', '2026-11-13']),
+    r.json.application);
+  r = await api(coach, 'DELETE', '/api/program-applications/' + appDist);
+  check('undo of an untouched application removes all its writes',
+    r.status === 200 && r.json.removed === 4 && r.json.kept === 0, r.json);
+  r = await api(coach, 'POST', '/api/programs/' + progBlock + '/apply', { startDate: '2026-11-04', target: 'Program Sprinters' });
+  const appSprint = r.json.application.id;
+  check('re-apply to the other group also lands', r.status === 201 && r.json.applied === 4, r.json);
+  r = await api(coach, 'GET', '/api/coach/feed?date=2026-11-02');
+  const feedSprint = (r.json.groups || []).find(g => g.group && g.group.id === gProgS);
+  check('coach feed resolves an applied day as an override of its first code',
+    !!feedSprint && feedSprint.assignment.source === 'override' &&
+    feedSprint.assignment.sessionId === 'MAX-01', feedSprint && feedSprint.assignment);
+  r = await api(coach, 'GET', '/api/calendar?month=2026-11');
+  check('calendar returns the whole month, resolved server-side',
+    r.status === 200 && r.json.month === '2026-11' && r.json.days.length === 30 &&
+    r.json.days.every(d => Array.isArray(d.groups)), r.json && r.json.days && r.json.days.length);
+  const calDay = (ds) => r.json.days.find(d => d.date === ds);
+  const calGroup = (d, gid) => (d.groups || []).find(g => g.group.id === gid) || {};
+  const mon2 = calGroup(calDay('2026-11-02'), gProgS);
+  check('calendar: the applied Monday carries both codes, as an override, with titles',
+    mon2.source === 'override' && mon2.codes.length === 2 &&
+    mon2.codes[0].id === 'MAX-01' && mon2.codes[1].id === 'PLY-01' &&
+    mon2.codes[0].name.length > 0 && mon2.note === 'Program: Test Block', mon2);
+  const mon2D = calGroup(calDay('2026-11-02'), gProgD);
+  check('calendar: the unapplied group still resolves the plan that day',
+    mon2D.source === 'plan' && mon2D.codes.map(c => c.id).join('+') === 'ACC-01+STR-01', mon2D);
+  const tue3 = calGroup(calDay('2026-11-03'), gProgS);
+  check('calendar: a program rest day writes nothing — the plan shows through',
+    tue3.source === 'plan' && tue3.codes.map(c => c.id).join('+') === 'TEM-01+PLY-01', tue3);
+  const fri13 = calGroup(calDay('2026-11-13'), gProgS);
+  check('calendar: week 2 lands on the right weekday with both codes',
+    fri13.source === 'override' && fri13.codes.map(c => c.id).join('+') === 'STR-01+TEM-01', fri13);
+  check('calendar: the plan test day carries its marker',
+    calDay('2026-11-18').isTest === true && calDay('2026-11-18').isMeet === false, calDay('2026-11-18'));
+  r = await api(coach, 'GET', '/api/calendar?month=2026-12');
+  check('calendar: the plan meet day carries its marker',
+    r.status === 200 && r.json.days.find(d => d.date === '2026-12-19').isMeet === true,
+    r.json && r.json.days && r.json.days.length);
+  r = await api(coach, 'GET', '/api/calendar?month=2026-13');
+  check('calendar: an impossible month is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/calendar');
+  check('calendar: no month param defaults to the current month',
+    r.status === 200 && r.json.days.length >= 28 && /^\d{4}-\d{2}$/.test(r.json.month), r.json && r.json.month);
+
+  /* Apply to ALL groups + deleting the template keeps the
+     application removable. */
+  r = await api(coach, 'GET', '/api/groups');
+  const groupCount = r.json.groups.length;
+  r = await api(coach, 'POST', '/api/programs', { name: 'All Block', weeks: [{ tue: ['TEM-02'] }] });
+  const progAll = r.json.program.id;
+  r = await api(coach, 'POST', '/api/programs/' + progAll + '/apply', { startDate: '2026-12-07', target: 'all' });
+  check('apply to all groups writes one day per group, Monday start un-normalized',
+    r.status === 201 && r.json.applied === groupCount && r.json.normalized === false &&
+    JSON.stringify(r.json.application.dates) === JSON.stringify(['2026-12-08']), r.json);
+  const appAll = r.json.application.id;
+  r = await api(coach, 'GET', '/api/calendar?month=2026-12');
+  const dec8 = (r.json.days.find(d => d.date === '2026-12-08').groups || []).find(g => g.group.id === gProgS);
+  check('calendar: the all-groups apply reached every group',
+    !!dec8 && dec8.source === 'override' && dec8.codes.map(c => c.id).join('+') === 'TEM-02', dec8);
+  r = await api(coach, 'DELETE', '/api/programs/' + progAll);
+  check('deleting an applied program is 200', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/program-applications');
+  check('the application outlives its template',
+    r.status === 200 && r.json.applications.some(a => a.id === appAll), r.json);
+  r = await api(coach, 'DELETE', '/api/program-applications/' + appAll);
+  check('undo still works after the template is gone',
+    r.status === 200 && r.json.removed === groupCount && r.json.kept === 0, r.json);
+
+  /* Apply errors. */
+  r = await api(coach, 'POST', '/api/programs/' + progBlock + '/apply', { startDate: 'not-a-date', target: 'all' });
+  check('apply with a bad start date is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/programs/' + progBlock + '/apply', { startDate: '2026-11-02', target: 'No Such Group' });
+  check('apply to an unknown group is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/programs', { name: 'Blank Block', weeks: [{}, {}] });
+  const progBlank = r.json.program.id;
+  r = await api(coach, 'POST', '/api/programs/' + progBlank + '/apply', { startDate: '2026-11-02', target: 'all' });
+  check('applying a program with no sessions in it is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/programs/does-not-exist/apply', { startDate: '2026-11-02', target: 'all' });
+  check('applying a missing program is 404', r.status === 404, r.status);
+
+  /* Undo keeps a hand-edited day: change one applied day through the
+     ordinary override endpoint, then remove the application. */
+  r = await api(coach, 'POST', '/api/assignments/override', { groupId: gProgS, date: '2026-11-04', sessionId: 'TEM-01', note: 'Coach swapped it' });
+  check('hand-edit of an applied day saves as a normal override',
+    r.status === 200 && r.json.assignment.sessionId === 'TEM-01', r.json);
+  r = await api(coach, 'DELETE', '/api/program-applications/' + appSprint);
+  check('undo removes exactly its own writes and keeps the hand-edited day',
+    r.status === 200 && r.json.removed === 3 && r.json.kept === 1, r.json);
+  r = await api(coach, 'GET', '/api/calendar?month=2026-11');
+  const afterMon = (r.json.days.find(d => d.date === '2026-11-02').groups || []).find(g => g.group.id === gProgS);
+  const afterWed = (r.json.days.find(d => d.date === '2026-11-04').groups || []).find(g => g.group.id === gProgS);
+  check('after undo, untouched applied days fall back to the plan',
+    !!afterMon && afterMon.source === 'plan' && afterMon.codes.map(c => c.id).join('+') === 'ACC-01+STR-01', afterMon);
+  check('after undo, the hand-edited day keeps the coach pick',
+    !!afterWed && afterWed.source === 'override' && afterWed.sessionId === 'TEM-01' &&
+    afterWed.note === 'Coach swapped it', afterWed);
+  r = await api(coach, 'DELETE', '/api/program-applications/' + appSprint);
+  check('removing the same application twice is 404', r.status === 404, r.status);
+
+  /* Auth gates: planning surfaces are coach-only. */
+  for (const [method, pth] of [
+    ['GET', '/api/programs'], ['POST', '/api/programs'],
+    ['GET', '/api/programs/' + progBlock], ['PUT', '/api/programs/' + progBlock],
+    ['DELETE', '/api/programs/' + progBlock],
+    ['POST', '/api/programs/' + progBlock + '/apply'],
+    ['GET', '/api/program-applications'], ['DELETE', '/api/program-applications/' + appSprint],
+    ['GET', '/api/calendar?month=2026-11'],
+  ]) {
+    r = await api(athlete, method, pth, method === 'POST' || method === 'PUT' ? {} : undefined);
+    check('athlete is 403 on ' + method + ' ' + pth.split('?')[0], r.status === 403, r.status);
+    r = await api(null, method, pth, method === 'POST' || method === 'PUT' ? {} : undefined);
+    check('logged-out is 401 on ' + method + ' ' + pth.split('?')[0], r.status === 401, r.status);
+  }
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id };
 }

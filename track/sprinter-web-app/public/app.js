@@ -80,6 +80,13 @@ const state = {
   amsGroup: '',
   amsStatus: '',
   amsRoster: null,
+  progEditId: null,
+  progDraft: null,
+  progApplyId: null,
+  progMsg: null,
+  calMonth: null,
+  calData: null,
+  calDay: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -107,8 +114,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v32';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v32';
+const APP_VERSION = 'v33';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v33';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -295,12 +302,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -344,6 +351,8 @@ function showView(name) {
   if (name === 'meetday') renderMeetDay();
   if (name === 'records') renderRecords();
   if (name === 'custom') renderCustomWorkouts();
+  if (name === 'programs') renderPrograms();
+  if (name === 'calendar') renderCalendar();
   if (name === 'exercises') renderExercises();
   window.scrollTo(0, 0);
 }
@@ -1110,6 +1119,7 @@ function syncAuthUi() {
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
   renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderWellness(); renderCustomWorkouts();
+  renderPrograms(); renderCalendar();
   renderWarmupCards();
   if (isCoach) loadMedia();
 }
@@ -3711,6 +3721,380 @@ async function renderCustomWorkouts() {
       renderCustomWorkouts();
     } catch (err) { $('#cw-err').textContent = err.message; }
   });
+}
+
+/* ---------------- programs (coach) ----------------
+   Reusable week-grid templates, plus the list of their applications
+   onto the team calendar. Building a program changes nothing on any
+   calendar; applying one writes the overrides (the server does that),
+   and an application is removed from the same screen — days a coach
+   hand-edited after the apply are kept, and the message says so. */
+const PROG_DAY_LABELS = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
+function progBlankWeek() { return { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] }; }
+function progSessionOptions() {
+  const sessions = (state.content && state.content.sessions) || [];
+  return '<option value="">+ add a session…</option>' + sessions.map(s =>
+    `<option value="${esc(s.id)}">${esc(s.id)} · ${esc(s.name)}</option>`).join('');
+}
+/* Read the editor's name/note back into the draft before any
+   re-render, so add/remove clicks never lose what was typed. */
+function progScrapeForm() {
+  if (!$('#prog-form') || !state.progDraft) return;
+  const nameEl = $('#prog-name');
+  const noteEl = $('#prog-note');
+  if (nameEl) state.progDraft.name = nameEl.value;
+  if (noteEl) state.progDraft.note = noteEl.value;
+}
+async function renderPrograms() {
+  const el = $('#programs-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Training programs live here.'); return; }
+  if ($('#prog-form')) progScrapeForm();
+  await refreshProfiles();
+  let programs, applications;
+  try {
+    const [p, a] = await Promise.all([api('/api/programs'), api('/api/program-applications')]);
+    programs = p.programs || [];
+    applications = a.applications || [];
+  } catch (err) {
+    el.innerHTML = '<p class="error">Could not load programs: ' + esc(err.message) + '</p>';
+    return;
+  }
+  const editing = state.progEditId && state.progEditId !== 'new'
+    ? programs.find(x => x.id === state.progEditId) : null;
+  if (state.progEditId && state.progEditId !== 'new' && !editing) { state.progEditId = null; state.progDraft = null; }
+  if (state.progEditId && !state.progDraft) {
+    state.progDraft = editing
+      ? JSON.parse(JSON.stringify({ name: editing.name, note: editing.note, weeks: editing.weeks }))
+      : { name: '', note: '', weeks: [progBlankWeek()] };
+  }
+  const msgHtml = state.progMsg
+    ? (state.progMsg.type === 'ok'
+      ? `<p class="ok-note">${esc(state.progMsg.text)}</p>`
+      : `<p class="error">${esc(state.progMsg.text)}</p>`)
+    : '';
+  const programCard = (pr) => {
+    const codedDays = pr.weeks.reduce((n, w) =>
+      n + PROG_DAY_LABELS.filter(([k]) => (w[k] || []).length).length, 0);
+    const applyHtml = state.progApplyId === pr.id ? `
+    <form class="prog-apply-form" data-prog-applyform="${pr.id}">
+      <div class="filter-row">
+        <label>Start date <input type="date" class="pa-date" value="${mondayStr()}" required></label>
+        <label>Apply to <select class="pa-target">
+          <option value="all">All groups</option>
+          ${state.groups.map(g => `<option value="${esc(g.name)}">${esc(g.name)}</option>`).join('')}
+        </select></label>
+      </div>
+      <p class="muted">Week 1 starts on the Monday of that week. Applying replaces those groups' assignments on the program's days with the program's sessions — as coach overrides, the same as picking the days by hand.</p>
+      <button class="btn primary" type="submit">Apply program</button>
+      <button class="btn secondary" data-prog-applycancel type="button">Cancel</button>
+      <p class="error pa-err"></p>
+    </form>` : '';
+    return `
+    <div class="card">
+      <div class="roster-row">
+        <span><strong>${esc(pr.name)}</strong></span>
+        <span class="roster-actions">
+          <button class="btn primary" data-prog-apply="${pr.id}" type="button">Apply</button>
+          <button class="btn secondary" data-prog-edit="${pr.id}" type="button">Edit</button>
+          <button class="btn secondary" data-prog-dup="${pr.id}" type="button">Duplicate</button>
+          <button class="btn danger" data-prog-del="${pr.id}" type="button">Delete</button>
+        </span>
+      </div>
+      <p class="muted">${pr.weeks.length} week${pr.weeks.length === 1 ? '' : 's'} · ${codedDays} training day${codedDays === 1 ? '' : 's'} a week</p>
+      ${pr.note ? `<p>${esc(pr.note)}</p>` : ''}
+      ${pr.weeks.map((w, i) => `<p class="muted"><strong>Week ${i + 1}:</strong> ${PROG_DAY_LABELS.map(([k, label]) =>
+        (w[k] || []).length ? label + ' ' + (w[k]).join(' + ') : '').filter(Boolean).join(' · ') || 'no sessions'}</p>`).join('')}
+      ${applyHtml}
+    </div>`;
+  };
+  let formHtml = '';
+  if (state.progEditId) {
+    const d = state.progDraft;
+    const weekHtml = (w, i) => `
+      <div class="card">
+        <div class="roster-row">
+          <strong>Week ${i + 1}</strong>
+          ${d.weeks.length > 1 ? `<button class="btn danger" data-prog-delweek="${i}" type="button">Remove week</button>` : ''}
+        </div>
+        ${PROG_DAY_LABELS.map(([k, label]) => `
+        <div class="roster-row">
+          <span><strong>${label}</strong> ${(w[k] || []).map((c, ci) =>
+            `<span class="badge plain">${esc(c)}</span> <button class="btn danger" style="width:auto;padding:0 8px;min-height:28px" data-prog-delcode="${i}:${k}:${ci}" type="button" aria-label="Remove ${esc(c)}">×</button>`).join(' ')
+            || '<span class="muted">rest</span>'}</span>
+          <span style="min-width:210px"><select class="prog-add-day" data-prog-add="${i}:${k}">${progSessionOptions()}</select></span>
+        </div>`).join('')}
+      </div>`;
+    formHtml = `
+    <form class="card" id="prog-form">
+      <h2>${state.progEditId === 'new' ? 'New program' : 'Edit program'}</h2>
+      <label>Name <input type="text" id="prog-name" value="${esc(d.name)}" placeholder="e.g. November build — sprinters" required></label>
+      <label>Note (optional) <input type="text" id="prog-note" value="${esc(d.note)}" placeholder="What this block is for"></label>
+      ${d.weeks.map(weekHtml).join('')}
+      ${d.weeks.length < 16 ? '<button class="btn secondary" id="prog-addweek" type="button">+ Add week</button>' : ''}
+      <button class="btn primary" type="submit">${state.progEditId === 'new' ? 'Save program' : 'Save changes'}</button>
+      <button class="btn secondary" id="prog-cancel" type="button">Cancel</button>
+      <p class="error" id="prog-err"></p>
+    </form>`;
+  }
+  el.innerHTML = `
+    ${msgHtml}
+    ${programs.length === 0
+      ? '<div class="card"><h2>No programs yet</h2><p class="muted">Build the first one below: name it, lay sessions onto the days of each week, then apply it to a group whenever you are ready. A program on its own changes nothing — only applying it writes to the calendar.</p></div>'
+      : programs.map(programCard).join('')}
+    ${state.progEditId ? '' : '<button class="btn primary" id="prog-new" type="button">+ New program</button>'}
+    ${formHtml}
+    <div class="card">
+      <h2>On the calendar now</h2>
+      ${applications.length ? applications.map(a => `
+      <div class="roster-row">
+        <span><strong>${esc(a.programName)}</strong> → ${a.target === 'all' ? 'All groups' : esc(a.target)} · from Mon ${esc(a.startDate)} · ${a.daysWritten} day-write${a.daysWritten === 1 ? '' : 's'} across ${a.dates.length} date${a.dates.length === 1 ? '' : 's'}</span>
+        <span class="roster-actions"><button class="btn danger" data-progapp-del="${a.id}" type="button">Remove</button></span>
+      </div>`).join('')
+        : '<p class="muted">Nothing applied right now. When you apply a program it shows up here, and removing it here takes exactly its days back off — days you changed by hand afterwards stay changed.</p>'}
+    </div>`;
+  const newBtn = $('#prog-new');
+  if (newBtn) newBtn.addEventListener('click', () => {
+    state.progEditId = 'new';
+    state.progDraft = null;
+    state.progMsg = null;
+    renderPrograms();
+  });
+  el.querySelectorAll('[data-prog-edit]').forEach(b => b.addEventListener('click', () => {
+    state.progEditId = b.dataset.progEdit;
+    state.progDraft = null;
+    state.progApplyId = null;
+    state.progMsg = null;
+    renderPrograms();
+  }));
+  el.querySelectorAll('[data-prog-dup]').forEach(b => b.addEventListener('click', async () => {
+    const pr = programs.find(x => x.id === b.dataset.progDup);
+    if (!pr) return;
+    try {
+      await apiPost('/api/programs', { name: pr.name + ' (copy)', note: pr.note, weeks: pr.weeks });
+      state.progMsg = { type: 'ok', text: 'Duplicated "' + pr.name + '" — the copy is in the list, ready to edit.' };
+    } catch (err) { state.progMsg = { type: 'err', text: err.message }; }
+    renderPrograms();
+  }));
+  el.querySelectorAll('[data-prog-del]').forEach(b => b.addEventListener('click', async () => {
+    const pr = programs.find(x => x.id === b.dataset.progDel);
+    if (!confirm('Delete the program "' + (pr ? pr.name : '') + '"? Applications already on the calendar stay — remove those separately below.')) return;
+    try {
+      await apiDel('/api/programs/' + encodeURIComponent(b.dataset.progDel));
+      if (state.progEditId === b.dataset.progDel) { state.progEditId = null; state.progDraft = null; }
+      state.progMsg = { type: 'ok', text: 'Program deleted. Anything it had applied stays on the calendar until you remove the application.' };
+    } catch (err) { state.progMsg = { type: 'err', text: err.message }; }
+    renderPrograms();
+  }));
+  el.querySelectorAll('[data-prog-apply]').forEach(b => b.addEventListener('click', () => {
+    state.progApplyId = state.progApplyId === b.dataset.progApply ? null : b.dataset.progApply;
+    state.progMsg = null;
+    renderPrograms();
+  }));
+  el.querySelectorAll('[data-prog-applycancel]').forEach(b => b.addEventListener('click', () => {
+    state.progApplyId = null;
+    renderPrograms();
+  }));
+  el.querySelectorAll('.prog-apply-form').forEach(f => f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pid = f.dataset.progApplyform;
+    const body = {
+      startDate: f.querySelector('.pa-date').value,
+      target: f.querySelector('.pa-target').value,
+    };
+    try {
+      const r = await apiPost('/api/programs/' + encodeURIComponent(pid) + '/apply', body);
+      state.progApplyId = null;
+      state.progMsg = {
+        type: 'ok',
+        text: 'Applied — ' + r.applied + ' day' + (r.applied === 1 ? '' : 's') + ' written, starting Monday ' + r.startDate
+          + (r.normalized ? ' (your date ' + r.requestedStart + ' sits in that week)' : '') + '. See it on the Calendar.',
+      };
+    } catch (err) {
+      const errEl = f.querySelector('.pa-err');
+      if (errEl) errEl.textContent = err.message;
+      return;
+    }
+    renderPrograms();
+  }));
+  el.querySelectorAll('[data-progapp-del]').forEach(b => b.addEventListener('click', async () => {
+    const a = applications.find(x => x.id === b.dataset.progappDel);
+    if (!confirm('Remove "' + (a ? a.programName : 'this application') + '" from the calendar? Its days fall back to the plan — except any day you changed by hand after applying, which stays.')) return;
+    try {
+      const r = await apiDel('/api/program-applications/' + encodeURIComponent(b.dataset.progappDel));
+      state.progMsg = {
+        type: 'ok',
+        text: 'Application removed — ' + r.removed + ' day' + (r.removed === 1 ? '' : 's') + ' taken back off the calendar'
+          + (r.kept ? '; ' + r.kept + ' day' + (r.kept === 1 ? '' : 's') + ' you had changed since were left as you set them' : '') + '.',
+      };
+    } catch (err) { state.progMsg = { type: 'err', text: err.message }; }
+    renderPrograms();
+  }));
+  if (!state.progEditId) return;
+  const cancel = $('#prog-cancel');
+  if (cancel) cancel.addEventListener('click', () => {
+    state.progEditId = null; state.progDraft = null; state.progMsg = null; renderPrograms();
+  });
+  const addWeek = $('#prog-addweek');
+  if (addWeek) addWeek.addEventListener('click', () => {
+    progScrapeForm();
+    state.progDraft.weeks.push(progBlankWeek());
+    renderPrograms();
+  });
+  el.querySelectorAll('[data-prog-delweek]').forEach(b => b.addEventListener('click', () => {
+    progScrapeForm();
+    state.progDraft.weeks.splice(parseInt(b.dataset.progDelweek, 10), 1);
+    renderPrograms();
+  }));
+  el.querySelectorAll('[data-prog-delcode]').forEach(b => b.addEventListener('click', () => {
+    progScrapeForm();
+    const [wi, k, ci] = b.dataset.progDelcode.split(':');
+    state.progDraft.weeks[parseInt(wi, 10)][k].splice(parseInt(ci, 10), 1);
+    renderPrograms();
+  }));
+  el.querySelectorAll('.prog-add-day').forEach(sel => sel.addEventListener('change', () => {
+    if (!sel.value) return;
+    progScrapeForm();
+    const [wi, k] = sel.dataset.progAdd.split(':');
+    const day = state.progDraft.weeks[parseInt(wi, 10)][k];
+    if (!day.includes(sel.value)) day.push(sel.value);
+    renderPrograms();
+  }));
+  $('#prog-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    progScrapeForm();
+    const d = state.progDraft;
+    try {
+      if (state.progEditId === 'new') await apiPost('/api/programs', d);
+      else await apiPut('/api/programs/' + encodeURIComponent(state.progEditId), d);
+      state.progMsg = { type: 'ok', text: 'Program "' + d.name + '" saved. Apply it whenever you are ready — saving alone changes no calendar.' };
+      state.progEditId = null;
+      state.progDraft = null;
+    } catch (err) { $('#prog-err').textContent = err.message; return; }
+    renderPrograms();
+  });
+}
+
+/* ---------------- team calendar (coach) ----------------
+   A month of the whole team at a glance, resolved on the server
+   (GET /api/calendar) through the same resolveAssignment the rest of
+   the app uses — the grid never invents its own answer. Clicking a
+   day opens its detail: per group, the resolved sessions, where each
+   came from, and the way into the session or the runner. */
+async function renderCalendar() {
+  const el = $('#calendar-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The team calendar lives here.'); return; }
+  if (!state.calMonth) state.calMonth = todayStr().slice(0, 7);
+  try {
+    state.calData = await api('/api/calendar?month=' + encodeURIComponent(state.calMonth));
+  } catch (err) {
+    el.innerHTML = '<p class="error">Could not load the calendar: ' + esc(err.message) + '</p>';
+    return;
+  }
+  if (!state.calDay || !state.calData.days.some(d => d.date === state.calDay)) {
+    const t = state.calData.days.find(d => d.today);
+    state.calDay = t ? t.date : state.calData.start;
+  }
+  paintCalendar();
+}
+function calDayLines(day) {
+  const withCodes = day.groups.filter(g => g.codes.length);
+  if (!withCodes.length) return day.isOff ? ['<span class="muted">Off</span>'] : [];
+  const byCodes = new Map();
+  for (const g of withCodes) {
+    const key = g.codes.map(c => c.id).join('+');
+    if (!byCodes.has(key)) byCodes.set(key, { codes: g.codes.map(c => c.id), names: [] });
+    byCodes.get(key).names.push(g.group.name);
+  }
+  const entries = [...byCodes.values()];
+  if (entries.length === 1) return [entries[0].codes.join(' + ')];
+  const lines = entries.slice(0, 2).map(e => esc(e.names[0]) + ': ' + e.codes.join(' + '));
+  const covered = entries.slice(0, 2).reduce((n, e) => n + e.names.length, 0);
+  const rest = withCodes.length - covered;
+  if (rest > 0) lines.push('+' + rest + ' group' + (rest === 1 ? '' : 's'));
+  return lines;
+}
+function paintCalendar() {
+  const el = $('#calendar-main');
+  const data = state.calData;
+  if (!el || !data) return;
+  const monthName = parseDate(data.start).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const firstDow = (parseDate(data.start).getDay() + 6) % 7; /* Mon = 0 */
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (const d of data.days) cells.push(d);
+  while (cells.length % 7) cells.push(null);
+  const rows = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+  const cellHtml = (day) => {
+    if (!day) return '<td></td>';
+    const markers = (day.isMeet ? ' <span class="badge high">MEET</span>' : '')
+      + (day.isTest ? ' <span class="badge plain">TEST</span>' : '');
+    const lines = calDayLines(day).map(l => `<div>${l}</div>`).join('');
+    return `<td data-cal-day="${day.date}" style="white-space:normal;vertical-align:top;cursor:pointer;min-width:86px${day.date === state.calDay ? ';background:#fdf0f3' : ''}">
+      <div><strong>${parseInt(day.date.slice(8), 10)}</strong>${day.today ? ' <span class="badge plain">Today</span>' : ''}${markers}</div>
+      ${lines || '<div class="muted">—</div>'}
+    </td>`;
+  };
+  const day = data.days.find(d => d.date === state.calDay);
+  let detailHtml = '';
+  if (day) {
+    detailHtml = `
+    <div class="card">
+      <h2>${fmtDate(parseDate(day.date))}${day.today ? ' · Today' : ''}</h2>
+      <p class="muted">Season week ${day.week == null ? '—' : day.week}${day.phase ? ' · ' + esc(day.phase) : ''}${day.planText ? ' · Plan: ' + esc(day.planText) : ''}</p>
+      ${day.isMeet ? '<p><span class="badge high">MEET</span></p>' : ''}${day.isTest ? '<p><span class="badge plain">TEST DAY</span></p>' : ''}
+      ${day.groups.length ? day.groups.map(g => `
+      <h3>${esc(g.group.name)}</h3>
+      <p>${g.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : '<span class="badge plain">FROM THE PLAN</span>'}
+      ${g.note ? ' <span class="muted">' + esc(g.note) + '</span>' : ''}</p>
+      ${g.codes.length ? g.codes.map(c => `
+      <div class="roster-row">
+        <span><span class="code-link">${esc(c.id)}</span> · ${esc(c.name)}</span>
+        <span class="roster-actions">
+          <button class="btn secondary" data-session="${esc(c.id)}" type="button" style="width:auto;padding:2px 10px">Open</button>
+          <button class="btn primary" data-cal-run="${esc(c.id)}" type="button" style="width:auto;padding:2px 10px">Run it</button>
+        </span>
+      </div>`).join('') : '<p class="muted">No session this day.</p>'}`).join('')
+      : '<p class="muted">No groups yet — the calendar fills in once the roster has groups.</p>'}
+    </div>`;
+  }
+  el.innerHTML = `
+    <div class="card digest-head">
+      <div class="digest-nav">
+        <button type="button" class="btn" id="cal-prev">← Prev</button>
+        <h2>${esc(monthName)}</h2>
+        <button type="button" class="btn" id="cal-next">Next →</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table class="matrix" style="table-layout:fixed">
+        <thead><tr>${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<th style="text-align:left">${d}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r => '<tr>' + r.map(cellHtml).join('') + '</tr>').join('')}</tbody>
+      </table></div>
+      <p class="muted">Every group's resolved sessions — plan, your picks, and applied programs alike. Tap a day for the full detail.</p>
+    </div>
+    ${detailHtml}`;
+  const stepMonth = (delta) => {
+    const d = parseDate(data.month + '-01');
+    d.setMonth(d.getMonth() + delta);
+    state.calMonth = dateStrOf(d).slice(0, 7);
+    state.calDay = null;
+    renderCalendar();
+  };
+  const pv = $('#cal-prev');
+  if (pv) pv.addEventListener('click', () => stepMonth(-1));
+  const nx = $('#cal-next');
+  if (nx) nx.addEventListener('click', () => stepMonth(1));
+  el.querySelectorAll('[data-cal-day]').forEach(td => td.addEventListener('click', () => {
+    state.calDay = td.dataset.calDay;
+    paintCalendar();
+  }));
+  el.querySelectorAll('[data-cal-run]').forEach(b => b.addEventListener('click', () => {
+    const s = state.sessions.get(b.dataset.calRun);
+    if (s) openRunner(sessionToRunnerPlan(s));
+  }));
 }
 
 /* ---------------- wiring ---------------- */

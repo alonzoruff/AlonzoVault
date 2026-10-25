@@ -85,6 +85,8 @@ let db = {
   meetEntries: [],
   schoolRecords: [],
   goals: [],
+  programs: [],
+  programApplications: [],
   coachInvites: [],
   coachInvitesSeeded: [],
   athleteLinks: {},
@@ -186,6 +188,12 @@ function migrate() {
   // target marks, one ACTIVE goal per athlete per event (setting a
   // new target for a pair replaces the old one; no goal history).
   db.goals = Array.isArray(db.goals) ? db.goals : [];
+  // Coach-built training programs (reusable week-grid templates) and
+  // their applications onto the team calendar. An application carries
+  // an exact snapshot of every override it wrote, so removing it
+  // deletes precisely those overrides and nothing else.
+  db.programs = Array.isArray(db.programs) ? db.programs : [];
+  db.programApplications = Array.isArray(db.programApplications) ? db.programApplications : [];
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     // The first account is the head coach (owner). Stores written
@@ -1240,7 +1248,12 @@ function publicUser(u) {
 }
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function userByEmail(email) { return db.users.find(u => u.email === email) || null; }
-/* An assignment = coach override if one exists, else the plan default. */
+/* An assignment = coach override if one exists, else the plan default.
+   `codes` is the full session list for the day: an override record
+   carries a single primary sessionId (its codes list rides along when
+   a program application wrote it), and a plan day's text can name two
+   sessions — so codes is how multi-session days survive resolution.
+   It is additive: every older reader keeps using sessionId alone. */
 function resolveAssignment(groupId, dateString) {
   const ov = db.overrides[groupId + '|' + dateString];
   const plan = planDayFor(dateString);
@@ -1248,21 +1261,96 @@ function resolveAssignment(groupId, dateString) {
     const s = SESSION_BY_ID.get(ov.sessionId);
     return {
       date: dateString, source: 'override', sessionId: ov.sessionId,
+      codes: Array.isArray(ov.codes) && ov.codes.length ? ov.codes.slice() : [ov.sessionId],
       sessionName: s ? s.name : ov.sessionId, note: ov.note || '',
       planText: plan ? plan.planText : '', warmup: plan ? plan.warmup : null,
       cns: s ? s.cns_demand : null,
     };
   }
-  if (!plan) return { date: dateString, source: 'plan', sessionId: null, sessionName: '', note: '', planText: '', warmup: null, cns: null };
+  if (!plan) return { date: dateString, source: 'plan', sessionId: null, sessionName: '', note: '', planText: '', warmup: null, cns: null, codes: [] };
   const s = plan.sessionId ? SESSION_BY_ID.get(plan.sessionId) : null;
   return {
     date: dateString, source: 'plan', sessionId: plan.sessionId,
+    codes: plan.codes.slice(),
     sessionName: s ? s.name : '', note: '', planText: plan.planText,
     warmup: plan.warmup, cns: s ? s.cns_demand : null, isOff: plan.isOff,
   };
 }
 function completionFor(profileId, dateString) {
   return db.completions[profileId + '|' + dateString] || null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Programs: reusable templates + calendar applications                */
+/* ------------------------------------------------------------------ */
+/* A program is a template only: 1–16 weeks, each a Mon–Sun grid of
+   session codes from the library (multiple codes per day, mirroring
+   how a plan day's text can carry two sessions). Building or editing
+   one changes nothing anywhere. APPLYING a program is the write: it
+   lays ordinary coach overrides — the same store the per-day
+   override endpoint writes — over the program's dates for the target
+   group(s), so Today, the checklist, the TV board and the reports
+   resolve applied days exactly like hand-set overrides, through
+   resolveAssignment and nothing else. The season plan content is
+   never touched. Each application snapshots the exact value of every
+   override it wrote (db.programApplications[].writes); removing the
+   application deletes an override only when its current value still
+   equals that snapshot, so a day a coach hand-edited afterwards is
+   kept, and counted as kept. */
+const PROGRAM_MAX_WEEKS = 16;
+function validateProgram(body) {
+  const name = clean(body.name, 80);
+  if (!name) return { error: 'A program needs a name.' };
+  const note = clean(body.note, 500);
+  if (!Array.isArray(body.weeks) || body.weeks.length < 1 || body.weeks.length > PROGRAM_MAX_WEEKS) {
+    return { error: 'A program runs 1 to ' + PROGRAM_MAX_WEEKS + ' weeks — send a weeks list of that length.' };
+  }
+  const weeks = [];
+  for (let wi = 0; wi < body.weeks.length; wi++) {
+    const w = body.weeks[wi] && typeof body.weeks[wi] === 'object' ? body.weeks[wi] : {};
+    const week = {};
+    for (const dayKey of DAY_KEYS) {
+      const raw = w[dayKey] === undefined ? [] : w[dayKey];
+      if (!Array.isArray(raw)) {
+        return { error: 'Week ' + (wi + 1) + ': ' + dayKey + ' must be a list of session codes.' };
+      }
+      const codes = [];
+      for (const c of raw) {
+        const code = clean(c, 20);
+        if (!SESSION_IDS.has(code)) {
+          return { error: 'Week ' + (wi + 1) + ': unknown session code "' + String(c) + '".' };
+        }
+        if (!codes.includes(code)) codes.push(code);
+      }
+      week[dayKey] = codes;
+    }
+    weeks.push(week);
+  }
+  return { fields: { name, note, weeks } };
+}
+function publicProgram(pr) {
+  return {
+    id: pr.id, name: pr.name, note: pr.note || '', weeks: pr.weeks,
+    createdBy: pr.createdBy || null, createdAt: pr.createdAt, updatedAt: pr.updatedAt,
+  };
+}
+function publicProgramApplication(a) {
+  return {
+    id: a.id, programId: a.programId, programName: a.programName,
+    target: a.target, startDate: a.startDate, dates: a.dates,
+    groups: [...new Set((a.writes || []).map(w => w.groupName))],
+    daysWritten: (a.writes || []).length,
+    createdAt: a.createdAt,
+  };
+}
+/* The value of an override, for undo comparison: which session(s) it
+   assigns and its note. by/at are bookkeeping, not value — who saved
+   the same pick again is not an edit worth protecting, but a changed
+   session or note is, and the override is then kept. */
+function overrideSemantic(ov) {
+  if (!ov) return null;
+  const codes = Array.isArray(ov.codes) && ov.codes.length ? ov.codes.slice() : [ov.sessionId];
+  return { sessionId: ov.sessionId, codes, note: ov.note || '' };
 }
 
 /* ------------------------------------------------------------------ */
@@ -4205,6 +4293,194 @@ async function handleApi(req, res, url) {
     db.customWorkouts = db.customWorkouts.filter(w => w.id !== id);
     saveDb();
     return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---------- programs (coach-built templates) + applications -----
+     Coach-only like everything in this section: athletes get a 403,
+     logged-out callers a 401. A program is a template — CRUD on it
+     never touches a calendar. Applying writes coach overrides (see
+     the helper note above); removing an application undoes exactly
+     its own writes. */
+  if (p === '/api/programs' && req.method === 'GET') {
+    const programs = db.programs.slice()
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+      .map(publicProgram);
+    return sendJson(res, 200, { programs });
+  }
+  if (p === '/api/programs' && req.method === 'POST') {
+    const body = await readBody(req);
+    const v = validateProgram(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const now = new Date().toISOString();
+    const program = Object.assign(
+      { id: crypto.randomUUID(), createdBy: user.id, createdAt: now },
+      v.fields, { updatedAt: now });
+    db.programs.push(program);
+    saveDb();
+    return sendJson(res, 201, { program: publicProgram(program) });
+  }
+  const programApplyMatch = p.match(/^\/api\/programs\/([^/]+)\/apply$/);
+  if (programApplyMatch && req.method === 'POST') {
+    const program = db.programs.find(x => x.id === decodeURIComponent(programApplyMatch[1]));
+    if (!program) return sendJson(res, 404, { error: 'Program not found.' });
+    const body = await readBody(req);
+    const startRaw = clean(body.startDate, 10);
+    if (!parseDateStr(startRaw)) return sendJson(res, 400, { error: 'Start date must be YYYY-MM-DD.' });
+    /* A program always starts on a Monday: any start date normalizes
+       to the Monday of its week, and week 1 lands there. */
+    const monday = mondayOf(startRaw);
+    const targetRaw = clean(body.target, 80);
+    let targetGroups, targetLabel;
+    if (targetRaw.toLowerCase() === 'all') {
+      targetGroups = db.groups.slice();
+      targetLabel = 'all';
+    } else {
+      const g = groupByName(targetRaw) || groupById(targetRaw);
+      if (!g) return sendJson(res, 400, { error: 'Unknown target group — name a group, or use "all".' });
+      targetGroups = [g];
+      targetLabel = g.name;
+    }
+    if (!targetGroups.length) {
+      return sendJson(res, 400, { error: 'There are no groups yet — add a group before applying a program.' });
+    }
+    /* Collect every write before touching the store, so a program
+       with nothing in it fails cleanly instead of half-applying.
+       Days with no codes write nothing: a program's empty day is not
+       an override, the plan keeps showing through there. */
+    const writes = [];
+    program.weeks.forEach((week, wi) => {
+      DAY_KEYS.forEach((dayKey, di) => {
+        const codes = week[dayKey] || [];
+        if (!codes.length) return;
+        const date = addDaysStr(monday, wi * 7 + di);
+        for (const g of targetGroups) {
+          writes.push({
+            groupId: g.id, groupName: g.name, date,
+            value: { sessionId: codes[0], codes: codes.slice(), note: 'Program: ' + program.name },
+          });
+        }
+      });
+    });
+    if (!writes.length) {
+      return sendJson(res, 400, { error: 'This program has no sessions in it yet — put at least one session on a day before applying.' });
+    }
+    const now = new Date().toISOString();
+    for (const w of writes) {
+      db.overrides[w.groupId + '|' + w.date] = {
+        sessionId: w.value.sessionId, codes: w.value.codes.slice(),
+        note: w.value.note, by: user.id, at: now,
+      };
+    }
+    const application = {
+      id: crypto.randomUUID(), programId: program.id, programName: program.name,
+      target: targetLabel, startDate: monday,
+      dates: [...new Set(writes.map(w => w.date))].sort(),
+      writes, createdBy: user.id, createdAt: now,
+    };
+    db.programApplications.push(application);
+    saveDb();
+    return sendJson(res, 201, {
+      ok: true, application: publicProgramApplication(application),
+      applied: writes.length, startDate: monday,
+      requestedStart: startRaw, normalized: startRaw !== monday,
+    });
+  }
+  const programMatch = p.match(/^\/api\/programs\/([^/]+)$/);
+  if (programMatch && req.method === 'GET') {
+    const program = db.programs.find(x => x.id === decodeURIComponent(programMatch[1]));
+    if (!program) return sendJson(res, 404, { error: 'Program not found.' });
+    return sendJson(res, 200, { program: publicProgram(program) });
+  }
+  if (programMatch && req.method === 'PUT') {
+    const program = db.programs.find(x => x.id === decodeURIComponent(programMatch[1]));
+    if (!program) return sendJson(res, 404, { error: 'Program not found.' });
+    const body = await readBody(req);
+    const v = validateProgram(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    Object.assign(program, v.fields, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { program: publicProgram(program) });
+  }
+  if (programMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(programMatch[1]);
+    if (!db.programs.some(x => x.id === id)) {
+      return sendJson(res, 404, { error: 'Program not found.' });
+    }
+    /* Deleting a template never un-applies it: applications carry
+       their own snapshot and stay removable afterwards. */
+    db.programs = db.programs.filter(x => x.id !== id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+  if (p === '/api/program-applications' && req.method === 'GET') {
+    const applications = db.programApplications.slice()
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+      .map(publicProgramApplication);
+    return sendJson(res, 200, { applications });
+  }
+  const programAppMatch = p.match(/^\/api\/program-applications\/([^/]+)$/);
+  if (programAppMatch && req.method === 'DELETE') {
+    const app = db.programApplications.find(a => a.id === decodeURIComponent(programAppMatch[1]));
+    if (!app) return sendJson(res, 404, { error: 'Application not found.' });
+    let removed = 0, kept = 0;
+    for (const w of app.writes || []) {
+      const key = w.groupId + '|' + w.date;
+      const cur = db.overrides[key];
+      if (!cur) continue; /* already cleared by hand: nothing to undo */
+      const wrote = { sessionId: w.value.sessionId, codes: w.value.codes, note: w.value.note || '' };
+      if (JSON.stringify(overrideSemantic(cur)) === JSON.stringify(wrote)) {
+        delete db.overrides[key];
+        removed++;
+      } else {
+        kept++; /* a coach changed that day after the apply — it stays */
+      }
+    }
+    db.programApplications = db.programApplications.filter(a => a.id !== app.id);
+    saveDb();
+    return sendJson(res, 200, { ok: true, removed, kept });
+  }
+
+  /* ---------- team calendar (coach) ----------
+     One month, resolved on the server through resolveAssignment —
+     plan default, hand overrides and applied programs alike — so the
+     grid can never disagree with Today or the checklist. Meet/test
+     markers come from planDayFor, the same detection the plan uses. */
+  if (p === '/api/calendar' && req.method === 'GET') {
+    const monthRaw = clean(q.get('month') || todayStr().slice(0, 7), 7);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthRaw)) {
+      return sendJson(res, 400, { error: 'Month must be YYYY-MM.' });
+    }
+    const first = monthRaw + '-01';
+    const d0 = parseDateStr(first);
+    const lastDay = new Date(d0.getFullYear(), d0.getMonth() + 1, 0).getDate();
+    const today = todayStr();
+    const days = [];
+    for (let i = 0; i < lastDay; i++) {
+      const date = addDaysStr(first, i);
+      const plan = planDayFor(date);
+      days.push({
+        date, dayKey: plan ? plan.dayKey : null, today: date === today,
+        week: plan ? plan.week : null, phase: plan ? plan.phase : null,
+        planText: plan ? plan.planText : '',
+        isMeet: !!(plan && plan.isMeet), isTest: !!(plan && plan.isTest),
+        isOff: !!(plan && plan.isOff),
+        groups: db.groups.map(g => {
+          const a = resolveAssignment(g.id, date);
+          return {
+            group: { id: g.id, name: g.name },
+            source: a.source, sessionId: a.sessionId, sessionName: a.sessionName,
+            note: a.note || '',
+            codes: (a.codes || []).map(code => {
+              const s = SESSION_BY_ID.get(code);
+              return { id: code, name: s ? s.name : code };
+            }),
+          };
+        }),
+      });
+    }
+    return sendJson(res, 200, {
+      month: monthRaw, start: first, end: addDaysStr(first, lastDay - 1), today, days,
+    });
   }
 
   void coachOnly;
