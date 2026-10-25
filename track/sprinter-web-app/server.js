@@ -3777,20 +3777,27 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
 };
+const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/fonts.css', '/sw.js']);
 function serveStatic(req, res, url) {
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
+  const shellHeaders = SHELL_NO_CACHE_PATHS.has(url.pathname)
+    ? { 'Cache-Control': 'no-cache' }
+    : {};
   fs.readFile(filePath, (err, data) => {
     if (err) {
       // SPA fallback: unknown paths get the app shell.
       fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (err2, html) => {
         if (err2) { res.writeHead(404); return res.end('not found'); }
-        res.writeHead(200, { 'Content-Type': MIME['.html'] });
+        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' });
         res.end(html);
       });
       return;
     }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    res.writeHead(200, Object.assign(
+      { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' },
+      shellHeaders
+    ));
     res.end(data);
   });
 }

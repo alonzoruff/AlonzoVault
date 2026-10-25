@@ -60,6 +60,7 @@ async function apiText(cookie, p) {
     text: await res.text(),
     type: res.headers.get('content-type') || '',
     disp: res.headers.get('content-disposition') || '',
+    cache: res.headers.get('cache-control') || '',
   };
 }
 
@@ -229,8 +230,21 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v27',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v27"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v28',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v28"), swJs.text.slice(0, 80));
+  check('service worker shell includes fonts.css and navigations go network-first',
+    swJs.text.includes("'/fonts.css'") && swJs.text.includes('networkFirstNavigation') &&
+    swJs.text.includes("request.mode === 'navigate'"));
+  const fontsCssRes = await apiText(null, '/fonts.css');
+  check('fonts.css serves the embedded data-URI faces (Archivo + JetBrains Mono, OFL)',
+    fontsCssRes.status === 200 && fontsCssRes.text.includes('@font-face') &&
+    fontsCssRes.text.includes('data:font/woff2;base64,') &&
+    fontsCssRes.text.includes('"Archivo"') && fontsCssRes.text.includes('"JetBrains Mono"') &&
+    fontsCssRes.text.includes('Open Font License'));
+  check('shell files revalidate (Cache-Control: no-cache on /, sw.js, app.js, styles.css, fonts.css)',
+    /no-cache/.test(pageHtml.cache) && /no-cache/.test(swJs.cache) &&
+    /no-cache/.test(appJs.cache) && /no-cache/.test((await apiText(null, '/styles.css')).cache) &&
+    /no-cache/.test(fontsCssRes.cache));
 
   /* ---- In-place row updates regression guards ----
      Each save handler segment is sliced out of the served app.js.
@@ -716,6 +730,10 @@ async function main() {
     started: today, impact: 'stopped', note: 'Summary flag check',
   });
   check('summary setup: flagged concern created', r.status === 201, r.status);
+  // Give Jane's group a session today via override so "today" is completable
+  // on any weekday (a plan Sunday is an off day, and off days reject marks).
+  r = await api(coach, 'POST', '/api/assignments/override', { groupId: gSprint, date: today, sessionId: 'SE-02', note: 'summary test setup' });
+  check('summary setup: today has an assigned session', r.status === 200, r.status);
   // Mark Jane complete for today so the summary count has something to count.
   r = await api(coach, 'POST', '/api/completions', { profileId: jane, date: today, marks: 'today', feel: 4 });
   check('summary setup: completion for today marked', r.status === 200, r.status);
@@ -1843,8 +1861,12 @@ async function main() {
   check('design: Archivo + JetBrains Mono lead the font stacks, palette hexes unchanged',
     stylesCss.text.includes('--font-display: "Archivo"') &&
     stylesCss.text.includes('--font-mono: "JetBrains Mono"') &&
-    stylesCss.text.includes('--red: #CC0033') &&
-    !stylesCss.text.includes('@font-face') && !stylesCss.text.includes('fonts.googleapis'));
+    stylesCss.text.includes('--red: #CC0033'));
+  check('design: fonts embedded as data URIs; no external font fetch anywhere',
+    /\/fonts\.css/.test(pageHtml.text) &&
+    fontsCssRes.text.includes('data:font/woff2;base64,') &&
+    !/fonts\.googleapis|fonts\.gstatic/.test(
+      pageHtml.text + stylesCss.text + fontsCssRes.text + appJs.text));
   check('design: run button label carries the session code in a mono run-code span',
     appJs.text.includes('class="run-code"') &&
     /\.run-code\s*\{[^}]*font-family:\s*var\(--font-mono\)/.test(stylesCss.text));
@@ -1882,6 +1904,41 @@ async function main() {
   check('TV board render path stays free of the Today Run buttons',
     !tvCode.includes('data-run-today') && !tvCode.includes('todayRunTargets') &&
     !tvCode.includes('run-today-btn') && !tvCode.includes('featuredRunSessionId'));
+
+  /* ---------------- V28 corrective pass: real fonts, arriving updates,
+     version stamp, bold Floodlight theme ---------------- */
+  check('v28: app version constant is pinned to the SW version',
+    appJs.text.includes("const APP_VERSION = 'v28'") &&
+    swJs.text.includes("sprinter-app-v28"));
+  check('v28: update loop reloads once on controllerchange and toasts after reload',
+    appJs.text.includes('hadServiceWorkerController') &&
+    appJs.text.includes('controllerchange') &&
+    appJs.text.includes('swa-app-updated') &&
+    appJs.text.includes('Updated to the latest version'));
+  check('v28: version stamp ships in the shell and the account view',
+    pageHtml.text.includes('data-app-version="v28"') &&
+    pageHtml.text.includes('Cadets Sprint · App v28') &&
+    appJs.text.includes('appVersionHtml'));
+  check('v28: Today hero is a scoreboard panel with NEXT UP from plan data',
+    pageHtml.text.includes('id="today-scoreboard"') &&
+    pageHtml.text.includes('id="today-hero-status"') &&
+    appJs.text.includes('updateTodayHero') &&
+    appJs.text.includes('nextPlanSession') &&
+    appJs.text.includes("'NEXT UP'") &&
+    stylesCss.text.includes('.today-hero'));
+  check('v28: sign-in renders the Floodlight poster',
+    appJs.text.includes('signinPosterHtml') &&
+    appJs.text.includes('signin-poster') &&
+    stylesCss.text.includes('.signin-poster'));
+  check('v28: theme — jersey banners, card lane bars, scarlet tab slab',
+    stylesCss.text.includes('.view > h1') &&
+    /\.tabbar \.tab\.active\s*\{[^}]*linear-gradient\(180deg, var\(--red\)/.test(stylesCss.text) &&
+    /\.menu-item\s*\{[^}]*var\(--hud-bg\)/.test(stylesCss.text) &&
+    stylesCss.text.includes('.lane-empty'));
+  check('v28: runner animation + Phase 1 in-place guards untouched by the theme',
+    stylesCss.text.includes('@keyframes athleteMove') &&
+    stylesCss.text.includes('athleteMove 12s') &&
+    appJs.text.includes('function flashSaved('));
 
   /* ---------------- QA + polish pass (Oct 24) ----------------
      Regression guards for the audit fixes: undefined scarlet token,

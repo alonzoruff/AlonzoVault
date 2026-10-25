@@ -101,6 +101,39 @@ const apiPut = (path, body) => api(path, {
 });
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
+/* ---------------- app version + update delivery ---------------- */
+const APP_VERSION = 'v28';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v28';
+function appVersionHtml() {
+  return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
+}
+const hadServiceWorkerController = !!(
+  'serviceWorker' in navigator && navigator.serviceWorker && navigator.serviceWorker.controller
+);
+let swUpdateReloadStarted = false;
+if ('serviceWorker' in navigator && navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadServiceWorkerController || swUpdateReloadStarted) return;
+    swUpdateReloadStarted = true;
+    try { sessionStorage.setItem('swa-app-updated', APP_VERSION); } catch (_) { /* private mode */ }
+    window.location.reload();
+  });
+}
+function showAppUpdatedToast() {
+  let updatedTo = '';
+  try {
+    updatedTo = sessionStorage.getItem('swa-app-updated') || '';
+    if (updatedTo) sessionStorage.removeItem('swa-app-updated');
+  } catch (_) { /* private mode */ }
+  if (!updatedTo) return;
+  const toast = document.createElement('div');
+  toast.className = 'update-toast';
+  toast.setAttribute('role', 'status');
+  toast.textContent = 'Updated to the latest version';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 5200);
+}
+
 /* ------------- in-place row updates -------------
    Coach data-entry saves update just the affected row in place
    instead of re-rendering the whole view, so scroll position,
@@ -193,6 +226,72 @@ function currentWeekNum() {
   if (t < parseDate(weeks[0].start)) return 1;
   return weeks[weeks.length - 1].week;
 }
+
+/* ---------------- TODAY-HERO-START ---------------- */
+function nextPlanSession(fromDate) {
+  const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+  for (const week of state.content.weeks) {
+    for (const dayKey of DAY_KEYS) {
+      const info = dayInfo(week, dayKey);
+      if (info.date > from && info.codes.length) {
+        return { week, dayKey, info, sessionId: info.codes[0] };
+      }
+    }
+  }
+  return null;
+}
+function heroDateLabel(date) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: '2-digit', year: 'numeric',
+  }).toUpperCase();
+}
+function updateTodayHero() {
+  const status = $('#today-hero-status');
+  if (!status) return;
+  const code = $('#today-hero-code');
+  const session = $('#today-hero-session');
+  const date = $('#today-hero-date');
+  const t = todayLocal();
+  const wkNum = currentWeekNum();
+  const wk = state.content.weeks.find(w => w.week === wkNum);
+  const todayKey = DAY_KEYS[(t.getDay() + 6) % 7];
+  const inSeason = wk && t >= parseDate(wk.start) && t <= parseDate(wk.end);
+  const info = inSeason ? dayInfo(wk, todayKey) : null;
+
+  let statusText = 'NEXT UP';
+  let codeText = '—';
+  let sessionText = 'The season is complete.';
+  let heroDate = t;
+
+  if (info && info.codes.length) {
+    const featured = state.sessions.get(info.codes[0]);
+    statusText = 'TODAY';
+    codeText = info.codes.join(' + ');
+    sessionText = featured ? featured.name : info.text;
+  } else if (info && info.isMeet) {
+    statusText = 'MEET DAY';
+    codeText = 'MEET';
+    sessionText = 'Championship setup — no training session code today.';
+  } else if (info && info.isTest) {
+    statusText = 'TEST DAY';
+    codeText = 'TEST';
+    sessionText = 'Testing day — bring the stopwatch.';
+  } else {
+    const next = nextPlanSession(t);
+    if (next) {
+      const nextSession = state.sessions.get(next.sessionId);
+      codeText = next.info.codes.join(' + ');
+      sessionText = nextSession ? nextSession.name : next.info.text;
+      heroDate = next.info.date;
+    }
+  }
+
+  status.textContent = statusText;
+  code.textContent = codeText;
+  session.textContent = sessionText;
+  date.textContent = heroDateLabel(heroDate);
+}
+/* ---------------- TODAY-HERO-END ---------------- */
 
 /* ---------------- tiny markdown renderer ---------------- */
 function inlineMd(s) {
@@ -487,6 +586,7 @@ function renderHome() {
       </ol>
     </div>`;
 
+  updateTodayHero();
   $('#home-content').removeAttribute('aria-busy');
   $('#home-content').innerHTML = `
     <h1>Today</h1>
@@ -951,6 +1051,18 @@ async function refreshUserData() {
 }
 
 /* ---------------- account ---------------- */
+function signinPosterHtml() {
+  return `<section class="signin-poster" aria-label="Cadets Sprint">
+    <div class="poster-kicker">St. John's College High School · Track &amp; Field</div>
+    <div class="poster-title">CADETS<br><span>SPRINT</span></div>
+    <div class="poster-meta"><span>TRAIN · RACE · RECOVER</span><span class="num">EST. 1851</span></div>
+    <div class="poster-lanes" aria-hidden="true">
+      <div class="lane-line"><div class="lane-strip"></div></div>
+      <div class="lane-line"><div class="lane-strip ls-b"></div></div>
+      <div class="lane-line"><div class="lane-strip ls-c"></div></div>
+    </div>
+  </section>`;
+}
 function renderAccount() {
   const chip = $('#account-chip');
   const note = $('#menu-account-note');
@@ -961,7 +1073,8 @@ function renderAccount() {
       <p>Logged in as <strong>${esc(state.user.email)}</strong>.</p>
       <p>${state.user.role === 'coach' ? '<span class="badge high">COACH ACCOUNT</span>' : '<span class="badge low">NOT A COACH ACCOUNT</span>'}</p>
       <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Athlete account: once your coach links this email to your name on the team roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. The rest of the team side stays coach-run.'} Your personal log entries and cross-training swaps save to this account.</p>
-      <button class="btn" id="acct-logout" type="button">Log out</button></div>
+      <button class="btn" id="acct-logout" type="button">Log out</button>
+      ${appVersionHtml()}</div>
       <div id="coach-accounts"></div>
       <div id="coach-invites"></div>`;
     renderCoachAccounts();
@@ -977,7 +1090,8 @@ function renderAccount() {
     chip.textContent = 'Not logged in';
     note.textContent = 'Log in or create an account';
     $('#account-main').innerHTML = `
-      <form id="login-form" class="card">
+      ${signinPosterHtml()}
+      <form id="login-form" class="card signin-card">
         <h2>Log in</h2>
         <label>Email <input type="email" id="li-email" required autocomplete="email"></label>
         <label>Password <input type="password" id="li-pass" required autocomplete="current-password"></label>
@@ -992,7 +1106,8 @@ function renderAccount() {
         <label>Password (8+ characters) <input type="password" id="rg-pass" required autocomplete="new-password" minlength="8"></label>
         <button class="btn primary" type="submit">Create account</button>
         <p class="error" id="rg-err"></p>
-      </form>`;
+      </form>
+      ${appVersionHtml()}`;
     $('#login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -4101,7 +4216,7 @@ async function renderRecords() {
       ${sel && sel.entries.length ? `<div class="table-wrap"><table class="ranked">
         <thead><tr><th>#</th><th>Athlete</th><th>Mark</th><th>Year</th><th>Meet</th></tr></thead>
         <tbody>${sel.entries.map(r => `<tr><td>${r.rank}</td><td><strong>${esc(r.name)}</strong></td><td class="num"><strong>${esc(r.mark)}</strong></td><td>${r.year ? esc(r.year) : '—'}</td><td>${esc(r.meet || '—')}</td></tr>`).join('')}</tbody></table></div>`
-        : `<p class="muted">No records yet${sel ? ' for the ' + esc(sel.name) : ''} — the board fills in as real marks are added.</p>`}
+        : `<div class="lane-empty"><div class="lane-empty-code num">LANE 1 · UNCLAIMED</div><strong>The board is waiting.</strong><span>No records yet${sel ? ' for the ' + esc(sel.name) : ''} — the board fills in as real marks are added.</span></div>`}
       ${anyMarks ? '' : '<p class="muted">The board starts empty on purpose: every mark here is real St. John\'s history, added by a coach.</p>'}
     </div>`;
   main.querySelectorAll('[data-rec-event]').forEach(b => b.addEventListener('click', () => {
@@ -4842,5 +4957,6 @@ function tvStopTimers() {
   /* syncAuthUi (not the individual renders) is what un-hides the Coach
      tabs for a coach whose session survived a reload. */
   syncAuthUi();
+  showAppUpdatedToast();
   renderLibrary();
 })();

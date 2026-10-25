@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sprinter">
+<link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -37,7 +38,17 @@
 <main id="app">
   <!-- TODAY -->
   <section id="view-home" class="view active">
-    <div class="hero" aria-hidden="true">
+    <div class="hero today-hero" id="today-scoreboard">
+      <div class="today-hero-copy">
+        <div class="today-hero-kicker">St. John's College High School · Cadets Track &amp; Field</div>
+        <div class="today-hero-title">CADETS <span>SPRINT</span></div>
+        <div class="today-hero-score">
+          <span class="today-hero-status" id="today-hero-status">NEXT UP</span>
+          <span class="today-hero-code num" id="today-hero-code">—</span>
+        </div>
+        <div class="today-hero-session" id="today-hero-session">Loading the plan…</div>
+        <div class="today-hero-date num" id="today-hero-date"></div>
+      </div>
       <div class="blocks">
         <svg viewBox="0 0 58 34" focusable="false" aria-hidden="true">
           <rect x="40" y="4" width="3" height="26" fill="#ffffff" opacity=".8"/>
@@ -787,6 +798,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
+  <div class="app-version" data-app-version="v28">Cadets Sprint · App v28</div>
 </footer>
 
 <script src="/app.js"></script>

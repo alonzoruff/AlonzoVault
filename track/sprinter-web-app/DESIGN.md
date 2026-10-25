@@ -9,18 +9,18 @@
 
 | Dial | Level | Why here |
 |------|-------|----------|
-| **Creativity** | `7` | Athletic editorial energy: jersey numerals, lane-line geometry, stopwatch data. Not gallery art — a locker-room whiteboard that went to design school. |
+| **Creativity** | `9` | Full meet-day identity on brand surfaces: poster-scale jersey type, Floodlight scoreboard panels, lane geometry, diagonal banner cuts, and the runner as a living backdrop. Data still behaves; the frame around it is unmistakably designed. |
 | **Density** | `7` | Cockpit-leaning. Coaches scan rosters, marks, and readiness for a whole squad at once. Data is the decoration. |
-| **Variance** | `5` | Structured where data lives (grids stay grids — athletes' times must line up), asymmetric where identity lives (headers, hero bands, empty states get diagonal lane cuts and offset type). |
+| **Variance** | `7` | Structured where data lives (grids stay grids — athletes' times must line up), boldly asymmetric where identity lives (headers, hero bands, sign-in, empty states get diagonal lane cuts and offset type). |
 | **Motion Intent** | `7` | Sport is motion. Spring-physics feedback, a runner in stride, live count-ups on the TV board — but every animation must survive a sunlit weight room and a school iPad. |
 
 ---
 
 ## 1. Visual Theme & Atmosphere
 
-A floodlit track at night rendered as software. Light app surfaces (Canvas Mist, Pure Surface cards) carry the daily workflow; deep HUD panels (Floodlight Charcoal) take over wherever performance is live — the workout runner, the weight-room TV board, record boards. The mood is "meet day, organized": bold condensed type like a jersey back, lane lines as structural rules, every number treated like a split time — precise, monospaced, earned. Nothing decorative that a stopwatch wouldn't approve of. Scarlet appears the way it does on a uniform: sparingly, and it always means *go, now, this one*.
+A floodlit track at night rendered as software. The whole shell wears the Floodlight frame — a dark SJC header, scarlet lane accents, jersey-banner section headers, and a scarlet active navigation slab — while light working surfaces (Canvas Mist, Pure Surface cards) sit inside that frame for daily workflow. Deep HUD panels take over wherever performance is live: the Today scoreboard, sign-in poster, workout runner, weight-room TV board, and record boards. The mood is "meet day, organized": bold condensed type like a jersey back, lane lines as structural rules, every number treated like a split time — precise, monospaced, earned. Scarlet appears the way it does on a uniform: as the signal color, and it always means *go, now, this one*.
 
-Density is balanced-high (Level 7): coach screens are control panels, athlete screens breathe a little more. Variance is mid (Level 5): data grids are ruthlessly aligned; brand moments — the Today header, the Run button, section banners — break the grid with diagonal cuts and oversized numerals. Motion is fluid and physical (Level 7): springs, strides, and count-ups, all hardware-accelerated, all honoring reduced-motion settings.
+Density is balanced-high (Level 7): coach screens are control panels, athlete screens breathe a little more. Variance runs high on identity surfaces (Level 7): data grids are ruthlessly aligned; brand moments — the Today scoreboard, sign-in poster, Run button, section banners, and empty states — break the grid with diagonal cuts and oversized numerals. Motion is fluid and physical (Level 7): springs, strides, and count-ups, all hardware-accelerated, all honoring reduced-motion settings.
 
 ## 2. Color Palette & Roles
 
