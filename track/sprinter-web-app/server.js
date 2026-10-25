@@ -3777,7 +3777,7 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
 };
-const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/fonts.css', '/sw.js']);
+const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/sw.js']);
 function serveStatic(req, res, url) {
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }

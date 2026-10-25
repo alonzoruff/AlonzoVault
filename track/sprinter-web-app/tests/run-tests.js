@@ -230,21 +230,18 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v28',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v28"), swJs.text.slice(0, 80));
-  check('service worker shell includes fonts.css and navigations go network-first',
-    swJs.text.includes("'/fonts.css'") && swJs.text.includes('networkFirstNavigation') &&
+  check('service worker cache is bumped to v29',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v29"), swJs.text.slice(0, 80));
+  check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
+    !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
   const fontsCssRes = await apiText(null, '/fonts.css');
-  check('fonts.css serves the embedded data-URI faces (Archivo + JetBrains Mono, OFL)',
-    fontsCssRes.status === 200 && fontsCssRes.text.includes('@font-face') &&
-    fontsCssRes.text.includes('data:font/woff2;base64,') &&
-    fontsCssRes.text.includes('"Archivo"') && fontsCssRes.text.includes('"JetBrains Mono"') &&
-    fontsCssRes.text.includes('Open Font License'));
-  check('shell files revalidate (Cache-Control: no-cache on /, sw.js, app.js, styles.css, fonts.css)',
+  check('rollback: fonts.css is gone (the embedded Archivo/JetBrains faces left with the design pass)',
+    !fontsCssRes.type.includes('text/css') && !fontsCssRes.text.includes('@font-face') &&
+    !fontsCssRes.text.includes('Archivo') && !pageHtml.text.includes('/fonts.css'));
+  check('shell files revalidate (Cache-Control: no-cache on /, sw.js, app.js, styles.css)',
     /no-cache/.test(pageHtml.cache) && /no-cache/.test(swJs.cache) &&
-    /no-cache/.test(appJs.cache) && /no-cache/.test((await apiText(null, '/styles.css')).cache) &&
-    /no-cache/.test(fontsCssRes.cache));
+    /no-cache/.test(appJs.cache) && /no-cache/.test((await apiText(null, '/styles.css')).cache));
 
   /* ---- In-place row updates regression guards ----
      Each save handler segment is sliced out of the served app.js.
@@ -1851,91 +1848,96 @@ async function main() {
     appJs.text.includes('▶ Run today\'s workout') && appJs.text.includes('▶ Run — ') &&
     appJs.text.includes('todayRunTargets(data.groups)'));
   const stylesCss = await apiText(null, '/styles.css');
-  check('today-run button style is served and at least 64px tall (DESIGN.md signature slab)',
-    stylesCss.status === 200 && /\.run-today-btn\s*\{[^}]*min-height:\s*64px/.test(stylesCss.text));
+  check('today-run button style is served at the restored pre-design treatment (56px)',
+    stylesCss.status === 200 && /\.btn\.run-today-btn\s*\{[^}]*min-height:\s*56px/.test(stylesCss.text));
 
-  /* ---------------- Design language (DESIGN.md, Phase 2) ----------------
-     Presentation contracts only: font stacks with no webfont fetch,
-     mono performance numerals, lane-rule dividers, split headers,
-     the record scoreboard hero, TV jersey banner, flagged rows. */
-  check('design: Archivo + JetBrains Mono lead the font stacks, palette hexes unchanged',
-    stylesCss.text.includes('--font-display: "Archivo"') &&
-    stylesCss.text.includes('--font-mono: "JetBrains Mono"') &&
+  /* ---------------- Design rollback (Oct 25) ----------------
+     AJ reviewed the DESIGN.md design pass live and directed a
+     rollback to the previous look. These checks pin the RESTORED
+     pre-design presentation and the absence of the design-pass
+     markers (fonts, 64px Run slab, lane rules, split heads,
+     scoreboard hero, flagged-row accents, cascade motion). */
+  check('rollback: system font stacks restored; no Archivo/JetBrains anywhere in the shell',
+    stylesCss.text.includes('font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto') &&
+    !/Archivo|JetBrains/.test(stylesCss.text + pageHtml.text + appJs.text) &&
+    !stylesCss.text.includes('--font-display') && !stylesCss.text.includes('--font-mono') &&
     stylesCss.text.includes('--red: #CC0033'));
-  check('design: fonts embedded as data URIs; no external font fetch anywhere',
-    /\/fonts\.css/.test(pageHtml.text) &&
-    fontsCssRes.text.includes('data:font/woff2;base64,') &&
-    !/fonts\.googleapis|fonts\.gstatic/.test(
-      pageHtml.text + stylesCss.text + fontsCssRes.text + appJs.text));
-  check('design: run button label carries the session code in a mono run-code span',
-    appJs.text.includes('class="run-code"') &&
-    /\.run-code\s*\{[^}]*font-family:\s*var\(--font-mono\)/.test(stylesCss.text));
-  check('design: run button has Scarlet Deep gradient depth + spring press',
-    /\.run-today-btn\s*\{[^}]*linear-gradient\(180deg, var\(--red\) 0%, var\(--red-dark\) 100%\)/.test(stylesCss.text) &&
-    stylesCss.text.includes('.run-today-btn:active { transform: translateY(1px)'));
-  check('design: lane rule is a 1px hairline with a 24px scarlet segment',
-    /\.lane-divider\s*\{[^}]*border-top:\s*1px solid var\(--line\)/.test(stylesCss.text) &&
-    /\.lane-divider \.lane-strip\s*\{[^}]*width:\s*24px/.test(stylesCss.text));
-  check('design: Today + session detail use split heads with oversized mono right side',
-    appJs.text.includes('class="split-head"><h2>Today — ') && appJs.text.includes('class="split-date num"') &&
-    appJs.text.includes('class="split-code num"') &&
-    /\.split-head \.split-date[^{]*\{[^}]*var\(--font-mono\)/.test(stylesCss.text));
-  check('design: mark/result cells render in mono (records, PR board, ranked, report card)',
-    appJs.text.includes('<td class="num"><strong>${esc(r.mark)}</strong></td>') &&
-    appJs.text.includes('<td class="num"><strong>${esc(b.mark)}</strong></td>') &&
-    appJs.text.includes('<td class="num">${resultRawText(r, t)}</td>') &&
-    appJs.text.includes('<td class="num"><strong>${esc(m.mark)}</strong></td>'));
-  check('design: school record top mark gets the oversized scoreboard hero',
-    appJs.text.includes('class="record-hero"') && appJs.text.includes('class="big-num"') &&
-    /\.big-num\s*\{[^}]*clamp\(2\.2rem, 7vw, 3\.5rem\)/.test(stylesCss.text));
-  check('design: TV group name is a jersey banner (uppercase display + scarlet segment)',
-    /\.tv-page-group\s*\{[^}]*text-transform:\s*uppercase/.test(stylesCss.text) &&
-    stylesCss.text.includes('.tv-page-group::after'));
-  check('design: flagged rows carry the 3px High Load left border',
-    /\.wellness-row\.flagged\s*\{[^}]*border-left:\s*3px solid var\(--high\)/.test(stylesCss.text) &&
-    /\.roster-row\.flagged\s*\{[^}]*border-left:\s*3px solid var\(--high\)/.test(stylesCss.text) &&
-    appJs.text.includes('class="roster-row flagged"'));
-  check('design: check-in selected state stays scarlet/white at full weight',
-    /\.tap-btn\.on\s*\{[^}]*background:\s*var\(--scarlet\)[^}]*font-weight:\s*800/.test(stylesCss.text));
-  check('design: list cascade is transform/opacity only and reduced-motion safe',
-    stylesCss.text.includes('@keyframes cascadeIn') &&
-    stylesCss.text.includes('prefers-reduced-motion: no-preference') &&
-    stylesCss.text.includes('animation-delay: 40ms'));
+  check('rollback: no external font fetch anywhere',
+    !/fonts\.googleapis|fonts\.gstatic/.test(pageHtml.text + stylesCss.text + appJs.text));
+  check('rollback: run button label is plain text with the session code (no mono run-code span)',
+    appJs.text.includes("`▶ Run today's workout · ${esc(target.sessionId)}`") &&
+    appJs.text.includes("`▶ Run — ${esc(target.groupName)} · ${esc(target.sessionId)}`") &&
+    !appJs.text.includes('run-code') && !stylesCss.text.includes('.run-code'));
+  check('rollback: run button has no slab gradient or spring-press treatment',
+    !/\.btn\.run-today-btn\s*\{[^}]*linear-gradient/.test(stylesCss.text) &&
+    !stylesCss.text.includes('.run-today-btn:active { transform: translateY(1px) scale(.99)'));
+  check('rollback: lane rule is the animated dashed stripe again',
+    /\.lane-divider\s*\{[^}]*height:\s*4px/.test(stylesCss.text) &&
+    /\.lane-divider \.lane-strip\s*\{[^}]*repeating-linear-gradient\(90deg, var\(--red\) 0 34px, transparent 34px 56px\)/.test(stylesCss.text));
+  check('rollback: Today + session detail headers are the plain headings again (no split heads)',
+    appJs.text.includes('<h2>Today — ${DAY_NAMES[todayKey]}, ${fmtDate(info.date)}</h2>') &&
+    appJs.text.includes('<h2><span class="code-link">${esc(s.id)}</span> · ${esc(s.name)}</h2>') &&
+    !appJs.text.includes('split-head') && !stylesCss.text.includes('.split-head'));
+  check('rollback: mark/result cells render in the body font (no mono num cells)',
+    appJs.text.includes('<td><strong>${esc(r.mark)}</strong></td>') &&
+    appJs.text.includes('<td><strong>${esc(b.mark)}</strong></td>') &&
+    appJs.text.includes('<td>${resultRawText(r, t)}</td>') &&
+    appJs.text.includes('<td><strong>${esc(m.mark)}</strong></td>') &&
+    !appJs.text.includes('class="num"'));
+  check('rollback: school record board has no scoreboard hero; the empty state is the plain note',
+    !appJs.text.includes('record-hero') && !appJs.text.includes('big-num') &&
+    !stylesCss.text.includes('.big-num') && !stylesCss.text.includes('.record-hero') &&
+    appJs.text.includes('<p class="muted">No records yet') &&
+    !appJs.text.includes('lane-empty') && !stylesCss.text.includes('.lane-empty'));
+  check('rollback: TV group name is the plain header again (no jersey banner)',
+    /\.tv-page-group\s*\{[^}]*font-weight:\s*800/.test(stylesCss.text) &&
+    !stylesCss.text.includes('.tv-page-group::after') &&
+    !/\.tv-page-group\s*\{[^}]*text-transform/.test(stylesCss.text));
+  check('rollback: flagged rows use the pre-design styling (wellness 4px scarlet edge; summary rows unflagged)',
+    /\.wellness-row\.flagged\s*\{[^}]*border-left:\s*4px solid var\(--scarlet\)/.test(stylesCss.text) &&
+    /\.concern-card\.flagged\s*\{[^}]*border:\s*2px solid var\(--red\)/.test(stylesCss.text) &&
+    !stylesCss.text.includes('.roster-row.flagged') &&
+    !appJs.text.includes('class="roster-row flagged"'));
+  check('rollback: check-in selected state is scarlet/white without the added full-weight shout',
+    /\.tap-btn\.on\s*\{[^}]*background:\s*var\(--scarlet\)/.test(stylesCss.text) &&
+    !/\.tap-btn\.on\s*\{[^}]*font-weight:\s*800/.test(stylesCss.text));
+  check('rollback: no card cascade motion was left behind',
+    !stylesCss.text.includes('cascadeIn'));
   check('TV board render path stays free of the Today Run buttons',
     !tvCode.includes('data-run-today') && !tvCode.includes('todayRunTargets') &&
     !tvCode.includes('run-today-btn') && !tvCode.includes('featuredRunSessionId'));
 
-  /* ---------------- V28 corrective pass: real fonts, arriving updates,
-     version stamp, bold Floodlight theme ---------------- */
-  check('v28: app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v28'") &&
-    swJs.text.includes("sprinter-app-v28"));
-  check('v28: update loop reloads once on controllerchange and toasts after reload',
+  /* ---------------- Update delivery (kept through the rollback) -----
+     The v28 update mechanics were functional, not part of the design
+     pass: version pinning, the one-time reload on controllerchange,
+     the update toast, and the version stamp all stay. The Floodlight
+     hero / poster / theme from that commit are rolled back below. */
+  check('app version constant is pinned to the SW version',
+    appJs.text.includes("const APP_VERSION = 'v29'") &&
+    swJs.text.includes("sprinter-app-v29"));
+  check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
-  check('v28: version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v28"') &&
-    pageHtml.text.includes('Cadets Sprint · App v28') &&
+  check('version stamp ships in the shell and the account view',
+    pageHtml.text.includes('data-app-version="v29"') &&
+    pageHtml.text.includes('Cadets Sprint · App v29') &&
     appJs.text.includes('appVersionHtml'));
-  check('v28: Today hero is a scoreboard panel with NEXT UP from plan data',
-    pageHtml.text.includes('id="today-scoreboard"') &&
-    pageHtml.text.includes('id="today-hero-status"') &&
-    appJs.text.includes('updateTodayHero') &&
-    appJs.text.includes('nextPlanSession') &&
-    appJs.text.includes("'NEXT UP'") &&
-    stylesCss.text.includes('.today-hero'));
-  check('v28: sign-in renders the Floodlight poster',
-    appJs.text.includes('signinPosterHtml') &&
-    appJs.text.includes('signin-poster') &&
-    stylesCss.text.includes('.signin-poster'));
-  check('v28: theme — jersey banners, card lane bars, scarlet tab slab',
-    stylesCss.text.includes('.view > h1') &&
-    /\.tabbar \.tab\.active\s*\{[^}]*linear-gradient\(180deg, var\(--red\)/.test(stylesCss.text) &&
-    /\.menu-item\s*\{[^}]*var\(--hud-bg\)/.test(stylesCss.text) &&
-    stylesCss.text.includes('.lane-empty'));
-  check('v28: runner animation + Phase 1 in-place guards untouched by the theme',
+  check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
+    pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
+    !pageHtml.text.includes('today-scoreboard') && !pageHtml.text.includes('today-hero') &&
+    !appJs.text.includes('updateTodayHero') && !appJs.text.includes('nextPlanSession') &&
+    !stylesCss.text.includes('.today-hero'));
+  check('rollback: sign-in has no Floodlight poster; the login form is a plain card',
+    !appJs.text.includes('signinPosterHtml') && !appJs.text.includes('signin-poster') &&
+    !stylesCss.text.includes('.signin-poster') &&
+    appJs.text.includes('<form id="login-form" class="card">'));
+  check('rollback: Floodlight theme layer is gone (no jersey banners, card lane bars, tab slab)',
+    !stylesCss.text.includes('Floodlight') && !stylesCss.text.includes('.view > h1') &&
+    !/\.tabbar \.tab\.active\s*\{[^}]*linear-gradient\(180deg, var\(--red\)/.test(stylesCss.text) &&
+    !/\.menu-item\s*\{[^}]*var\(--hud-bg\)/.test(stylesCss.text));
+  check('runner animation + Phase 1 in-place guards untouched by the rollback',
     stylesCss.text.includes('@keyframes athleteMove') &&
     stylesCss.text.includes('athleteMove 12s') &&
     appJs.text.includes('function flashSaved('));

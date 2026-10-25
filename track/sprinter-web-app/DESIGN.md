@@ -1,3 +1,7 @@
+> ## ⛔ STATUS: PAUSED / SUPERSEDED — DO NOT APPLY
+>
+> AJ reviewed this design applied live on **Oct 25, 2026** and directed a rollback to the previous look. The app was reverted to its pre-design-pass appearance (SW v29): the Archivo / JetBrains Mono font stacks, the 64px Run-button slab, lane-rule dividers, split headers, scoreboard record hero, flagged-row accents, sign-in poster, Today scoreboard hero, and the Floodlight theme layer are all removed. **Do not re-apply any part of this document without AJ explicitly asking again.** This file is kept for reference only.
+
 # Design System: Cadets Sprint — SJC Track & Field
 
 **Skill:** stitch-design-taste · **Product:** Sprinter Workout App (St. John's College High School — Cadets Track & Field)

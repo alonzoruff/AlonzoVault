@@ -2,8 +2,8 @@
    shell reaches open and installed apps promptly, with the cache as
    the offline fallback. Static assets use stale-while-revalidate.
    API calls always go to the network — log data is never cached. */
-const CACHE = 'sprinter-app-v28';
-const SHELL = ['/', '/index.html', '/fonts.css', '/styles.css', '/app.js', '/manifest.json', '/assets/sjc-logo-header.svg'];
+const CACHE = 'sprinter-app-v29';
+const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/assets/sjc-logo-header.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

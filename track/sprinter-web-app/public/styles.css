@@ -17,22 +17,11 @@
   --red-on-dark: #ff7086;         /* scarlet legible on dark HUD surfaces */
   --red-soft-on-dark: #ffb3c2;    /* secondary scarlet for dark-surface labels */
   --hud-bg: #101216;
-  --hud-panel: #1d2026;
-  --hud-deep: #17191c;
-  --hud-track: #262b31;
   --hud-line: #2c313a;
   --hud-text-dim: #c9ccd1;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
   --card-pad: 16px;
   --card-gap: 14px;
-  /* Design language (DESIGN.md): Archivo is the jersey voice,
-     JetBrains Mono carries every performance number. The real
-     fonts are embedded locally in fonts.css as data URIs, so iOS
-     renders them with no external font request and the offline
-     PWA carries its type with it. System fonts remain fallbacks. */
-  --font-display: "Archivo", "Archivo Expanded", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-body: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -42,10 +31,10 @@ html { -webkit-text-size-adjust: 100%; }
 }
 body {
   margin: 0;
-  font-family: var(--font-body);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--ink);
-  line-height: 1.55;
+  line-height: 1.45;
 }
 .topbar {
   position: sticky; top: 0; z-index: 20;
@@ -121,35 +110,9 @@ main { max-width: 880px; margin: 0 auto; padding: 16px max(16px, env(safe-area-i
 .view { display: none; }
 .view.active { display: block; }
 h1 { font-size: 24px; margin: 6px 0 12px; line-height: 1.25; }
-/* Display voice: uppercase, track-tight, weight does the shouting.
-   h3 keeps its case — it often carries athlete names. */
-h1, h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; text-transform: uppercase; }
 h2 { font-size: 19px; margin: 4px 0 10px; line-height: 1.25; }
-h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; font-size: 16.5px; margin: 10px 0 6px; line-height: 1.25; }
+h3 { font-size: 16.5px; margin: 10px 0 6px; line-height: 1.25; }
 .muted { color: var(--muted); font-size: 14px; }
-/* Performance numerals: mono, tabular — a 10.87 is a split time
-   and must look like one. .big-num is the scoreboard treatment. */
-.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.big-num {
-  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-  font-weight: 800; font-size: clamp(2.2rem, 7vw, 3.5rem); line-height: 1; letter-spacing: -0.01em;
-}
-/* Split identity headers: title left, oversized mono date/code
-   right. Identity breaks the grid; data never does. */
-.split-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.split-head .split-date, .split-head .split-code {
-  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-  font-weight: 800; font-size: clamp(1.35rem, 5vw, 2rem); color: var(--ink); white-space: nowrap;
-}
-/* Everywhere a performance number is typed or read in place —
-   entry grids, mark inputs, session codes, stat readouts — the
-   mono voice applies, so columns of marks align to the hundredth. */
-input.grid-in, input.grid-r, .rapid-test input, .check-inputs input,
-input[data-md-mark], .tap-btn, .ci-sleep-val, .stat-num,
-.session-row .code, .code-link, .day-date {
-  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-}
-.day-card .day-head .day-date { font-size: 17px; font-weight: 700; color: var(--ink); }
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px var(--card-pad); margin: 0 0 var(--card-gap);
@@ -166,18 +129,7 @@ a.btn { display: inline-block; text-decoration: none; }
 .btn.danger { color: var(--high); border-color: #f0c4c0; }
 /* Today screen Run button(s): full width of the card (via
    .btn.primary), tall enough to hit across a weight room. */
-/* The signature Run button: a full-width scarlet slab, 64px,
-   uppercase display type, the session code in mono, Scarlet Deep
-   as the gradient floor, and a spring press (transform only). */
-.btn.run-today-btn {
-  min-height: 64px; font-size: 19px; font-weight: 800; margin: 0 0 10px;
-  font-family: var(--font-display); text-transform: uppercase; letter-spacing: -0.01em;
-  background: linear-gradient(180deg, var(--red) 0%, var(--red-dark) 100%);
-  border-color: var(--red-dark); color: #fff;
-  transition: transform .18s cubic-bezier(.34, 1.56, .64, 1), background-color .15s ease, border-color .15s ease;
-}
-.btn.run-today-btn:active { transform: translateY(1px) scale(.99); }
-.run-code { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: 0; }
+.btn.run-today-btn { min-height: 56px; font-size: 17px; font-weight: 700; margin: 0 0 10px; }
 button.back { margin-bottom: 10px; }
 input[type="search"], input[type="text"], input[type="email"], input[type="password"],
 input[type="date"], select, textarea {
@@ -1523,16 +1475,14 @@ details.card summary { cursor: pointer; }
 }
 }
 
-/* Lane rule: a 1px hairline with a 24px scarlet segment at its
-   left edge, like a lane number marking. (On HUD surfaces the TV
-   rules below carry the same idea in --hud-line.) */
+/* Animated dashed lane stripe under section headers */
 .lane-divider {
-  height: auto; border-top: 1px solid var(--line); border-radius: 0;
-  overflow: visible; margin: -2px 0 14px; background: none; position: relative;
+  height: 4px; border-radius: 2px; overflow: hidden;
+  margin: -4px 0 14px; background: rgba(138,147,159,.18);
 }
 .lane-divider .lane-strip {
-  display: block; width: 24px; height: 3px; margin-top: -2px;
-  background: var(--red); opacity: 1; animation: none; border-radius: 0;
+  background-image: repeating-linear-gradient(90deg, var(--red) 0 34px, transparent 34px 56px);
+  opacity: .55; animation-duration: 3s;
 }
 
 /* Weekly digest */
@@ -1635,7 +1585,7 @@ svg.chart { width: 100%; height: auto; display: block; }
 .chart-axis { font-size: 10px; fill: var(--muted); }
 .chart-best { font-size: 9.5px; font-weight: 800; }
 .legend .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; }
-.concern-card.flagged { border: 2px solid var(--high); background: var(--high-bg); }
+.concern-card.flagged { border: 2px solid var(--red); background: #fff7f8; }
 .demo-zone { display: inline-flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .demo-zone .btn { width: auto; padding: 4px 12px; font-size: 13.5px; }
 
@@ -1793,17 +1743,7 @@ body.tv-mode #view-tv.active {
 }
 .tv-date { font-size: calc(max(44px, 3.8vw) * var(--tv-scale, 1)); font-weight: 800; line-height: 1.1; color: #fff; }
 .tv-weekline { font-size: calc(max(26px, 2vw) * var(--tv-scale, 1)); color: var(--gray); font-weight: 700; margin: 10px 0 26px; }
-/* Group name as a jersey banner: uppercase display type with a
-   scarlet lane segment under it, on the charcoal HUD surface. */
-.tv-page-group {
-  font-family: var(--font-display); text-transform: uppercase; letter-spacing: -0.01em;
-  font-size: calc(max(40px, 3.4vw) * var(--tv-scale, 1)); font-weight: 800; color: #fff; line-height: 1.15;
-}
-.tv-page-group::after {
-  content: ''; display: block;
-  width: calc(72px * var(--tv-scale, 1)); height: calc(5px * var(--tv-scale, 1));
-  background: var(--red); margin-top: calc(10px * var(--tv-scale, 1));
-}
+.tv-page-group { font-size: calc(max(40px, 3.4vw) * var(--tv-scale, 1)); font-weight: 800; color: #fff; line-height: 1.15; }
 .tv-pick {
   display: inline-block; vertical-align: middle; background: var(--red); color: #fff;
   font-size: calc(19px * var(--tv-scale, 1)); font-weight: 800; letter-spacing: .04em;
@@ -2015,27 +1955,6 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .row-saved { animation: rowSavedFlash 1.8s ease-out; border-radius: 8px; }
 .row-errored { outline: 2px solid var(--red); outline-offset: 2px; border-radius: 8px; }
 .row-err { display: block; margin-top: 4px; }
-
-/* Design language motion: lists cascade at ~40ms per card when a
-   view mounts — transform/opacity only, spring-feel curve, and
-   fully off under reduced motion. In-place row saves never
-   re-create these cards, so entry is never interrupted by it. */
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes cascadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: none; }
-  }
-  .view > .card { animation: cascadeIn .3s cubic-bezier(.25, .9, .3, 1.12) both; }
-  .view > .card:nth-of-type(2) { animation-delay: 40ms; }
-  .view > .card:nth-of-type(3) { animation-delay: 80ms; }
-  .view > .card:nth-of-type(4) { animation-delay: 120ms; }
-  .view > .card:nth-of-type(5) { animation-delay: 160ms; }
-  .view > .card:nth-of-type(6) { animation-delay: 200ms; }
-  .view > .card:nth-of-type(n+7) { animation-delay: 240ms; }
-}
-/* School-record hero: the top mark gets the scoreboard treatment. */
-.record-hero { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 2px 0 10px; }
-.record-hero .big-num { color: var(--ink); }
 .report-card .rc-head h3 { margin: 0 0 2px; font-size: 20px; }
 .report-card h4 { margin: 14px 0 6px; }
 .rc-line { margin: 8px 0; }
@@ -2133,17 +2052,12 @@ body.runner-mode { overflow: hidden; }
   border: 2px solid var(--gray); border-radius: 12px;
   background: #fff; font-size: 18px; font-weight: 700; cursor: pointer;
 }
-/* Check-in selected state: scarlet fill, white text, full weight —
-   a selection must read from arm's length. */
-.tap-btn.on { background: var(--scarlet); border-color: var(--scarlet); color: #fff; font-weight: 800; }
+.tap-btn.on { background: var(--scarlet); border-color: var(--scarlet); color: #fff; }
 .ci-hurts { font-size: 17px; font-weight: 700; margin-top: 16px; }
 .ci-hurts { display: flex; align-items: center; gap: 10px; min-height: 48px; }
 .ci-hurts input { width: 26px; height: 26px; flex: none; }
 .ci-save { width: 100%; min-height: 52px; font-size: 18px; margin-top: 14px; }
-/* Flagged rows: a 3px High Load left border — unmissable at a
-   glance across a weight room, in the functional data red. */
-.wellness-row.flagged { background: var(--high-bg); border-left: 3px solid var(--high); border-radius: 8px; }
-.roster-row.flagged { background: var(--high-bg); border-left: 3px solid var(--high); border-radius: 8px; }
+.wellness-row.flagged { background: #fdeef1; border-left: 4px solid var(--scarlet); border-radius: 8px; }
 
 /* GOALS (coach manager + athlete card + report card) */
 .goal-row { padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
@@ -2167,415 +2081,16 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .tv-updated{font-size:13px;color:var(--hud-text-dim);text-align:right;min-height:16px}
 .tv-updated.stale{color:var(--red-soft-on-dark);font-weight:700}
 
-/* ================================================================
-   V28 THEME — Cadets Sprint scoreboard system
-   The palette is unchanged. This layer gives the whole product a
-   Floodlight frame: dark identity bands, light working surfaces,
-   scarlet lane segments, real embedded type, and scoreboard data.
-   Screen-only so printed warm-up cards and reports keep their
-   established print treatment.
-   ================================================================ */
-.app-version {
-  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-  font-size: 12px; font-weight: 700; letter-spacing: .09em;
-  text-transform: uppercase; color: var(--muted); margin: 14px 0 0;
-}
-.footer .app-version { color: var(--red-soft-on-dark); }
+/* App version stamp + update toast (update-delivery pass, Oct 25):
+   plain shell styling — the stamp lets anyone confirm at a glance
+   which build an installed app is running, and the toast confirms
+   when an update has landed. */
+.app-version { font-size: 12px; color: var(--muted); margin: 14px 0 0; }
 .update-toast {
   position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 120;
   transform: translateX(-50%);
   max-width: calc(100vw - 32px); padding: 11px 16px; border-radius: 999px;
   background: var(--hud-bg); color: #fff; border: 1px solid var(--hud-line);
   box-shadow: 0 16px 38px -16px rgba(16, 18, 22, .55);
-  font-family: var(--font-display); font-size: 13px; font-weight: 800;
-  letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
-}
-.update-toast::before {
-  content: ""; display: inline-block; width: 24px; height: 4px;
-  background: var(--red); vertical-align: middle; margin-right: 9px;
-}
-
-/* Today scoreboard: the existing runner stays in motion, now as the
-   backdrop to a proper Floodlight results board. */
-.today-hero {
-  height: 248px; min-height: 248px; border: 1px solid var(--hud-line);
-  background:
-    repeating-linear-gradient(90deg, transparent 0 52px, rgba(201, 204, 209, .055) 52px 53px),
-    linear-gradient(145deg, var(--hud-track) 0%, var(--hud-bg) 58%, var(--hud-deep) 100%);
-  box-shadow: inset 0 -5px 0 var(--red), 0 18px 34px -24px rgba(16, 18, 22, .65);
-}
-.today-hero::before {
-  content: ""; position: absolute; z-index: 1; right: 0; top: 0; width: 46%; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(201, 204, 209, .06));
-  clip-path: polygon(18% 0, 100% 0, 100% 100%, 0 100%);
-  pointer-events: none;
-}
-.today-hero-copy {
-  position: absolute; z-index: 4; left: 18px; right: 18px; top: 17px;
-  color: #fff; pointer-events: none;
-}
-.today-hero-kicker {
-  font-family: var(--font-display); font-size: 10.5px; font-weight: 800;
-  letter-spacing: .14em; text-transform: uppercase; color: var(--red-soft-on-dark);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.today-hero-title {
-  font-family: var(--font-display); font-size: clamp(38px, 11.5vw, 64px);
-  font-weight: 900; line-height: .9; letter-spacing: -.035em;
-  text-transform: uppercase; margin-top: 7px;
-}
-.today-hero-title span {
-  color: transparent; -webkit-text-stroke: 2px var(--red-soft-on-dark);
-}
-.today-hero-score { display: flex; align-items: center; gap: 11px; margin-top: 16px; min-width: 0; }
-.today-hero-status {
-  flex: none; background: var(--red); color: #fff; border-radius: 3px;
-  padding: 4px 8px; font-family: var(--font-display); font-size: 11px;
-  font-weight: 900; letter-spacing: .1em; text-transform: uppercase;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
-}
-.today-hero-code {
-  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-  font-size: clamp(27px, 8.5vw, 46px); font-weight: 800; line-height: 1;
-  letter-spacing: -.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.today-hero-session {
-  margin-top: 7px; max-width: 520px; color: #fff;
-  font-size: 15px; font-weight: 700; line-height: 1.3;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.today-hero-date {
-  margin-top: 3px; color: var(--hud-text-dim);
-  font-size: 13px; font-weight: 700; letter-spacing: .08em;
-}
-.today-hero .runner {
-  left: auto; right: -12px; bottom: 30px; height: 118px;
-  transform: none; opacity: .46;
-}
-.today-hero .blocks { left: auto; right: 118px; bottom: 31px; opacity: .28; }
-.today-hero .hero-lanes { z-index: 3; }
-
-/* Sign-in poster: a meet-poster first impression, then a dark,
-   focused login card. */
-.signin-poster {
-  position: relative; overflow: hidden; isolation: isolate;
-  min-height: 252px; margin: 0 0 14px; padding: 24px 20px 18px;
-  border: 1px solid var(--hud-line); border-radius: 18px;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 42px, rgba(201, 204, 209, .06) 42px 43px),
-    linear-gradient(145deg, var(--hud-track) 0%, var(--hud-bg) 62%, var(--red-dark) 150%);
-  color: #fff;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%);
-  box-shadow: 0 20px 36px -24px rgba(16, 18, 22, .7);
-}
-.signin-poster::after {
-  content: ""; position: absolute; z-index: -1; right: -28px; top: 34px;
-  width: 150px; height: 150px; border: 22px solid var(--red);
-  border-radius: 50%; opacity: .18; transform: rotate(-18deg);
-}
-.poster-kicker {
-  font-family: var(--font-display); font-size: 10.5px; font-weight: 800;
-  letter-spacing: .14em; text-transform: uppercase; color: var(--red-soft-on-dark);
-}
-.poster-title {
-  font-family: var(--font-display); font-size: clamp(52px, 17vw, 84px);
-  font-weight: 900; line-height: .86; letter-spacing: -.045em;
-  text-transform: uppercase; margin-top: 12px;
-}
-.poster-title span { color: transparent; -webkit-text-stroke: 2px var(--red-soft-on-dark); }
-.poster-meta {
-  display: flex; justify-content: space-between; gap: 12px; margin-top: 17px;
-  color: var(--hud-text-dim); font-family: var(--font-display);
-  font-size: 11px; font-weight: 800; letter-spacing: .12em;
-}
-.poster-lanes { display: grid; gap: 6px; margin-top: 13px; }
-.signin-card {
-  background: var(--hud-bg) !important; color: #fff; border-color: var(--hud-line) !important;
-}
-.signin-card h2 { color: #fff; }
-.signin-card .muted { color: var(--hud-text-dim); }
-.signin-card input { background: #fff; color: var(--ink); }
-.signin-card .error { color: var(--red-soft-on-dark); }
-
-/* Lane-assignment-sheet empty states. */
-.lane-empty {
-  position: relative; overflow: hidden; margin: 12px 0 4px; padding: 18px;
-  border: 1px dashed var(--gray); border-radius: var(--radius-sm);
-  background:
-    repeating-linear-gradient(0deg, transparent 0 27px, rgba(138, 147, 159, .12) 27px 28px),
-    var(--card);
-}
-.lane-empty::before {
-  content: ""; position: absolute; left: 0; top: 0; width: 64px; height: 5px; background: var(--red);
-}
-.lane-empty-code { color: var(--red-dark); font-size: 12px; font-weight: 800; letter-spacing: .1em; }
-.lane-empty strong {
-  display: block; font-family: var(--font-display); font-size: 20px;
-  text-transform: uppercase; margin: 7px 0 3px;
-}
-.lane-empty span { color: var(--muted); font-size: 14px; }
-
-@media screen {
-  body {
-    background-color: var(--bg);
-    background-image:
-      linear-gradient(180deg, rgba(255, 255, 255, .78) 0, rgba(246, 246, 247, 0) 360px),
-      repeating-linear-gradient(90deg, transparent 0 54px, rgba(44, 49, 58, .035) 54px 55px);
-  }
-  .topbar {
-    background:
-      repeating-linear-gradient(90deg, transparent 0 54px, rgba(201, 204, 209, .05) 54px 55px),
-      linear-gradient(120deg, var(--hud-bg) 0%, var(--hud-panel) 74%, var(--red-dark) 155%);
-    border-bottom: 4px solid var(--red); color: #fff;
-    box-shadow: 0 14px 30px -20px rgba(16, 18, 22, .75);
-  }
-  .topbar-inner { padding-top: 12px; }
-  .site-logo {
-    height: 45px; max-width: 58vw; padding: 5px 8px;
-    background: #fff; border-radius: 5px;
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
-  }
-  .footer-logo { height: 34px; padding: 4px 6px; }
-  .identity { color: #fff; font-family: var(--font-display); text-transform: uppercase; letter-spacing: .035em; }
-  .app-name { color: var(--hud-text-dim); font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
-  .account-chip { color: var(--hud-text-dim); }
-  .account-chip .btn.secondary {
-    background: transparent; color: #fff; border-color: var(--gray);
-  }
-  .topbar .tab {
-    background: transparent; color: var(--hud-text-dim); border-color: var(--hud-line);
-    font-family: var(--font-display); text-transform: uppercase; letter-spacing: .025em;
-  }
-  .topbar .tab.active {
-    background: linear-gradient(180deg, var(--red), var(--red-dark));
-    border-color: var(--red-dark); color: #fff;
-    box-shadow: inset 0 -3px 0 rgba(255, 255, 255, .22);
-  }
-  main { padding-top: 18px; }
-
-  /* Jersey-banner page and section headers. */
-  .view > h1, #home-content > h1 {
-    position: relative; overflow: hidden; isolation: isolate;
-    min-height: 64px; margin: 0 0 12px; padding: 17px 18px 20px;
-    border: 1px solid var(--hud-line); border-radius: 7px;
-    background:
-      repeating-linear-gradient(90deg, transparent 0 42px, rgba(201, 204, 209, .055) 42px 43px),
-      linear-gradient(105deg, var(--hud-bg) 0 76%, var(--hud-panel) 76% 100%);
-    color: #fff; font-size: clamp(25px, 7vw, 34px); line-height: 1;
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%);
-    box-shadow: 0 16px 28px -22px rgba(16, 18, 22, .7);
-  }
-  .view > h1::after, #home-content > h1::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px;
-    background: linear-gradient(90deg, var(--red) 0 92px, var(--gray) 92px 116px, transparent 116px);
-  }
-  .view > .lane-divider, #home-content > .lane-divider { display: none; }
-  .split-head {
-    position: relative; overflow: hidden; isolation: isolate;
-    align-items: center; margin: 14px 0 12px; padding: 13px 15px 16px;
-    border: 1px solid var(--hud-line); border-radius: 7px;
-    background:
-      repeating-linear-gradient(90deg, transparent 0 42px, rgba(201, 204, 209, .05) 42px 43px),
-      linear-gradient(105deg, var(--hud-bg) 0 78%, var(--hud-panel) 78% 100%);
-    color: #fff;
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
-  }
-  .split-head::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px;
-    background: linear-gradient(90deg, var(--red) 0 72px, var(--gray) 72px 92px, transparent 92px);
-  }
-  .split-head h2 { color: #fff; margin: 0; }
-  .split-head .split-date, .split-head .split-code { color: var(--red-soft-on-dark); }
-  .view-sub {
-    position: relative; padding: 11px 13px 11px 17px; border: 1px solid var(--line);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: rgba(255, 255, 255, .76);
-    color: var(--muted); font-weight: 600;
-  }
-  .view-sub::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
-    background: linear-gradient(180deg, var(--red) 0 68%, var(--gray) 68% 100%);
-  }
-
-  /* Working cards sit inside the Floodlight frame, each with a lane bar. */
-  .card {
-    border-color: #d8d8dd; border-radius: 7px;
-    background-image: linear-gradient(90deg, var(--red) 0 46px, var(--gray) 46px 61px, transparent 61px);
-    background-size: 100% 4px; background-repeat: no-repeat;
-    box-shadow: 0 12px 26px -22px rgba(16, 18, 22, .45);
-  }
-  .card label {
-    font-family: var(--font-display); font-size: 12.5px; font-weight: 800;
-    letter-spacing: .055em; text-transform: uppercase;
-  }
-  .btn {
-    font-family: var(--font-display); font-weight: 800;
-    letter-spacing: .025em; text-transform: uppercase;
-    border-width: 1.5px;
-  }
-  .btn.primary {
-    background: linear-gradient(180deg, var(--red) 0%, var(--red-dark) 100%);
-    border-color: var(--red-dark); color: #fff;
-    box-shadow: inset 0 -3px 0 rgba(255, 255, 255, .18), 0 10px 20px -16px rgba(153, 0, 38, .8);
-  }
-  .btn.secondary {
-    background-image: linear-gradient(90deg, var(--red) 0 4px, transparent 4px);
-    background-repeat: no-repeat;
-  }
-  .badge {
-    font-family: var(--font-display); letter-spacing: .055em; text-transform: uppercase;
-    border-radius: 3px; clip-path: polygon(0 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
-  }
-  .chip, .seg-btn {
-    font-family: var(--font-display); font-weight: 800; letter-spacing: .035em;
-    text-transform: uppercase; border-width: 1.5px; border-radius: 6px;
-  }
-  .chip.active, .seg-btn.active {
-    background: linear-gradient(180deg, var(--red), var(--red-dark));
-    border-color: var(--red-dark); color: #fff;
-    box-shadow: inset 0 -3px 0 rgba(255, 255, 255, .18);
-  }
-  .seg {
-    padding: 8px; border: 1px solid var(--hud-line); border-bottom: 5px solid var(--red);
-    border-radius: 8px; background:
-      repeating-linear-gradient(90deg, transparent 0 42px, rgba(201, 204, 209, .05) 42px 43px),
-      var(--hud-bg);
-  }
-  .seg-btn { background: transparent; color: var(--hud-text-dim); border-color: var(--hud-line); }
-  .seg-btn.active { color: #fff; }
-
-  /* Hub destinations become Floodlight jersey rows. */
-  .menu-list { gap: 9px; }
-  .menu-item {
-    position: relative; overflow: hidden; min-height: 72px; padding: 15px 46px 15px 18px;
-    border: 1px solid var(--hud-line); border-radius: 7px;
-    background:
-      repeating-linear-gradient(90deg, transparent 0 42px, rgba(201, 204, 209, .045) 42px 43px),
-      linear-gradient(100deg, var(--hud-bg) 0 82%, var(--hud-panel) 82% 100%);
-    color: #fff; font-family: var(--font-display); font-size: 17px; font-weight: 800;
-    letter-spacing: .01em; text-transform: uppercase;
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
-    box-shadow: 0 13px 24px -20px rgba(16, 18, 22, .72);
-  }
-  .menu-item::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
-    background: linear-gradient(180deg, var(--red) 0 68%, var(--gray) 68% 100%);
-  }
-  .menu-item::after {
-    content: "›"; position: absolute; right: 16px; top: 50%; transform: translateY(-54%);
-    color: var(--red-soft-on-dark); font-size: 30px; font-weight: 900;
-  }
-  .menu-item span {
-    color: var(--hud-text-dim); font-family: var(--font-body); font-size: 13px;
-    font-weight: 500; letter-spacing: 0; text-transform: none;
-  }
-  @media (hover: hover) {
-    .menu-item:hover { border-color: var(--red-on-dark); }
-  }
-
-  /* Library/session rows: a lane number, a hard edge, mono data. */
-  .session-row {
-    position: relative; border: 1.5px solid #d8d8dd; border-left: 7px solid var(--gray);
-    border-radius: 7px; padding: 14px 15px;
-    background-image: linear-gradient(90deg, var(--red) 0 38px, transparent 38px);
-    background-size: 100% 3px; background-repeat: no-repeat;
-    box-shadow: 0 10px 22px -20px rgba(16, 18, 22, .45);
-  }
-  .session-row .code { font-family: var(--font-mono); font-size: 16px; }
-  .session-row .name { font-family: var(--font-display); text-transform: uppercase; }
-  .detail-grid dt {
-    font-family: var(--font-display); font-size: 11.5px; font-weight: 800;
-    letter-spacing: .06em; text-transform: uppercase;
-  }
-  .detail-grid dd { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-
-  /* Scoreboard stat tiles. */
-  .hero-stats { gap: 8px; }
-  .hero-stat {
-    position: relative; overflow: hidden; border: 1px solid var(--hud-line); border-radius: 7px;
-    background:
-      repeating-linear-gradient(90deg, transparent 0 34px, rgba(201, 204, 209, .05) 34px 35px),
-      var(--hud-bg);
-    color: #fff; padding: 12px 8px 10px;
-  }
-  .hero-stat::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
-    background: linear-gradient(90deg, var(--red) 0 55%, var(--gray) 55% 72%, transparent 72%);
-  }
-  .stat-num { color: #fff; font-size: 32px; }
-  .stat-label { color: var(--hud-text-dim); font-family: var(--font-display); }
-  .hero-stat.inv-flag { border-color: var(--red-on-dark); background: var(--hud-bg); }
-  .hero-stat.inv-flag .stat-num { color: var(--red-soft-on-dark); }
-  .day-card {
-    border-top: 1px solid #d8d8dd; border-right: 1px solid #d8d8dd; border-bottom: 1px solid #d8d8dd;
-  }
-  .day-card .day-name { font-family: var(--font-display); text-transform: uppercase; }
-  .roster-row { padding-left: 8px; padding-right: 8px; }
-  .roster-row strong { font-family: var(--font-display); }
-  table.matrix thead th, table.ranked thead th {
-    background: var(--hud-bg); color: #fff; border-color: var(--hud-line);
-    font-family: var(--font-display); letter-spacing: .045em; text-transform: uppercase;
-  }
-  .record-hero {
-    position: relative; overflow: hidden; align-items: center;
-    margin: 10px 0 14px; padding: 16px; border: 1px solid var(--hud-line); border-radius: 7px;
-    background:
-      repeating-linear-gradient(90deg, transparent 0 42px, rgba(201, 204, 209, .055) 42px 43px),
-      linear-gradient(105deg, var(--hud-bg) 0 78%, var(--hud-panel) 78% 100%);
-    color: #fff;
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
-  }
-  .record-hero::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px;
-    background: linear-gradient(90deg, var(--red) 0 84px, var(--gray) 84px 106px, transparent 106px);
-  }
-  .record-hero .big-num { color: #fff; font-size: clamp(3rem, 14vw, 4.4rem); }
-  .record-hero .muted { color: var(--hud-text-dim); font-family: var(--font-display); text-transform: uppercase; }
-
-  /* Bottom navigation: the active destination is a scarlet slab. */
-  .tabbar {
-    background: var(--hud-bg); border-top: 1px solid var(--hud-line);
-    box-shadow: 0 -12px 28px -18px rgba(16, 18, 22, .8);
-    padding-top: 5px;
-  }
-  .tabbar .tab {
-    color: var(--hud-text-dim); border-radius: 7px; margin: 0 3px;
-    font-family: var(--font-display); letter-spacing: .025em; text-transform: uppercase;
-  }
-  .tabbar .tab.active {
-    background: linear-gradient(180deg, var(--red) 0%, var(--red-dark) 100%);
-    border-color: transparent; color: #fff;
-    box-shadow: inset 0 -3px 0 rgba(255, 255, 255, .22), 0 8px 18px -12px rgba(204, 0, 51, .9);
-  }
-  .tabbar .tab.active::before { display: none; }
-  .tabbar .tab:active { background: var(--hud-panel); }
-  .tabbar .tab.active:active { background: var(--red-dark); }
-
-  /* Runner + TV chrome share the shell's lane language. */
-  .runner-top { border-bottom: 4px solid var(--red); padding-bottom: 13px; }
-  .runner-workout { font-family: var(--font-display); letter-spacing: .035em; text-transform: uppercase; }
-  .runner-progress { border: 1px solid var(--hud-line); }
-  .tv-top { border-bottom: 4px solid var(--red); }
-  .tv-brand { font-family: var(--font-display); text-transform: uppercase; }
-  .tv-clock { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-
-  .footer {
-    max-width: none; margin-top: 26px; padding: 24px max(16px, calc((100% - 880px) / 2)) calc(30px + env(safe-area-inset-bottom));
-    background:
-      repeating-linear-gradient(90deg, transparent 0 54px, rgba(201, 204, 209, .05) 54px 55px),
-      var(--hud-bg);
-    color: var(--hud-text-dim); border-top: 5px solid var(--red);
-  }
-}
-@media screen and (max-width: 520px) {
-  .today-hero { height: 300px; min-height: 300px; }
-  .today-hero-copy { left: 15px; right: 15px; }
-  .today-hero-kicker { white-space: normal; }
-  .today-hero-title { font-size: 40px; }
-  .today-hero-score { flex-direction: column; align-items: flex-start; gap: 7px; margin-top: 12px; }
-  .today-hero-code { font-size: clamp(26px, 8vw, 34px); }
-  .today-hero .runner { height: 92px; bottom: 74px; right: -36px; opacity: .32; }
-  .today-hero .blocks { bottom: 75px; right: 86px; opacity: .22; }
-  .today-hero-session { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .signin-poster { min-height: 238px; }
-  .tabbar .tab { font-size: 10.5px; padding-left: 1px; padding-right: 1px; }
+  font-size: 13px; font-weight: 700; white-space: nowrap;
 }
