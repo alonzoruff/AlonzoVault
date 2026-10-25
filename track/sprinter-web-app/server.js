@@ -1701,6 +1701,145 @@ function sendCsv(res, filename, rows) {
   res.end(body);
 }
 const numStr = (v) => (v === null || v === undefined ? '' : String(Math.round(v * 100) / 100));
+
+/* ------------------------------------------------------------------ */
+/* Backup export / import (the Data page)                              */
+/* ------------------------------------------------------------------ */
+/* A backup carries the coach's team data ONLY — never user accounts,
+   password hashes, or the session secret — so the file is safe to
+   keep anywhere. The collections are the whole team-data store minus
+   accounts (users) and the per-account practice logs (logs / swaps,
+   which belong to individual logins, not the team dataset). */
+const isPlainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+/* Id-keyed collections and the field their records upsert by.
+   customTests / customWeeklyMetrics are keyed by `key`, not `id`;
+   coachInvites is a plain list of emails and merges as a set. */
+const BACKUP_ARRAY_KEYS = {
+  groups: 'id', profiles: 'id', customTests: 'key', testDays: 'id',
+  customWeeklyMetrics: 'key', inventory: 'id', meetResults: 'id',
+  meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
+  customWorkouts: 'id', programs: 'id', programApplications: 'id',
+  announcements: 'id',
+};
+/* Keyed-object collections: these merge leaf by leaf (see
+   mergeLeaves), so a restore touches only the paths it names. */
+const BACKUP_OBJECT_KEYS = [
+  'overrides', 'completions', 'testResults', 'weekly', 'concerns',
+  'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
+  'attendance', 'coachNotes',
+];
+function buildBackupData() {
+  return {
+    groups: db.groups, profiles: db.profiles, overrides: db.overrides,
+    completions: db.completions, customTests: db.customTests,
+    testDays: db.testDays, testResults: db.testResults,
+    customWeeklyMetrics: db.customWeeklyMetrics, weekly: db.weekly,
+    concerns: db.concerns, mediaOverrides: db.mediaOverrides,
+    inventory: db.inventory, warmupCardEdits: db.warmupCardEdits,
+    meetResults: db.meetResults, meets: db.meets,
+    meetEntries: db.meetEntries, schoolRecords: db.schoolRecords,
+    goals: db.goals, coachInvites: db.coachInvites,
+    athleteLinks: db.athleteLinks, checkins: db.checkins,
+    attendance: db.attendance, coachNotes: db.coachNotes,
+    customWorkouts: db.customWorkouts,
+    customWorkoutsSeeded: db.customWorkoutsSeeded === true,
+    programs: db.programs, programApplications: db.programApplications,
+    announcements: db.announcements,
+  };
+}
+/* Validate an import payload's data object WITHOUT touching the
+   store: every collection present must match the shape migrate()
+   expects (list vs object), and every record in a list must carry
+   its upsert key. Returns an error string, or null when the payload
+   is safe to merge. Unknown keys are not an error — the merge
+   ignores them, so they are ignored here too. */
+function validateBackupData(data) {
+  for (const [k, keyField] of Object.entries(BACKUP_ARRAY_KEYS)) {
+    if (data[k] === undefined) continue;
+    if (!Array.isArray(data[k])) return 'The backup\'s "' + k + '" should be a list.';
+    for (const rec of data[k]) {
+      if (!isPlainObj(rec) || typeof rec[keyField] !== 'string' || !rec[keyField]) {
+        return 'A record in "' + k + '" is missing its ' + keyField + ' — the file looks damaged.';
+      }
+    }
+  }
+  if (data.coachInvites !== undefined
+    && (!Array.isArray(data.coachInvites)
+      || data.coachInvites.some(e => typeof e !== 'string'))) {
+    return 'The backup\'s "coachInvites" should be a list of emails.';
+  }
+  for (const k of BACKUP_OBJECT_KEYS) {
+    if (data[k] === undefined) continue;
+    if (!isPlainObj(data[k])) return 'The backup\'s "' + k + '" should be an object.';
+  }
+  if (data.customWorkoutsSeeded !== undefined
+    && typeof data.customWorkoutsSeeded !== 'boolean') {
+    return 'The backup\'s "customWorkoutsSeeded" should be true or false.';
+  }
+  return null;
+}
+/* Merge one keyed-object collection leaf by leaf: where both sides
+   hold a plain object at the same path the merge recurses, and any
+   other imported value replaces the leaf at its path. Leaves the
+   import never mentions survive untouched — an import deletes
+   nothing, ever. Counts track leaf writes: a path that did not exist
+   is an add; a path whose value changed is an update. */
+function mergeLeaves(target, source, counts) {
+  for (const [k, v] of Object.entries(source)) {
+    const cur = target[k];
+    if (isPlainObj(v) && isPlainObj(cur)) { mergeLeaves(cur, v, counts); continue; }
+    if (cur === undefined) { target[k] = v; counts.added++; }
+    else if (JSON.stringify(cur) !== JSON.stringify(v)) { target[k] = v; counts.updated++; }
+  }
+}
+/* Merge a validated backup into the live store (never a replace:
+   records absent from the file stay exactly as they are). Arrays
+   upsert by their key field; keyed objects merge at the leaf level;
+   coachInvites union as a set of emails. */
+function mergeBackupData(data) {
+  const counts = {};
+  let totalAdded = 0, totalUpdated = 0;
+  const tally = (k, c) => { counts[k] = c; totalAdded += c.added; totalUpdated += c.updated; };
+  for (const [k, keyField] of Object.entries(BACKUP_ARRAY_KEYS)) {
+    if (data[k] === undefined) continue;
+    const c = { added: 0, updated: 0 };
+    const byKey = new Map(db[k].map(rec => [rec[keyField], rec]));
+    for (const rec of data[k]) {
+      const existing = byKey.get(rec[keyField]);
+      if (!existing) {
+        db[k].push(rec); byKey.set(rec[keyField], rec); c.added++;
+      } else if (JSON.stringify(existing) !== JSON.stringify(rec)) {
+        db[k][db[k].indexOf(existing)] = rec;
+        byKey.set(rec[keyField], rec);
+        c.updated++;
+      }
+    }
+    tally(k, c);
+  }
+  if (data.coachInvites !== undefined) {
+    const c = { added: 0, updated: 0 };
+    for (const email of data.coachInvites) {
+      const norm = String(email).trim().toLowerCase();
+      if (norm && !db.coachInvites.includes(norm)) { db.coachInvites.push(norm); c.added++; }
+    }
+    tally('coachInvites', c);
+  }
+  for (const k of BACKUP_OBJECT_KEYS) {
+    if (data[k] === undefined) continue;
+    const c = { added: 0, updated: 0 };
+    mergeLeaves(db[k], data[k], c);
+    tally(k, c);
+  }
+  if (data.customWorkoutsSeeded !== undefined) {
+    const c = { added: 0, updated: 0 };
+    if (db.customWorkoutsSeeded !== data.customWorkoutsSeeded) {
+      db.customWorkoutsSeeded = data.customWorkoutsSeeded;
+      c.updated = 1;
+    }
+    tally('customWorkoutsSeeded', c);
+  }
+  return { counts, totalAdded, totalUpdated };
+}
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -1734,6 +1873,33 @@ function readTextBody(req) {
       chunks.push(chunk);
     });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+/* readBody with a caller-chosen cap and a status-tagged oversize
+   failure, for the one endpoint whose legitimate payloads dwarf the
+   256 KB default: backup imports. Oversize rejects with status 413;
+   the stream is still drained (chunks discarded past the cap) so the
+   client receives its response instead of a reset connection. */
+function readJsonBody(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let size = 0, over = false;
+    const chunks = [];
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) { over = true; chunks.length = 0; return; }
+      if (!over) chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (over) {
+        const err = new Error('body too large');
+        err.status = 413;
+        return reject(err);
+      }
+      const raw = Buffer.concat(chunks).toString('utf8');
+      if (!raw) return resolve({});
+      try { resolve(JSON.parse(raw)); } catch (_) { reject(new Error('bad json')); }
+    });
     req.on('error', reject);
   });
 }
@@ -2856,6 +3022,122 @@ async function handleApi(req, res, url) {
     db.coachNotes[prof.id] = next;
     saveDb();
     return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---------- Data page: backup export / import + more CSVs ---------- */
+  if (p === '/api/export/backup' && req.method === 'GET') {
+    const body = JSON.stringify({
+      app: 'sprinter-workout-app', kind: 'backup', version: 1,
+      exportedAt: new Date().toISOString(), data: buildBackupData(),
+    }, null, 1);
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="sprinter-backup-' + todayStr() + '.json"',
+      'Content-Length': Buffer.byteLength(body),
+    });
+    return res.end(body);
+  }
+
+  if (p === '/api/import/backup' && req.method === 'POST') {
+    let body;
+    try {
+      body = await readJsonBody(req, 10 * 1024 * 1024);
+    } catch (err) {
+      if (err && err.status === 413) {
+        return sendJson(res, 413, { error: 'That file is too large — backups over 10 MB are not accepted.' });
+      }
+      return sendJson(res, 400, { error: 'That file is not valid JSON.' });
+    }
+    if (!isPlainObj(body) || body.app !== 'sprinter-workout-app' || body.kind !== 'backup'
+      || !isPlainObj(body.data)) {
+      return sendJson(res, 400, { error: 'That is not a sprinter app backup file.' });
+    }
+    /* Everything is validated before anything is merged: a bad
+       collection refuses the whole import with the store untouched. */
+    const invalid = validateBackupData(body.data);
+    if (invalid) return sendJson(res, 400, { error: invalid });
+    const merged = mergeBackupData(body.data);
+    migrate();
+    saveDb();
+    return sendJson(res, 200, {
+      ok: true, counts: merged.counts,
+      totalAdded: merged.totalAdded, totalUpdated: merged.totalUpdated,
+    });
+  }
+
+  if (p === '/api/export/attendance.csv' && req.method === 'GET') {
+    const rows = [['Date', 'Athlete', 'Group', 'Status']];
+    const entries = [];
+    for (const [date, byProfile] of Object.entries(db.attendance)) {
+      for (const [pid, mark] of Object.entries(byProfile || {})) {
+        const prof = profileById(pid);
+        const pub = prof ? publicProfile(prof) : null;
+        entries.push({
+          date, name: pub ? pub.name : pid,
+          row: [date, pub ? pub.name : pid, pub ? (pub.groupName || '') : '',
+            mark && mark.status ? mark.status : ''],
+        });
+      }
+    }
+    entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.name.localeCompare(b.name)));
+    for (const e of entries) rows.push(e.row);
+    return sendCsv(res, 'attendance.csv', rows);
+  }
+
+  if (p === '/api/export/testing-detail.csv' && req.method === 'GET') {
+    const rows = [['Athlete', 'Test Date', 'Test', 'Value', 'Weight (lb)', 'Reps', 'Est. 1RM (lb)']];
+    const entries = [];
+    for (const pr of db.profiles) {
+      const pub = publicProfile(pr);
+      for (const r of db.testResults[pr.id] || []) {
+        const day = db.testDays.find(d => d.id === r.testDayId);
+        const test = findTest(r.testKey);
+        entries.push({
+          date: day ? day.date : '', name: pub.name, testName: test ? test.name : r.testKey,
+          row: [pub.name, day ? day.date : '', test ? test.name : r.testKey,
+            numStr(r.value), numStr(r.weight),
+            r.reps === null || r.reps === undefined ? '' : String(r.reps), numStr(r.est1rm)],
+        });
+      }
+    }
+    entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1
+      : a.name.localeCompare(b.name) || a.testName.localeCompare(b.testName)));
+    for (const e of entries) rows.push(e.row);
+    return sendCsv(res, 'testing-detail.csv', rows);
+  }
+
+  if (p === '/api/export/checkins.csv' && req.method === 'GET') {
+    const rows = [['Athlete', 'Date', 'Sleep (hrs)', 'Soreness', 'Energy', 'Something Hurts']];
+    const entries = [];
+    for (const [pid, byDate] of Object.entries(db.checkins)) {
+      const prof = profileById(pid);
+      const name = prof ? publicProfile(prof).name : pid;
+      for (const [date, c] of Object.entries(byDate || {})) {
+        entries.push({
+          name, date,
+          row: [name, date, numStr(c.sleep),
+            c.soreness === null || c.soreness === undefined ? '' : String(c.soreness),
+            c.energy === null || c.energy === undefined ? '' : String(c.energy),
+            c.hurts ? 'yes' : 'no'],
+        });
+      }
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name)
+      || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (const e of entries) rows.push(e.row);
+    return sendCsv(res, 'checkins.csv', rows);
+  }
+
+  if (p === '/api/export/records.csv' && req.method === 'GET') {
+    const rows = [['Event', 'Mark', 'Name', 'Year', 'Meet']];
+    const evs = RECORD_EVENTS.slice().sort((a, b) => a.name.localeCompare(b.name));
+    for (const ev of evs) {
+      for (const r of rankedRecords(ev.key, 100000)) {
+        rows.push([ev.name, r.mark, r.name,
+          r.year === null || r.year === undefined ? '' : String(r.year), r.meet || '']);
+      }
+    }
+    return sendCsv(res, 'school-records.csv', rows);
   }
 
   /* ---------- CSV exports (coach-only downloads) ---------- */

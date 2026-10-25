@@ -116,8 +116,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v34';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v34';
+const APP_VERSION = 'v35';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v35';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -304,12 +304,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -357,6 +357,7 @@ function showView(name) {
   if (name === 'custom') renderCustomWorkouts();
   if (name === 'programs') renderPrograms();
   if (name === 'calendar') renderCalendar();
+  if (name === 'data') renderData();
   if (name === 'exercises') renderExercises();
   window.scrollTo(0, 0);
 }
@@ -5218,6 +5219,111 @@ async function renderAnnouncePanel() {
   }
   const nb = $('#ann-panel-new');
   if (nb) nb.addEventListener('click', () => showView('announce'));
+}
+
+/* ---------------- data: backup, restore, spreadsheets ----------------
+   The whole team dataset leaves as one JSON backup and comes back
+   the same way. A restore MERGES — records in the file are added or
+   updated and nothing is ever deleted — and the file never carries
+   accounts or passwords, so it is safe to keep anywhere. The client
+   reads the picked file first and shows what is in it; the import
+   only runs on the coach's explicit click. */
+let pendingBackup = null;
+function backupCollectionCounts(data) {
+  const rows = [];
+  for (const [k, v] of Object.entries(data || {})) {
+    if (Array.isArray(v)) rows.push([k, String(v.length)]);
+    else if (v && typeof v === 'object') rows.push([k, String(Object.keys(v).length)]);
+    else if (typeof v === 'boolean') rows.push([k, v ? 'on' : 'off']);
+  }
+  return rows;
+}
+async function renderData() {
+  const main = $('#data-main');
+  if (!main) return;
+  if (!isCoachUser()) { gateHtml(main, 'Team data lives here.'); return; }
+  pendingBackup = null;
+  main.innerHTML = `
+    <div class="card">
+      <h3>Full backup</h3>
+      <p class="muted">One JSON file with the whole team dataset: roster and groups, assignments and completions, testing, weekly numbers, health concerns, inventory, warm-up card edits, meet results, school records, goals, check-ins, attendance, coach notes, custom workouts, programs, and announcements. Accounts and passwords are never in the file.</p>
+      <p><a class="btn" href="/api/export/backup">Download full backup</a></p>
+    </div>
+    <div class="card">
+      <h3>Restore from a backup</h3>
+      <p class="muted">Restoring merges into what's already here: records in the file are added or updated, and nothing is ever deleted. Accounts are not part of a backup — athlete sign-ins keep working because account links are stored by email and re-attach on their own.</p>
+      <p><input type="file" id="data-file" accept=".json,application/json"></p>
+      <div id="data-import-box"></div>
+    </div>
+    <div class="card">
+      <h3>Spreadsheets (CSV)</h3>
+      <p>
+        <a class="btn secondary" href="/api/export/attendance.csv">Attendance</a>
+        <a class="btn secondary" href="/api/export/checkins.csv">Check-ins</a>
+        <a class="btn secondary" href="/api/export/records.csv">School records</a>
+      </p>
+      <p>
+        <a class="btn secondary" href="/api/export/testing-detail.csv">Testing results (full detail)</a>
+        <a class="btn secondary" href="/api/export/testing.csv">Testing results (summary)</a>
+        <a class="btn secondary" href="/api/export/weekly.csv">Weekly tracker</a>
+      </p>
+      <p>
+        <a class="btn secondary" href="/api/export/meet-results.csv">Meet results</a>
+        <a class="btn secondary" href="/api/export/roster.csv">Roster</a>
+      </p>
+    </div>`;
+  const fileInput = $('#data-file');
+  fileInput.addEventListener('change', async () => {
+    const box = $('#data-import-box');
+    pendingBackup = null;
+    box.innerHTML = '';
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch (_) {
+      box.innerHTML = '<p class="error">That file is not valid JSON.</p>';
+      return;
+    }
+    if (!parsed || parsed.app !== 'sprinter-workout-app' || parsed.kind !== 'backup'
+      || !parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) {
+      box.innerHTML = '<p class="error">That is not a sprinter app backup file.</p>';
+      return;
+    }
+    pendingBackup = parsed;
+    const when = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString() : 'an unknown date';
+    const counts = backupCollectionCounts(parsed.data)
+      .map(([k, n]) => '<tr><td>' + esc(k) + '</td><td>' + esc(n) + '</td></tr>').join('');
+    box.innerHTML =
+      '<p>Backup from <strong>' + esc(when) + '</strong> — importing merges it into the current data:</p>'
+      + '<table class="ranked"><tbody>' + counts + '</tbody></table>'
+      + '<p><button type="button" class="btn" id="data-import-go">Import this backup</button> '
+      + '<button type="button" class="btn secondary" id="data-import-cancel">Cancel</button></p>'
+      + '<div id="data-import-result"></div>';
+    $('#data-import-cancel').addEventListener('click', () => {
+      pendingBackup = null;
+      box.innerHTML = '';
+      fileInput.value = '';
+    });
+    $('#data-import-go').addEventListener('click', async () => {
+      const out = $('#data-import-result');
+      out.innerHTML = '<p class="muted">Importing…</p>';
+      try {
+        const r = await apiPost('/api/import/backup', pendingBackup);
+        const lines = Object.entries(r.counts || {})
+          .filter(([, c]) => c.added || c.updated)
+          .map(([k, c]) => '<tr><td>' + esc(k) + '</td><td>' + c.added + ' added · ' + c.updated + ' updated</td></tr>').join('');
+        out.innerHTML = '<p><strong>Import complete:</strong> ' + r.totalAdded + ' added, ' + r.totalUpdated + ' updated.</p>'
+          + (lines
+            ? '<table class="ranked"><tbody>' + lines + '</tbody></table>'
+            : '<p class="muted">Everything in the file was already here, unchanged.</p>');
+        pendingBackup = null;
+      } catch (err) {
+        out.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
+      }
+    });
+  });
 }
 
 /* The coach manager: compose form on top, every post below with

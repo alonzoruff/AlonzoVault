@@ -336,8 +336,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v34',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v34"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v35',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v35"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2021,16 +2021,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v34'") &&
-    swJs.text.includes("sprinter-app-v34"));
+    appJs.text.includes("const APP_VERSION = 'v35'") &&
+    swJs.text.includes("sprinter-app-v35"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v34"') &&
-    pageHtml.text.includes('Cadets Sprint · App v34') &&
+    pageHtml.text.includes('data-app-version="v35"') &&
+    pageHtml.text.includes('Cadets Sprint · App v35') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
@@ -3394,7 +3394,193 @@ async function main() {
   r = await api(coach, 'DELETE', '/api/announcements/' + annLongTitle.id);
   check('deleting the same announcement twice is 404', r.status === 404, r.status);
 
-  return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id };
+  /* ---------------- data: backup export / import + CSVs ---------------- */
+  check('data view is in the served page',
+    pageHtml.text.includes('id="view-data"') && pageHtml.text.includes('id="data-main"') &&
+    pageHtml.text.includes('data-view="data"'));
+  check('data wiring is in the served JS',
+    appJs.text.includes("['data', 'Data']") && appJs.text.includes("data: 'coachhub'") &&
+    appJs.text.includes('renderData') && appJs.text.includes('/api/export/backup') &&
+    appJs.text.includes('/api/import/backup') && appJs.text.includes('/api/export/attendance.csv') &&
+    appJs.text.includes('/api/export/testing-detail.csv') && appJs.text.includes('/api/export/checkins.csv') &&
+    appJs.text.includes('/api/export/records.csv'));
+
+  /* Auth matrix: every data endpoint is coach-only. */
+  r = await api(null, 'GET', '/api/export/backup');
+  check('backup export without login is 401', r.status === 401, r.status);
+  r = await api(ana, 'GET', '/api/export/backup');
+  check('backup export for an athlete is 403', r.status === 403, r.status);
+  r = await api(null, 'POST', '/api/import/backup', {});
+  check('backup import without login is 401', r.status === 401, r.status);
+  r = await api(ana, 'POST', '/api/import/backup', {});
+  check('backup import for an athlete is 403', r.status === 403, r.status);
+  for (const csvPath of ['/api/export/attendance.csv', '/api/export/testing-detail.csv',
+    '/api/export/checkins.csv', '/api/export/records.csv']) {
+    const noAuth = await apiText(null, csvPath);
+    check('GET ' + csvPath + ' without login is 401', noAuth.status === 401, noAuth.status);
+    const ath = await apiText(ana, csvPath);
+    check('GET ' + csvPath + ' for an athlete is 403', ath.status === 403, ath.status);
+  }
+
+  /* Fixtures of our own, so the CSV and merge assertions below are
+     exact rather than depending on earlier blocks' data. */
+  r = await api(coach, 'POST', '/api/groups', { name: 'Data Group' });
+  check('data fixture group creates', r.status === 201 && !!r.json.group.id, r.status);
+  const dataGrp = r.json.group;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Data', lastName: 'Subject', groupId: dataGrp.id });
+  check('data fixture athlete creates', r.status === 201 && !!r.json.profile.id, r.status);
+  const dataP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: '=2+5', lastName: 'Formula', groupId: dataGrp.id });
+  check('hostile-name fixture athlete creates', r.status === 201 && !!r.json.profile.id, r.status);
+  const hostileP = r.json.profile;
+  r = await api(coach, 'PUT', '/api/attendance/2027-01-04/' + dataP.id, { status: 'present' });
+  check('data fixture attendance mark saves', r.status === 200, r.status);
+  r = await api(coach, 'PUT', '/api/attendance/2027-01-04/' + hostileP.id, { status: 'late' });
+  check('hostile-name attendance mark saves', r.status === 200, r.status);
+  r = await api(coach, 'POST', '/api/test-days', { date: '2027-01-05', title: 'Data Day', testKeys: ['back-squat'] });
+  check('data fixture test day creates', r.status === 201 && !!r.json.testDay.id, r.status);
+  const dataDay = r.json.testDay;
+  r = await api(coach, 'POST', '/api/results', { profileId: dataP.id, testDayId: dataDay.id, testKey: 'back-squat', weight: 200, reps: 5 });
+  check('data fixture testing result saves', r.status === 201 || r.status === 200, r.status);
+  r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '9.99', name: 'Data Record', year: 2027, meet: 'Data Meet' });
+  check('data fixture school record saves', r.status === 201 || r.status === 200, r.status);
+  r = await api(null, 'POST', '/api/register', { email: 'data@test.com', password: 'testpass123' });
+  check('data fixture athlete account registers', r.status === 201, r.status);
+  const dataUser = cookieOf(r);
+  r = await api(coach, 'PUT', '/api/profiles/' + dataP.id + '/link', { email: 'data@test.com' });
+  check('data fixture account links to the profile', r.status === 200, r.status);
+  /* Dated ten days back on purpose: a check-in today would change
+     the wellness-today counts the restart block asserts later. */
+  const dataCheckinDate = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  r = await api(dataUser, 'POST', '/api/checkin', { date: dataCheckinDate, sleep: 7.5, soreness: 2, energy: 4 });
+  check('data fixture check-in saves', r.status === 201 || r.status === 200, r.status);
+
+  /* The backup export: envelope, full collection set, no secrets. */
+  const bk = await apiText(coach, '/api/export/backup');
+  check('backup export downloads as JSON with a dated filename',
+    bk.status === 200 && bk.type.includes('application/json') &&
+    bk.disp.includes('sprinter-backup-') && bk.disp.includes('.json'), bk.disp);
+  const bkEnv = JSON.parse(bk.text);
+  check('backup envelope markers are right',
+    bkEnv.app === 'sprinter-workout-app' && bkEnv.kind === 'backup' && bkEnv.version === 1 &&
+    typeof bkEnv.exportedAt === 'string' && !!bkEnv.data, bkEnv.app + '/' + bkEnv.kind + '/' + bkEnv.version);
+  const BK_ARRAYS = ['groups', 'profiles', 'customTests', 'testDays', 'customWeeklyMetrics',
+    'inventory', 'meetResults', 'meets', 'meetEntries', 'schoolRecords', 'goals', 'coachInvites',
+    'customWorkouts', 'programs', 'programApplications', 'announcements'];
+  const BK_OBJECTS = ['overrides', 'completions', 'testResults', 'weekly', 'concerns',
+    'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins', 'attendance', 'coachNotes'];
+  check('backup carries every team-data collection with the right shape',
+    BK_ARRAYS.every(k => Array.isArray(bkEnv.data[k])) &&
+    BK_OBJECTS.every(k => !!bkEnv.data[k] && typeof bkEnv.data[k] === 'object' && !Array.isArray(bkEnv.data[k])) &&
+    typeof bkEnv.data.customWorkoutsSeeded === 'boolean',
+    Object.keys(bkEnv.data));
+  check('backup data matches the live store (announcements + fixture profile present)',
+    bkEnv.data.announcements.length === 4 &&
+    bkEnv.data.profiles.some(p => p.id === dataP.id) &&
+    bkEnv.data.attendance['2027-01-04'] && bkEnv.data.attendance['2027-01-04'][dataP.id].status === 'present',
+    bkEnv.data.announcements.length);
+  check('backup contains no accounts or secrets',
+    !('users' in bkEnv.data) && !bk.text.includes('passHash') && !bk.text.includes('"users"') &&
+    !bk.text.includes('test-secret') && !bk.text.includes('"logs"'),
+    bk.text.slice(0, 120));
+
+  /* The new CSVs: headers, rows, and the formula guard. */
+  let cx = await apiText(coach, '/api/export/attendance.csv');
+  check('attendance CSV downloads with its header',
+    cx.status === 200 && cx.type.includes('text/csv') && cx.disp.includes('attendance.csv') &&
+    cx.text.startsWith('Date,Athlete,Group,Status'), cx.text.slice(0, 60));
+  check('attendance CSV carries the fixture rows',
+    cx.text.includes('2027-01-04,Data Subject,Data Group,present'), cx.text.slice(0, 200));
+  check('attendance CSV neutralizes a formula-looking athlete name',
+    cx.text.includes("'=2+5 Formula,Data Group,late"), cx.text.slice(0, 200));
+  cx = await apiText(coach, '/api/export/testing-detail.csv');
+  check('testing detail CSV downloads with the spec header',
+    cx.status === 200 && cx.disp.includes('testing-detail.csv') &&
+    cx.text.startsWith('Athlete,Test Date,Test,Value,Weight (lb),Reps,Est. 1RM (lb)'), cx.text.slice(0, 80));
+  check('testing detail CSV splits value / weight / reps / est 1RM into columns',
+    cx.text.includes('Data Subject,2027-01-05,Back Squat,,200,5,233'), cx.text.slice(0, 200));
+  cx = await apiText(coach, '/api/export/checkins.csv');
+  check('check-ins CSV downloads with its header',
+    cx.status === 200 && cx.disp.includes('checkins.csv') &&
+    cx.text.startsWith('Athlete,Date,Sleep (hrs),Soreness,Energy,Something Hurts'), cx.text.slice(0, 80));
+  check('check-ins CSV carries the fixture check-in',
+    cx.text.split('\r\n').some(l => l.startsWith('Data Subject,') && l.includes(',7.5,2,4,no')),
+    cx.text.slice(0, 200));
+  cx = await apiText(coach, '/api/export/records.csv');
+  check('school records CSV downloads with its header',
+    cx.status === 200 && cx.disp.includes('school-records.csv') &&
+    cx.text.startsWith('Event,Mark,Name,Year,Meet'), cx.text.slice(0, 60));
+  check('school records CSV carries the fixture record',
+    cx.text.includes('100m,9.99,Data Record,2027,Data Meet'), cx.text.slice(0, 200));
+
+  /* Import: merge semantics — add new, update same-id, delete
+     nothing, leave unrelated records exactly as they were. */
+  const pinnedRec = bkEnv.data.announcements.find(a => a.id === annPinned.id);
+  const importOne = {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1, exportedAt: bkEnv.exportedAt,
+    data: {
+      profiles: [{ id: 'data-import-prof', firstName: 'Imported', lastName: 'Athlete', groupId: null, events: [], topAthlete: false, archived: false, status: 'active' }],
+      announcements: [Object.assign({}, pinnedRec, { body: 'Pinned post (edited by import)' })],
+      attendance: { '2027-01-04': { 'data-import-prof': { status: 'excused', updatedAt: '2027-01-04T12:00:00.000Z', updatedBy: 'import-test' } } },
+    },
+  };
+  r = await api(coach, 'POST', '/api/import/backup', importOne);
+  check('import merges and reports per-collection counts',
+    r.status === 200 && r.json.ok === true &&
+    r.json.counts.profiles.added === 1 && r.json.counts.profiles.updated === 0 &&
+    r.json.counts.announcements.added === 0 && r.json.counts.announcements.updated === 1 &&
+    r.json.counts.attendance.added === 1 && r.json.counts.attendance.updated === 0 &&
+    r.json.totalAdded === 2 && r.json.totalUpdated === 1, r.json);
+  r = await api(coach, 'GET', '/api/announcements');
+  check('the imported edit landed and every other post is untouched',
+    r.json.announcements.length === 4 &&
+    (r.json.announcements.find(a => a.id === annPinned.id) || {}).body === 'Pinned post (edited by import)' &&
+    (r.json.announcements.find(a => a.id === annPostB.id) || {}).body === 'Group B only' &&
+    (r.json.announcements.find(a => a.id === annTeamOld.id) || {}).body === 'Team post one',
+    r.json.announcements.map(a => a.body));
+  r = await api(coach, 'GET', '/api/profiles');
+  check('the imported profile is on the roster',
+    r.json.profiles.some(p => p.id === 'data-import-prof'), r.json.profiles.length);
+  cx = await apiText(coach, '/api/export/attendance.csv');
+  check('leaf merge: the imported attendance leaf landed beside the existing ones',
+    cx.text.includes('2027-01-04,Imported Athlete,,excused') &&
+    cx.text.includes('2027-01-04,Data Subject,Data Group,present'), cx.text.slice(0, 200));
+  r = await api(coach, 'POST', '/api/import/backup', importOne);
+  check('re-importing the identical file adds and updates nothing',
+    r.status === 200 && r.json.totalAdded === 0 && r.json.totalUpdated === 0, r.json);
+
+  /* Import: atomic rejection — validate everything, mutate nothing. */
+  const profCountBefore = (await api(coach, 'GET', '/api/profiles')).json.profiles.length;
+  r = await api(coach, 'POST', '/api/import/backup', {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    data: {
+      profiles: 'not-a-list',
+      announcements: [{ id: 'brand-new-ann', title: '', body: 'should not land', audience: 'team', pinned: false, authorId: 'x', authorEmail: 'x@test.com', createdAt: '2027-01-01T00:00:00.000Z', updatedAt: '2027-01-01T00:00:00.000Z' }],
+    },
+  });
+  check('a bad collection type refuses the whole import (400)', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/announcements');
+  check('the refused import saved nothing (announcement absent)',
+    !r.json.announcements.some(a => a.id === 'brand-new-ann'), r.json.announcements.length);
+  r = await api(coach, 'GET', '/api/profiles');
+  check('the refused import saved nothing (profile count unchanged)',
+    r.json.profiles.length === profCountBefore, r.json.profiles.length);
+  r = await api(coach, 'POST', '/api/import/backup', { app: 'other-app', kind: 'backup', data: {} });
+  check('a foreign envelope is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', { kind: 'backup', data: {} });
+  check('an envelope missing the app marker is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: [] });
+  check('a backup whose data is a list is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: { profiles: [{ firstName: 'No', lastName: 'Id' }] } });
+  check('a record missing its id is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', undefined, { raw: 'this is not json', contentType: 'application/json' });
+  check('a non-JSON import body is 400', r.status === 400, r.status);
+  const bigBody = '{"app":"sprinter-workout-app","kind":"backup","data":{"pad":"'
+    + 'x'.repeat(11 * 1024 * 1024) + '"}}';
+  r = await api(coach, 'POST', '/api/import/backup', undefined, { raw: bigBody, contentType: 'application/json' });
+  check('an import over 10 MB is 413', r.status === 413, r.status);
+
+  return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id };
 }
 
 async function waitForServer(tries = 60) {
@@ -3469,6 +3655,87 @@ async function waitForServer(tries = 60) {
     check('deleted seed does NOT resurrect after a restart',
       rc2.status === 200 && (rc2.json.workouts || []).length === 0,
       rc2.json && (rc2.json.workouts || []).length);
+
+    /* Backup round-trip: the main suite's exported backup imports
+       into a completely empty store and reproduces the team dataset;
+       a restart of that store keeps it (the merge saved once, for
+       real). Runs its own server/port/data dir like the seed and
+       digest blocks below. */
+    {
+      const RT_BASE = 'http://127.0.0.1:3220';
+      const rtApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+        const res = await fetch(RT_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const RT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-roundtrip-'));
+      let rtLog = '';
+      const startRt = () => {
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, process.env, {
+            PORT: '3220', DATA_DIR: RT_DIR, SESSION_SECRET: 'roundtrip-secret',
+          }),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', d => { rtLog += d; });
+        c.stderr.on('data', d => { rtLog += d; });
+        return c;
+      };
+      const waitRt = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(RT_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      let rtChild = startRt();
+      try {
+        check('round-trip server starts on an empty store', await waitRt(), rtLog);
+        let sr = await rtApi(null, 'POST', '/api/register', { email: 'rt-coach@test.com', password: 'testpass123' });
+        check('round-trip store: first account is the coach', sr.status === 201 && sr.json.role === 'coach', sr.json);
+        const rtCoach = cookieOf(sr);
+        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', ctx.backup);
+        check('round-trip import lands in the empty store',
+          sr.status === 200 && sr.json.ok === true &&
+          sr.json.counts.profiles.added === ctx.backup.data.profiles.length &&
+          sr.json.counts.announcements.added === ctx.backup.data.announcements.length &&
+          sr.json.totalAdded > 0, sr.json && sr.json.counts && sr.json.counts.profiles);
+        sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
+        check('round-trip store reproduces the source dataset',
+          sr.status === 200 &&
+          sr.json.data.profiles.length === ctx.backup.data.profiles.length &&
+          sr.json.data.announcements.length === ctx.backup.data.announcements.length &&
+          sr.json.data.schoolRecords.length === ctx.backup.data.schoolRecords.length &&
+          Object.keys(sr.json.data.attendance).length === Object.keys(ctx.backup.data.attendance).length &&
+          sr.json.data.profiles.some(p => p.id === ctx.dataProfileId),
+          sr.json && sr.json.data && sr.json.data.profiles && sr.json.data.profiles.length);
+        rtChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        rtChild = startRt();
+        check('round-trip server restarts', await waitRt(), rtLog);
+        sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
+        check('the imported dataset survives a restart of the new store',
+          sr.status === 200 &&
+          sr.json.data.profiles.length === ctx.backup.data.profiles.length &&
+          sr.json.data.announcements.length === ctx.backup.data.announcements.length,
+          sr.json && sr.json.data && sr.json.data.profiles && sr.json.data.profiles.length);
+      } finally {
+        rtChild.kill('SIGKILL');
+        fs.rmSync(RT_DIR, { recursive: true, force: true });
+      }
+    }
 
     /* Env-seeded invites (COACH_INVITE_EMAILS): a fresh store gets the
        invites, a seeded email registers as coach, and a seeded invite

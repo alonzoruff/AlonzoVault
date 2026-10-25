@@ -159,6 +159,7 @@
       <button type="button" class="menu-item" data-view="announce">Announcements <span>One-way posts to the whole team or a single group — athletes read them on Today</span></button>
       <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
       <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
+      <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
       <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access — under Account</span></button>
     </div>
   </section>
@@ -815,6 +816,15 @@
     <p class="view-sub muted">The whole team on one month: every group's sessions exactly as Today and the checklist resolve them, with meet and test days marked. Coaches only.</p>
     <div id="calendar-main"></div>
   </section>
+
+  <!-- DATA: BACKUP / RESTORE / SPREADSHEETS (coach) -->
+  <section id="view-data" class="view">
+    <h1>Data</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The whole team dataset, in and out: one backup file for safekeeping, restores that merge instead of wiping, and spreadsheets for everything else. Coaches only.</p>
+    <div id="data-main"></div>
+  </section>
 </main>
 
 <!-- RUNNER MODE (full-screen workout walk-through overlay) -->
@@ -850,7 +860,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v34">Cadets Sprint · App v34</div>
+  <div class="app-version" data-app-version="v35">Cadets Sprint · App v35</div>
 </footer>
 
 <script src="/app.js"></script>
