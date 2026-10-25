@@ -75,6 +75,11 @@ const state = {
   pfQ: '',
   importReport: null,
   importText: '',
+  amsProfileId: null,
+  amsQ: '',
+  amsGroup: '',
+  amsStatus: '',
+  amsRoster: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -102,8 +107,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v31';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v31';
+const APP_VERSION = 'v32';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v32';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -290,12 +295,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -331,6 +336,7 @@ function showView(name) {
   if (name === 'inventory') renderInventory();
   if (name === 'wellness') renderWellness();
   if (name === 'attendance') renderAttendance();
+  if (name === 'ams') renderAms();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
   if (name === 'digest') renderDigest();
@@ -1426,6 +1432,217 @@ async function renderAttendance() {
     } catch (err) { alert(err.message); }
     btn.disabled = false;
   });
+}
+
+/* ---------------- AMS (athlete management system) ----------------
+   The coach-side home for one athlete: a roster table with the
+   coach-set status and the server's attention flags, and a profile
+   page aggregating wellness, testing, meet PRs, attendance, health,
+   goals, and the private coach-notes thread. All of it reads the
+   /api/ams endpoints (coach-only); Roster & Groups stays the place
+   for roster editing and import. */
+const AMS_STATUS_LABELS = { active: 'Active', injured: 'Injured', inactive: 'Inactive' };
+function amsFlagBadges(flags) {
+  if (!flags || !flags.length) return '<span class="muted">—</span>';
+  return flags.map(f =>
+    `<span class="badge high" title="${esc(f.detail)}">${esc(f.label)}${f.count != null ? ' · ' + f.count : ''}</span>`).join(' ');
+}
+async function renderAms() {
+  const el = $('#ams-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The athlete-management system lives here.'); return; }
+  if (state.amsProfileId) { await renderAmsProfile(el, state.amsProfileId); return; }
+  let data;
+  try { data = await api('/api/ams/roster'); }
+  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  state.amsRoster = data.athletes || [];
+  const groupOpts = [];
+  const seenGroups = new Set();
+  for (const a of state.amsRoster) {
+    const gid = a.profile.groupId || '';
+    if (seenGroups.has(gid)) continue;
+    seenGroups.add(gid);
+    groupOpts.push([gid, a.profile.groupName || 'No group']);
+  }
+  el.innerHTML = `
+    <div class="card">
+      <div class="filter-row">
+        <label>Search <input type="search" id="ams-q" value="${esc(state.amsQ)}" placeholder="Athlete name"></label>
+        <label>Group <select id="ams-group">
+          <option value="">All groups</option>
+          ${groupOpts.map(([gid, name]) => `<option value="${esc(gid)}" ${state.amsGroup === gid ? 'selected' : ''}>${esc(name)}</option>`).join('')}
+        </select></label>
+        <label>Status <select id="ams-status-filter">
+          <option value="">Any status</option>
+          ${Object.keys(AMS_STATUS_LABELS).map(s => `<option value="${s}" ${state.amsStatus === s ? 'selected' : ''}>${AMS_STATUS_LABELS[s]}</option>`).join('')}
+        </select></label>
+      </div>
+      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Attendance = 2+ absences in the last 14 days · Health = an open aches &amp; pains concern. Tap an athlete for their full page.</p>
+      <div id="ams-table"></div>
+    </div>`;
+  const paintTable = () => {
+    const slot = $('#ams-table');
+    if (!slot) return;
+    const q = state.amsQ.trim().toLowerCase();
+    const rows = state.amsRoster.filter(a => {
+      if (q && !a.profile.name.toLowerCase().includes(q)) return false;
+      if (state.amsGroup !== '' && (a.profile.groupId || '') !== state.amsGroup) return false;
+      if (state.amsStatus && a.status !== state.amsStatus) return false;
+      return true;
+    });
+    slot.innerHTML = `<div class="table-wrap"><table class="ranked">
+      <thead><tr><th>Athlete</th><th>Group</th><th>Events</th><th>Status</th><th>Account</th><th>Attention</th></tr></thead>
+      <tbody>${rows.length ? rows.map(a => `<tr>
+        <td><button type="button" class="code-link" data-ams-open="${a.profile.id}">${esc(a.profile.name)}</button>${a.profile.topAthlete ? ' <span class="badge star">★</span>' : ''}${a.profile.archived ? ' <span class="badge plain">ARCHIVED</span>' : ''}</td>
+        <td>${esc(a.profile.groupName || 'No group')}</td>
+        <td>${esc((a.profile.events || []).join(', ') || '—')}</td>
+        <td>${esc(AMS_STATUS_LABELS[a.status] || a.status)}</td>
+        <td>${a.linked ? esc(a.profile.linkedEmail) : '<span class="badge plain">NOT LINKED</span>'}</td>
+        <td>${amsFlagBadges(a.flags)}</td>
+      </tr>`).join('') : '<tr><td colspan="6">No athletes match.</td></tr>'}</tbody>
+    </table></div>`;
+    slot.querySelectorAll('[data-ams-open]').forEach(b => b.addEventListener('click', () => {
+      state.amsProfileId = b.dataset.amsOpen;
+      renderAms();
+      window.scrollTo(0, 0);
+    }));
+  };
+  paintTable();
+  $('#ams-q').addEventListener('input', (e) => { state.amsQ = e.target.value; paintTable(); });
+  $('#ams-group').addEventListener('change', (e) => { state.amsGroup = e.target.value; paintTable(); });
+  $('#ams-status-filter').addEventListener('change', (e) => { state.amsStatus = e.target.value; paintTable(); });
+}
+async function renderAmsProfile(el, profileId) {
+  let d;
+  try { d = await api('/api/ams/athlete/' + encodeURIComponent(profileId)); }
+  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const p = d.profile;
+  const w = d.wellness;
+  const att = d.attendance;
+  const attLine = (label, win) => `<p><strong>${label}:</strong> ${win.marked} marked · ${win.attended} attended · ${win.absent} absent${win.percent == null ? '' : ' · ' + win.percent + '% attended'}</p>`;
+  el.innerHTML = `
+    <button class="btn secondary back" id="ams-back" type="button">← AMS roster</button>
+    <div class="card">
+      <h2>${esc(p.name)}${p.topAthlete ? ' <span class="badge star">★ Top athlete</span>' : ''}${p.archived ? ' <span class="badge plain">ARCHIVED</span>' : ''}</h2>
+      <p class="muted">${esc(p.groupName || 'No group')}${(p.events || []).length ? ' · ' + esc(p.events.join(', ')) : ''}</p>
+      <p>${d.linked
+        ? `Account linked: <strong>${esc(d.linkedEmail)}</strong>`
+        : '<span class="badge plain">NOT LINKED</span> <span class="muted">No account linked — this athlete cannot check in yet. Link their email in Roster &amp; Groups.</span>'}</p>
+      <div class="filter-row">
+        <label>Status <select id="ams-status">
+          ${Object.keys(AMS_STATUS_LABELS).map(s => `<option value="${s}" ${d.status === s ? 'selected' : ''}>${AMS_STATUS_LABELS[s]}</option>`).join('')}
+        </select></label>
+      </div>
+      <p>Attention: ${amsFlagBadges(d.flags)}</p>
+    </div>
+    <div class="card">
+      <h2>Wellness — last 14 days</h2>
+      ${w.recent.length ? `
+      <p class="muted">${w.summary.days} check-ins · avg sleep ${w.summary.avgSleep == null ? '—' : w.summary.avgSleep}h · avg soreness ${w.summary.avgSoreness == null ? '—' : w.summary.avgSoreness}/5 · avg energy ${w.summary.avgEnergy == null ? '—' : w.summary.avgEnergy}/5 · ${w.summary.flaggedDays} flagged day${w.summary.flaggedDays === 1 ? '' : 's'}</p>
+      <div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Date</th><th>Sleep</th><th>Soreness</th><th>Energy</th><th>Flags</th></tr></thead>
+        <tbody>${w.recent.slice().reverse().map(c => `<tr>
+          <td>${esc(fmtDate(parseDate(c.date)))}</td><td>${c.sleep}h</td><td>${c.soreness}/5</td><td>${c.energy}/5</td>
+          <td>${c.flags.length ? c.flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ') : '<span class="badge low">OK</span>'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : '<p class="muted">No check-ins in the last 14 days.</p>'}
+    </div>
+    <div class="card">
+      <h2>Testing</h2>
+      ${d.testing.length ? `<div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Test</th><th>Latest</th><th>Best</th><th>Latest date</th></tr></thead>
+        <tbody>${d.testing.map(t => `<tr><td>${esc(t.name)}</td><td>${t.latest == null ? '—' : esc(fmtNum(t.latest)) + ' ' + esc(t.unit)}</td><td>${t.best == null ? '—' : esc(fmtNum(t.best)) + ' ' + esc(t.unit)}</td><td>${esc(t.latestDate || '—')}</td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="muted">No testing results yet.</p>'}
+    </div>
+    <div class="card">
+      <h2>Meet results &amp; PRs</h2>
+      ${d.meetPrs.length ? `<div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Event</th><th>PR</th><th>Meet</th><th>Date</th></tr></thead>
+        <tbody>${d.meetPrs.map(pr => `<tr><td>${esc(pr.name)}</td><td>${esc(pr.mark)}</td><td>${esc(pr.meet)}</td><td>${esc(pr.date)}</td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="muted">No meet results yet.</p>'}
+      ${d.recentResults.length ? `<h3>Most recent results</h3>${d.recentResults.map(r => `
+        <div class="roster-row"><span>${esc(r.date)} · ${esc(r.eventName)} — <strong>${esc(r.mark)}</strong></span><span class="muted">${esc(r.meet)}</span></div>`).join('')}` : ''}
+    </div>
+    <div class="card">
+      <h2>Attendance</h2>
+      ${attLine('Last 30 days', att.last30)}
+      ${attLine('Season to date', att.season)}
+      ${att.recent.length ? att.recent.map(m => `
+        <div class="roster-row"><span>${esc(fmtDate(parseDate(m.date)))}</span><span class="badge ${m.status === 'absent' ? 'high' : 'plain'}">${esc(m.status).toUpperCase()}</span></div>`).join('') : '<p class="muted">No attendance marks yet.</p>'}
+    </div>
+    <div class="card">
+      <h2>Health — aches &amp; pains</h2>
+      <p class="muted">${d.health.counts.open} new · ${d.health.counts.monitoring} monitoring · ${d.health.counts.cleared} cleared · ${d.health.counts.total} total</p>
+      ${d.health.concerns.length ? d.health.concerns.map(c => `
+        <div class="roster-row">
+          <span><strong>${esc(AREA_LABELS[c.area] || c.area)}</strong> (${esc(c.side)}) · ${esc(FEELING_LABELS[c.feeling] || c.feeling)} · started ${esc(c.started)}${c.source === 'athlete' ? ' · athlete reported' : ''}</span>
+          <span class="badge ${c.status === 'cleared' ? 'low' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
+        </div>${c.note ? `<p class="muted">${esc(c.note)}</p>` : ''}`).join('') : '<p class="muted">No concerns on file.</p>'}
+    </div>
+    <div class="card">
+      <h2>Goals</h2>
+      ${d.goals.length ? d.goals.map(g => `
+        <div class="roster-row">
+          <span><strong>${esc(g.eventName)}</strong> — target ${esc(g.targetText)}${g.current ? ' · PR ' + esc(g.current.mark) : ''}</span>
+          <span>${g.achieved ? '<span class="badge done">ACHIEVED</span>' : (g.progressPct == null ? '<span class="muted">No marks yet</span>' : `<span class="badge plain">${g.progressPct}%</span>`)}</span>
+        </div>`).join('') : '<p class="muted">No goals set yet — add them in Goals.</p>'}
+    </div>
+    <div class="card">
+      <h2>Coach notes <span class="badge plain">COACHES ONLY</span></h2>
+      <p class="muted">Private to the coaching staff. Athletes never see these — not in the app, not on the TV board, not in exports.</p>
+      <label>New note <textarea id="ams-note-text" rows="3" maxlength="2000" placeholder="What does the staff need to remember about this athlete?"></textarea></label>
+      <button class="btn primary" id="ams-note-add" type="button" style="width:auto">Add note</button>
+      <div id="ams-notes">
+      ${d.notes.length ? d.notes.map(n => `
+        <div class="roster-row" data-ams-note="${n.id}" style="display:block">
+          <p>${esc(n.text)}</p>
+          <p class="muted">${esc(n.authorEmail)} · ${esc(String(n.createdAt).slice(0, 10))}${n.updatedAt !== n.createdAt ? ' · edited ' + esc(String(n.updatedAt).slice(0, 10)) : ''}
+          <button class="btn secondary" data-ams-note-edit="${n.id}" type="button" style="width:auto">Edit</button>
+          <button class="btn secondary" data-ams-note-del="${n.id}" type="button" style="width:auto">Delete</button></p>
+        </div>`).join('') : '<p class="muted">No notes yet.</p>'}
+      </div>
+    </div>`;
+  $('#ams-back').addEventListener('click', () => { state.amsProfileId = null; renderAms(); window.scrollTo(0, 0); });
+  $('#ams-status').addEventListener('change', async (e) => {
+    try {
+      await apiPut('/api/profiles/' + encodeURIComponent(profileId), { status: e.target.value });
+      state.amsRoster = null;
+      renderAms();
+    } catch (err) { alert(err.message); }
+  });
+  $('#ams-note-add').addEventListener('click', async () => {
+    const text = $('#ams-note-text').value.trim();
+    if (!text) { alert('Write the note first.'); return; }
+    try {
+      await apiPost('/api/ams/athlete/' + encodeURIComponent(profileId) + '/notes', { text });
+      renderAms();
+    } catch (err) { alert(err.message); }
+  });
+  el.querySelectorAll('[data-ams-note-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!window.confirm('Delete this note?')) return;
+    try {
+      await apiDel('/api/ams/athlete/' + encodeURIComponent(profileId) + '/notes/' + encodeURIComponent(b.dataset.amsNoteDel));
+      renderAms();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-ams-note-edit]').forEach(b => b.addEventListener('click', async () => {
+    const row = b.closest('[data-ams-note]');
+    const note = d.notes.find(n => n.id === b.dataset.amsNoteEdit);
+    if (!row || !note) return;
+    row.innerHTML = `
+      <label>Edit note <textarea id="ams-note-edit-text" rows="3" maxlength="2000">${esc(note.text)}</textarea></label>
+      <button class="btn primary" id="ams-note-save" type="button" style="width:auto">Save</button>
+      <button class="btn secondary" id="ams-note-cancel" type="button" style="width:auto">Cancel</button>`;
+    $('#ams-note-cancel').addEventListener('click', () => renderAms());
+    $('#ams-note-save').addEventListener('click', async () => {
+      const text = $('#ams-note-edit-text').value.trim();
+      if (!text) { alert('Write the note first.'); return; }
+      try {
+        await apiPut('/api/ams/athlete/' + encodeURIComponent(profileId) + '/notes/' + encodeURIComponent(note.id), { text });
+        renderAms();
+      } catch (err) { alert(err.message); }
+    });
+  }));
 }
 
 /* ================================================================

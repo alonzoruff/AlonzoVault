@@ -90,7 +90,12 @@ let db = {
   athleteLinks: {},
   checkins: {},
   attendance: {},
+  coachNotes: {},
 };
+
+/* Coach-set athlete status (the AMS layer): every profile carries
+   one; anything missing or unrecognized reads as active. */
+const PROFILE_STATUSES = ['active', 'injured', 'inactive'];
 
 function migrate() {
   db.users = Array.isArray(db.users) ? db.users : [];
@@ -167,6 +172,15 @@ function migrate() {
   // record: never an alias for a completion, never athlete-facing.
   db.attendance = (db.attendance && typeof db.attendance === 'object' && !Array.isArray(db.attendance))
     ? db.attendance : {};
+  // Private coach notes (the AMS layer): { profileId: [ { id, text,
+  // authorId, authorEmail, createdAt, updatedAt } ] } — a per-athlete
+  // thread only coaches can read or write. Athlete-facing payloads
+  // never include it; the notes live behind the coach gate, full stop.
+  db.coachNotes = (db.coachNotes && typeof db.coachNotes === 'object' && !Array.isArray(db.coachNotes))
+    ? db.coachNotes : {};
+  for (const pid of Object.keys(db.coachNotes)) {
+    if (!Array.isArray(db.coachNotes[pid])) db.coachNotes[pid] = [];
+  }
   // Athlete goals: one flat list of { id, profileId, event,
   // targetText, targetValue, createdAt, updatedAt } — coach-set
   // target marks, one ACTIVE goal per athlete per event (setting a
@@ -190,6 +204,7 @@ function migrate() {
     if (prof.topAthlete === undefined) prof.topAthlete = false;
     if (prof.archived === undefined) prof.archived = false;
     if (prof.groupId === undefined) prof.groupId = null;
+    if (!PROFILE_STATUSES.includes(prof.status)) prof.status = 'active';
   }
 }
 function loadDb() {
@@ -1216,6 +1231,7 @@ function publicProfile(pr) {
     name: (pr.firstName + ' ' + pr.lastName).trim(),
     groupId: pr.groupId || null, groupName: g ? g.name : null,
     events: pr.events || [], topAthlete: !!pr.topAthlete, archived: !!pr.archived,
+    status: PROFILE_STATUSES.includes(pr.status) ? pr.status : 'active',
     linkedEmail: linkedEmailForProfile(pr.id),
   };
 }
@@ -1377,6 +1393,115 @@ function weeklySeriesFor(profileId, metric) {
     improved = metric.better === 'lower' ? delta < 0 : delta > 0;
   }
   return { points, best, first, latest, delta, improved };
+}
+
+/* One athlete's testing history, per test: the chronological series
+   plus latest/best — the block the athlete report card renders, and
+   the same block the AMS profile page reads. One computation, two
+   readers, so a "best" means the same thing on both pages. */
+function testingHistoryFor(profileId) {
+  const dayById = new Map(db.testDays.map(d => [d.id, d]));
+  return allTests().map(t => {
+    const series = (db.testResults[profileId] || [])
+      .filter(r => r.testKey === t.key)
+      .map(r => {
+        const day = dayById.get(r.testDayId);
+        return {
+          resultId: r.id, testDayId: r.testDayId,
+          date: day ? day.date : '', title: day ? day.title : '',
+          display: displayValue(r),
+          value: r.value, weight: r.weight, reps: r.reps, est1rm: r.est1rm,
+        };
+      })
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const displays = series.map(r => r.display).filter(d => d !== null && d !== undefined);
+    return {
+      testKey: t.key, name: t.name, unit: t.unit, kind: t.kind, better: t.better || 'higher', series,
+      best: displays.length ? (t.better === 'lower' ? Math.min : Math.max).apply(null, displays) : null,
+      latest: series.length ? series[series.length - 1].display : null,
+      latestDate: series.length ? series[series.length - 1].date : null,
+    };
+  }).filter(t => t.series.length);
+}
+
+/* ------------------------------------------------------------------ */
+/* AMS attention flags (coach-side only)                               */
+/* ------------------------------------------------------------------ */
+/* Four flags, each computed from data the app already holds, with
+   the same rules everywhere they appear (the AMS roster table and
+   the AMS profile page read this one function):
+   - Readiness: 2+ check-ins flagged by checkinFlags in the last
+     7 days (today and the 6 days before it).
+   - No check-in: a LINKED athlete with no check-in in the last
+     3 days (today and the 2 days before it). Unlinked athletes
+     never earn this flag — they get the neutral "Not linked"
+     indicator instead, since they cannot check in at all.
+   - Attendance: 2+ Absent marks in the last 14 days.
+   - Health: 1+ aches & pains concerns currently new/open/monitoring
+     (the concern store's live statuses are new/monitoring/cleared;
+     'open' is accepted defensively so a future status rename can
+     never silently hide an active concern).
+   Every flag carries the count behind it, stated in its detail. */
+function amsFlagsFor(pr, today) {
+  const flags = [];
+  const byDate = db.checkins[pr.id] || {};
+  const weekStart = addDaysStr(today, -6);
+  let flaggedDays = 0;
+  for (const ds of Object.keys(byDate)) {
+    if (ds >= weekStart && ds <= today && checkinFlags(byDate[ds]).length) flaggedDays++;
+  }
+  if (flaggedDays >= 2) {
+    flags.push({
+      key: 'readiness', label: 'Readiness', count: flaggedDays,
+      detail: flaggedDays + ' flagged check-ins this week',
+    });
+  }
+  if (linkedEmailForProfile(pr.id)) {
+    const start3 = addDaysStr(today, -2);
+    let lastCheckin = null;
+    for (const ds of Object.keys(byDate)) {
+      if (ds <= today && (!lastCheckin || ds > lastCheckin)) lastCheckin = ds;
+    }
+    if (!lastCheckin || lastCheckin < start3) {
+      flags.push({
+        key: 'no-checkin', label: 'No check-in',
+        count: lastCheckin ? Math.round((parseDateStr(today) - parseDateStr(lastCheckin)) / 86400000) : null,
+        detail: lastCheckin
+          ? 'Last check-in ' + lastCheckin + ' — none in the last 3 days'
+          : 'No check-ins recorded — none in the last 3 days',
+      });
+    }
+  }
+  const start14 = addDaysStr(today, -13);
+  let absents = 0;
+  for (const ds of Object.keys(db.attendance)) {
+    if (ds < start14 || ds > today) continue;
+    const rec = db.attendance[ds][pr.id];
+    if (rec && rec.status === 'absent') absents++;
+  }
+  if (absents >= 2) {
+    flags.push({
+      key: 'attendance', label: 'Attendance', count: absents,
+      detail: absents + ' absences in the last 14 days',
+    });
+  }
+  const openConcerns = (db.concerns[pr.id] || [])
+    .filter(c => c.status === 'new' || c.status === 'open' || c.status === 'monitoring').length;
+  if (openConcerns >= 1) {
+    flags.push({
+      key: 'health', label: 'Health', count: openConcerns,
+      detail: openConcerns + (openConcerns === 1 ? ' open concern' : ' open concerns'),
+    });
+  }
+  return flags;
+}
+/* The wire shape of one private coach note. */
+function publicCoachNote(n) {
+  return {
+    id: n.id, text: n.text,
+    authorId: n.authorId, authorEmail: n.authorEmail,
+    createdAt: n.createdAt, updatedAt: n.updatedAt,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1917,10 +2042,17 @@ async function handleApi(req, res, url) {
     }
     const gid = body.groupId ? clean(body.groupId, 80) : null;
     if (gid && !groupById(gid)) return sendJson(res, 400, { error: 'Unknown group.' });
+    let status = 'active';
+    if (body.status !== undefined) {
+      status = clean(body.status, 20);
+      if (!PROFILE_STATUSES.includes(status)) {
+        return sendJson(res, 400, { error: 'Status must be active, injured, or inactive.' });
+      }
+    }
     const prof = {
       id: crypto.randomUUID(), firstName, lastName,
       groupId: gid, events: cleanEvents(body.events),
-      topAthlete: !!body.topAthlete, archived: false,
+      topAthlete: !!body.topAthlete, archived: false, status,
       createdAt: new Date().toISOString(),
     };
     db.profiles.push(prof);
@@ -2041,6 +2173,9 @@ async function handleApi(req, res, url) {
     const prof = profileById(decodeURIComponent(profileMatch[1]));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const body = await readBody(req);
+    if (body.status !== undefined && !PROFILE_STATUSES.includes(clean(body.status, 20))) {
+      return sendJson(res, 400, { error: 'Status must be active, injured, or inactive.' });
+    }
     const nextFirst = body.firstName !== undefined ? (clean(body.firstName, 40) || prof.firstName) : prof.firstName;
     const nextLast = body.lastName !== undefined ? (clean(body.lastName, 40) || prof.lastName) : prof.lastName;
     if ((nextFirst !== prof.firstName || nextLast !== prof.lastName)
@@ -2057,6 +2192,7 @@ async function handleApi(req, res, url) {
     if (body.events !== undefined) prof.events = cleanEvents(body.events);
     if (body.topAthlete !== undefined) prof.topAthlete = !!body.topAthlete;
     if (body.archived !== undefined) prof.archived = !!body.archived;
+    if (body.status !== undefined) prof.status = clean(body.status, 20);
     saveDb();
     return sendJson(res, 200, { profile: publicProfile(prof) });
   }
@@ -2267,6 +2403,48 @@ async function handleApi(req, res, url) {
     }
     return counts;
   }
+  /* The summary windows and their per-athlete counting, shared by
+     the summary endpoint and the AMS profile page so both read the
+     same numbers: last 30 days ending today, and season-to-date
+     (the season opens on the plan's first week). Attended counts
+     present + late; the percentage runs over marked days only —
+     unmarked days never count against an athlete (null when the
+     athlete has no marks in the window at all). */
+  function attendanceWindows() {
+    const today = todayStr();
+    const seasonStart = (CONTENT.weeks && CONTENT.weeks.length && CONTENT.weeks[0].start)
+      || addDaysStr(today, -29);
+    return {
+      today,
+      last30: { from: addDaysStr(today, -29), to: today },
+      season: { from: seasonStart, to: today },
+    };
+  }
+  function attendanceCountsInWindow(profileId, win) {
+    const counts = { marked: 0, present: 0, late: 0, excused: 0, absent: 0, attended: 0, percent: null };
+    for (const date of Object.keys(db.attendance)) {
+      if (date < win.from || date > win.to) continue;
+      const rec = db.attendance[date][profileId];
+      if (!rec || !ATTENDANCE_STATUSES.includes(rec.status)) continue;
+      counts.marked++;
+      counts[rec.status]++;
+    }
+    counts.attended = counts.present + counts.late;
+    counts.percent = counts.marked ? Math.round((counts.attended / counts.marked) * 1000) / 10 : null;
+    return counts;
+  }
+  /* An athlete's most recent attendance marks, newest first. */
+  function attendanceRecentMarks(profileId, limit) {
+    const out = [];
+    for (const date of Object.keys(db.attendance).sort().reverse()) {
+      const rec = db.attendance[date][profileId];
+      if (rec && ATTENDANCE_STATUSES.includes(rec.status)) {
+        out.push({ date, status: rec.status });
+      }
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
   if (p === '/api/attendance' && req.method === 'GET') {
     const date = clean(q.get('date') || todayStr(), 10);
     if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
@@ -2340,13 +2518,9 @@ async function handleApi(req, res, url) {
      unmarked days never count against an athlete (null when an
      athlete has no marks in the window at all). */
   if (p === '/api/attendance/summary' && req.method === 'GET') {
-    const today = todayStr();
-    const seasonStart = (CONTENT.weeks && CONTENT.weeks.length && CONTENT.weeks[0].start)
-      || addDaysStr(today, -29);
-    const windows = {
-      last30: { from: addDaysStr(today, -29), to: today },
-      season: { from: seasonStart, to: today },
-    };
+    const aw = attendanceWindows();
+    const today = aw.today;
+    const windows = { last30: aw.last30, season: aw.season };
     const customFrom = clean(q.get('from') || '', 10);
     const customTo = clean(q.get('to') || '', 10);
     if (customFrom || customTo) {
@@ -2355,25 +2529,155 @@ async function handleApi(req, res, url) {
       }
       windows.custom = { from: customFrom, to: customTo };
     }
-    const countsFor = (profileId, win) => {
-      const counts = { marked: 0, present: 0, late: 0, excused: 0, absent: 0, attended: 0, percent: null };
-      for (const date of Object.keys(db.attendance)) {
-        if (date < win.from || date > win.to) continue;
-        const rec = db.attendance[date][profileId];
-        if (!rec || !ATTENDANCE_STATUSES.includes(rec.status)) continue;
-        counts.marked++;
-        counts[rec.status]++;
-      }
-      counts.attended = counts.present + counts.late;
-      counts.percent = counts.marked ? Math.round((counts.attended / counts.marked) * 1000) / 10 : null;
-      return counts;
-    };
     const athletes = db.profiles.filter(pr => !pr.archived).map(pr => {
       const row = { profile: publicProfile(pr) };
-      for (const key of Object.keys(windows)) row[key] = countsFor(pr.id, windows[key]);
+      for (const key of Object.keys(windows)) row[key] = attendanceCountsInWindow(pr.id, windows[key]);
       return row;
     });
     return sendJson(res, 200, { today, windows, athletes });
+  }
+
+  /* ---------- AMS (athlete management system) ----------
+     The coach-side home for everything the app holds on one
+     athlete: a roster table with coach-set status and computed
+     attention flags, one aggregate page per athlete (wellness,
+     testing, meet PRs, attendance, health, goals), and a private
+     coach-notes thread. Everything here sits below the coach
+     gate: athletes get 403, logged-out 401. Notes in particular
+     are coach-only data — they are served ONLY by these endpoints
+     and are never folded into any athlete-facing payload, the TV
+     board, or an export. */
+  if (p === '/api/ams/roster' && req.method === 'GET') {
+    const today = todayStr();
+    const includeArchived = q.get('includeArchived') === '1';
+    const athletes = db.profiles
+      .filter(pr => includeArchived || !pr.archived)
+      .slice()
+      .sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName))
+      .map(pr => {
+        const pub = publicProfile(pr);
+        return {
+          profile: pub,
+          status: pub.status,
+          linked: !!pub.linkedEmail,
+          flags: amsFlagsFor(pr, today),
+        };
+      });
+    return sendJson(res, 200, { today, athletes });
+  }
+
+  const amsAthleteMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)$/);
+  if (amsAthleteMatch && req.method === 'GET') {
+    const prof = profileById(decodeURIComponent(amsAthleteMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const today = todayStr();
+    /* Wellness: the last 14 days of check-ins, oldest first, with
+       the window's averages and flagged-day count (checkinFlags,
+       the same rules as everywhere else). */
+    const byDate = db.checkins[prof.id] || {};
+    const recent = [];
+    for (let i = 13; i >= 0; i--) {
+      const c = byDate[addDaysStr(today, -i)];
+      if (c) recent.push(publicCheckin(c));
+    }
+    const avgOf = (key) => (recent.length
+      ? round2(recent.reduce((s, c) => s + c[key], 0) / recent.length) : null);
+    const wellness = {
+      recent,
+      summary: {
+        days: recent.length,
+        avgSleep: avgOf('sleep'), avgSoreness: avgOf('soreness'), avgEnergy: avgOf('energy'),
+        flaggedDays: recent.filter(c => c.flags.length).length,
+      },
+    };
+    const aw = attendanceWindows();
+    const attendance = {
+      last30: attendanceCountsInWindow(prof.id, aw.last30),
+      season: attendanceCountsInWindow(prof.id, aw.season),
+      recent: attendanceRecentMarks(prof.id, 10),
+    };
+    const concerns = (db.concerns[prof.id] || []).slice()
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const healthCounts = { open: 0, monitoring: 0, cleared: 0, total: concerns.length };
+    for (const c of concerns) {
+      if (c.status === 'new') healthCounts.open++;
+      else if (c.status === 'monitoring') healthCounts.monitoring++;
+      else if (c.status === 'cleared') healthCounts.cleared++;
+    }
+    const recentResults = db.meetResults
+      .filter(r => r.profileId === prof.id)
+      .slice()
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1
+        : (a.createdAt < b.createdAt ? 1 : -1)))
+      .slice(0, 10)
+      .map(publicMeetResult);
+    const notes = (db.coachNotes[prof.id] || []).slice()
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(publicCoachNote);
+    const pub = publicProfile(prof);
+    return sendJson(res, 200, {
+      profile: pub,
+      status: pub.status,
+      linked: !!pub.linkedEmail,
+      linkedEmail: pub.linkedEmail,
+      flags: amsFlagsFor(prof, today),
+      wellness,
+      testing: testingHistoryFor(prof.id),
+      meetPrs: meetPrsFor(prof.id),
+      recentResults,
+      attendance,
+      health: { counts: healthCounts, concerns },
+      goals: goalsForProfile(prof.id),
+      notes,
+    });
+  }
+
+  /* Private coach notes: a per-athlete thread. Any coach on the
+     staff can add, edit, or delete; the author is recorded on
+     every note. Coach-only by the gate above, and read back only
+     through the AMS endpoints. */
+  const amsNotesMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)\/notes$/);
+  if (amsNotesMatch && req.method === 'POST') {
+    const prof = profileById(decodeURIComponent(amsNotesMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const body = await readBody(req);
+    const text = clean(body.text, 2000);
+    if (!text) return sendJson(res, 400, { error: 'Write the note first.' });
+    const now = new Date().toISOString();
+    const note = {
+      id: crypto.randomUUID(), text,
+      authorId: user.id, authorEmail: user.email,
+      createdAt: now, updatedAt: now,
+    };
+    db.coachNotes[prof.id] = db.coachNotes[prof.id] || [];
+    db.coachNotes[prof.id].push(note);
+    saveDb();
+    return sendJson(res, 201, { note: publicCoachNote(note) });
+  }
+  const amsNoteMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)\/notes\/([^/]+)$/);
+  if (amsNoteMatch && req.method === 'PUT') {
+    const prof = profileById(decodeURIComponent(amsNoteMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const note = (db.coachNotes[prof.id] || [])
+      .find(n => n.id === decodeURIComponent(amsNoteMatch[2]));
+    if (!note) return sendJson(res, 404, { error: 'Note not found.' });
+    const body = await readBody(req);
+    const text = clean(body.text, 2000);
+    if (!text) return sendJson(res, 400, { error: 'Write the note first.' });
+    note.text = text;
+    note.updatedAt = new Date().toISOString();
+    saveDb();
+    return sendJson(res, 200, { note: publicCoachNote(note) });
+  }
+  if (amsNoteMatch && req.method === 'DELETE') {
+    const prof = profileById(decodeURIComponent(amsNoteMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const list = db.coachNotes[prof.id] || [];
+    const next = list.filter(n => n.id !== decodeURIComponent(amsNoteMatch[2]));
+    if (next.length === list.length) return sendJson(res, 404, { error: 'Note not found.' });
+    db.coachNotes[prof.id] = next;
+    saveDb();
+    return sendJson(res, 200, { ok: true });
   }
 
   /* ---------- CSV exports (coach-only downloads) ---------- */
@@ -3490,28 +3794,7 @@ async function handleApi(req, res, url) {
   if (athleteReportMatch && req.method === 'GET') {
     const prof = profileById(decodeURIComponent(athleteReportMatch[1]));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
-    const dayById = new Map(db.testDays.map(d => [d.id, d]));
-    const testing = allTests().map(t => {
-      const series = (db.testResults[prof.id] || [])
-        .filter(r => r.testKey === t.key)
-        .map(r => {
-          const day = dayById.get(r.testDayId);
-          return {
-            resultId: r.id, testDayId: r.testDayId,
-            date: day ? day.date : '', title: day ? day.title : '',
-            display: displayValue(r),
-            value: r.value, weight: r.weight, reps: r.reps, est1rm: r.est1rm,
-          };
-        })
-        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-      const displays = series.map(r => r.display).filter(d => d !== null && d !== undefined);
-      return {
-        testKey: t.key, name: t.name, unit: t.unit, kind: t.kind, better: t.better || 'higher', series,
-        best: displays.length ? (t.better === 'lower' ? Math.min : Math.max).apply(null, displays) : null,
-        latest: series.length ? series[series.length - 1].display : null,
-        latestDate: series.length ? series[series.length - 1].date : null,
-      };
-    }).filter(t => t.series.length);
+    const testing = testingHistoryFor(prof.id);
     const weekly = allWeeklyMetrics().map(m => {
       const s = weeklySeriesFor(prof.id, m);
       return { metric: m, points: s.points, best: s.best, latest: s.latest, delta: s.delta, improved: s.improved };

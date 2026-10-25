@@ -336,8 +336,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v31',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v31"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v32',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v32"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2019,16 +2019,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v31'") &&
-    swJs.text.includes("sprinter-app-v31"));
+    appJs.text.includes("const APP_VERSION = 'v32'") &&
+    swJs.text.includes("sprinter-app-v32"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v31"') &&
-    pageHtml.text.includes('Cadets Sprint · App v31') &&
+    pageHtml.text.includes('data-app-version="v32"') &&
+    pageHtml.text.includes('Cadets Sprint · App v32') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
@@ -2761,6 +2761,252 @@ async function main() {
   check('attendance summary: an athlete with no marks gets zeros and a null percent',
     !!danaSum && danaSum.last30.marked === 0 && danaSum.last30.percent === null &&
     danaSum.season.marked === 0 && danaSum.season.percent === null, danaSum);
+
+  /* ---------------- AMS (athlete management system) ----------------
+     Coach-side only: a roster table with coach-set status and
+     computed attention flags, one aggregate page per athlete, and a
+     private coach-notes thread that must never reach an athlete
+     payload, the TV board, or an export. Fixtures are a dedicated
+     squad; flag windows run off the server's own today (reportToday)
+     so the boundaries are exact:
+       Amy — 2 flagged check-ins 4-5 days ago (Readiness fires),
+             none in the last 3 days (No check-in fires), 2 absences
+             in 14 days (Attendance fires), 1 open concern (Health
+             fires): all four flags.
+       Ben — exactly 1 flagged check-in yesterday (Readiness does
+             NOT fire), 1 absence (Attendance does NOT fire), one
+             cleared concern (Health does NOT fire): zero flags.
+       Cid — unlinked with no check-ins at all: NO No check-in flag
+             (unlinked athletes get the neutral Not linked state). */
+  check('ams view is in the served page',
+    pageHtml.text.includes('id="view-ams"') && pageHtml.text.includes('id="ams-main"') &&
+    pageHtml.text.includes('data-view="ams"'));
+  check('ams wiring is in the served JS',
+    appJs.text.includes("['ams', 'AMS']") && appJs.text.includes("ams: 'coachhub'") &&
+    appJs.text.includes("if (name === 'ams') renderAms();") &&
+    appJs.text.includes('/api/ams/roster') && appJs.text.includes('/api/ams/athlete/'));
+  {
+    const amsTvStart = appJs.text.indexOf('TV BOARD');
+    const amsTvEnd = appJs.text.indexOf('/* ---------------- boot', amsTvStart);
+    const amsTvCode = amsTvStart >= 0 && amsTvEnd > amsTvStart ? appJs.text.slice(amsTvStart, amsTvEnd) : '';
+    check('TV board render path never references AMS or coach notes',
+      amsTvCode.length > 500 && !amsTvCode.toLowerCase().includes('ams') &&
+      !amsTvCode.includes('coachNotes') && !amsTvCode.includes('/api/ams'), amsTvCode.length);
+  }
+
+  r = await api(coach, 'POST', '/api/groups', { name: 'AMS Squad' });
+  const gAms = r.json.group.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Amy', lastName: 'Ams', groupId: gAms, events: ['sprinter'] });
+  const amyP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Ben', lastName: 'Ams', groupId: gAms, events: ['jumper'] });
+  const benP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Cid', lastName: 'Ams', events: [] });
+  const cidP = r.json.profile;
+  check('profiles are born with status active',
+    amyP.status === 'active' && benP.status === 'active' && cidP.status === 'active', amyP);
+
+  /* Status: validated on create and on edit, persisted, and a bad
+     edit changes nothing. */
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Dee', lastName: 'Ams', status: 'injured' });
+  check('profile create accepts a valid status', r.status === 201 && r.json.profile.status === 'injured', r.json);
+  const deeP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Eli', lastName: 'Ams', status: 'benched' });
+  check('profile create with an unknown status is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/profiles/' + amyP.id, { status: 'benched' });
+  check('profile edit with an unknown status is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/profiles');
+  check('the bad status edit changed nothing',
+    (r.json.profiles || []).find(x => x.id === amyP.id).status === 'active', r.json.profiles.length);
+  r = await api(coach, 'PUT', '/api/profiles/' + amyP.id, { status: 'injured' });
+  check('profile status edit saves', r.status === 200 && r.json.profile.status === 'injured', r.json);
+  r = await api(coach, 'PUT', '/api/profiles/' + amyP.id, { status: 'active' });
+  check('profile status edit back to active saves', r.status === 200 && r.json.profile.status === 'active', r.json);
+
+  /* Link Amy + Ben so they can check in. */
+  r = await api(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123' });
+  const amyAcct = cookieOf(r);
+  r = await api(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123' });
+  const benAcct = cookieOf(r);
+  await api(coach, 'PUT', '/api/profiles/' + amyP.id + '/link', { email: 'amy@test.com' });
+  await api(coach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
+
+  /* Amy: two flagged check-ins, 4 and 5 days ago. */
+  r = await api(amyAcct, 'POST', '/api/checkin', { sleep: 5, soreness: 3, energy: 3, date: addDays(reportToday, -4) });
+  check('ams fixtures: Amy flagged check-in 4 days ago', r.status === 201, r.status);
+  r = await api(amyAcct, 'POST', '/api/checkin', { sleep: 8, soreness: 5, energy: 3, date: addDays(reportToday, -5) });
+  check('ams fixtures: Amy flagged check-in 5 days ago', r.status === 201, r.status);
+  /* Ben: exactly one flagged check-in, yesterday. */
+  r = await api(benAcct, 'POST', '/api/checkin', { sleep: 5.5, soreness: 3, energy: 3, date: yDay });
+  check('ams fixtures: Ben flagged check-in yesterday', r.status === 201, r.status);
+
+  /* Attendance: Amy absent twice inside 14 days; Ben once. */
+  await api(coach, 'PUT', '/api/attendance/' + addDays(reportToday, -1) + '/' + amyP.id, { status: 'absent' });
+  await api(coach, 'PUT', '/api/attendance/' + addDays(reportToday, -3) + '/' + amyP.id, { status: 'absent' });
+  await api(coach, 'PUT', '/api/attendance/' + addDays(reportToday, -2) + '/' + amyP.id, { status: 'present' });
+  await api(coach, 'PUT', '/api/attendance/' + addDays(reportToday, -5) + '/' + benP.id, { status: 'absent' });
+
+  /* Health: Amy one open concern; Ben one concern, then cleared. */
+  r = await api(coach, 'POST', '/api/concerns', { profileId: amyP.id, area: 'hamstring', side: 'left', feeling: 'tightness', impact: 'modified', started: addDays(reportToday, -2), pain: 5 });
+  check('ams fixtures: Amy open concern filed', r.status === 201 && r.json.concern.status === 'new', r.status);
+  r = await api(coach, 'POST', '/api/concerns', { profileId: benP.id, area: 'ankle', side: 'right', feeling: 'ache', impact: 'none', started: addDays(reportToday, -9), pain: 3 });
+  const benConcern = r.json.concern.id;
+  r = await api(coach, 'PUT', '/api/concerns/' + benConcern, { status: 'cleared' });
+  check('ams fixtures: Ben concern cleared', r.status === 200 && r.json.concern.status === 'cleared', r.json);
+
+  /* Ben's aggregate fixtures: a test result, a meet PR, a goal. */
+  r = await api(coach, 'POST', '/api/test-days', { date: '2026-11-09', title: 'AMS Testing', testKeys: ['bench-press'] });
+  const amsDay = r.json.testDay.id;
+  r = await api(coach, 'POST', '/api/results', { profileId: benP.id, testDayId: amsDay, testKey: 'bench-press', weight: 185, reps: 5 });
+  check('ams fixtures: Ben bench result saved', r.status === 201, r.status);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: benP.id, date: '2026-11-07', meet: 'AMS Opener', event: '100m', mark: '11.20' });
+  check('ams fixtures: Ben meet result saved', r.status === 201, r.status);
+  r = await api(coach, 'POST', '/api/goals', { profileId: benP.id, event: '100m', target: '11.00' });
+  check('ams fixtures: Ben goal set', r.status === 201, r.status);
+
+  /* Auth gates: AMS is coach-only data. */
+  r = await api(null, 'GET', '/api/ams/roster');
+  check('ams roster without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/ams/roster');
+  check('ams roster for an athlete is 403', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/ams/athlete/' + benP.id);
+  check('ams athlete page without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/ams/athlete/' + benP.id);
+  check('ams athlete page for an athlete is 403', r.status === 403, r.status);
+  r = await api(amyAcct, 'GET', '/api/ams/athlete/' + amyP.id);
+  check('a linked athlete cannot read even their own AMS page', r.status === 403, r.status);
+  r = await api(null, 'POST', '/api/ams/athlete/' + benP.id + '/notes', { text: 'x' });
+  check('ams note create without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'POST', '/api/ams/athlete/' + benP.id + '/notes', { text: 'x' });
+  check('ams note create for an athlete is 403', r.status === 403, r.status);
+
+  /* Roster: shape + every flag rule firing and not firing. */
+  r = await api(coach, 'GET', '/api/ams/roster');
+  check('ams roster loads with today', r.status === 200 && r.json.today === reportToday, r.json.today);
+  const amsRow = (pid) => (r.json.athletes || []).find(a => a.profile.id === pid);
+  const flagKeys = (row) => (row ? row.flags.map(f => f.key) : null);
+  const amyRow = amsRow(amyP.id);
+  check('ams roster: Amy row shape (status, link, group)',
+    !!amyRow && amyRow.status === 'active' && amyRow.linked === true &&
+    amyRow.profile.linkedEmail === 'amy@test.com' && amyRow.profile.groupName === 'AMS Squad', amyRow);
+  check('ams flags: Amy earns all four flags, in order',
+    JSON.stringify(flagKeys(amyRow)) === JSON.stringify(['readiness', 'no-checkin', 'attendance', 'health']),
+    flagKeys(amyRow));
+  const amyFlag = (k) => amyRow.flags.find(f => f.key === k);
+  check('ams flags: readiness carries its count (2 flagged check-ins)',
+    amyFlag('readiness').count === 2 && amyFlag('readiness').detail.includes('2 flagged'), amyFlag('readiness'));
+  check('ams flags: no-checkin fires with the last check-in 4 days out',
+    amyFlag('no-checkin').count === 4 && amyFlag('no-checkin').detail.includes('last 3 days'), amyFlag('no-checkin'));
+  check('ams flags: attendance carries its count (2 absences)',
+    amyFlag('attendance').count === 2 && amyFlag('attendance').detail.includes('2 absences'), amyFlag('attendance'));
+  check('ams flags: health carries its count (1 open concern)',
+    amyFlag('health').count === 1 && amyFlag('health').detail.includes('1 open concern'), amyFlag('health'));
+  const benRow = amsRow(benP.id);
+  check('ams flags: exactly 1 flagged check-in / 1 absence / a cleared concern = NO flags for Ben',
+    !!benRow && benRow.flags.length === 0, benRow && benRow.flags);
+  const cidRow = amsRow(cidP.id);
+  check('ams flags: unlinked Cid gets no No check-in flag (neutral Not linked instead)',
+    !!cidRow && cidRow.linked === false && cidRow.flags.length === 0, cidRow);
+  const deeRow = amsRow(deeP.id);
+  check('ams roster: coach-set status shows on the row',
+    !!deeRow && deeRow.status === 'injured' && deeRow.profile.status === 'injured', deeRow);
+
+  /* Aggregate page: every block present, from the shared helpers. */
+  r = await api(coach, 'GET', '/api/ams/athlete/nope');
+  check('ams athlete page for an unknown profile is 404', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + benP.id);
+  check('ams athlete page: header block',
+    r.status === 200 && r.json.profile.name === 'Ben Ams' && r.json.status === 'active' &&
+    r.json.linked === true && r.json.linkedEmail === 'ben@test.com' && r.json.flags.length === 0, r.json.profile);
+  check('ams athlete page: wellness window (1 check-in, averages, 1 flagged day)',
+    r.json.wellness.recent.length === 1 && r.json.wellness.summary.days === 1 &&
+    r.json.wellness.summary.avgSleep === 5.5 && r.json.wellness.summary.flaggedDays === 1 &&
+    r.json.wellness.recent[0].flags.includes('low-sleep'), r.json.wellness.summary);
+  check('ams athlete page: testing reuses the report-card block (bench 185x5 -> 216)',
+    r.json.testing.length === 1 && r.json.testing[0].testKey === 'bench-press' &&
+    r.json.testing[0].latest === 216 && r.json.testing[0].best === 216 &&
+    r.json.testing[0].latestDate === '2026-11-09', r.json.testing);
+  check('ams athlete page: meet PRs + recent results',
+    r.json.meetPrs.length === 1 && r.json.meetPrs[0].event === '100m' && r.json.meetPrs[0].mark === '11.20' &&
+    r.json.recentResults.length === 1 && r.json.recentResults[0].meet === 'AMS Opener', r.json.meetPrs);
+  check('ams athlete page: attendance windows + recent marks',
+    r.json.attendance.last30.absent === 1 && r.json.attendance.last30.marked === 1 &&
+    typeof r.json.attendance.season.marked === 'number' &&
+    r.json.attendance.recent.length === 1 &&
+    r.json.attendance.recent[0].status === 'absent', r.json.attendance);
+  check('ams athlete page: health counts the cleared concern, lists it',
+    r.json.health.counts.total === 1 && r.json.health.counts.cleared === 1 &&
+    r.json.health.counts.open === 0 && r.json.health.concerns.length === 1 &&
+    r.json.health.concerns[0].area === 'ankle', r.json.health.counts);
+  check('ams athlete page: goals with progress',
+    r.json.goals.length === 1 && r.json.goals[0].event === '100m' &&
+    r.json.goals[0].current.mark === '11.20', r.json.goals);
+  check('ams athlete page: notes start empty', Array.isArray(r.json.notes) && r.json.notes.length === 0, r.json.notes);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + amyP.id);
+  check('ams athlete page: Amy wellness trend (2 check-ins, both flagged)',
+    r.status === 200 && r.json.wellness.summary.days === 2 && r.json.wellness.summary.flaggedDays === 2 &&
+    r.json.wellness.summary.avgSleep === 6.5 && r.json.flags.length === 4, r.json.wellness.summary);
+
+  /* Coach notes: CRUD + validation. */
+  const NOTE_TEXT = 'AMS private note — check on the hamstring before Friday.';
+  r = await api(coach, 'POST', '/api/ams/athlete/' + benP.id + '/notes', { text: NOTE_TEXT });
+  check('ams note create is 201 with author + timestamps',
+    r.status === 201 && r.json.note.text === NOTE_TEXT &&
+    r.json.note.authorEmail === 'coach@test.com' && typeof r.json.note.authorId === 'string' &&
+    !!r.json.note.createdAt && r.json.note.createdAt === r.json.note.updatedAt, r.json);
+  const benNote = r.json.note.id;
+  r = await api(coach, 'POST', '/api/ams/athlete/' + benP.id + '/notes', { text: '   ' });
+  check('ams note create with blank text is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/ams/athlete/nope/notes', { text: 'x' });
+  check('ams note create for an unknown athlete is 404', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + benP.id);
+  check('ams note reads back on the athlete page',
+    r.json.notes.length === 1 && r.json.notes[0].id === benNote, r.json.notes);
+  r = await api(coach, 'PUT', '/api/ams/athlete/' + benP.id + '/notes/' + benNote, { text: 'Edited: cleared by the trainer.' });
+  check('ams note edit saves with a fresh updatedAt',
+    r.status === 200 && r.json.note.text === 'Edited: cleared by the trainer.' &&
+    r.json.note.updatedAt >= r.json.note.createdAt, r.json);
+  r = await api(coach, 'PUT', '/api/ams/athlete/' + benP.id + '/notes/' + benNote, { text: '' });
+  check('ams note edit to blank is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/ams/athlete/' + benP.id + '/notes/nope', { text: 'x' });
+  check('ams note edit on an unknown note is 404', r.status === 404, r.status);
+  r = await api(coach, 'PUT', '/api/ams/athlete/nope/notes/' + benNote, { text: 'x' });
+  check('ams note edit on an unknown athlete is 404', r.status === 404, r.status);
+  r = await api(coach, 'PUT', '/api/ams/athlete/' + benP.id + '/notes/' + benNote, { text: NOTE_TEXT });
+  check('ams note restored for the privacy checks', r.status === 200 && r.json.note.text === NOTE_TEXT, r.json);
+
+  /* Notes privacy: athletes get 403 on every note route, and no
+     athlete-facing (or public, or report-card) payload carries the
+     note text. */
+  r = await api(athlete, 'PUT', '/api/ams/athlete/' + benP.id + '/notes/' + benNote, { text: 'hacked' });
+  check('ams note edit for an athlete is 403', r.status === 403, r.status);
+  r = await api(athlete, 'DELETE', '/api/ams/athlete/' + benP.id + '/notes/' + benNote);
+  check('ams note delete for an athlete is 403', r.status === 403, r.status);
+  r = await api(benAcct, 'GET', '/api/ams/athlete/' + benP.id);
+  check('the athlete a note is ABOUT still cannot read the AMS page', r.status === 403, r.status);
+  const noteLeak = (label, resp) => check('coach notes never leak into ' + label,
+    !JSON.stringify(resp.json || resp.text || '').includes('AMS private note'), label);
+  r = await api(benAcct, 'GET', '/api/checkin/mine');
+  noteLeak('the athlete check-in history', r);
+  r = await api(benAcct, 'GET', '/api/goals/mine');
+  noteLeak('the athlete goals view', r);
+  r = await api(benAcct, 'GET', '/api/checkin/today');
+  noteLeak('the athlete check-in state', r);
+  r = await api(coach, 'GET', '/api/reports/athlete/' + benP.id);
+  noteLeak('the athlete report card payload', r);
+  r = await api(coach, 'GET', '/api/profiles/' + benP.id + '/records');
+  noteLeak('the profile records payload', r);
+  const boardPub = await apiText(null, '/api/records/board');
+  noteLeak('the public record board', boardPub);
+  const amsRosterCsv = await apiText(coach, '/api/export/roster.csv');
+  noteLeak('the roster CSV export', amsRosterCsv);
+
+  /* Delete closes the CRUD loop. */
+  r = await api(coach, 'DELETE', '/api/ams/athlete/' + benP.id + '/notes/' + benNote);
+  check('ams note delete is 200', r.status === 200 && r.json.ok === true, r.json);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + benP.id);
+  check('ams note is gone after delete', r.json.notes.length === 0, r.json.notes);
+  r = await api(coach, 'DELETE', '/api/ams/athlete/' + benP.id + '/notes/' + benNote);
+  check('ams note delete twice is 404', r.status === 404, r.status);
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id };
 }
