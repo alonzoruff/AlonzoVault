@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v13',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v13"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v14',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v14"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1053,6 +1053,235 @@ async function main() {
   check('athlete is 403 on the results the TV board reads', r.status === 403, r.status);
   r = await api(null, 'GET', '/api/results');
   check('results without login is 401', r.status === 401, r.status);
+
+  /* ---------------- reports, test-day grid, meet results ----------
+     Fresh fixtures (own group + athletes) so every count is exact. */
+  r = await api(coach, 'POST', '/api/groups', { name: 'Report Squad' });
+  const gRep = r.json.group.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Amy', lastName: 'Report', groupId: gRep, events: ['sprinter'] });
+  const amyR = r.json.profile.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Ben', lastName: 'Report', groupId: gRep, events: ['jumper'] });
+  const benR = r.json.profile.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Cara', lastName: 'Nodata' });
+  const caraR = r.json.profile.id;
+
+  /* Empty-state reports: a fresh group and an athlete with no data. */
+  r = await api(coach, 'GET', '/api/reports/completions');
+  const repW1 = ((r.json.groups.find(g => g.group.id === gRep) || {}).weeks || []).find(w => w.monday === '2026-10-26');
+  check('reports completions: fresh group week 1 has plan assignments, zero completions',
+    !!repW1 && repW1.assigned === 6 && repW1.completions === 0 && repW1.completedDays === 0, repW1);
+  r = await api(coach, 'GET', '/api/reports/athlete/' + caraR);
+  check('report card for athlete with no data: empty sections, null percent',
+    r.status === 200 && r.json.testing.length === 0 && r.json.weekly.length === 0 &&
+    r.json.meetPrs.length === 0 && r.json.completions.percent === null &&
+    r.json.completions.denominator === 0 && r.json.health.total === 0, r.json);
+  r = await api(coach, 'GET', '/api/reports/athlete/nope');
+  check('report card for unknown athlete is 404', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/reports/load');
+  check('planned load report covers 29 weeks, each summing to 7 days',
+    r.status === 200 && r.json.weeks.length === 29 &&
+    r.json.weeks.every(w => w.high + w.low + w.off === 7), r.json.weeks[0]);
+  r = await api(coach, 'GET', '/api/reports/team-trend');
+  const ttPull = (r.json.tests || []).find(t => t.testKey === 'pull-ups');
+  check('team trend includes tests with no results as empty point lists',
+    !!ttPull && Array.isArray(ttPull.points) && ttPull.points.length === 0, ttPull);
+
+  /* ---- test-day rapid entry grid (bulk save) ---- */
+  r = await api(coach, 'POST', '/api/test-days', { date: '2026-11-09', title: 'Report Day 1', testKeys: ['back-squat', 'vertical-jump'] });
+  const rDay1 = r.json.testDay.id;
+  r = await api(coach, 'POST', '/api/test-days', { date: '2027-02-08', title: 'Report Day 2', testKeys: ['back-squat', 'vertical-jump'] });
+  const rDay2 = r.json.testDay.id;
+  r = await api(coach, 'POST', '/api/results/bulk', {
+    testDayId: rDay1,
+    entries: [
+      { profileId: amyR, testKey: 'back-squat', weight: 200, reps: 5 },
+      { profileId: benR, testKey: 'back-squat', weight: 150, reps: 5 },
+      { profileId: amyR, testKey: 'vertical-jump', value: 24 },
+      { profileId: benR, testKey: 'vertical-jump', value: 28 },
+    ],
+  });
+  check('bulk grid save writes the whole grid', r.status === 200 && r.json.saved === 4 && r.json.created === 4, r.json);
+  r = await api(coach, 'GET', '/api/results?testDayId=' + rDay1);
+  check('bulk save prefills: 4 results on the day', r.status === 200 && r.json.results.length === 4,
+    r.json.results && r.json.results.length);
+  const amySquat1 = r.json.results.find(x => x.profileId === amyR && x.testKey === 'back-squat');
+  check('bulk lift went through Epley (200x5 = 233)', !!amySquat1 && amySquat1.est1rm === 233, amySquat1);
+  r = await api(coach, 'POST', '/api/results/bulk', {
+    testDayId: rDay1,
+    entries: [{ profileId: amyR, testKey: 'back-squat', weight: 205, reps: 5 }],
+  });
+  check('bulk re-save updates instead of duplicating', r.status === 200 && r.json.updated === 1 && r.json.created === 0, r.json);
+  r = await api(coach, 'POST', '/api/results/bulk', {
+    testDayId: rDay1,
+    entries: [
+      { profileId: benR, testKey: 'vertical-jump', value: -2 },
+      { profileId: amyR, testKey: 'back-squat', weight: 999, reps: 40 },
+    ],
+  });
+  check('bulk save with bad cells is 400 with one precise error per cell',
+    r.status === 400 && Array.isArray(r.json.cellErrors) && r.json.cellErrors.length === 2 &&
+    r.json.cellErrors.some(e => e.profileId === benR && e.testKey === 'vertical-jump') &&
+    r.json.cellErrors.some(e => e.profileId === amyR && e.testKey === 'back-squat'), r.json);
+  r = await api(coach, 'GET', '/api/results?testDayId=' + rDay1);
+  const benVjAfter = r.json.results.find(x => x.profileId === benR && x.testKey === 'vertical-jump');
+  const amySquatAfter = r.json.results.find(x => x.profileId === amyR && x.testKey === 'back-squat');
+  check('rejected bulk save wrote nothing (benR jump still 28, amyR squat still 239)',
+    !!benVjAfter && benVjAfter.value === 28 && !!amySquatAfter && amySquatAfter.est1rm === 239,
+    { benR: benVjAfter, amyR: amySquatAfter });
+  r = await api(coach, 'POST', '/api/results/bulk', {
+    testDayId: rDay1,
+    entries: [{ profileId: amyR, testKey: 'hang-clean', weight: 100 }],
+  });
+  check('bulk cell for a test not on the day is a precise 400',
+    r.status === 400 && r.json.cellErrors.length === 1 && /not part of that test day/.test(r.json.cellErrors[0].error), r.json);
+  r = await api(coach, 'POST', '/api/results/bulk', { testDayId: 'nope', entries: [] });
+  check('bulk save for unknown test day is 404', r.status === 404, r.status);
+  r = await api(coach, 'POST', '/api/results/bulk', {
+    testDayId: rDay1,
+    entries: [
+      { profileId: amyR, testKey: 'vertical-jump', value: 25 },
+      { profileId: amyR, testKey: 'vertical-jump', value: 26 },
+    ],
+  });
+  check('bulk save with a duplicated cell is 400', r.status === 400 && r.json.cellErrors.length === 1, r.json);
+  r = await api(athlete, 'POST', '/api/results/bulk', { testDayId: rDay1, entries: [] });
+  check('athlete is 403 on bulk save', r.status === 403, r.status);
+  r = await api(coach, 'POST', '/api/results/bulk', {
+    testDayId: rDay2,
+    entries: [
+      { profileId: amyR, testKey: 'back-squat', weight: 210, reps: 5 },
+      { profileId: benR, testKey: 'back-squat', weight: 160, reps: 5 },
+    ],
+  });
+  check('bulk save on day 2 is 200', r.status === 200 && r.json.saved === 2, r.json);
+  r = await api(coach, 'POST', '/api/results/bulk', {
+    testDayId: rDay1, clear: [{ profileId: amyR, testKey: 'vertical-jump' }],
+  });
+  check('bulk clear removes a saved cell', r.status === 200 && r.json.cleared === 1, r.json);
+  r = await api(coach, 'GET', '/api/results?testDayId=' + rDay1);
+  check('cleared cell is gone from the day',
+    !r.json.results.some(x => x.profileId === amyR && x.testKey === 'vertical-jump'), r.json.results.length);
+
+  /* ---- reports calculations ---- */
+  r = await api(coach, 'GET', '/api/reports/team-trend');
+  const ttSquat = r.json.tests.find(t => t.testKey === 'back-squat');
+  const sqD1 = ttSquat.points.find(p => p.testDayId === rDay1);
+  const sqD2 = ttSquat.points.find(p => p.testDayId === rDay2);
+  check('team trend median across a test day (day 1 squat = 207 of 239+175)',
+    !!sqD1 && sqD1.median === 207 && sqD1.count === 2, sqD1);
+  check('team trend median across a test day (day 2 squat = 216 of 245+187)',
+    !!sqD2 && sqD2.median === 216 && sqD2.count === 2, sqD2);
+  const ttVj = r.json.tests.find(t => t.testKey === 'vertical-jump');
+  const vjD1 = ttVj.points.find(p => p.testDayId === rDay1);
+  check('team trend reflects the cleared cell (day 1 jump median 28, n=1)',
+    !!vjD1 && vjD1.median === 28 && vjD1.count === 1, vjD1);
+  await api(coach, 'POST', '/api/completions', { profileId: amyR, date: '2026-10-26' });
+  await api(coach, 'POST', '/api/completions', { profileId: amyR, date: '2026-10-28' });
+  r = await api(coach, 'GET', '/api/reports/completions');
+  const repW1b = ((r.json.groups.find(g => g.group.id === gRep) || {}).weeks || []).find(w => w.monday === '2026-10-26');
+  check('reports completions counts the group week (2 completions, 2 days, 6 assigned)',
+    !!repW1b && repW1b.completions === 2 && repW1b.completedDays === 2 && repW1b.assigned === 6, repW1b);
+  r = await api(coach, 'GET', '/api/reports/athlete/' + amyR);
+  const amySquatTest = r.json.testing.find(t => t.testKey === 'back-squat') || {};
+  check('athlete report: testing series, best and latest from Epley displays',
+    r.status === 200 && (amySquatTest.series || []).length === 2 &&
+    amySquatTest.best === 245 && amySquatTest.latest === 245, r.json.testing);
+  check('athlete report: completion totals are honest (2 recorded; percent null or 0-100)',
+    r.json.completions.total === 2 && (r.json.completions.percent === null ||
+      (r.json.completions.percent >= 0 && r.json.completions.percent <= 100)), r.json.completions);
+  r = await api(coach, 'POST', '/api/concerns', { profileId: amyR, area: 'knee', side: 'left', feeling: 'ache', pain: 4, started: '2026-12-01', impact: 'modified' });
+  const amyConcern1 = r.json.concern.id;
+  await api(coach, 'PUT', '/api/concerns/' + amyConcern1, { status: 'monitoring' });
+  r = await api(coach, 'POST', '/api/concerns', { profileId: amyR, area: 'ankle', side: 'right', feeling: 'soreness', pain: 2, started: '2026-12-02', impact: 'none' });
+  const amyConcern2 = r.json.concern.id;
+  await api(coach, 'PUT', '/api/concerns/' + amyConcern2, { status: 'cleared' });
+  r = await api(coach, 'GET', '/api/reports/athlete/' + amyR);
+  check('athlete report: health counts by status',
+    r.json.health.open === 0 && r.json.health.monitoring === 1 &&
+    r.json.health.cleared === 1 && r.json.health.total === 2, r.json.health);
+  r = await api(coach, 'GET', '/api/reports/health');
+  check('health overview totals equal the sum of statuses and of months opened',
+    r.json.total === r.json.byStatus.new + r.json.byStatus.monitoring + r.json.byStatus.cleared &&
+    r.json.byMonth.reduce((s, m) => s + m.opened, 0) === r.json.total, r.json);
+
+  /* ---- meet results ---- */
+  r = await api(coach, 'GET', '/api/meet-events');
+  check('meet events list has 17 events with directions',
+    r.status === 200 && r.json.events.length === 17 &&
+    r.json.events.find(e => e.key === '100m').better === 'lower' &&
+    r.json.events.find(e => e.key === 'long-jump').better === 'higher', r.json.events.length);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2026-12-05', meet: 'Winter Invite', event: '100m', mark: '11.20' });
+  check('meet result create is 201 with normalized seconds', r.status === 201 && r.json.result.value === 11.2, r.json);
+  const amyRun1 = r.json.result.id;
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2026-12-12', meet: 'Holiday Classic', event: '100m', mark: '11.45' });
+  const amyRun2 = r.json.result.id;
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2026-12-12', meet: 'Holiday Classic', event: 'long-jump', mark: '21-06.5' });
+  check('feet-inches mark normalizes to inches (21-06.5 = 258.5)', r.status === 201 && r.json.result.value === 258.5, r.json);
+  await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2027-01-09', meet: 'New Year Open', event: 'long-jump', mark: '20-11' });
+  await api(coach, 'POST', '/api/meet-results', { profileId: benR, date: '2026-12-12', meet: 'Holiday Classic', event: 'long-jump', mark: '22-01' });
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2027-01-09', meet: 'New Year Open', event: '800m', mark: '1:55.20' });
+  check('minutes:seconds time normalizes (1:55.20 = 115.2)', r.status === 201 && r.json.result.value === 115.2, r.json);
+  r = await api(coach, 'GET', '/api/meet-results/prs?profileId=' + amyR);
+  const amyPr100 = r.json.prs.find(p => p.event === '100m');
+  const amyPrLj = r.json.prs.find(p => p.event === 'long-jump');
+  check('a slower time never becomes the PR (100m PR stays 11.20)',
+    !!amyPr100 && amyPr100.mark === '11.20' && amyPr100.value === 11.2, amyPr100);
+  check('a shorter jump never becomes the PR (LJ PR stays 21-06.5)',
+    !!amyPrLj && amyPrLj.mark === '21-06.5' && amyPrLj.value === 258.5, amyPrLj);
+  const amyLjSeries = r.json.series.find(s => s.event === 'long-jump');
+  check('PR progression series is chronological with both marks',
+    !!amyLjSeries && amyLjSeries.points.length === 2 &&
+    amyLjSeries.points[0].date === '2026-12-12' && amyLjSeries.points[1].date === '2027-01-09', amyLjSeries);
+  r = await api(coach, 'GET', '/api/meet-results/board');
+  const boardLj = r.json.board.find(b => b.event === 'long-jump');
+  const board100 = r.json.board.find(b => b.event === '100m');
+  check('team PR board takes the best per event across the roster',
+    !!boardLj && boardLj.profileId === benR && boardLj.mark === '22-01' &&
+    !!board100 && board100.profileId === amyR && board100.mark === '11.20', r.json.board);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2027-01-09', meet: 'X', event: '100m', mark: 'fast' });
+  check('unparseable time is a clean 400', r.status === 400 && /could not be read/.test(r.json.error || ''), r.json);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2027-01-09', meet: 'X', event: 'long-jump', mark: '21-13' });
+  check('impossible feet-inches (21-13) is a clean 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2027-01-09', meet: 'X', event: 'marathon', mark: '2:00:00' });
+  check('unknown meet event is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: 'nope', date: '2027-01-09', meet: 'X', event: '100m', mark: '11.00' });
+  check('meet result for unknown athlete is 404', r.status === 404, r.status);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2026-02-30', meet: 'X', event: '100m', mark: '11.00' });
+  check('meet result with Feb 30 is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2027-01-09', meet: '', event: '100m', mark: '11.00' });
+  check('meet result without a meet name is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/meet-results/' + amyRun2, { mark: '11.05' });
+  check('meet edit re-normalizes the mark', r.status === 200 && r.json.result.value === 11.05, r.json);
+  r = await api(coach, 'GET', '/api/meet-results/prs?profileId=' + amyR);
+  check('edited mark becomes the PR', r.json.prs.find(p => p.event === '100m').mark === '11.05', r.json.prs);
+  r = await api(coach, 'PUT', '/api/meet-results/' + amyRun2, { mark: 'bogus' });
+  check('meet edit with an unparseable mark is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/meet-results/prs?profileId=' + amyR);
+  check('failed edit changed nothing (PR still 11.05)', r.json.prs.find(p => p.event === '100m').mark === '11.05', r.json.prs);
+  r = await api(coach, 'DELETE', '/api/meet-results/' + amyRun1);
+  check('meet result delete is 200', r.status === 200, r.status);
+  r = await api(coach, 'DELETE', '/api/meet-results/' + amyRun1);
+  check('meet result delete twice is 404', r.status === 404, r.status);
+  r = await api(athlete, 'POST', '/api/meet-results', { profileId: amyR, date: '2027-01-09', meet: 'X', event: '100m', mark: '11.00' });
+  check('athlete is 403 on meet result create', r.status === 403, r.status);
+  r = await api(athlete, 'GET', '/api/meet-results');
+  check('athlete is 403 on meet results list', r.status === 403, r.status);
+  r = await api(athlete, 'GET', '/api/reports/team-trend');
+  check('athlete is 403 on reports', r.status === 403, r.status);
+  r = await api(athlete, 'GET', '/api/meet-results/board');
+  check('athlete is 403 on the PR board', r.status === 403, r.status);
+  const meetCsv = await apiText(coach, '/api/export/meet-results.csv');
+  check('meet results CSV exports with header and rows',
+    meetCsv.status === 200 && meetCsv.type.includes('text/csv') &&
+    meetCsv.text.startsWith('Date,Meet,Athlete,Group,Event,Mark') &&
+    meetCsv.text.includes('Long Jump') && meetCsv.text.includes('22-01'), meetCsv.text.slice(0, 120));
+  check('reports and meet views are in the served page',
+    pageHtml.text.includes('id="view-reports"') && pageHtml.text.includes('id="view-meets"') &&
+    pageHtml.text.includes('data-view="reports"') && pageHtml.text.includes('data-view="meets"'));
+  check('reports/meet/grid wiring is in the served JS',
+    appJs.text.includes('renderReports') && appJs.text.includes('renderMeets') &&
+    appJs.text.includes('/api/results/bulk') && appJs.text.includes('/api/reports/athlete/') &&
+    appJs.text.includes('/api/meet-results'));
 
   return { coach, inventoryId: invBlocks };
 }

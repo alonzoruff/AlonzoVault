@@ -40,6 +40,13 @@ const state = {
   tvPanel: 0,
   tvPaused: false,
   tvData: null,
+  gridGroupId: '',
+  reportTest: null,
+  reportGroup: null,
+  reportAthleteId: null,
+  meetEvents: [],
+  meetEditId: null,
+  meetProgAthlete: null,
   profiles: [],
   pfGroup: '',
   pfEvent: '',
@@ -200,12 +207,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train',
   videos: 'learn', definitions: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', reports: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['reports', 'Reports'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -225,6 +232,8 @@ function showView(name) {
      the app chrome (CSS), and its timers run only while it shows. */
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
+  if (name === 'reports') renderReports();
+  if (name === 'meets') renderMeets();
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -866,6 +875,7 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
+  renderMeets(); renderReports();
   renderWarmupCards();
   if (isCoach) loadMedia();
 }
@@ -1715,6 +1725,18 @@ async function renderTesting() {
       <div id="rapid-zone"></div>
     </div>
     <div class="card">
+      <h2>Test-day grid — whole group, one save</h2>
+      <p class="muted">Every athlete in the group as a row, every test on this day as a column, prefilled with what is already saved — so this is also where you fix a number. Change anything and save once: the whole grid writes together, or not at all. If a cell is invalid, nothing is saved and the bad cells are flagged. Blank a saved cell completely to clear it.</p>
+      <label>Group <select id="grid-group">
+        <option value="" ${!state.gridGroupId ? 'selected' : ''}>All athletes</option>
+        ${state.groups.map(g => `<option value="${g.id}" ${state.gridGroupId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+      </select></label>
+      <div id="grid-zone"></div>
+      <p><button class="btn primary" id="grid-save" type="button" style="width:auto">Save the whole grid</button></p>
+      <p class="error" id="grid-err"></p>
+      <ul class="grid-err-list" id="grid-err-list"></ul>
+    </div>
+    <div class="card">
       <h2>Ranked — ${esc(day.title)}</h2>
       ${dayTests.map(t => {
         const rows = dayResults.filter(r => r.testKey === t.key).slice()
@@ -1788,6 +1810,85 @@ async function renderTesting() {
   };
   const ra = $('#rapid-athlete');
   if (ra) { ra.addEventListener('change', renderRapid); renderRapid(); }
+  const gridZone = $('#grid-zone');
+  const gridRows = () => activeProfiles().filter(pr => !state.gridGroupId || pr.groupId === state.gridGroupId);
+  const renderGrid = () => {
+    if (!gridZone) return;
+    const rows = gridRows();
+    if (!rows.length) { gridZone.innerHTML = '<p class="muted">No athletes in this group yet.</p>'; return; }
+    const cellInputs = (pr, t) => {
+      const cur = resultFor(pr.id, t.key);
+      const cellKey = pr.id + ':' + t.key;
+      if (t.kind === 'lift') {
+        return `<input type="number" step="any" min="0" class="grid-in grid-w" data-cell="${cellKey}" placeholder="lb" value="${cur ? esc(cur.weight) : ''}">`
+          + `<input type="number" step="1" min="1" max="30" class="grid-in grid-r" data-cell="${cellKey}" placeholder="reps" value="${cur && cur.reps ? esc(cur.reps) : ''}">`;
+      }
+      return `<input type="number" step="any" min="0" class="grid-in grid-v" data-cell="${cellKey}" placeholder="${esc(t.unit)}" value="${cur ? esc(cur.value) : ''}">`;
+    };
+    gridZone.innerHTML = `<div class="table-wrap"><table class="matrix grid-table">
+      <thead><tr><th>Athlete</th>${dayTests.map(t => `<th>${esc(t.name)}${t.kind === 'lift' ? ' (lb × reps)' : ' (' + esc(t.unit) + ')'}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(pr => `<tr><td>${esc(pr.name)}</td>${dayTests.map(t => `<td data-cellwrap="${pr.id}:${t.key}">${cellInputs(pr, t)}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>`;
+  };
+  const gg = $('#grid-group');
+  if (gg) gg.addEventListener('change', () => { state.gridGroupId = gg.value; renderGrid(); });
+  renderGrid();
+  const gridSave = $('#grid-save');
+  if (gridSave) gridSave.addEventListener('click', async () => {
+    const errEl = $('#grid-err');
+    const listEl = $('#grid-err-list');
+    errEl.textContent = '';
+    listEl.innerHTML = '';
+    gridZone.querySelectorAll('.cell-error').forEach(td => td.classList.remove('cell-error'));
+    const entries = [], clear = [];
+    for (const pr of gridRows()) {
+      for (const t of dayTests) {
+        const key = pr.id + ':' + t.key;
+        const existing = resultFor(pr.id, t.key);
+        if (t.kind === 'lift') {
+          const wEl = gridZone.querySelector('.grid-w[data-cell="' + key + '"]');
+          const rEl = gridZone.querySelector('.grid-r[data-cell="' + key + '"]');
+          const wv = wEl ? wEl.value.trim() : '';
+          const rv = rEl ? rEl.value.trim() : '';
+          if (!wv && !rv) { if (existing) clear.push({ profileId: pr.id, testKey: t.key }); continue; }
+          const entry = { profileId: pr.id, testKey: t.key, weight: wv };
+          if (rv) entry.reps = rv;
+          entries.push(entry);
+        } else {
+          const inp = gridZone.querySelector('.grid-v[data-cell="' + key + '"]');
+          const vv = inp ? inp.value.trim() : '';
+          if (!vv) { if (existing) clear.push({ profileId: pr.id, testKey: t.key }); continue; }
+          entries.push({ profileId: pr.id, testKey: t.key, value: vv });
+        }
+      }
+    }
+    if (!entries.length && !clear.length) {
+      errEl.textContent = 'Nothing to save — the grid matches what is already stored.';
+      return;
+    }
+    try {
+      const res = await fetch('/api/results/bulk', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testDayId: day.id, entries, clear }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        errEl.textContent = data.error || 'The grid could not be saved.';
+        if (Array.isArray(data.cellErrors)) {
+          listEl.innerHTML = data.cellErrors.map(ce => {
+            const pr = state.profiles.find(x => x.id === ce.profileId);
+            const t = tests.find(x => x.key === ce.testKey);
+            const td = gridZone.querySelector('[data-cellwrap="' + ce.profileId + ':' + ce.testKey + '"]');
+            if (td) td.classList.add('cell-error');
+            return `<li>${esc(pr ? pr.name : ce.profileId)} — ${esc(t ? t.name : ce.testKey)}: ${esc(ce.error)}</li>`;
+          }).join('');
+        }
+        return;
+      }
+      renderTesting();
+    } catch (err) { errEl.textContent = err.message; }
+  });
   const renderHist = async () => {
     const zone = $('#hist-zone');
     const pid = $('#hist-athlete').value;
@@ -2181,6 +2282,347 @@ $('#log-form').addEventListener('submit', async (e) => {
     renderLog(); renderHome();
   } catch (err) { msg.textContent = err.message; }
 });
+
+/* ================================================================
+   REPORTS + MEET RESULTS — coach analytics. Reports turns the data
+   the coach already records (testing, completions, the plan,
+   concerns) into charts and a printable athlete report card. Meet
+   Results is the meet-day record: marks, PRs by direction, a team
+   PR board, and per-athlete PR progression charts.
+   ================================================================ */
+function barChart(items, seriesList, stacked) {
+  if (!items.length) return '<p class="muted">No data yet.</p>';
+  const W = 340, H = 176, PL = 30, PR = 8, PT = 14, PB = 24;
+  const totals = items.map((_, i) => stacked
+    ? seriesList.reduce((s, sr) => s + (sr.values[i] || 0), 0)
+    : Math.max(0, ...seriesList.map(sr => sr.values[i] || 0)));
+  const max = Math.max(1, ...totals);
+  const y = (v) => PT + (1 - v / max) * (H - PT - PB);
+  let svg = '';
+  for (let g = 0; g <= 3; g++) {
+    const gv = (max * g) / 3;
+    const gy = y(gv);
+    svg += `<line x1="${PL}" y1="${gy}" x2="${W - PR}" y2="${gy}" class="chart-grid"/><text x="${PL - 4}" y="${gy + 3}" class="chart-axis" text-anchor="end">${fmtNum(gv)}</text>`;
+  }
+  const slot = (W - PL - PR) / items.length;
+  const labelEvery = items.length > 10 ? Math.ceil(items.length / 8) : 1;
+  items.forEach((it, i) => {
+    const x0 = PL + i * slot;
+    if (stacked) {
+      let acc = 0;
+      seriesList.forEach(sr => {
+        const v = sr.values[i] || 0;
+        if (!v) return;
+        const yTop = y(acc + v), yBot = y(acc);
+        svg += `<rect x="${(x0 + slot * 0.18).toFixed(1)}" y="${yTop.toFixed(1)}" width="${(slot * 0.64).toFixed(1)}" height="${Math.max(0, yBot - yTop).toFixed(1)}" class="${sr.cls}"><title>${esc(it.label)} — ${esc(sr.name)}: ${v}</title></rect>`;
+        acc += v;
+      });
+    } else {
+      const bw = (slot * 0.8) / Math.max(seriesList.length, 1);
+      seriesList.forEach((sr, si) => {
+        const v = sr.values[i] || 0;
+        if (!v) return;
+        svg += `<rect x="${(x0 + slot * 0.1 + si * bw).toFixed(1)}" y="${y(v).toFixed(1)}" width="${(bw * 0.85).toFixed(1)}" height="${(y(0) - y(v)).toFixed(1)}" class="${sr.cls}"><title>${esc(it.label)} — ${esc(sr.name)}: ${v}</title></rect>`;
+      });
+    }
+    if (i % labelEvery === 0 || i === items.length - 1) {
+      svg += `<text x="${(x0 + slot / 2).toFixed(1)}" y="${H - 8}" class="chart-axis" text-anchor="middle">${esc(it.label)}</text>`;
+    }
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${svg}</svg>`;
+}
+function chartLegend(seriesList) {
+  return `<div class="chart-legend">${seriesList.map(sr => `<span class="legend-item"><span class="legend-swatch ${sr.cls}"></span>${esc(sr.name)}</span>`).join('')}</div>`;
+}
+const monthLabel = (s) => {
+  const d = parseDate(s + '-01');
+  return d.toLocaleDateString(undefined, { month: 'short' }) + ' ’' + s.slice(2, 4);
+};
+
+async function renderReports() {
+  const el = $('#reports-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Reports and athlete report cards live here.'); return; }
+  await refreshProfiles();
+  let trend, comp, load, health;
+  try {
+    [trend, comp, load, health] = await Promise.all([
+      api('/api/reports/team-trend'), api('/api/reports/completions'),
+      api('/api/reports/load'), api('/api/reports/health'),
+    ]);
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const testsWithData = trend.tests.filter(t => t.points.length);
+  if (!state.reportTest || !trend.tests.some(t => t.testKey === state.reportTest)) {
+    state.reportTest = (testsWithData[0] || {}).testKey || null;
+  }
+  const trendTest = trend.tests.find(t => t.testKey === state.reportTest) || null;
+  const trendHtml = !testsWithData.length
+    ? '<p class="muted">No testing results yet — the team median for each test appears here after the first test day is saved.</p>'
+    : (trendTest && trendTest.points.length
+      ? lineChart(
+        [{ label: trendTest.name + ' — team median', points: trendTest.points.map(p => ({ week: p.date, value: p.median })) }],
+        { name: trendTest.name, unit: trendTest.unit, better: 'higher' })
+      + `<div class="table-wrap"><table class="ranked"><thead><tr><th>Date</th><th>Test day</th><th>Team median</th><th>Athletes</th></tr></thead><tbody>${trendTest.points.map(p => `<tr><td>${esc(p.date)}</td><td>${esc(p.title)}</td><td><strong>${fmtNum(p.median)} ${esc(trendTest.unit)}</strong></td><td>${p.count}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="muted">No results for this test yet.</p>');
+  if (!state.reportGroup || !comp.groups.some(g => g.group.id === state.reportGroup)) {
+    state.reportGroup = comp.groups.length ? comp.groups[0].group.id : null;
+  }
+  const compGroup = comp.groups.find(g => g.group.id === state.reportGroup) || null;
+  let compHtml;
+  if (!comp.groups.length) {
+    compHtml = '<p class="muted">No groups yet — create a group on the Roster &amp; Groups page and completions will chart here.</p>';
+  } else if (compGroup) {
+    const series = [
+      { name: 'Assigned session days', cls: 'bar-b', values: compGroup.weeks.map(w => w.assigned) },
+      { name: 'Days with completions', cls: 'bar-a', values: compGroup.weeks.map(w => w.completedDays) },
+    ];
+    const totA = compGroup.weeks.reduce((s, w) => s + w.assigned, 0);
+    const totC = compGroup.weeks.reduce((s, w) => s + w.completedDays, 0);
+    const totN = compGroup.weeks.reduce((s, w) => s + w.completions, 0);
+    compHtml = chartLegend(series)
+      + barChart(compGroup.weeks.map(w => ({ label: 'W' + w.week })), series, false)
+      + `<p class="muted">Across the season: <strong>${totN}</strong> coach-marked completions covering <strong>${totC}</strong> days, against <strong>${totA}</strong> assigned session days. Weeks still ahead show the plan only.</p>`;
+  } else {
+    compHtml = '<p class="muted">Pick a group to see its completion chart.</p>';
+  }
+  const loadSeries = [
+    { name: 'High-CNS days', cls: 'bar-a', values: load.weeks.map(w => w.high) },
+    { name: 'Low-CNS days', cls: 'bar-b', values: load.weeks.map(w => w.low) },
+  ];
+  const loadTotals = load.weeks.reduce((a, w) => ({
+    high: a.high + w.high, low: a.low + w.low, off: a.off + w.off, meet: a.meet + w.meet,
+  }), { high: 0, low: 0, off: 0, meet: 0 });
+  const loadHtml = chartLegend(loadSeries)
+    + barChart(load.weeks.map(w => ({ label: 'W' + w.week })), loadSeries, true)
+    + `<p class="muted">Planned for the season: <strong>${loadTotals.high}</strong> high-CNS days, <strong>${loadTotals.low}</strong> low days, <strong>${loadTotals.off}</strong> days off, <strong>${loadTotals.meet}</strong> meet days. This is the plan as written — coach overrides are not folded in.</p>`;
+  const healthHtml = `<div class="hero-stats">
+      <div class="hero-stat"><div class="stat-num">${health.byStatus.new}</div><div class="stat-label">New</div></div>
+      <div class="hero-stat"><div class="stat-num">${health.byStatus.monitoring}</div><div class="stat-label">Monitoring</div></div>
+      <div class="hero-stat"><div class="stat-num">${health.byStatus.cleared}</div><div class="stat-label">Cleared</div></div>
+      <div class="hero-stat"><div class="stat-num">${health.total}</div><div class="stat-label">Total recorded</div></div>
+    </div>`
+    + (health.byMonth.length
+      ? barChart(health.byMonth.map(m => ({ label: monthLabel(m.month) })),
+        [{ name: 'Concerns opened', cls: 'bar-a', values: health.byMonth.map(m => m.opened) }], false)
+      : '<p class="muted">No aches &amp; pains recorded yet.</p>');
+  el.innerHTML = `
+    <div class="card">
+      <h2>Team strength trend</h2>
+      <p class="muted">The team median on every test day — the honest middle of the room, not the best kid. Lifts use estimated 1RM.</p>
+      <label>Test <select id="report-test">${trend.tests.map(t => `<option value="${t.key}" ${trendTest && t.key === trendTest.testKey ? 'selected' : ''}>${esc(t.name)}${t.points.length ? '' : ' (no results yet)'}</option>`).join('')}</select></label>
+      <div id="report-trend">${trendHtml}</div>
+    </div>
+    <div class="card">
+      <h2>Completions by group</h2>
+      <p class="muted">Assigned session days vs the days the group actually got work marked complete, per season week.</p>
+      ${comp.groups.length ? `<label>Group <select id="report-group">${comp.groups.map(g => `<option value="${g.group.id}" ${compGroup && g.group.id === compGroup.group.id ? 'selected' : ''}>${esc(g.group.name)}</option>`).join('')}</select></label>` : ''}
+      <div id="report-comp">${compHtml}</div>
+    </div>
+    <div class="card">
+      <h2>Planned load</h2>
+      <p class="muted">High-CNS vs low-CNS days per week, straight from the season plan.</p>
+      <div id="report-load">${loadHtml}</div>
+    </div>
+    <div class="card">
+      <h2>Health overview</h2>
+      <div id="report-health">${healthHtml}</div>
+    </div>
+    <div class="card rc-host">
+      <h2>Athlete report card</h2>
+      <p class="muted">One printable page per athlete: testing, weekly numbers, completions, meet PRs, and health status.</p>
+      <label>Athlete <select id="report-athlete">${profileOptions(state.reportAthleteId, true)}</select></label>
+      <div id="report-card-zone"></div>
+    </div>`;
+  const rt = $('#report-test');
+  if (rt) rt.addEventListener('change', () => { state.reportTest = rt.value; renderReports(); });
+  const rg = $('#report-group');
+  if (rg) rg.addEventListener('change', () => { state.reportGroup = rg.value; renderReports(); });
+  const ra = $('#report-athlete');
+  if (ra) {
+    ra.addEventListener('change', () => { state.reportAthleteId = ra.value || null; renderReportCard(); });
+    renderReportCard();
+  }
+}
+
+async function renderReportCard() {
+  const zone = $('#report-card-zone');
+  if (!zone) return;
+  const pid = state.reportAthleteId;
+  if (!pid) { zone.innerHTML = '<p class="muted">Pick an athlete to build their report card.</p>'; return; }
+  let data;
+  try { data = await api('/api/reports/athlete/' + encodeURIComponent(pid)); }
+  catch (err) { zone.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const pr = data.profile;
+  const hasData = !!(data.testing.length || data.weekly.length || data.meetPrs.length
+    || data.completions.total || data.health.total);
+  const compLine = data.completions.percent !== null
+    ? `<strong>${data.completions.count}</strong> of <strong>${data.completions.denominator}</strong> assigned session days completed (<strong>${data.completions.percent}%</strong>) since they joined the roster`
+    : `<strong>${data.completions.total}</strong> sessions marked complete — no assigned-day window to compare against yet`;
+  const testingRows = data.testing.map(t => `<tr><td>${esc(t.name)}</td><td><strong>${fmtNum(t.best)} ${esc(t.unit)}</strong></td><td>${fmtNum(t.latest)} ${esc(t.unit)}</td><td>${esc(t.latestDate || '')}</td></tr>`).join('');
+  const testingCharts = data.testing.filter(t => t.series.length >= 2).map(t =>
+    `<h4>${esc(t.name)} — progression</h4>` + lineChart(
+      [{ label: t.name, points: t.series.map(r => ({ week: r.date, value: r.display })) }],
+      { name: t.name, unit: t.unit, better: 'higher' }, true)).join('');
+  const weeklyRows = data.weekly.map(w => `<tr><td>${esc(w.metric.name)}</td><td>${w.best !== null && w.best !== undefined ? fmtNum(w.best) + ' ' + esc(w.metric.unit) : '—'}</td><td>${fmtNum(w.latest)} ${esc(w.metric.unit)}</td><td>${deltaHtml(w.metric, w)}</td></tr>`).join('');
+  const meetRows = data.meetPrs.map(m => `<tr><td>${esc(m.name)}</td><td><strong>${esc(m.mark)}</strong></td><td>${esc(m.date)}</td><td>${esc(m.meet)}</td></tr>`).join('');
+  zone.innerHTML = `
+    <div class="report-card" id="report-card-print">
+      <div class="rc-head">
+        <h3>${esc(pr.name)}</h3>
+        <p class="muted">${esc(pr.groupName || 'No group')} · ${(pr.events || []).map(esc).join(', ') || 'No events tagged'}${pr.topAthlete ? ' · Top Athlete ★' : ''}</p>
+      </div>
+      ${hasData ? `
+      <p class="rc-line">${compLine}.</p>
+      <h4>Testing</h4>
+      ${data.testing.length
+        ? `<div class="table-wrap"><table class="ranked"><thead><tr><th>Test</th><th>Best</th><th>Latest</th><th>Latest date</th></tr></thead><tbody>${testingRows}</tbody></table></div>${testingCharts}`
+        : '<p class="muted">No testing results yet.</p>'}
+      ${data.weekly.length ? `<h4>Weekly tracker</h4><div class="table-wrap"><table class="ranked"><thead><tr><th>Metric</th><th>Best</th><th>Latest</th><th>Change</th></tr></thead><tbody>${weeklyRows}</tbody></table></div>` : ''}
+      <h4>Meet PRs</h4>
+      ${data.meetPrs.length
+        ? `<div class="table-wrap"><table class="ranked"><thead><tr><th>Event</th><th>PR</th><th>Date</th><th>Meet</th></tr></thead><tbody>${meetRows}</tbody></table></div>`
+        : '<p class="muted">No meet results yet.</p>'}
+      <h4>Health (coach record)</h4>
+      <p class="rc-line">Open: <strong>${data.health.open}</strong> · Monitoring: <strong>${data.health.monitoring}</strong> · Cleared: <strong>${data.health.cleared}</strong> · Total recorded: <strong>${data.health.total}</strong></p>`
+      : '<p class="muted">No data recorded yet for this athlete — testing, weekly numbers, completions, and meet results will build this card.</p>'}
+      <p><button class="btn primary no-print" id="report-print" type="button" style="width:auto">Print this report card</button></p>
+    </div>`;
+  const pb = $('#report-print');
+  if (pb) pb.addEventListener('click', () => {
+    const card = $('#report-card-print');
+    document.body.classList.add('printing-report');
+    if (card) card.classList.add('print-target');
+    const cleanup = () => {
+      document.body.classList.remove('printing-report');
+      if (card) card.classList.remove('print-target');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(cleanup, 1000);
+    window.print();
+  });
+}
+
+async function renderMeets() {
+  const el = $('#meets-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Meet results live here.'); return; }
+  await refreshProfiles();
+  let events, results, board;
+  try {
+    const [e, r, b] = await Promise.all([
+      api('/api/meet-events'), api('/api/meet-results'), api('/api/meet-results/board'),
+    ]);
+    events = e.events; results = r.results; board = b.board;
+    state.meetEvents = events;
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const edit = state.meetEditId ? results.find(r => r.id === state.meetEditId) : null;
+  if (state.meetEditId && !edit) state.meetEditId = null;
+  const markHint = (type) => type === 'time'
+    ? 'Time: seconds (10.87) or minutes:seconds (1:55.20).'
+    : 'Mark: feet-inches (21-06.5), 21\'6.5, a plain number in feet, or meters with an m (6.45m).';
+  const editEvent = edit ? events.find(e2 => e2.key === edit.event) : null;
+  el.innerHTML = `
+    <form class="card" id="meet-form">
+      <h2>${edit ? 'Edit result' : 'Add a result'}</h2>
+      <div class="filter-row">
+        <label>Athlete <select id="mf-athlete">${profileOptions(edit ? edit.profileId : null, true)}</select></label>
+        <label>Date <input type="date" id="mf-date" value="${edit ? esc(edit.date) : todayStr()}" required></label>
+      </div>
+      <div class="filter-row">
+        <label>Meet <input type="text" id="mf-meet" placeholder="e.g. WCAC Championships" value="${edit ? esc(edit.meet) : ''}" required></label>
+        <label>Event <select id="mf-event">${events.map(ev => `<option value="${ev.key}" ${edit && edit.event === ev.key ? 'selected' : ''}>${esc(ev.name)} (${ev.type === 'time' ? 'time' : 'field'})</option>`).join('')}</select></label>
+      </div>
+      <div class="filter-row">
+        <label>Mark <input type="text" id="mf-mark" placeholder="10.87 · 1:55.20 · 21-06.5" value="${edit ? esc(edit.mark) : ''}" required></label>
+        <label>Notes <input type="text" id="mf-notes" placeholder="optional — wind, round, FAT…" value="${edit ? esc(edit.notes || '') : ''}"></label>
+      </div>
+      <p class="muted" id="mf-hint">${markHint(editEvent ? editEvent.type : 'time')}</p>
+      <button class="btn primary" type="submit">${edit ? 'Save changes' : 'Add result'}</button>
+      ${edit ? '<button class="btn secondary" id="mf-cancel" type="button">Cancel edit</button>' : ''}
+      <p class="error" id="mf-err"></p>
+    </form>
+    <div class="card">
+      <h2>Team PR board</h2>
+      ${board.length ? `<div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Event</th><th>Athlete</th><th>PR</th><th>Meet</th><th>Date</th></tr></thead>
+        <tbody>${board.map(b => `<tr><td>${esc(b.name)}</td><td>${esc(b.athleteName)}</td><td><strong>${esc(b.mark)}</strong></td><td>${esc(b.meet)}</td><td>${esc(b.date)}</td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="muted">No meet results yet — the board fills in as results are entered.</p>'}
+    </div>
+    <div class="card">
+      <h2>PR progression</h2>
+      <label>Athlete <select id="mp-athlete">${profileOptions(state.meetProgAthlete, true)}</select></label>
+      <div id="mp-zone"></div>
+    </div>
+    <div class="card">
+      <h2>All results</h2>
+      <p class="muted">Newest first${results.length > 200 ? ' — showing the 200 most recent' : ''}.</p>
+      ${results.length ? `<div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Date</th><th>Meet</th><th>Athlete</th><th>Event</th><th>Mark</th><th></th></tr></thead>
+        <tbody>${results.slice(0, 200).map(r => `<tr><td>${esc(r.date)}</td><td>${esc(r.meet)}</td><td>${esc(r.athleteName)}</td><td>${esc(r.eventName)}</td><td><strong>${esc(r.mark)}</strong></td>
+          <td><button class="btn secondary" data-meet-edit="${r.id}" type="button" style="width:auto;padding:2px 10px">Edit</button>
+          <button class="btn danger" data-meet-del="${r.id}" type="button" style="width:auto;padding:2px 10px">Delete</button></td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="muted">No meet results recorded yet.</p>'}
+      <p><a class="btn secondary" href="/api/export/meet-results.csv">Download meet results (CSV)</a></p>
+    </div>`;
+  const evSel = $('#mf-event');
+  if (evSel) evSel.addEventListener('change', () => {
+    const ev = state.meetEvents.find(e2 => e2.key === evSel.value);
+    $('#mf-hint').textContent = markHint(ev ? ev.type : 'time');
+  });
+  $('#meet-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      profileId: $('#mf-athlete').value,
+      date: $('#mf-date').value,
+      meet: $('#mf-meet').value,
+      event: $('#mf-event').value,
+      mark: $('#mf-mark').value,
+      notes: $('#mf-notes').value,
+    };
+    try {
+      if (state.meetEditId) await apiPut('/api/meet-results/' + encodeURIComponent(state.meetEditId), body);
+      else await apiPost('/api/meet-results', body);
+      state.meetEditId = null;
+      renderMeets();
+    } catch (err) { $('#mf-err').textContent = err.message; }
+  });
+  const cancel = $('#mf-cancel');
+  if (cancel) cancel.addEventListener('click', () => { state.meetEditId = null; renderMeets(); });
+  el.querySelectorAll('[data-meet-edit]').forEach(b => b.addEventListener('click', () => {
+    state.meetEditId = b.dataset.meetEdit;
+    renderMeets();
+    window.scrollTo(0, 0);
+  }));
+  el.querySelectorAll('[data-meet-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Delete this meet result?')) return;
+    try { await apiDel('/api/meet-results/' + encodeURIComponent(b.dataset.meetDel)); renderMeets(); }
+    catch (err) { alert(err.message); }
+  }));
+  const renderProg = async () => {
+    const zone = $('#mp-zone');
+    const pid = $('#mp-athlete').value;
+    state.meetProgAthlete = pid || null;
+    if (!pid) { zone.innerHTML = '<p class="muted">Pick an athlete to see their PR progression.</p>'; return; }
+    try {
+      const data = await api('/api/meet-results/prs?profileId=' + encodeURIComponent(pid));
+      if (!data.series.length) { zone.innerHTML = '<p class="muted">No meet results yet for this athlete.</p>'; return; }
+      zone.innerHTML = data.series.map(s => {
+        const pr = data.prs.find(p => p.event === s.event);
+        const metric = { name: s.name, unit: s.type === 'time' ? 'sec' : 'in', better: s.better };
+        return `<h3>${esc(s.name)}</h3>
+          <p class="rc-line">PR: <strong>${esc(pr ? pr.mark : '')}</strong>${pr ? ` — ${esc(pr.meet)}, ${esc(pr.date)}` : ''}</p>
+          ${s.points.length >= 2
+            ? lineChart([{ label: s.name, points: s.points.map(pt => ({ week: pt.date, value: pt.value })) }], metric, true)
+            : '<p class="muted">One result so far — the chart starts with the second.</p>'}
+          <div class="table-wrap"><table class="ranked"><thead><tr><th>Date</th><th>Meet</th><th>Mark</th></tr></thead>
+          <tbody>${s.points.map(pt => `<tr><td>${esc(pt.date)}</td><td>${esc(pt.meet)}</td><td>${esc(pt.mark)}${pr && pt.resultId === pr.resultId ? ' <span class="badge star">PR ★</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      }).join('');
+    } catch (err) { zone.innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+  };
+  const mp = $('#mp-athlete');
+  if (mp) { mp.addEventListener('change', renderProg); renderProg(); }
+}
 
 /* ================================================================
    TV BOARD — the weight-room display. Coach-only: it reads the

@@ -139,6 +139,8 @@
       <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
       <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
       <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
+      <button type="button" class="menu-item" data-view="meets">Meet Results <span>Race and field marks, PRs, and the team PR board</span></button>
+      <button type="button" class="menu-item" data-view="reports">Reports <span>Team trends, completion and load charts, and athlete report cards</span></button>
       <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
       <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
       <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access — under Account</span></button>
@@ -602,6 +604,24 @@
     <p class="view-sub muted">What gear the program owns, how much of it, and where it lives.</p>
     <p class="muted">The program's gear, counted by you: what you have, how many, what shape it is in, and where it lives. Coach-only — athletes never see this.</p>
     <div id="inventory-main"></div>
+  </section>
+
+  <!-- MEET RESULTS (coach) -->
+  <section id="view-meets" class="view">
+    <h1>Meet Results</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record what your athletes run, jump, and throw at meets — PRs and the team board build themselves. Coaches only.</p>
+    <div id="meets-main"></div>
+  </section>
+
+  <!-- REPORTS (coach) -->
+  <section id="view-reports" class="view">
+    <h1>Reports</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The program in charts: strength trends, who is completing the work, planned load, and health — plus a printable report card for every athlete.</p>
+    <div id="reports-main"></div>
   </section>
 
   <!-- DRILLS -->

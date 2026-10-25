@@ -74,6 +74,7 @@ let db = {
   mediaOverrides: {},
   inventory: [],
   warmupCardEdits: {},
+  meetResults: [],
   coachInvites: [],
   coachInvitesSeeded: [],
 };
@@ -99,6 +100,11 @@ function migrate() {
   // renders the shipped card from public/index.html.
   db.warmupCardEdits = (db.warmupCardEdits && typeof db.warmupCardEdits === 'object' && !Array.isArray(db.warmupCardEdits))
     ? db.warmupCardEdits : {};
+  // Meet results: one flat list of { id, profileId, date, meet, event,
+  // mark, value, notes } — mark is the raw text the coach typed, value
+  // is the normalized number (seconds for times, inches for field
+  // marks) that PR comparisons run on.
+  db.meetResults = Array.isArray(db.meetResults) ? db.meetResults : [];
   // Assistant-coach invites: normalized (trimmed, lowercased) emails the
   // owner has granted coach access to. Kept deduped on every load.
   db.coachInvites = Array.isArray(db.coachInvites)
@@ -324,6 +330,189 @@ function epley(weight, reps) { return Math.round(weight * (1 + reps / 30)); }
 function displayValue(result) {
   if (result.est1rm != null) return result.est1rm;
   return result.value;
+}
+const round2 = (v) => Math.round(v * 100) / 100;
+function medianOf(nums) {
+  if (!nums.length) return null;
+  const s = nums.slice().sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return round2(s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2);
+}
+function addDaysStr(dateString, n) {
+  const d = parseDateStr(dateString);
+  if (!d) return null;
+  d.setDate(d.getDate() + n);
+  return dateStr(d);
+}
+
+/* The value rules for one testing result, shared verbatim by the
+   single-result endpoint and the test-day rapid-entry bulk save, so a
+   number that is valid in one is valid in the other. Returns
+   { fields: { value, weight, reps, est1rm } } or { error }. */
+function validateResultFields(test, body) {
+  let value = null, weight = null, reps = null, est1rm = null;
+  if (test.kind === 'lift') {
+    const w = num(body.weight !== undefined ? body.weight : body.value);
+    if (w === null || w <= 0) return { error: 'Enter a valid weight in lb.' };
+    weight = w;
+    if (body.reps !== undefined && body.reps !== null && body.reps !== '') {
+      const r = num(body.reps);
+      if (r === null || !Number.isInteger(r) || r < 1 || r > 30) {
+        return { error: 'Reps must be a whole number from 1 to 30.' };
+      }
+      reps = r;
+      est1rm = epley(w, r);
+    } else {
+      est1rm = Math.round(w);
+    }
+  } else {
+    const v = num(body.value);
+    if (v === null || v < 0) return { error: 'Enter a valid result.' };
+    value = v;
+  }
+  return { fields: { value, weight, reps, est1rm } };
+}
+/* Insert or replace the one result for an athlete + test day + test
+   (the same upsert the single-result endpoint has always done). */
+function upsertResult(prof, day, testKey, fields, userId) {
+  db.testResults[prof.id] = db.testResults[prof.id] || [];
+  const existing = db.testResults[prof.id].find(r => r.testDayId === day.id && r.testKey === testKey);
+  const result = existing || {
+    id: crypto.randomUUID(), profileId: prof.id, testDayId: day.id, testKey,
+    createdAt: new Date().toISOString(),
+  };
+  Object.assign(result, fields, { enteredBy: userId, updatedAt: new Date().toISOString() });
+  if (!existing) db.testResults[prof.id].push(result);
+  return { result, created: !existing };
+}
+
+/* ------------------------------------------------------------------ */
+/* Meet results: events, mark parsing, PRs                             */
+/* ------------------------------------------------------------------ */
+/* type 'time' normalizes to seconds (lower is better); type 'field'
+   normalizes to inches (higher is better). */
+const MEET_EVENTS = [
+  { key: '55m', name: '55m', type: 'time' },
+  { key: '60m', name: '60m', type: 'time' },
+  { key: '100m', name: '100m', type: 'time' },
+  { key: '200m', name: '200m', type: 'time' },
+  { key: '300m', name: '300m', type: 'time' },
+  { key: '400m', name: '400m', type: 'time' },
+  { key: '800m', name: '800m', type: 'time' },
+  { key: '55m-hurdles', name: '55m Hurdles', type: 'time' },
+  { key: '110m-hurdles', name: '110m Hurdles', type: 'time' },
+  { key: '300m-hurdles', name: '300m Hurdles', type: 'time' },
+  { key: 'long-jump', name: 'Long Jump', type: 'field' },
+  { key: 'triple-jump', name: 'Triple Jump', type: 'field' },
+  { key: 'high-jump', name: 'High Jump', type: 'field' },
+  { key: 'shot-put', name: 'Shot Put', type: 'field' },
+  { key: 'discus', name: 'Discus', type: 'field' },
+  { key: 'javelin', name: 'Javelin', type: 'field' },
+  { key: 'pole-vault', name: 'Pole Vault', type: 'field' },
+];
+function findMeetEvent(key) { return MEET_EVENTS.find(e => e.key === key) || null; }
+function meetEventView(ev) {
+  return { key: ev.key, name: ev.name, type: ev.type, better: ev.type === 'time' ? 'lower' : 'higher' };
+}
+/* Times: plain seconds ("10.87") or minutes:seconds ("1:55.20").
+   Returns normalized seconds, or null when the text is not a time. */
+function parseTimeMark(raw) {
+  const t = String(raw || '').trim();
+  const colon = /^(\d+):([0-5]?\d(?:\.\d+)?)$/.exec(t);
+  if (colon) {
+    const secs = Number(colon[1]) * 60 + Number(colon[2]);
+    return secs > 0 ? round2(secs) : null;
+  }
+  if (/^\d+(?:\.\d+)?$/.test(t)) {
+    const v = Number(t);
+    return v > 0 && v < 3600 ? round2(v) : null;
+  }
+  return null;
+}
+/* Field marks normalize to inches. Accepted shapes: feet-inches with
+   a dash ("21-06.5") or an apostrophe (21'6.5), a plain number in
+   feet ("21.5"), or a number with an m suffix in meters ("6.45m").
+   The inches part must be under 12 — "21-13" is a typo, not a mark. */
+function parseFieldMark(raw) {
+  const t = String(raw || '').trim().replace(/["\u201d]/g, '');
+  let m = /^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/.exec(t) || /^(\d+(?:\.\d+)?)'\s*(\d+(?:\.\d+)?)$/.exec(t);
+  if (m) {
+    const inches = Number(m[2]);
+    if (inches >= 12) return null;
+    const v = Number(m[1]) * 12 + inches;
+    return v > 0 ? round2(v) : null;
+  }
+  m = /^(\d+(?:\.\d+)?)\s*m$/i.exec(t);
+  if (m) {
+    const v = Number(m[1]) * 39.3701;
+    return v > 0 ? round2(v) : null;
+  }
+  if (/^\d+(?:\.\d+)?$/.test(t)) {
+    const v = Number(t) * 12;
+    return v > 0 ? round2(v) : null;
+  }
+  return null;
+}
+/* Parse a raw mark under an event's rules. Returns { value } or
+   { error } with a message a coach can act on. */
+function parseMeetMark(ev, raw) {
+  const mark = String(raw || '').trim();
+  if (!mark) return { error: 'Enter a mark.' };
+  const value = ev.type === 'time' ? parseTimeMark(mark) : parseFieldMark(mark);
+  if (value === null) {
+    return {
+      error: ev.type === 'time'
+        ? 'That time could not be read — use seconds (10.87) or minutes:seconds (1:55.20).'
+        : 'That mark could not be read — use feet-inches (21-06.5), 21\'6.5, a plain number in feet, or meters with an m (6.45m).',
+    };
+  }
+  return { value };
+}
+function publicMeetResult(r) {
+  const pr = profileById(r.profileId);
+  const ev = findMeetEvent(r.event);
+  return Object.assign({}, r, {
+    athleteName: pr ? pr.firstName + ' ' + pr.lastName : '',
+    eventName: ev ? ev.name : r.event,
+  });
+}
+/* Best result per event for one athlete, by the event's direction —
+   a slower time or a shorter jump can never become the PR. */
+function meetPrsFor(profileId) {
+  const byEvent = {};
+  for (const r of db.meetResults) {
+    if (r.profileId !== profileId) continue;
+    const ev = findMeetEvent(r.event);
+    if (!ev) continue;
+    const cur = byEvent[r.event];
+    if (!cur || (ev.type === 'time' ? r.value < cur.value : r.value > cur.value)) {
+      byEvent[r.event] = r;
+    }
+  }
+  return MEET_EVENTS.filter(ev => byEvent[ev.key]).map(ev => {
+    const r = byEvent[ev.key];
+    return {
+      event: ev.key, name: ev.name, type: ev.type,
+      better: ev.type === 'time' ? 'lower' : 'higher',
+      resultId: r.id, mark: r.mark, value: r.value, date: r.date, meet: r.meet,
+    };
+  });
+}
+/* Chronological series per event for one athlete (PR progression). */
+function meetSeriesFor(profileId) {
+  const out = [];
+  for (const ev of MEET_EVENTS) {
+    const points = db.meetResults
+      .filter(r => r.profileId === profileId && r.event === ev.key)
+      .slice()
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1
+        : (a.createdAt < b.createdAt ? -1 : 1)))
+      .map(r => ({ resultId: r.id, date: r.date, meet: r.meet, mark: r.mark, value: r.value }));
+    if (points.length) {
+      out.push({ event: ev.key, name: ev.name, type: ev.type, better: ev.type === 'time' ? 'lower' : 'higher', points });
+    }
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1377,33 +1566,89 @@ async function handleApi(req, res, url) {
     if (!day.testKeys.includes(testKey)) {
       return sendJson(res, 400, { error: test.name + ' is not part of that test day.' });
     }
-    let value = null, weight = null, reps = null, est1rm = null;
-    if (test.kind === 'lift') {
-      const w = num(body.weight !== undefined ? body.weight : body.value);
-      if (w === null || w <= 0) return sendJson(res, 400, { error: 'Enter a valid weight in lb.' });
-      weight = w;
-      if (body.reps !== undefined && body.reps !== null && body.reps !== '') {
-        const r = num(body.reps);
-        if (r === null || !Number.isInteger(r) || r < 1 || r > 30) {
-          return sendJson(res, 400, { error: 'Reps must be a whole number from 1 to 30.' });
-        }
-        reps = r;
-        est1rm = epley(w, r);
-      } else {
-        est1rm = Math.round(w);
-      }
-    } else {
-      const v = num(body.value);
-      if (v === null || v < 0) return sendJson(res, 400, { error: 'Enter a valid result.' });
-      value = v;
-    }
-    db.testResults[prof.id] = db.testResults[prof.id] || [];
-    const existing = db.testResults[prof.id].find(r => r.testDayId === day.id && r.testKey === testKey);
-    const result = existing || { id: crypto.randomUUID(), profileId: prof.id, testDayId: day.id, testKey, createdAt: new Date().toISOString() };
-    Object.assign(result, { value, weight, reps, est1rm, enteredBy: user.id, updatedAt: new Date().toISOString() });
-    if (!existing) db.testResults[prof.id].push(result);
+    const v = validateResultFields(test, body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const up = upsertResult(prof, day, testKey, v.fields, user.id);
     saveDb();
-    return sendJson(res, existing ? 200 : 201, { result });
+    return sendJson(res, up.created ? 201 : 200, { result: up.result });
+  }
+
+  /* Test-day rapid entry: one save for a whole grid of cells. Every
+     cell is validated with the exact rules of the single-result
+     endpoint BEFORE anything is written — if any cell is bad, the
+     save is refused whole (400 with a per-cell error list) and the
+     store is left untouched. `clear` cells remove existing results,
+     which is how the grid doubles as the edit path. */
+  if (p === '/api/results/bulk' && req.method === 'POST') {
+    const body = await readBody(req);
+    const day = db.testDays.find(d => d.id === clean(body.testDayId, 80));
+    if (!day) return sendJson(res, 404, { error: 'Test day not found.' });
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    const clears = Array.isArray(body.clear) ? body.clear : [];
+    if (entries.length + clears.length > 4000) {
+      return sendJson(res, 400, { error: 'That save is too large — split the grid into smaller saves.' });
+    }
+    const cellErrors = [];
+    const validEntries = [];
+    const validClears = [];
+    const seenCells = new Set();
+    const checkCell = (raw, sink) => {
+      const cell = raw && typeof raw === 'object' ? raw : {};
+      const profileId = clean(cell.profileId, 80);
+      const testKey = clean(cell.testKey, 40);
+      const prof = profileById(profileId);
+      if (!prof) { cellErrors.push({ profileId, testKey, error: 'Athlete not found.' }); return; }
+      const test = findTest(testKey);
+      if (!test) { cellErrors.push({ profileId, testKey, error: 'Unknown test.' }); return; }
+      const cellKey = profileId + '|' + testKey;
+      if (seenCells.has(cellKey)) {
+        cellErrors.push({ profileId, testKey, error: 'That cell appears twice in one save.' });
+        return;
+      }
+      seenCells.add(cellKey);
+      sink({ prof, test, cell });
+    };
+    for (const raw of entries) {
+      checkCell(raw, ({ prof, test, cell }) => {
+        if (!day.testKeys.includes(test.key)) {
+          cellErrors.push({ profileId: prof.id, testKey: test.key, error: test.name + ' is not part of that test day.' });
+          return;
+        }
+        const v = validateResultFields(test, cell);
+        if (v.error) {
+          cellErrors.push({ profileId: prof.id, testKey: test.key, error: v.error });
+          return;
+        }
+        validEntries.push({ prof, testKey: test.key, fields: v.fields });
+      });
+    }
+    for (const raw of clears) {
+      checkCell(raw, ({ prof, test }) => {
+        validClears.push({ prof, testKey: test.key });
+      });
+    }
+    if (cellErrors.length) {
+      return sendJson(res, 400, {
+        error: 'Some cells could not be saved, so nothing was written. Fix the highlighted cells and save again.',
+        cellErrors,
+      });
+    }
+    let created = 0, updated = 0, cleared = 0;
+    const results = [];
+    for (const ve of validEntries) {
+      const up = upsertResult(ve.prof, day, ve.testKey, ve.fields, user.id);
+      if (up.created) created++; else updated++;
+      results.push(up.result);
+    }
+    for (const vc of validClears) {
+      const list = db.testResults[vc.prof.id] || [];
+      const idx = list.findIndex(r => r.testDayId === day.id && r.testKey === vc.testKey);
+      if (idx >= 0) { list.splice(idx, 1); cleared++; }
+    }
+    saveDb();
+    return sendJson(res, 200, {
+      ok: true, saved: validEntries.length, created, updated, cleared, results,
+    });
   }
 
   if (p === '/api/results' && req.method === 'GET') {
@@ -1589,6 +1834,329 @@ async function handleApi(req, res, url) {
     found.updatedAt = new Date().toISOString();
     saveDb();
     return sendJson(res, 200, { concern: found });
+  }
+
+  /* ---------- meet results (coach entry only) ---------- */
+  if (p === '/api/meet-events' && req.method === 'GET') {
+    return sendJson(res, 200, { events: MEET_EVENTS.map(meetEventView) });
+  }
+
+  if (p === '/api/meet-results' && req.method === 'GET') {
+    const profParam = clean(q.get('profileId') || '', 80);
+    if (profParam && !profileById(profParam)) {
+      return sendJson(res, 404, { error: 'Profile not found.' });
+    }
+    const evParam = clean(q.get('event') || '', 30);
+    const results = db.meetResults
+      .filter(r => !profParam || r.profileId === profParam)
+      .filter(r => !evParam || r.event === evParam)
+      .slice()
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1
+        : (a.createdAt < b.createdAt ? 1 : -1)))
+      .map(publicMeetResult);
+    return sendJson(res, 200, { results });
+  }
+
+  if (p === '/api/meet-results' && req.method === 'POST') {
+    const body = await readBody(req);
+    const prof = profileById(clean(body.profileId, 80));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const date = clean(body.date, 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const meet = clean(body.meet, 80);
+    if (!meet) return sendJson(res, 400, { error: 'Name the meet.' });
+    const ev = findMeetEvent(clean(body.event, 30));
+    if (!ev) return sendJson(res, 400, { error: 'Unknown event.' });
+    const rawMark = typeof body.mark === 'string' ? body.mark.trim().slice(0, 20) : '';
+    const parsed = parseMeetMark(ev, rawMark);
+    if (parsed.error) return sendJson(res, 400, { error: parsed.error });
+    const now = new Date().toISOString();
+    const r = {
+      id: crypto.randomUUID(), profileId: prof.id, date, meet,
+      event: ev.key, mark: rawMark, value: parsed.value,
+      notes: clean(body.notes, 500), enteredBy: user.id,
+      createdAt: now, updatedAt: now,
+    };
+    db.meetResults.push(r);
+    saveDb();
+    return sendJson(res, 201, { result: publicMeetResult(r) });
+  }
+
+  const meetResultMatch = p.match(/^\/api\/meet-results\/([^/]+)$/);
+  if (meetResultMatch && req.method === 'PUT') {
+    const r = db.meetResults.find(x => x.id === decodeURIComponent(meetResultMatch[1]));
+    if (!r) return sendJson(res, 404, { error: 'Meet result not found.' });
+    const body = await readBody(req);
+    // Validate the whole update first; a bad field changes nothing.
+    const next = {
+      profileId: r.profileId, date: r.date, meet: r.meet,
+      event: r.event, mark: r.mark, value: r.value, notes: r.notes,
+    };
+    if (body.profileId !== undefined) {
+      const prof = profileById(clean(body.profileId, 80));
+      if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+      next.profileId = prof.id;
+    }
+    if (body.date !== undefined) {
+      const d = clean(body.date, 10);
+      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      next.date = d;
+    }
+    if (body.meet !== undefined) {
+      const m = clean(body.meet, 80);
+      if (!m) return sendJson(res, 400, { error: 'Name the meet.' });
+      next.meet = m;
+    }
+    if (body.notes !== undefined) next.notes = clean(body.notes, 500);
+    if (body.event !== undefined || body.mark !== undefined) {
+      const ev = findMeetEvent(clean(body.event !== undefined ? body.event : r.event, 30));
+      if (!ev) return sendJson(res, 400, { error: 'Unknown event.' });
+      const rawMark = body.mark !== undefined
+        ? (typeof body.mark === 'string' ? body.mark.trim().slice(0, 20) : '')
+        : r.mark;
+      const parsed = parseMeetMark(ev, rawMark);
+      if (parsed.error) return sendJson(res, 400, { error: parsed.error });
+      next.event = ev.key;
+      next.mark = rawMark;
+      next.value = parsed.value;
+    }
+    Object.assign(r, next, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { result: publicMeetResult(r) });
+  }
+  if (meetResultMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(meetResultMatch[1]);
+    if (!db.meetResults.some(r => r.id === id)) {
+      return sendJson(res, 404, { error: 'Meet result not found.' });
+    }
+    db.meetResults = db.meetResults.filter(r => r.id !== id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (p === '/api/meet-results/prs' && req.method === 'GET') {
+    const prof = profileById(clean(q.get('profileId') || '', 80));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    return sendJson(res, 200, {
+      profileId: prof.id,
+      prs: meetPrsFor(prof.id),
+      series: meetSeriesFor(prof.id),
+    });
+  }
+
+  if (p === '/api/meet-results/board' && req.method === 'GET') {
+    // Team PR board: the single best mark per event across the active
+    // roster, by each event's direction.
+    const board = [];
+    for (const ev of MEET_EVENTS) {
+      let best = null;
+      for (const r of db.meetResults) {
+        if (r.event !== ev.key) continue;
+        const pr = profileById(r.profileId);
+        if (!pr || pr.archived) continue;
+        if (!best || (ev.type === 'time' ? r.value < best.value : r.value > best.value)) best = r;
+      }
+      if (best) {
+        const pr = profileById(best.profileId);
+        board.push({
+          event: ev.key, name: ev.name, type: ev.type,
+          better: ev.type === 'time' ? 'lower' : 'higher',
+          profileId: best.profileId,
+          athleteName: pr.firstName + ' ' + pr.lastName,
+          mark: best.mark, value: best.value, date: best.date, meet: best.meet,
+        });
+      }
+    }
+    return sendJson(res, 200, { board });
+  }
+
+  if (p === '/api/export/meet-results.csv' && req.method === 'GET') {
+    const rows = [['Date', 'Meet', 'Athlete', 'Group', 'Event', 'Mark']];
+    const sorted = db.meetResults.slice().sort((a, b) =>
+      (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (const r of sorted) {
+      const pr = profileById(r.profileId);
+      const pub = pr ? publicProfile(pr) : null;
+      const ev = findMeetEvent(r.event);
+      rows.push([r.date, r.meet, pub ? pub.name : '', pub ? (pub.groupName || '') : '',
+        ev ? ev.name : r.event, r.mark]);
+    }
+    return sendCsv(res, 'meet-results.csv', rows);
+  }
+
+  /* ---------- reports (coach-only analytics) ---------- */
+  if (p === '/api/reports/team-trend' && req.method === 'GET') {
+    // Team median per test per test day — is the room getting stronger?
+    const days = db.testDays.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const tests = allTests().map(t => {
+      const points = [];
+      for (const day of days) {
+        if (!day.testKeys.includes(t.key)) continue;
+        const vals = [];
+        for (const pr of db.profiles) {
+          const r = (db.testResults[pr.id] || []).find(x => x.testDayId === day.id && x.testKey === t.key);
+          if (r) {
+            const d = displayValue(r);
+            if (d !== null && d !== undefined) vals.push(d);
+          }
+        }
+        if (vals.length) {
+          points.push({ testDayId: day.id, date: day.date, title: day.title, median: medianOf(vals), count: vals.length });
+        }
+      }
+      return { testKey: t.key, name: t.name, unit: t.unit, kind: t.kind, points };
+    });
+    return sendJson(res, 200, { tests });
+  }
+
+  if (p === '/api/reports/completions' && req.method === 'GET') {
+    // Per group per season week: assigned = days that week whose
+    // resolved assignment has a session (plan or coach override);
+    // completed = the coach-marked completions recorded for the group
+    // that week, with the distinct days they cover.
+    const today = todayStr();
+    const groups = db.groups.map(g => {
+      const daySets = new Map();
+      const weeks = CONTENT.weeks.map(w => {
+        let assigned = 0;
+        for (let i = 0; i < 7; i++) {
+          const ds = addDaysStr(w.start, i);
+          if (!ds) continue;
+          const a = resolveAssignment(g.id, ds);
+          if (a && a.sessionId) assigned++;
+        }
+        daySets.set(w.start, new Set());
+        return {
+          week: w.week, monday: w.start, assigned,
+          completedDays: 0, completions: 0, upcoming: w.start > today,
+        };
+      });
+      const byMonday = new Map(weeks.map(x => [x.monday, x]));
+      for (const c of Object.values(db.completions)) {
+        if (c.groupId !== g.id) continue;
+        const mon = mondayOf(c.date);
+        const wk = mon ? byMonday.get(mon) : null;
+        if (!wk) continue; // outside the season weeks — not charted
+        wk.completions++;
+        daySets.get(wk.monday).add(c.date);
+      }
+      for (const wk of weeks) wk.completedDays = daySets.get(wk.monday).size;
+      return { group: { id: g.id, name: g.name }, weeks };
+    });
+    return sendJson(res, 200, { groups });
+  }
+
+  if (p === '/api/reports/load' && req.method === 'GET') {
+    // PLANNED load only: what the season plan itself calls for each
+    // week (coach overrides are not folded in — the label says so).
+    const weeks = CONTENT.weeks.map(w => {
+      let high = 0, low = 0, off = 0, meet = 0, test = 0;
+      for (let i = 0; i < 7; i++) {
+        const ds = addDaysStr(w.start, i);
+        const plan = ds ? planDayFor(ds) : null;
+        if (!plan) continue;
+        if (plan.isOff) { off++; continue; }
+        if (plan.isHigh) high++; else low++;
+        if (plan.isMeet) meet++;
+        if (plan.isTest) test++;
+      }
+      return { week: w.week, phase: w.phase, start: w.start, high, low, off, meet, test };
+    });
+    return sendJson(res, 200, { weeks });
+  }
+
+  if (p === '/api/reports/health' && req.method === 'GET') {
+    const byStatus = { new: 0, monitoring: 0, cleared: 0 };
+    const monthCounts = {};
+    let total = 0;
+    for (const pid of Object.keys(db.concerns)) {
+      for (const c of db.concerns[pid] || []) {
+        total++;
+        if (byStatus[c.status] !== undefined) byStatus[c.status]++;
+        const month = String(c.createdAt || '').slice(0, 7);
+        if (/^\d{4}-\d{2}$/.test(month)) monthCounts[month] = (monthCounts[month] || 0) + 1;
+      }
+    }
+    const byMonth = Object.keys(monthCounts).sort().map(m => ({ month: m, opened: monthCounts[m] }));
+    return sendJson(res, 200, { total, byStatus, byMonth });
+  }
+
+  const athleteReportMatch = p.match(/^\/api\/reports\/athlete\/([^/]+)$/);
+  if (athleteReportMatch && req.method === 'GET') {
+    const prof = profileById(decodeURIComponent(athleteReportMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const dayById = new Map(db.testDays.map(d => [d.id, d]));
+    const testing = allTests().map(t => {
+      const series = (db.testResults[prof.id] || [])
+        .filter(r => r.testKey === t.key)
+        .map(r => {
+          const day = dayById.get(r.testDayId);
+          return {
+            resultId: r.id, testDayId: r.testDayId,
+            date: day ? day.date : '', title: day ? day.title : '',
+            display: displayValue(r),
+            value: r.value, weight: r.weight, reps: r.reps, est1rm: r.est1rm,
+          };
+        })
+        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      const displays = series.map(r => r.display).filter(d => d !== null && d !== undefined);
+      return {
+        testKey: t.key, name: t.name, unit: t.unit, kind: t.kind, series,
+        best: displays.length ? Math.max.apply(null, displays) : null,
+        latest: series.length ? series[series.length - 1].display : null,
+        latestDate: series.length ? series[series.length - 1].date : null,
+      };
+    }).filter(t => t.series.length);
+    const weekly = allWeeklyMetrics().map(m => {
+      const s = weeklySeriesFor(prof.id, m);
+      return { metric: m, points: s.points, best: s.best, latest: s.latest, delta: s.delta, improved: s.improved };
+    }).filter(w => w.points.length);
+    /* Completion percentage, stated honestly: the denominator is the
+       number of days their CURRENT group had an assigned session from
+       the later of (the day the profile was created, the season
+       start) through today (capped at the season end); the numerator
+       is their coach-marked completions inside that same window.
+       Group moves are not tracked historically, so when there is no
+       group or no assigned day in the window, percent stays null and
+       the card shows the raw completion count instead. */
+    const mine = Object.values(db.completions).filter(c => c.profileId === prof.id);
+    let denominator = 0;
+    let counted = mine.length;
+    let percent = null;
+    if (prof.groupId && CONTENT.weeks.length) {
+      const seasonStart = CONTENT.weeks[0].start;
+      const seasonEnd = CONTENT.weeks[CONTENT.weeks.length - 1].end;
+      const joined = String(prof.createdAt || '').slice(0, 10);
+      const from = joined > seasonStart ? joined : seasonStart;
+      const today = todayStr();
+      const to = today < seasonEnd ? today : seasonEnd;
+      counted = 0;
+      if (parseDateStr(from) && from <= to) {
+        let ds = from;
+        while (ds && ds <= to) {
+          const a = resolveAssignment(prof.groupId, ds);
+          if (a && a.sessionId) denominator++;
+          ds = addDaysStr(ds, 1);
+        }
+        counted = mine.filter(c => c.date >= from && c.date <= to).length;
+        if (denominator > 0) percent = Math.round((counted / denominator) * 100);
+      }
+    }
+    const health = { open: 0, monitoring: 0, cleared: 0, total: 0 };
+    for (const c of db.concerns[prof.id] || []) {
+      health.total++;
+      if (c.status === 'new') health.open++;
+      else if (c.status === 'monitoring') health.monitoring++;
+      else if (c.status === 'cleared') health.cleared++;
+    }
+    return sendJson(res, 200, {
+      profile: publicProfile(prof),
+      testing, weekly,
+      completions: { count: counted, total: mine.length, denominator, percent },
+      health,
+      meetPrs: meetPrsFor(prof.id),
+      meetSeries: meetSeriesFor(prof.id),
+    });
   }
 
   /* ---------- warm-up card editor (coach-managed) ---------- */

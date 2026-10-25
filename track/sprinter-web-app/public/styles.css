@@ -1848,3 +1848,41 @@ body.tv-mode #view-tv.active {
 .start-steps .btn { width: auto; padding: 4px 12px; font-size: 13.5px; margin-left: 6px; }
 .warmup-panel h3 { margin: 0 0 6px; font-size: 16.5px; }
 :focus-visible { outline: 3px solid rgba(204, 0, 51, .55); outline-offset: 2px; }
+
+/* ---- Reports, meet results, and the test-day grid ---- */
+.bar-a { fill: var(--red); background: var(--red); }
+.bar-b { fill: #9aa1a8; background: #9aa1a8; }
+.chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 4px 0 8px; font-size: 13.5px; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; flex: none; }
+.grid-table input.grid-in { width: 78px; padding: 6px 8px; }
+.grid-table input.grid-r { width: 62px; margin-left: 4px; }
+.grid-table td.cell-error { background: #fdf0f3; }
+.grid-table td.cell-error input { border-color: var(--red); }
+.grid-err-list { color: var(--red); margin: 4px 0; padding-left: 20px; }
+.report-card .rc-head h3 { margin: 0 0 2px; font-size: 20px; }
+.report-card h4 { margin: 14px 0 6px; }
+.rc-line { margin: 8px 0; }
+
+@media print {
+  body.printing-report .topbar,
+  body.printing-report .tabbar,
+  body.printing-report .footer,
+  body.printing-report #media-modal { display: none !important; }
+  body.printing-report main > section { display: none !important; }
+  body.printing-report main > section#view-reports { display: block !important; }
+  body.printing-report #view-reports > h1,
+  body.printing-report #view-reports > .lane-divider,
+  body.printing-report #view-reports > .subnav-slot,
+  body.printing-report #view-reports > p { display: none !important; }
+  body.printing-report #reports-main > .card { display: none !important; }
+  body.printing-report #reports-main > .card.rc-host {
+    display: block !important; border: none; box-shadow: none; margin: 0; padding: 0;
+  }
+  body.printing-report .rc-host > h2,
+  body.printing-report .rc-host > p,
+  body.printing-report .rc-host > label,
+  body.printing-report .no-print { display: none !important; }
+  body.printing-report .report-card { page-break-inside: avoid; }
+  @page { size: Letter; margin: 0.5in; }
+}
