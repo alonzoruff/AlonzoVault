@@ -95,6 +95,9 @@ h2 { font-size: 18px; margin: 4px 0 10px; }
 .btn.secondary { background: #fff; }
 a.btn { display: inline-block; text-decoration: none; }
 .btn.danger { color: var(--high); border-color: #f0c4c0; }
+/* Today screen Run button(s): full width of the card (via
+   .btn.primary), tall enough to hit across a weight room. */
+.btn.run-today-btn { min-height: 56px; font-size: 17px; font-weight: 700; margin: 0 0 10px; }
 button.back { margin-bottom: 10px; }
 input[type="search"], input[type="text"], input[type="email"], input[type="password"],
 input[type="date"], select, textarea {

@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v21',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v22"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v23',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v23"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1734,6 +1734,60 @@ async function main() {
     appJs.text.includes('renderCustomWorkouts') && appJs.text.includes('openRunner') &&
     appJs.text.includes('/api/custom-workouts') && appJs.text.includes('detail-run') &&
     appJs.text.includes('runnerAdvance') && appJs.text.includes('runnerTogglePause'));
+
+  /* ---------------- Today screen Run button ----------------
+     One big scarlet Run button on Today launches today's session
+     in the runner — the same sessionToRunnerPlan + openRunner
+     path as a session's own "Run this workout". Per group when
+     a coach's groups have different sessions today, a single
+     button when they share one, and no button at all on a rest
+     day. The decisions are pure helpers in app.js, evaluated
+     directly here against /api/coach/today-shaped fixtures. */
+  const trMatch = appJs.text.match(/\/\* TODAY-RUN-BEGIN \*\/([\s\S]*?)\/\* TODAY-RUN-END \*\//);
+  check('today-run section is in the shipped JS', !!trMatch);
+  if (trMatch) {
+    const tr = new Function(trMatch[1] +
+      '\nreturn { todayRunTargets, featuredRunSessionId };')();
+    const grp = (name, sessionId) => ({ group: { id: 'g-' + name, name }, assignment: { sessionId } });
+    check('today-run: no groups means no buttons',
+      Array.isArray(tr.todayRunTargets([])) && tr.todayRunTargets([]).length === 0 &&
+      tr.todayRunTargets(null).length === 0);
+    check('today-run: every group resting means no buttons',
+      tr.todayRunTargets([grp('Sprinters', null), grp('Distance', null)]).length === 0);
+    check('today-run: one group with a session is a single unnamed target',
+      JSON.stringify(tr.todayRunTargets([grp('Sprinters', 'ACC-01')])) ===
+      JSON.stringify([{ sessionId: 'ACC-01', groupName: null }]));
+    check('today-run: groups sharing one session collapse to a single button',
+      JSON.stringify(tr.todayRunTargets([grp('Sprinters', 'ACC-01'), grp('Jumpers', 'ACC-01')])) ===
+      JSON.stringify([{ sessionId: 'ACC-01', groupName: null }]));
+    const split = tr.todayRunTargets([grp('Sprinters', 'ACC-01'), grp('Distance', 'TEM-01'), grp('Throwers', 'ACC-01')]);
+    check('today-run: different sessions give one named target per group',
+      split.length === 3 &&
+      split[0].groupName === 'Sprinters' && split[0].sessionId === 'ACC-01' &&
+      split[1].groupName === 'Distance' && split[1].sessionId === 'TEM-01' &&
+      split[2].groupName === 'Throwers' && split[2].sessionId === 'ACC-01', split);
+    check('today-run: a resting group drops out when the others share a session',
+      JSON.stringify(tr.todayRunTargets([grp('Sprinters', 'ACC-01'), grp('Distance', null)])) ===
+      JSON.stringify([{ sessionId: 'ACC-01', groupName: null }]));
+    check('today-run: the featured session is the day\'s first code',
+      tr.featuredRunSessionId({ codes: ['ACC-01', 'STR-01'] }) === 'ACC-01' &&
+      tr.featuredRunSessionId({ codes: ['TEM-01'] }) === 'TEM-01');
+    check('today-run: a rest day (no codes) has no featured session',
+      tr.featuredRunSessionId({ codes: [] }) === null &&
+      tr.featuredRunSessionId({}) === null && tr.featuredRunSessionId(null) === null);
+  }
+  check('today-run buttons render and launch through the shared runner path',
+    appJs.text.includes('runTodayButtonHtml') && appJs.text.includes('data-run-today') &&
+    appJs.text.includes('wireRunTodayButtons') &&
+    appJs.text.includes('openRunner(sessionToRunnerPlan(s))') &&
+    appJs.text.includes('▶ Run today\'s workout') && appJs.text.includes('▶ Run — ') &&
+    appJs.text.includes('todayRunTargets(data.groups)'));
+  const stylesCss = await apiText(null, '/styles.css');
+  check('today-run button style is served and at least 56px tall',
+    stylesCss.status === 200 && /\.run-today-btn\s*\{[^}]*min-height:\s*56px/.test(stylesCss.text));
+  check('TV board render path stays free of the Today Run buttons',
+    !tvCode.includes('data-run-today') && !tvCode.includes('todayRunTargets') &&
+    !tvCode.includes('run-today-btn') && !tvCode.includes('featuredRunSessionId'));
 
   /* ---------------- athlete accounts + daily wellness check-in ----------------
      The first athlete-entered surface: a coach links an email to a

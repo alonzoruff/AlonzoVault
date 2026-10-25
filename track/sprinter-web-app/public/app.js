@@ -396,10 +396,17 @@ function renderHome() {
     const info = dayInfo(wk, todayKey);
     restKeys = DAY_KEYS.filter(dk => dk !== todayKey);
     const w = info.warmup ? state.sessions.get(info.warmup) : null;
+    /* Non-coaches get one big Run button for the day's featured
+       session, right under the day card. (Coaches get theirs —
+       one per group when groups differ — in the summary card.)
+       A rest day has no session code, so no button at all. */
+    const runSid = isCoachUser() ? null : featuredRunSessionId(info);
+    const runSession = runSid ? state.sessions.get(runSid) : null;
     todayHtml = `
     <h2>Today — ${DAY_NAMES[todayKey]}, ${fmtDate(info.date)}</h2>
     ${LANE_DIVIDER}
     ${dayCardHtml(wk, todayKey, info, { highlight: true })}
+    ${runSession ? runTodayButtonHtml({ sessionId: runSession.id, groupName: null }) : ''}
     ${w ? `<div class="card warmup-panel">
       <h3>Today's warm-up</h3>
       <p><a class="code-link" data-code="${w.id}">${w.id}</a> ${esc(w.name)} — run this before the session starts.</p>
@@ -467,6 +474,7 @@ function renderHome() {
   const startCards = $('#start-cards');
   if (startCards) startCards.addEventListener('click', () => showView('cards'));
   $$('#home-content .stat-num').forEach(countUp);
+  wireRunTodayButtons($('#home-content'));
   const gotoBtn = $('#home-content [data-goto]');
   if (gotoBtn) gotoBtn.addEventListener('click', () => showView(gotoBtn.dataset.goto));
   if (state.user) renderHomeLogs();
@@ -492,6 +500,18 @@ async function renderCoachToday() {
       ${g.assignment.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : ''}</span>
       <span class="muted">${g.completed} of ${g.total} done</span>
     </div>`).join('') : '<p class="muted">No groups yet — set them up in Roster &amp; Groups.</p>';
+  /* Big Run button(s) for today's sessions: one per group when
+     the groups' sessions differ, a single shared one when they
+     match, and none when nobody trains today. If no group
+     resolves a session (no groups set up yet) but the plan itself
+     trains today, fall back to the plan's featured session so
+     the one-tap run is still there. */
+  let runTargets = todayRunTargets(data.groups).filter(t => state.sessions.get(t.sessionId));
+  if (!runTargets.length) {
+    const sid = featuredRunSessionId(tvTodayInfo());
+    if (sid && state.sessions.get(sid)) runTargets = [{ sessionId: sid, groupName: null }];
+  }
+  const runHtml = runTargets.map(runTodayButtonHtml).join('');
   const open = data.healthFlags || [];
   const healthHtml = open.length ? open.slice(0, 8).map(c => `
     <div class="roster-row">
@@ -509,6 +529,7 @@ async function renderCoachToday() {
     <p class="muted">${esc(fmtDate(parseDate(data.date)))} · ${planLabel}</p>
     <h3>Today's assignments</h3>
     ${groupsHtml}
+    ${runHtml}
     <p><button class="btn secondary" id="ct-open-coach" type="button">Open today's checklist</button></p>
     <h3>Health flags${open.length ? ` (${open.length} open)` : ''}</h3>
     ${healthHtml}
@@ -518,6 +539,7 @@ async function renderCoachToday() {
     <p><button class="btn secondary" id="ct-open-wellness" type="button">Open Wellness</button></p>
   </div>`;
   $('#ct-open-coach').addEventListener('click', () => { state.feedDate = data.date; renderCoach(); showView('coach'); });
+  wireRunTodayButtons(el);
   $('#ct-open-health').addEventListener('click', () => { renderHealth(); showView('health'); });
   $('#ct-open-wellness').addEventListener('click', () => { renderWellness(); showView('wellness'); });
 }
@@ -2559,6 +2581,50 @@ function sessionToRunnerPlan(s) {
   return { title, blocks: [{ rounds: 1, restBetweenRounds: 0, restAfterBlock: 0, exercises: [{ name: s.name, reps: repsText }] }] };
 }
 /* RUNNER-CORE-END */
+
+/* TODAY-RUN-BEGIN */
+/* Which Run buttons belong on the Today screen. Pure decisions,
+   no DOM: the renderers turn these into buttons, and the test
+   suite evaluates this section directly.
+   todayRunTargets takes the groups array from /api/coach/today
+   (plan default + coach override already resolved server-side):
+   - no group has a session today -> no buttons at all
+   - every group shares one session -> one unnamed target
+   - groups differ -> one target per group, named, so the coach
+     runs the right session for the group in front of him
+   featuredRunSessionId is the plan's featured session for a day,
+   resolved the way the server resolves an assignment: the first
+   code in the day's text. A rest day has no codes, so no button. */
+function todayRunTargets(groups) {
+  const live = (groups || []).filter(g => g && g.assignment && g.assignment.sessionId);
+  if (!live.length) return [];
+  const distinct = [...new Set(live.map(g => g.assignment.sessionId))];
+  if (distinct.length === 1) return [{ sessionId: distinct[0], groupName: null }];
+  return live.map(g => ({ sessionId: g.assignment.sessionId, groupName: (g.group && g.group.name) || '' }));
+}
+function featuredRunSessionId(info) {
+  if (!info || !info.codes || !info.codes.length) return null;
+  return info.codes[0];
+}
+/* TODAY-RUN-END */
+
+/* The big scarlet Run button for the Today screen. The button
+   carries data-run-today with a session id; wireRunTodayButtons
+   launches the runner through the same sessionToRunnerPlan +
+   openRunner path as a session's own "Run this workout" button. */
+function runTodayButtonHtml(target) {
+  const label = target.groupName
+    ? `▶ Run — ${esc(target.groupName)} · ${esc(target.sessionId)}`
+    : `▶ Run today's workout · ${esc(target.sessionId)}`;
+  return `<button class="btn primary run-today-btn" type="button" data-run-today="${esc(target.sessionId)}">${label}</button>`;
+}
+function wireRunTodayButtons(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-run-today]').forEach(b => b.addEventListener('click', () => {
+    const s = state.sessions.get(b.dataset.runToday);
+    if (s) openRunner(sessionToRunnerPlan(s));
+  }));
+}
 
 /* ---------------- runner mode (display) ----------------
    A full-screen walk through a workout: the current exercise huge,
