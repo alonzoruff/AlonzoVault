@@ -1956,3 +1956,21 @@ body.runner-mode { overflow: hidden; }
   body.printing-report .report-card { page-break-inside: avoid; }
   @page { size: Letter; margin: 0.5in; }
 }
+
+/* DAILY CHECK-IN (athlete) + WELLNESS (coach) */
+.checkin-card h2 { margin-top: 0; }
+.checkin-streak { font-weight: 700; color: var(--scarlet); }
+.ci-label { font-weight: 700; margin: 16px 0 6px; }
+.ci-stepper { display: flex; align-items: center; gap: 14px; }
+.ci-sleep-val { font-size: 26px; font-weight: 800; min-width: 110px; text-align: center; }
+.ci-taps { display: flex; gap: 8px; flex-wrap: wrap; }
+.tap-btn {
+  min-width: 52px; min-height: 48px; padding: 10px 14px;
+  border: 2px solid var(--gray); border-radius: 12px;
+  background: #fff; font-size: 18px; font-weight: 700; cursor: pointer;
+}
+.tap-btn.on { background: var(--scarlet); border-color: var(--scarlet); color: #fff; }
+.ci-hurts { font-size: 17px; font-weight: 700; margin-top: 16px; }
+.ci-hurts input { width: 22px; height: 22px; }
+.ci-save { width: 100%; min-height: 52px; font-size: 18px; margin-top: 14px; }
+.wellness-row.flagged { background: #fdeef1; border-left: 4px solid var(--scarlet); border-radius: 8px; }

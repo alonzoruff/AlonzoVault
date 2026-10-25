@@ -230,7 +230,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is bumped to v16',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v16"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v17"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1434,7 +1434,252 @@ async function main() {
     appJs.text.includes('/api/custom-workouts') && appJs.text.includes('detail-run') &&
     appJs.text.includes('runnerAdvance') && appJs.text.includes('runnerTogglePause'));
 
-  return { coach, inventoryId: invBlocks, seedId: seed.id };
+  /* ---------------- athlete accounts + daily wellness check-in ----------------
+     The first athlete-entered surface: a coach links an email to a
+     roster profile; that account can then log sleep/soreness/energy
+     once a day. Runs its own fixtures so the other sections' roster
+     counts stay untouched. Boundary dates are computed from the
+     server's own today (reportToday), never hardcoded. */
+  const pad2w = (n) => String(n).padStart(2, '0');
+  const fmtDw = (d) => d.getFullYear() + '-' + pad2w(d.getMonth() + 1) + '-' + pad2w(d.getDate());
+  const reportToday = fmtDw(new Date());
+  const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return fmtDw(d); };
+  const yDay = addDays(reportToday, -1);
+  const y2Day = addDays(reportToday, -2);
+  r = await api(coach, 'POST', '/api/groups', { name: 'Wellness Squad' });
+  const wGroup = r.json.group;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Will', lastName: 'Wells', groupId: wGroup.id, events: ['sprinter'] });
+  const willP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Wendy', lastName: 'Waves', groupId: wGroup.id, events: ['jumper'] });
+  const wendyP = r.json.profile;
+
+  /* Unlinked athlete: browses fine, check-in shows the clear
+     "ask your coach" state (never an error wall). */
+  r = await api(null, 'POST', '/api/register', { email: 'will@test.com', password: 'testpass123' });
+  check('wellness athlete registers as athlete role', r.status === 201 && r.json.role === 'athlete', r.json);
+  const will = cookieOf(r);
+  r = await api(will, 'GET', '/api/checkin/today');
+  check('unlinked athlete check-in state is linked:false, not an error',
+    r.status === 200 && r.json.linked === false && r.json.checkin === null, r.json);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 8, soreness: 3, energy: 3 });
+  check('unlinked athlete check-in POST is 403 with the notLinked flag',
+    r.status === 403 && r.json.notLinked === true, r.json);
+  r = await api(will, 'GET', '/api/checkin/mine');
+  check('unlinked athlete history is empty with streak 0',
+    r.status === 200 && r.json.linked === false && r.json.entries.length === 0 && r.json.streak === 0, r.json);
+  r = await api(athlete, 'GET', '/api/checkin/today');
+  check('the fixture athlete account is likewise unlinked by default',
+    r.status === 200 && r.json.linked === false, r.json);
+
+  /* Coach wellness view on an empty check-in store: clean zeros. */
+  r = await api(coach, 'GET', '/api/wellness/today');
+  check('wellness today (empty): participation math is clean',
+    r.status === 200 && r.json.summary.checkedIn === 0 && r.json.summary.flagged === 0 &&
+    r.json.summary.participation === 0 && r.json.summary.avgSleep === null &&
+    r.json.rows.length === r.json.summary.total && r.json.summary.total >= 2, r.json.summary);
+  r = await api(coach, 'GET', '/api/reports/health');
+  check('reports health (empty): check-in aggregates are present and zero',
+    r.status === 200 && !!r.json.checkins && r.json.checkins.totalCheckins === 0 &&
+    r.json.checkins.participationByWeek.length === 0 && r.json.checkins.dailyTrend.length === 0,
+    r.json.checkins);
+  r = await api(coach, 'GET', '/api/coach/today');
+  check('coach today (empty): wellness block present with zeros',
+    r.status === 200 && !!r.json.wellness && r.json.wellness.checkedIn === 0 &&
+    Array.isArray(r.json.wellness.flagged) && r.json.wellness.flagged.length === 0, r.json.wellness);
+
+  /* Link management: validation + binding an EXISTING account. */
+  r = await api(coach, 'PUT', '/api/profiles/' + wendyP.id + '/link', { email: 'not-an-email' });
+  check('link with a bad email is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/profiles/nope/link', { email: 'x@test.com' });
+  check('link for an unknown profile is 404', r.status === 404, r.status);
+  r = await api(will, 'PUT', '/api/profiles/' + willP.id + '/link', { email: 'will@test.com' });
+  check('athlete cannot link profiles (coach gate)', r.status === 403, r.status);
+  r = await api(will, 'GET', '/api/wellness/today');
+  check('athlete cannot read the coach wellness view', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/wellness/today');
+  check('wellness view without login is 401', r.status === 401, r.status);
+  r = await api(coach, 'PUT', '/api/profiles/' + willP.id + '/link', { email: 'Will@Test.com ' });
+  check('link binds the existing account immediately (email normalized)',
+    r.status === 200 && r.json.accountLinked === true && r.json.profile.linkedEmail === 'will@test.com', r.json);
+  r = await api(will, 'GET', '/api/me');
+  check('bound account carries its profileId', r.status === 200 && r.json.profileId === willP.id, r.json);
+  r = await api(will, 'GET', '/api/checkin/today');
+  check('bound athlete sees the linked check-in state',
+    r.status === 200 && r.json.linked === true && r.json.profileId === willP.id && r.json.checkin === null, r.json);
+  r = await api(coach, 'PUT', '/api/profiles/' + wendyP.id + '/link', { email: 'will@test.com' });
+  check('linking an email already on another profile is 409', r.status === 409, r.status);
+
+  /* Link BEFORE register: the account is born bound. */
+  r = await api(coach, 'PUT', '/api/profiles/' + wendyP.id + '/link', { email: 'wendy@test.com' });
+  check('link before register reports no account yet',
+    r.status === 200 && r.json.accountLinked === false, r.json);
+  r = await api(null, 'POST', '/api/register', { email: 'wendy@test.com', password: 'testpass123' });
+  check('registering a linked email stays athlete role', r.status === 201 && r.json.role === 'athlete', r.json);
+  const wendy = cookieOf(r);
+  r = await api(wendy, 'GET', '/api/me');
+  check('link-before-register binds at registration', r.status === 200 && r.json.profileId === wendyP.id, r.json);
+
+  /* Validation: clean 400s, nothing half-saved. */
+  const badCheckins = [
+    [{ sleep: 2.5, soreness: 3, energy: 3 }, 'sleep below range'],
+    [{ sleep: 13.5, soreness: 3, energy: 3 }, 'sleep above range'],
+    [{ sleep: 7.3, soreness: 3, energy: 3 }, 'sleep off the half step'],
+    [{ sleep: 8, soreness: 0, energy: 3 }, 'soreness below range'],
+    [{ sleep: 8, soreness: 6, energy: 3 }, 'soreness above range'],
+    [{ sleep: 8, soreness: 2.5, energy: 3 }, 'soreness not whole'],
+    [{ sleep: 8, soreness: 3, energy: 0 }, 'energy below range'],
+    [{ sleep: 8, soreness: 3, energy: 6 }, 'energy above range'],
+    [{ sleep: 8, soreness: 3, energy: 3, hurts: true, painText: 'x'.repeat(241) }, 'pain text over 240 chars'],
+    [{ sleep: 8, soreness: 3, energy: 3, note: 'x'.repeat(501) }, 'note over 500 chars'],
+    [{ sleep: 8, soreness: 3, energy: 3, date: addDays(reportToday, 1) }, 'future date'],
+    [{ sleep: 8, soreness: 3, energy: 3, date: '2026-02-30' }, 'impossible date'],
+  ];
+  for (const [body, label] of badCheckins) {
+    r = await api(will, 'POST', '/api/checkin', body);
+    check('check-in validation 400: ' + label, r.status === 400, r.status);
+  }
+  r = await api(null, 'POST', '/api/checkin', { sleep: 8, soreness: 3, energy: 3 });
+  check('check-in without login is 401', r.status === 401, r.status);
+  r = await api(will, 'GET', '/api/checkin/mine');
+  check('failed validations saved nothing', r.status === 200 && r.json.entries.length === 0, r.json);
+
+  /* Upsert: one entry per athlete per day; resubmitting edits it. */
+  r = await api(will, 'POST', '/api/checkin', { sleep: 6, soreness: 3, energy: 3 });
+  check('first check-in creates (201)', r.status === 201 && r.json.created === true, r.json);
+  check('sleep exactly 6.0 is NOT flagged', r.json.checkin.flags.length === 0, r.json.checkin);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 5.5, soreness: 3, energy: 3 });
+  check('same-day resubmit edits (200, not created)',
+    r.status === 200 && r.json.created === false && r.json.checkin.sleep === 5.5, r.json);
+  check('sleep 5.5 IS flagged low-sleep',
+    JSON.stringify(r.json.checkin.flags) === JSON.stringify(['low-sleep']), r.json.checkin.flags);
+  r = await api(will, 'GET', '/api/checkin/mine');
+  check('still exactly one entry after the edit', r.status === 200 && r.json.entries.length === 1, r.json.entries);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4 });
+  check('final fixture values save cleanly with no flags',
+    r.status === 200 && r.json.checkin.sleep === 7 && r.json.checkin.flags.length === 0, r.json.checkin);
+
+  /* Isolation: the server binds by the caller's account, so a
+     profileId smuggled into the body is ignored, and Will's data
+     is never visible to Wendy. */
+  r = await api(wendy, 'POST', '/api/checkin',
+    { sleep: 5.5, soreness: 4, energy: 2, profileId: willP.id });
+  check('wendy check-in saves to HER profile (body profileId ignored)',
+    r.status === 201 && r.json.checkin.flags.length === 3, r.json);
+  r = await api(wendy, 'GET', '/api/checkin/today');
+  check('wendy sees her own check-in on her profile',
+    r.status === 200 && r.json.profileId === wendyP.id && r.json.checkin.sleep === 5.5, r.json);
+  r = await api(wendy, 'GET', '/api/checkin/mine');
+  check('wendy history holds only her own entry',
+    r.status === 200 && r.json.entries.length === 1 && r.json.entries[0].sleep === 5.5, r.json.entries);
+  r = await api(coach, 'GET', '/api/wellness/today');
+  const willRow = r.json.rows.find(x => x.profile.id === willP.id);
+  check('coach view shows will untouched by wendy submit',
+    !!willRow && willRow.checkedIn && willRow.checkin.sleep === 7 && willRow.flags.length === 0, willRow);
+  check('flag boundaries all hit at once (5.5 sleep, 4 soreness, 2 energy)',
+    r.status === 200 && r.json.summary.checkedIn === 2 && r.json.summary.flagged === 1 &&
+    r.json.summary.avgSleep === 6.25 && r.json.summary.avgSoreness === 3 && r.json.summary.avgEnergy === 3,
+    r.json.summary);
+  const wendyRow = r.json.rows.find(x => x.profile.id === wendyP.id);
+  check('wendy row carries all three flags',
+    !!wendyRow && JSON.stringify(wendyRow.flags) === JSON.stringify(['low-sleep', 'high-soreness', 'low-energy']),
+    wendyRow && wendyRow.flags);
+  r = await api(coach, 'GET', '/api/coach/today');
+  check('coach today wellness line counts check-ins + flags the right athlete',
+    r.status === 200 && r.json.wellness.checkedIn === 2 && r.json.wellness.flagged.length === 1 &&
+    r.json.wellness.flagged[0].profileId === wendyP.id, r.json.wellness);
+
+  /* Pain integration: exactly one athlete-reported concern per
+     check-in day, edited not duplicated, removable while untouched. */
+  r = await api(coach, 'GET', '/api/concerns');
+  const concernsBefore = r.json.concerns.length;
+  r = await api(will, 'POST', '/api/checkin',
+    { sleep: 7, soreness: 2, energy: 4, hurts: true, painText: 'Right hamstring tight' });
+  check('pain toggle saves on the check-in', r.status === 200 && r.json.checkin.hurts === true, r.json);
+  r = await api(coach, 'GET', '/api/concerns');
+  const athleteConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
+  check('pain toggle files exactly one athlete-reported concern',
+    r.json.concerns.length === concernsBefore + 1 && athleteConcerns.length === 1 &&
+    athleteConcerns[0].note === 'Right hamstring tight' && athleteConcerns[0].pain === null &&
+    athleteConcerns[0].status === 'new', athleteConcerns);
+  r = await api(will, 'POST', '/api/checkin',
+    { sleep: 7, soreness: 2, energy: 4, hurts: true, painText: 'Left hamstring tight now' });
+  check('editing the same day keeps one check-in', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/concerns');
+  const athleteConcerns2 = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
+  check('same-day edit updates the same concern instead of duplicating',
+    athleteConcerns2.length === 1 && athleteConcerns2[0].note === 'Left hamstring tight now', athleteConcerns2);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: false });
+  check('turning pain off saves cleanly', r.status === 200 && r.json.checkin.hurts === false, r.json);
+  r = await api(coach, 'GET', '/api/concerns');
+  check('pain off removes the still-new concern',
+    r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete').length === 0,
+    r.json.concerns.length);
+  r = await api(will, 'GET', '/api/checkin/mine');
+  check('will still has exactly one entry after the pain edits',
+    r.status === 200 && r.json.entries.length === 1, r.json.entries && r.json.entries.length);
+
+  /* Streak: past-day check-ins stack into a run. */
+  r = await api(will, 'POST', '/api/checkin', { date: yDay, sleep: 8, soreness: 2, energy: 4 });
+  check('yesterday check-in saves (201)', r.status === 201, r.status);
+  r = await api(will, 'POST', '/api/checkin', { date: y2Day, sleep: 8, soreness: 2, energy: 4 });
+  check('day-before check-in saves (201)', r.status === 201, r.status);
+  r = await api(will, 'GET', '/api/checkin/mine');
+  check('mine returns the last 7 days newest first with a 3-day streak',
+    r.status === 200 && r.json.entries.length === 3 && r.json.entries[0].date === reportToday &&
+    r.json.entries[2].date === y2Day && r.json.streak === 3, r.json);
+
+  /* Coach trends + reports aggregates on the fixture data. */
+  r = await api(coach, 'GET', '/api/wellness/trends?days=7');
+  const wTrend = (r.json.athletes || []).find(a => a.profile.id === willP.id);
+  check('trends cover 7 days with will on three of them',
+    r.status === 200 && r.json.dates.length === 7 && r.json.dates[6] === reportToday && !!wTrend &&
+    wTrend.days.filter(d => d.sleep !== null).length === 3, r.json.dates);
+  const teamToday = (r.json.team || []).find(d => d.date === reportToday);
+  check('team trend aggregates today across the roster',
+    !!teamToday && teamToday.checkedIn === 2 && teamToday.avgSleep === 6.25, teamToday);
+  r = await api(athlete, 'GET', '/api/wellness/trends?days=7');
+  check('athlete cannot read wellness trends', r.status === 403, r.status);
+  r = await api(coach, 'GET', '/api/reports/health');
+  check('reports health aggregates the check-ins',
+    r.status === 200 && r.json.checkins.totalCheckins === 4 &&
+    r.json.checkins.dailyTrend.some(d => d.date === reportToday && d.count === 2) &&
+    r.json.checkins.participationByWeek.length >= 1, r.json.checkins);
+
+  /* Unlink unbinds; re-link restores. */
+  r = await api(coach, 'DELETE', '/api/profiles/' + willP.id + '/link');
+  check('unlink reports the previous link', r.status === 200 && r.json.wasLinked === true, r.json);
+  r = await api(will, 'GET', '/api/me');
+  check('unlinked account loses its profileId', r.status === 200 && r.json.profileId === null, r.json);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 8, soreness: 3, energy: 3 });
+  check('unlinked athlete check-in is blocked again', r.status === 403 && r.json.notLinked === true, r.json);
+  r = await api(coach, 'DELETE', '/api/profiles/' + willP.id + '/link');
+  check('second unlink is a clean no-op', r.status === 200 && r.json.wasLinked === false, r.json);
+  r = await api(coach, 'PUT', '/api/profiles/' + willP.id + '/link', { email: 'will@test.com' });
+  check('re-link restores the binding', r.status === 200 && r.json.accountLinked === true, r.json);
+  r = await api(will, 'GET', '/api/checkin/mine');
+  check('check-in history is waiting after re-link',
+    r.status === 200 && r.json.linked === true && r.json.entries.length === 3 && r.json.streak === 3, r.json);
+
+  /* Privacy: check-in/wellness data never reaches the TV path or
+     any public surface. */
+  {
+    const tvStart = appJs.text.indexOf('TV BOARD');
+    const tvEnd = appJs.text.indexOf('/* ---------------- boot', tvStart);
+    const tvCode = appJs.text.slice(tvStart, tvEnd);
+    check('TV render path has no check-in or wellness references',
+      tvStart >= 0 && tvEnd > tvStart && !tvCode.includes('checkin') && !tvCode.includes('wellness'),
+      tvCode.length);
+    check('wellness view + check-in card are in the served page',
+      pageHtml.text.includes('id="view-wellness"') && pageHtml.text.includes('data-view="wellness"') &&
+      pageHtml.text.includes('id="checkin-slot"') && pageHtml.text.includes('id="checkin-history"'));
+    check('wellness + check-in wiring is in the served JS',
+      appJs.text.includes('renderWellness') && appJs.text.includes('renderCheckin') &&
+      appJs.text.includes('/api/checkin') && appJs.text.includes('/api/wellness/today'));
+    r = await api(null, 'GET', '/api/checkin/today');
+    check('check-in state without login is 401', r.status === 401, r.status);
+  }
+
+  return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id };
 }
 
 async function waitForServer(tries = 60) {
@@ -1483,6 +1728,14 @@ async function waitForServer(tries = 60) {
       rc.status === 200 && (rc.json.workouts || []).length === 1 &&
       rc.json.workouts[0].id === ctx.seedId,
       rc.json && (rc.json.workouts || []).length);
+    const rWell = await api(ctx.willCookie, 'GET', '/api/checkin/mine');
+    check('check-ins + the account link survive a server restart',
+      rWell.status === 200 && rWell.json.linked === true && rWell.json.entries.length === 3,
+      rWell.json && rWell.json.entries && rWell.json.entries.length);
+    const rWellCoach = await api(ctx.coach, 'GET', '/api/wellness/today');
+    check('coach wellness view still aggregates after the restart',
+      rWellCoach.status === 200 && rWellCoach.json.summary.checkedIn === 2,
+      rWellCoach.json && rWellCoach.json.summary);
     /* Deleting the seed must not resurrect it: delete it, restart
        once more on the same store, and the list stays empty. */
     const rd = await api(ctx.coach, 'DELETE', '/api/custom-workouts/' + ctx.seedId);

@@ -481,10 +481,15 @@ async function renderCoachToday() {
   const open = data.healthFlags || [];
   const healthHtml = open.length ? open.slice(0, 8).map(c => `
     <div class="roster-row">
-      <span>${c.flagged ? '🚩 ' : ''}<strong>${esc(c.athleteName)}</strong> — ${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}), pain ${c.pain}/10${c.impact === 'stopped' ? ' · stopped training' : ''}</span>
+      <span>${c.flagged ? '🚩 ' : ''}<strong>${esc(c.athleteName)}</strong> — ${c.source === 'athlete' ? 'athlete reported: ' + esc(c.note || 'something hurts') : `${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}), pain ${c.pain}/10`}${c.impact === 'stopped' ? ' · stopped training' : ''}</span>
       <span class="badge ${c.status === 'new' ? 'high' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
     </div>`).join('') + (open.length > 8 ? `<p class="muted">…and ${open.length - 8} more open in Aches &amp; Pains.</p>` : '')
     : '<p class="muted">No open health flags. Good news.</p>';
+  const w = data.wellness || { checkedIn: 0, total: 0, flagged: [] };
+  const wellHtml = w.total
+    ? `<p>Wellness: <strong>${w.checkedIn}/${w.total} checked in</strong>${w.flagged.length ? ` · ${w.flagged.length} flagged` : ''}</p>`
+      + w.flagged.map(f => `<div class="roster-row"><span>🚩 <strong>${esc(f.name)}</strong></span><span class="muted">${f.flags.map(fl => esc(CHECKIN_FLAG_LABELS[fl] || fl)).join(' · ')}</span></div>`).join('')
+    : '<p class="muted">No roster yet — check-ins appear here once athletes are linked.</p>';
   el.innerHTML = `<div class="card">
     <h2>Coach summary</h2>
     <p class="muted">${esc(fmtDate(parseDate(data.date)))} · ${planLabel}</p>
@@ -494,9 +499,13 @@ async function renderCoachToday() {
     <h3>Health flags${open.length ? ` (${open.length} open)` : ''}</h3>
     ${healthHtml}
     <p><button class="btn secondary" id="ct-open-health" type="button">Open Aches &amp; Pains</button></p>
+    <h3>Daily wellness</h3>
+    ${wellHtml}
+    <p><button class="btn secondary" id="ct-open-wellness" type="button">Open Wellness</button></p>
   </div>`;
   $('#ct-open-coach').addEventListener('click', () => { state.feedDate = data.date; renderCoach(); showView('coach'); });
   $('#ct-open-health').addEventListener('click', () => { renderHealth(); showView('health'); });
+  $('#ct-open-wellness').addEventListener('click', () => { renderWellness(); showView('wellness'); });
 }
 function renderHomeLogs() {
   const el = $('#home-logs');
@@ -791,6 +800,7 @@ function logEntryHtml(e) {
   </div>`;
 }
 function renderLog() {
+  renderCheckin();
   const gate = $('#log-gate');
   const main = $('#log-main');
   if (!state.user) {
@@ -838,7 +848,7 @@ function renderAccount() {
     $('#account-main').innerHTML = `<div class="card">
       <p>Logged in as <strong>${esc(state.user.email)}</strong>.</p>
       <p>${state.user.role === 'coach' ? '<span class="badge high">COACH ACCOUNT</span>' : '<span class="badge low">NOT A COACH ACCOUNT</span>'}</p>
-      <p class="muted">Accounts are for coaches only — athletes never log in. The coach records everything: groups and rosters, assignments, testing results, weekly numbers, and health concerns. Your personal log entries and cross-training swaps save to this account.</p>
+      <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Athlete account: once your coach links this email to your name on the team roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. The rest of the team side stays coach-run.'} Your personal log entries and cross-training swaps save to this account.</p>
       <button class="btn" id="acct-logout" type="button">Log out</button></div>
       <div id="coach-accounts"></div>
       <div id="coach-invites"></div>`;
@@ -887,15 +897,203 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
-  renderMeets(); renderReports(); renderCustomWorkouts();
+  renderMeets(); renderReports(); renderWellness(); renderCustomWorkouts();
   renderWarmupCards();
   if (isCoach) loadMedia();
 }
 
 /* ================================================================
+   DAILY WELLNESS CHECK-IN — the one thing an athlete logs.
+   One short screen: sleep, soreness, energy, and an optional
+   "something hurts". Coaches read it in the Wellness view and on
+   Coach Today. Check-in data is health data: it never appears on
+   any public or TV surface.
+   ================================================================ */
+const CHECKIN_FLAG_LABELS = { 'low-sleep': 'Low sleep', 'high-soreness': 'Very sore', 'low-energy': 'Low energy' };
+function isAthleteUser() { return !!(state.user && state.user.role === 'athlete'); }
+function checkinLine(c) {
+  return `Slept ${c.sleep}h · Soreness ${c.soreness}/5 · Energy ${c.energy}/5`
+    + (c.hurts && c.painText ? ` · Hurts: ${c.painText}` : '');
+}
+
+async function renderCheckin() {
+  const slot = $('#checkin-slot');
+  const hist = $('#checkin-history');
+  if (!isAthleteUser()) {
+    if (slot) slot.innerHTML = '';
+    if (hist) hist.innerHTML = '';
+    return;
+  }
+  try {
+    const [today, mine] = await Promise.all([api('/api/checkin/today'), api('/api/checkin/mine')]);
+    state.checkinToday = today; state.checkinMine = mine;
+  } catch (_) {
+    if (slot) slot.innerHTML = '';
+    if (hist) hist.innerHTML = '';
+    return;
+  }
+  const today = state.checkinToday;
+  const mine = state.checkinMine;
+  if (slot) {
+    if (!today.linked) {
+      slot.innerHTML = `<div class="card checkin-card">
+        <h2>Daily Check-In</h2>
+        <p><strong>Ask your coach to link your account.</strong></p>
+        <p class="muted">Once your coach links this email (${esc(state.user.email)}) to your name on the team roster, you can log your daily check-in here — sleep, soreness, and energy in under 20 seconds.</p>
+      </div>`;
+    } else {
+      const c = today.checkin;
+      const tapRow = (name, val) => [1, 2, 3, 4, 5].map(n =>
+        `<button type="button" class="tap-btn ${n === val ? 'on' : ''}" data-ci="${name}" data-val="${n}">${n}</button>`).join('');
+      slot.innerHTML = `<div class="card checkin-card">
+        <h2>Daily Check-In ${c ? '<span class="badge low">DONE TODAY ✓</span>' : ''}</h2>
+        <p class="muted">${esc(today.athleteName || '')} · ${esc(fmtDate(parseDate(today.date)))} — takes under 20 seconds. Your coaches see this before practice.</p>
+        ${mine && mine.streak ? `<p class="checkin-streak">🔥 Checked in ${mine.streak} day${mine.streak === 1 ? '' : 's'} in a row</p>` : ''}
+        <div class="ci-label">Sleep last night</div>
+        <div class="ci-stepper">
+          <button type="button" class="tap-btn" id="ci-sleep-minus" aria-label="Less sleep">−</button>
+          <span class="ci-sleep-val" id="ci-sleep-val">${c ? c.sleep : 8} hrs</span>
+          <button type="button" class="tap-btn" id="ci-sleep-plus" aria-label="More sleep">+</button>
+        </div>
+        <div class="ci-label">How sore are you? <span class="muted">(1 = fresh, 5 = very sore)</span></div>
+        <div class="ci-taps">${tapRow('soreness', c ? c.soreness : 3)}</div>
+        <div class="ci-label">Energy today <span class="muted">(1 = drained, 5 = full)</span></div>
+        <div class="ci-taps">${tapRow('energy', c ? c.energy : 3)}</div>
+        <label class="check-line ci-hurts"><input type="checkbox" id="ci-hurts" ${c && c.hurts ? 'checked' : ''}> Something hurts</label>
+        <div id="ci-pain-wrap" ${c && c.hurts ? '' : 'hidden'}>
+          <label>What hurts, and where? <input type="text" id="ci-pain" maxlength="240" value="${esc(c ? c.painText : '')}" placeholder="e.g. Right hamstring feels tight"></label>
+        </div>
+        <label>Anything else? (optional) <input type="text" id="ci-note" maxlength="500" value="${esc(c ? c.note : '')}" placeholder="Short note for your coach"></label>
+        <button class="btn primary ci-save" id="ci-save" type="button">${c ? 'Update check-in' : 'Save check-in'}</button>
+        ${state.ciMsg ? `<p class="muted">${esc(state.ciMsg)}</p>` : ''}
+      </div>`;
+      let sleep = c ? c.sleep : 8;
+      const picked = { soreness: c ? c.soreness : 3, energy: c ? c.energy : 3 };
+      const setSleep = (v) => {
+        sleep = Math.min(13, Math.max(3, Math.round(v * 2) / 2));
+        $('#ci-sleep-val').textContent = sleep + ' hrs';
+      };
+      $('#ci-sleep-minus').addEventListener('click', () => setSleep(sleep - 0.5));
+      $('#ci-sleep-plus').addEventListener('click', () => setSleep(sleep + 0.5));
+      slot.querySelectorAll('[data-ci]').forEach(b => b.addEventListener('click', () => {
+        picked[b.dataset.ci] = parseInt(b.dataset.val, 10);
+        slot.querySelectorAll(`[data-ci="${b.dataset.ci}"]`).forEach(x => x.classList.toggle('on', x === b));
+      }));
+      $('#ci-hurts').addEventListener('change', (e) => { $('#ci-pain-wrap').hidden = !e.target.checked; });
+      $('#ci-save').addEventListener('click', async () => {
+        try {
+          await apiPost('/api/checkin', {
+            sleep, soreness: picked.soreness, energy: picked.energy,
+            hurts: $('#ci-hurts').checked, painText: $('#ci-pain').value, note: $('#ci-note').value,
+          });
+          state.ciMsg = 'Saved — your coaches can see it. ✓';
+          await renderCheckin();
+        } catch (err) { alert(err.message); }
+      });
+    }
+  }
+  if (hist) {
+    if (!mine || !mine.linked) {
+      hist.innerHTML = '';
+    } else {
+      hist.innerHTML = `<div class="card">
+        <h2>Your check-ins — last 7 days</h2>
+        ${mine.entries.length
+          ? mine.entries.map(e => `<div class="roster-row"><span><strong>${esc(fmtDate(parseDate(e.date)))}</strong></span><span class="muted">${esc(checkinLine(e))}</span></div>`).join('')
+          : '<p class="muted">No check-ins yet — your first one takes under 20 seconds on the Today page.</p>'}
+        ${mine.streak ? `<p class="checkin-streak">🔥 ${mine.streak} day${mine.streak === 1 ? '' : 's'} in a row</p>` : ''}
+      </div>`;
+    }
+  }
+}
+
+/* Reports → Health: the check-in aggregates block. Shows the
+   participation-by-week bars and the team-average trend when
+   check-ins exist; a clean "not yet" line when they don't. */
+function checkinReportHtml(ci) {
+  if (!ci || !ci.totalCheckins) {
+    return '<h3>Daily check-ins</h3><p class="muted">No daily check-ins yet — participation and team averages appear here once athletes start checking in.</p>';
+  }
+  const part = ci.participationByWeek.length
+    ? chartLegend([{ name: 'Check-ins', cls: 'bar-a' }])
+      + barChart(ci.participationByWeek.map(w => ({ label: 'Wk of ' + w.week.slice(5) })),
+        [{ name: 'Check-ins', cls: 'bar-a', values: ci.participationByWeek.map(w => w.checkins) }], false)
+      + `<p class="muted">${ci.participationByWeek.map(w => `${esc(w.week)}: ${w.percent}% (${w.checkins} of ${w.possible})`).join(' · ')}</p>`
+    : '';
+  const pts = ci.dailyTrend.filter(d => d.avgSleep != null).map(d => ({ week: d.date, value: d.avgSleep }));
+  const trend = pts.length
+    ? lineChart([{ points: pts, color: '#cc0033' }], 'week', true)
+    : '';
+  return `<h3>Daily check-ins</h3>
+    <p class="muted">${ci.totalCheckins} check-in${ci.totalCheckins === 1 ? '' : 's'} logged so far.</p>
+    ${part}
+    ${trend ? `<h3>Team average sleep by day</h3>${trend}` : ''}`;
+}
+
+/* Coach Wellness view: who checked in today, the flags, and the
+   last 7 days per athlete plus team averages. Coach-only. */
+async function renderWellness() {
+  const el = $('#wellness-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Daily wellness check-ins live here.'); return; }
+  let today, trends;
+  try {
+    [today, trends] = await Promise.all([api('/api/wellness/today'), api('/api/wellness/trends?days=7')]);
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const s = today.summary;
+  const flagBadges = (flags) => flags.length
+    ? flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ')
+    : '<span class="badge low">OK</span>';
+  const rowsHtml = today.rows.length ? today.rows.map(rw => `
+    <div class="roster-row wellness-row ${rw.flags.length ? 'flagged' : ''}">
+      <span><strong>${esc(rw.profile.name)}</strong>${rw.profile.groupName ? ` <span class="muted">· ${esc(rw.profile.groupName)}</span>` : ''}</span>
+      ${rw.checkedIn
+        ? `<span class="muted">Slept ${rw.checkin.sleep}h · Sore ${rw.checkin.soreness}/5 · Energy ${rw.checkin.energy}/5${rw.checkin.hurts && rw.checkin.painText ? ` · <strong>Hurts:</strong> ${esc(rw.checkin.painText)}` : ''}</span><span>${flagBadges(rw.flags)}</span>`
+        : '<span class="muted">No check-in yet</span><span><span class="badge plain">MISSING</span></span>'}
+    </div>`).join('') : '<p class="muted">No athletes on the roster yet. Add them in Roster &amp; Groups and link their accounts so they can check in.</p>';
+  const sparkFor = (a) => {
+    const vals = a.days.map(d => d.sleep);
+    const pts = vals.map((v, i) => v == null ? null
+      : `${(2 + (i * 116) / Math.max(1, vals.length - 1)).toFixed(1)},${(30 - (v / 13) * 26).toFixed(1)}`).filter(Boolean).join(' ');
+    return pts ? `<svg width="120" height="32" viewBox="0 0 120 32" role="img" aria-label="Sleep hours, last 7 days"><polyline points="${pts}" fill="none" stroke="var(--scarlet)" stroke-width="2"/></svg>` : '<span class="muted">—</span>';
+  };
+  const trendsHtml = trends.athletes.length ? trends.athletes.map(a => `
+    <div class="roster-row">
+      <span><strong>${esc(a.profile.name)}</strong></span>
+      <span>${sparkFor(a)}</span>
+      <span class="muted">${a.days.map(d => d.sleep == null ? '–' : d.sleep).join(' · ')}</span>
+    </div>`).join('') : '<p class="muted">Nothing to trend yet.</p>';
+  const teamSleepPts = trends.team.filter(d => d.avgSleep != null).map(d => ({ week: d.date, value: d.avgSleep }));
+  const teamTrendHtml = teamSleepPts.length
+    ? lineChart([{ points: teamSleepPts, color: '#cc0033' }], 'week', true)
+    : '<p class="muted">No check-ins yet — the team trend appears once athletes start checking in.</p>';
+  el.innerHTML = `
+    <div class="stats-row">
+      <div class="stat-card"><span class="stat-num">${s.checkedIn}/${s.total}</span><span class="stat-label">Checked in today (${s.participation}%)</span></div>
+      <div class="stat-card"><span class="stat-num">${s.avgSleep == null ? '—' : s.avgSleep}</span><span class="stat-label">Avg sleep (hrs)</span></div>
+      <div class="stat-card"><span class="stat-num">${s.avgSoreness == null ? '—' : s.avgSoreness}</span><span class="stat-label">Avg soreness /5</span></div>
+      <div class="stat-card"><span class="stat-num">${s.avgEnergy == null ? '—' : s.avgEnergy}</span><span class="stat-label">Avg energy /5</span></div>
+      <div class="stat-card"><span class="stat-num">${s.flagged}</span><span class="stat-label">Flagged today</span></div>
+    </div>
+    <div class="card">
+      <h2>Today — ${esc(fmtDate(parseDate(today.date)))}</h2>
+      <p class="muted">Flags: slept under 6 hours · soreness 4–5 · energy 1–2. A "hurts" report also lands in Aches &amp; Pains for follow-up.</p>
+      ${rowsHtml}
+    </div>
+    <div class="card">
+      <h2>Last 7 days</h2>
+      <p class="muted">Sleep hours per athlete, oldest to newest.</p>
+      ${trendsHtml}
+      <h3>Team average sleep by day</h3>
+      ${teamTrendHtml}
+    </div>`;
+}
+
+/* ================================================================
    COACH SYSTEM — profiles, assignments, testing, weekly tracker,
-   health concerns, demo media. Coach-input only: athletes never
-   log in; the coach records everything.
+   health concerns, demo media. Coach-input, with one exception:
+   the daily wellness check-in an athlete logs themselves, once a
+   coach links their account to a roster profile.
    ================================================================ */
 const isCoachUser = () => !!(state.user && state.user.role === 'coach');
 const FEEL_OPTIONS = '<option value="">—</option><option value="1">1 — rough</option><option value="2">2</option><option value="3">3 — solid</option><option value="4">4</option><option value="5">5 — great</option>';
@@ -1404,6 +1602,12 @@ async function renderGroups() {
           <label>Events (comma list — sprinter, jumper, hurdler…)
             <input type="text" id="ee-${pr.id}" value="${esc((pr.events || []).join(', '))}"></label>
           <button class="btn primary" data-save-profile="${pr.id}" type="button">Save profile</button>
+          <h3>Account link — daily check-in</h3>
+          <p class="muted">Link the email this athlete uses for their account and they can log the daily check-in (sleep, soreness, energy) themselves. Nothing else opens up.</p>
+          <label>Account email <input type="email" id="lk-${pr.id}" value="${esc(pr.linkedEmail || '')}" placeholder="athlete@example.com"></label>
+          <button class="btn primary" data-link-profile="${pr.id}" type="button">${pr.linkedEmail ? 'Update link' : 'Link account'}</button>
+          ${pr.linkedEmail ? `<button class="btn danger" data-unlink-profile="${pr.id}" type="button">Unlink</button>
+          <p class="muted">Linked to ${esc(pr.linkedEmail)} — this athlete can check in.</p>` : ''}
         </details>
       </div>`).join('');
   }).join('');
@@ -1486,6 +1690,18 @@ async function renderGroups() {
       });
       renderGroups();
     } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-link-profile]').forEach(b => b.addEventListener('click', async () => {
+    const id = b.dataset.linkProfile;
+    try {
+      await apiPut('/api/profiles/' + encodeURIComponent(id) + '/link', { email: $('#lk-' + CSS.escape(id)).value });
+      renderGroups();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-unlink-profile]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Unlink this account? The athlete keeps their account but can no longer check in.')) return;
+    try { await apiDel('/api/profiles/' + encodeURIComponent(b.dataset.unlinkProfile) + '/link'); renderGroups(); }
+    catch (err) { alert(err.message); }
   }));
   el.querySelectorAll('[data-rename-group]').forEach(b => b.addEventListener('click', async () => {
     const g = state.groups.find(x => x.id === b.dataset.renameGroup);
@@ -2031,8 +2247,9 @@ async function renderHealth() {
     <div class="card concern-card ${c.flagged ? 'flagged' : ''}">
       <div class="roster-row">
         <span><strong>${esc(c.athleteName)}</strong> · ${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}) — ${esc(FEELING_LABELS[c.feeling] || c.feeling)}</span>
-        <span><span class="badge ${c.pain >= 7 ? 'high' : 'plain'}">PAIN ${c.pain}/10</span>
+        <span>${c.pain == null ? '<span class="badge plain">NO SCORE YET</span>' : `<span class="badge ${c.pain >= 7 ? 'high' : 'plain'}">PAIN ${c.pain}/10</span>`}
         ${c.impact === 'stopped' ? '<span class="badge high">STOPPED</span>' : `<span class="badge plain">${esc(IMPACT_LABELS[c.impact] || c.impact)}</span>`}
+        ${c.source === 'athlete' ? '<span class="badge star">ATHLETE REPORTED</span>' : ''}
         <span class="badge ${c.status === 'cleared' ? 'low' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span></span>
       </div>
       <p class="muted">Started ${esc(c.started)} · filed ${esc(String(c.createdAt).slice(0, 10))}</p>
@@ -2079,8 +2296,8 @@ async function renderHealth() {
     ${LANE_DIVIDER}
     ${Object.keys(byAthlete).sort().map(name => `
       <details class="card"><summary><strong>${esc(name)}</strong> — ${byAthlete[name].length} concern${byAthlete[name].length === 1 ? '' : 's'}</summary>
-      ${byAthlete[name].map(c => `<div class="roster-row"><span>${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}) · ${esc(FEELING_LABELS[c.feeling] || c.feeling)} · started ${esc(c.started)}</span>
-        <span><span class="badge ${c.pain >= 7 ? 'high' : 'plain'}">${c.pain}/10</span> <span class="badge plain">${esc(STATUS_LABELS[c.status] || c.status)}</span></span></div>`).join('')}
+      ${byAthlete[name].map(c => `<div class="roster-row"><span>${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}) · ${esc(FEELING_LABELS[c.feeling] || c.feeling)} · started ${esc(c.started)}${c.source === 'athlete' ? ' · athlete reported' : ''}</span>
+        <span><span class="badge ${c.pain != null && c.pain >= 7 ? 'high' : 'plain'}">${c.pain == null ? 'no score' : c.pain + '/10'}</span> <span class="badge plain">${esc(STATUS_LABELS[c.status] || c.status)}</span></span></div>`).join('')}
       </details>`).join('') || '<p class="muted">Nothing yet.</p>'}`;
   $('#concern-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2900,7 +3117,8 @@ async function renderReports() {
     + (health.byMonth.length
       ? barChart(health.byMonth.map(m => ({ label: monthLabel(m.month) })),
         [{ name: 'Concerns opened', cls: 'bar-a', values: health.byMonth.map(m => m.opened) }], false)
-      : '<p class="muted">No aches &amp; pains recorded yet.</p>');
+      : '<p class="muted">No aches &amp; pains recorded yet.</p>')
+    + checkinReportHtml(health.checkins);
   el.innerHTML = `
     <div class="card">
       <h2>Team strength trend</h2>
