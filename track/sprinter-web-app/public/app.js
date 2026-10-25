@@ -23,6 +23,8 @@ const state = {
   invEditId: null,
   announcements: [],
   annEditId: null,
+  devTab: 'forcedecks',
+  devPreviews: {},
   cwWorkouts: [],
   cwEditId: null,
   cwDraft: null,
@@ -116,8 +118,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v35';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v35';
+const APP_VERSION = 'v36';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v36';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -304,12 +306,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -358,6 +360,7 @@ function showView(name) {
   if (name === 'programs') renderPrograms();
   if (name === 'calendar') renderCalendar();
   if (name === 'data') renderData();
+  if (name === 'devices') renderDevices();
   if (name === 'exercises') renderExercises();
   window.scrollTo(0, 0);
 }
@@ -1493,7 +1496,7 @@ async function renderAms() {
           ${Object.keys(AMS_STATUS_LABELS).map(s => `<option value="${s}" ${state.amsStatus === s ? 'selected' : ''}>${AMS_STATUS_LABELS[s]}</option>`).join('')}
         </select></label>
       </div>
-      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Attendance = 2+ absences in the last 14 days · Health = an open aches &amp; pains concern. Tap an athlete for their full page.</p>
+      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Attendance = 2+ absences in the last 14 days · Health = an open aches &amp; pains concern · plus the device flags from the latest ForceDecks / NordBord sessions (imbalance, asymmetry, jump drop-off). Tap an athlete for their full page.</p>
       <div id="ams-table"></div>
     </div>`;
   const paintTable = () => {
@@ -1536,6 +1539,26 @@ async function renderAmsProfile(el, profileId) {
   const w = d.wellness;
   const att = d.attendance;
   const attLine = (label, win) => `<p><strong>${label}:</strong> ${win.marked} marked · ${win.attended} attended · ${win.absent} absent${win.percent == null ? '' : ' · ' + win.percent + '% attended'}</p>`;
+  /* Devices strip: the latest session per device (server-computed
+     from the same testing store the Testing card reads), shown only
+     for devices this athlete actually has data on. */
+  const devNames = { forcedecks: 'ForceDecks', nordbord: 'NordBord', tapex: 'T-APEX' };
+  const devEntries = Object.keys(devNames)
+    .filter(k => d.devices && d.devices[k])
+    .map(k => {
+      const s = d.devices[k];
+      const metrics = (s.metrics || [])
+        .map(m => `${esc(m.name.replace(/^[^·]+·\s*/, ''))} <strong>${esc(fmtNum(m.value))}</strong>`)
+        .join(' · ');
+      const pair = k === 'nordbord' && s.left != null && s.right != null
+        ? ` <span class="muted">(L ${esc(fmtNum(s.left))} / R ${esc(fmtNum(s.right))})</span>` : '';
+      return `<div class="roster-row"><span><strong>${devNames[k]}</strong> — latest ${esc(s.date)}</span><span>${metrics}${pair}</span></div>`;
+    });
+  const devicesHtml = devEntries.length ? `
+    <div class="card">
+      <h2>Devices — latest sessions</h2>
+      ${devEntries.join('')}
+    </div>` : '';
   el.innerHTML = `
     <button class="btn secondary back" id="ams-back" type="button">← AMS roster</button>
     <div class="card">
@@ -1569,7 +1592,7 @@ async function renderAmsProfile(el, profileId) {
         <thead><tr><th>Test</th><th>Latest</th><th>Best</th><th>Latest date</th></tr></thead>
         <tbody>${d.testing.map(t => `<tr><td>${esc(t.name)}</td><td>${t.latest == null ? '—' : esc(fmtNum(t.latest)) + ' ' + esc(t.unit)}</td><td>${t.best == null ? '—' : esc(fmtNum(t.best)) + ' ' + esc(t.unit)}</td><td>${esc(t.latestDate || '—')}</td></tr>`).join('')}</tbody>
       </table></div>` : '<p class="muted">No testing results yet.</p>'}
-    </div>
+    </div>${devicesHtml}
     <div class="card">
       <h2>Meet results &amp; PRs</h2>
       ${d.meetPrs.length ? `<div class="table-wrap"><table class="ranked">
@@ -5324,6 +5347,240 @@ async function renderData() {
       }
     });
   });
+}
+
+/* ================================================================
+   DEVICES — ForceDecks, NordBord, T-APEX, and the VALD API status.
+   Imports are two steps on purpose: pick a file and the app shows
+   how every row matched the roster BEFORE anything is filed;
+   unmatched rows get a roster dropdown so the coach maps them by
+   hand, and rows still unmapped at commit are skipped and counted
+   by the server — never guessed. The T-APEX tab leads with its
+   quick-entry card (the tablet has no feed, so hand entry is the
+   guaranteed path) and also takes the same file import. Device
+   results are testing results, so they read in Testing, report
+   cards, and the AMS profile with no extra wiring here.
+   ================================================================ */
+const DEVICE_TABS = [
+  ['forcedecks', 'ForceDecks'], ['nordbord', 'NordBord'],
+  ['tapex', 'T-APEX'], ['valdapi', 'VALD API'],
+];
+const DEVICE_NAMES = { forcedecks: 'ForceDecks', nordbord: 'NordBord', tapex: 'T-APEX' };
+const TAPEX_FIELD_LABELS = {
+  load: 'Load (kg)', peakSpeed: 'Peak Speed (m/s)',
+  maxForce: 'Max Force (N)', distance: 'Distance (m)',
+};
+let devFlash = '';
+
+async function renderDevices() {
+  const el = $('#devices-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Device results live here.'); return; }
+  await refreshProfiles();
+  const tab = state.devTab;
+  el.innerHTML = `
+    <nav class="seg" aria-label="Devices">${DEVICE_TABS.map(([id, label]) =>
+      `<button type="button" class="seg-btn${tab === id ? ' active' : ''}" data-dev-tab="${id}">${label}</button>`).join('')}
+    </nav>
+    ${devFlash ? `<div class="card"><p>${esc(devFlash)}</p></div>` : ''}
+    <div id="devices-panel"></div>`;
+  devFlash = '';
+  el.querySelectorAll('[data-dev-tab]').forEach(b => b.addEventListener('click', () => {
+    state.devTab = b.dataset.devTab;
+    renderDevices();
+  }));
+  const panel = $('#devices-panel');
+  if (tab === 'valdapi') { renderValdApiPanel(panel); return; }
+  if (tab === 'tapex') paintTapexPanel(panel);
+  else panel.innerHTML = deviceImportCardHtml(tab);
+  wireDeviceFile(tab);
+  paintDevicePreview(tab);
+  loadDeviceSummary(tab);
+}
+function deviceImportCardHtml(device) {
+  const name = DEVICE_NAMES[device];
+  const from = device === 'tapex'
+    ? 'If the tablet app gives you a session export file, it imports here the same way.'
+    : 'Export the results file from VALD Hub, then pick it here.';
+  return `
+    <div class="card">
+      <h2>Import ${esc(name)} results</h2>
+      <p class="muted">${from} Nothing is filed until you review the matches and confirm: rows are matched to the roster by name, any row the file cannot name waits for you to map it by hand below, and anything left unmapped is skipped and counted — never guessed.</p>
+      <p><input type="file" id="dev-file" accept=".csv,text/csv"></p>
+      <div id="dev-preview-slot"></div>
+    </div>
+    <div class="card">
+      <h2>Recent ${esc(name)} sessions</h2>
+      <div id="dev-summary-slot"><p class="muted">Loading…</p></div>
+    </div>`;
+}
+function wireDeviceFile(device) {
+  const input = $('#dev-file');
+  if (!input) return;
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const slot = $('#dev-preview-slot');
+    slot.innerHTML = '<p class="muted">Reading the file…</p>';
+    try {
+      const text = await file.text();
+      state.devPreviews[device] = await apiPost('/api/devices/' + device + '/preview', { csv: text });
+      paintDevicePreview(device);
+    } catch (err) {
+      slot.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
+    }
+  });
+}
+function paintDevicePreview(device) {
+  const slot = $('#dev-preview-slot');
+  if (!slot) return;
+  const pv = state.devPreviews[device];
+  if (!pv) { slot.innerHTML = ''; return; }
+  const nameOf = (pid) => {
+    const pr = state.profiles.find(x => x.id === pid);
+    return pr ? pr.name : pid;
+  };
+  const matched = pv.rows.filter(r => r.matchStatus === 'matched').length;
+  const unmapped = pv.rows.length - matched;
+  slot.innerHTML = `
+    <p><strong>${pv.rows.length + pv.errors.length} rows read</strong> — ${matched} matched to the roster${unmapped ? ' · ' + unmapped + ' to map by hand' : ''}${pv.errors.length ? ' · ' + pv.errors.length + ' could not be read' : ''}.</p>
+    ${pv.errors.length ? pv.errors.map(e => `<p class="error">Row ${e.rowIndex}${e.rawName ? ' (' + esc(e.rawName) + ')' : ''}: ${esc(e.reason)}</p>`).join('') : ''}
+    ${pv.rows.length ? `<div class="table-wrap"><table class="ranked">
+      <thead><tr><th>Athlete in file</th><th>Date</th><th>Results</th><th>Files to</th></tr></thead>
+      <tbody>${pv.rows.map(r => `<tr>
+        <td>${esc(r.rawName)}${r.matchNote ? `<br><span class="muted">${esc(r.matchNote)}</span>` : ''}</td>
+        <td>${esc(r.date)}</td>
+        <td>${Object.entries(r.metrics).map(([k, v]) => esc(k) + ' ' + esc(fmtNum(v))).join(' · ')}</td>
+        <td>${r.matchStatus === 'matched'
+          ? esc(nameOf(r.profileId))
+          : `<select data-dev-map="${r.rowIndex}">${profileOptions('', true)}</select>`}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <p><button type="button" class="btn primary" id="dev-commit" style="width:auto">File these results</button>
+    <button type="button" class="btn secondary" id="dev-discard" style="width:auto">Discard</button></p>
+    <div id="dev-commit-result"></div>` : '<p class="muted">No readable rows in this file.</p>'}`;
+  const discard = $('#dev-discard');
+  if (discard) discard.addEventListener('click', () => {
+    state.devPreviews[device] = null;
+    paintDevicePreview(device);
+    const f = $('#dev-file');
+    if (f) f.value = '';
+  });
+  const commit = $('#dev-commit');
+  if (commit) commit.addEventListener('click', async () => {
+    const rows = pv.rows.map(r => {
+      let pid = r.profileId;
+      if (!pid) {
+        const sel = slot.querySelector('[data-dev-map="' + r.rowIndex + '"]');
+        pid = sel && sel.value ? sel.value : null;
+      }
+      return { profileId: pid, date: r.date, metrics: r.metrics };
+    });
+    const out = $('#dev-commit-result');
+    out.innerHTML = '<p class="muted">Filing…</p>';
+    try {
+      const res = await apiPost('/api/devices/' + device + '/commit', { rows });
+      state.devPreviews[device] = null;
+      devFlash = 'Filed ' + res.filed + ' athlete row' + (res.filed === 1 ? '' : 's')
+        + ' (' + res.results + ' results) from the ' + DEVICE_NAMES[device] + ' file'
+        + (res.skipped ? ' · ' + res.skipped + ' skipped — left unmapped or unreadable' : '') + '.';
+      renderDevices();
+    } catch (err) {
+      out.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
+    }
+  });
+}
+async function loadDeviceSummary(device) {
+  const slot = $('#dev-summary-slot');
+  if (!slot) return;
+  try {
+    const data = await api('/api/devices/' + device + '/summary');
+    slot.innerHTML = data.days.length
+      ? data.days.map(d => `<div class="roster-row"><span><strong>${esc(d.date)}</strong> — ${esc(d.title)}</span><span class="muted">${d.athletes} athlete${d.athletes === 1 ? '' : 's'} · ${d.results} results</span></div>`).join('')
+      : '<p class="muted">No ' + esc(DEVICE_NAMES[device]) + ' sessions filed yet.</p>';
+  } catch (err) {
+    slot.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
+  }
+}
+function paintTapexPanel(panel) {
+  panel.innerHTML = `
+    <div class="card">
+      <h2>T-APEX quick entry</h2>
+      <p class="muted">The T-APEX lives on its own tablet — no feed, no sync — so key the session in here. Fill in whichever numbers the session produced; at least one is required. Entries file onto the athlete's T-APEX test day, in their testing history.</p>
+      <div class="filter-row">
+        <label>Athlete <select id="ta-athlete">${profileOptions('', true)}</select></label>
+        <label>Date <input type="date" id="ta-date" value="${esc(dateStrOf(todayLocal()))}"></label>
+      </div>
+      <div class="filter-row">
+        <label>Load (kg) <input type="number" id="ta-load" min="0" step="any" inputmode="decimal"></label>
+        <label>Peak speed (m/s) <input type="number" id="ta-speed" min="0" step="any" inputmode="decimal"></label>
+        <label>Max force (N) <input type="number" id="ta-force" min="0" step="any" inputmode="decimal"></label>
+        <label>Distance (m) <input type="number" id="ta-distance" min="0" step="any" inputmode="decimal"></label>
+      </div>
+      <button class="btn primary" id="ta-save" type="button" style="width:auto">Save entry</button>
+      <p class="error" id="ta-err"></p>
+    </div>
+    <div class="card">
+      <h2>Recent T-APEX entries</h2>
+      <div id="ta-entries-slot"><p class="muted">Loading…</p></div>
+    </div>
+    ${deviceImportCardHtml('tapex')}`;
+  loadTapexEntries();
+  $('#ta-save').addEventListener('click', async () => {
+    const errEl = $('#ta-err');
+    errEl.textContent = '';
+    const payload = { profileId: $('#ta-athlete').value, date: $('#ta-date').value };
+    const fields = [['load', '#ta-load'], ['peakSpeed', '#ta-speed'], ['maxForce', '#ta-force'], ['distance', '#ta-distance']];
+    for (const [field, sel] of fields) {
+      const v = $(sel).value.trim();
+      if (v !== '') payload[field] = Number(v);
+    }
+    if (!payload.profileId) { errEl.textContent = 'Pick the athlete first.'; return; }
+    try {
+      await apiPost('/api/devices/tapex/entry', payload);
+      const pr = state.profiles.find(x => x.id === payload.profileId);
+      devFlash = 'T-APEX entry saved for ' + (pr ? pr.name : 'the athlete') + ' (' + payload.date + ').';
+      renderDevices();
+    } catch (err) { errEl.textContent = err.message; }
+  });
+}
+async function loadTapexEntries() {
+  const slot = $('#ta-entries-slot');
+  if (!slot) return;
+  try {
+    const data = await api('/api/devices/tapex/entries');
+    slot.innerHTML = data.entries.length ? data.entries.map((e, i) => {
+      const vals = Object.entries(e.values)
+        .map(([f, v]) => esc(TAPEX_FIELD_LABELS[f] || f) + ' <strong>' + esc(fmtNum(v)) + '</strong>').join(' · ');
+      const extra = (e.extra || [])
+        .map(x => esc(x.name) + ' <strong>' + esc(fmtNum(x.value)) + '</strong>').join(' · ');
+      return `<div class="roster-row"><span><strong>${esc(e.athleteName)}</strong> · ${esc(e.date)}</span>
+        <span>${[vals, extra].filter(Boolean).join(' · ')}
+        <button class="btn secondary" data-ta-del="${i}" type="button" style="width:auto">Delete</button></span></div>`;
+    }).join('') : '<p class="muted">No T-APEX entries yet.</p>';
+    slot.querySelectorAll('[data-ta-del]').forEach(b => b.addEventListener('click', async () => {
+      const entry = data.entries[Number(b.dataset.taDel)];
+      if (!entry) return;
+      if (!confirm('Delete the T-APEX entry for ' + entry.athleteName + ' on ' + entry.date + '?')) return;
+      try {
+        for (const id of entry.resultIds) {
+          await apiDel('/api/results/' + encodeURIComponent(id));
+        }
+        devFlash = 'Deleted the T-APEX entry for ' + entry.athleteName + ' (' + entry.date + ').';
+        renderDevices();
+      } catch (err) { alert(err.message); }
+    }));
+  } catch (err) {
+    slot.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
+  }
+}
+function renderValdApiPanel(panel) {
+  panel.innerHTML = `
+    <div class="card">
+      <h2>VALD API <span class="badge plain">NOT CONNECTED</span></h2>
+      <p>API credentials have been requested from VALD. When they arrive, this panel is where the connection gets configured — and once it is live, ForceDecks and NordBord results will sync automatically instead of being imported from files.</p>
+      <p class="muted">Until then, use the ForceDecks and NordBord tabs: export the results file from VALD Hub and import it here — every number lands in the athlete's testing history, labeled by device, exactly as a sync would file it.</p>
+    </div>`;
 }
 
 /* The coach manager: compose form on top, every post below with

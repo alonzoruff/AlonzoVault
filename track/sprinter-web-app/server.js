@@ -1608,6 +1608,11 @@ function testingHistoryFor(profileId) {
      (the concern store's live statuses are new/monitoring/cleared;
      'open' is accepted defensively so a future status rename can
      never silently hide an active concern).
+   Plus three device flags from the athlete's latest ForceDecks /
+   NordBord sessions — NordBord imbalance (>10% left/right max
+   force apart), ForceDecks asymmetry (an 'asym' metric over 10),
+   and Jump drop-off (latest jump height >10% under the best prior
+   session) — specified where they are computed, below.
    Every flag carries the count behind it, stated in its detail. */
 function amsFlagsFor(pr, today) {
   const flags = [];
@@ -1660,6 +1665,70 @@ function amsFlagsFor(pr, today) {
       detail: openConcerns + (openConcerns === 1 ? ' open concern' : ' open concerns'),
     });
   }
+  /* Device flags, each read off the athlete's LATEST session for
+     that device (deviceSessionsFor):
+     - NordBord imbalance: the latest NordBord session's left/right
+       max-force pair differs by more than 10% of the stronger side.
+     - ForceDecks asymmetry: the latest ForceDecks session carries
+       an asymmetry metric (label contains 'asym') reading over 10
+       in either direction — VALD reports asymmetry signed, so the
+       magnitude is what counts.
+     - Jump drop-off: the latest ForceDecks jump-height value sits
+       more than 10% below the best value from any PRIOR session of
+       the same test (a first-ever session can never flag). */
+  const nbSessions = deviceSessionsFor(pr.id, 'nordbord');
+  if (nbSessions.length) {
+    const latestNb = nbSessions[nbSessions.length - 1];
+    const pair = nordbordPairFor(latestNb);
+    if (pair && Math.max(pair.left, pair.right) > 0) {
+      const asym = Math.abs(pair.left - pair.right) / Math.max(pair.left, pair.right);
+      if (asym > 0.10) {
+        flags.push({
+          key: 'nordbord-imbalance', label: 'NordBord imbalance',
+          count: Math.round(asym * 100),
+          detail: 'NordBord max force is ' + Math.round(asym * 100)
+            + '% different left vs right (L ' + pair.left + ' / R ' + pair.right
+            + ', latest ' + latestNb.date + ')',
+        });
+      }
+    }
+  }
+  const fdSessions = deviceSessionsFor(pr.id, 'forcedecks');
+  if (fdSessions.length) {
+    const latestFd = fdSessions[fdSessions.length - 1];
+    const asymMetrics = latestFd.metrics.filter(m => m.name.toLowerCase().includes('asym'));
+    const worstAsym = asymMetrics.length
+      ? asymMetrics.reduce((acc, m) => (Math.abs(m.value) > Math.abs(acc.value) ? m : acc))
+      : null;
+    if (worstAsym && Math.abs(worstAsym.value) > 10) {
+      flags.push({
+        key: 'forcedecks-asymmetry', label: 'ForceDecks asymmetry',
+        count: Math.round(Math.abs(worstAsym.value)),
+        detail: worstAsym.name + ' reads ' + worstAsym.value
+          + ' (latest ForceDecks session, ' + latestFd.date + ')',
+      });
+    }
+    for (const m of latestFd.metrics) {
+      if (!m.name.toLowerCase().includes('jump height')) continue;
+      let bestPrior = null;
+      for (const s of fdSessions.slice(0, -1)) {
+        for (const pm of s.metrics) {
+          if (pm.testKey === m.testKey && (bestPrior === null || pm.value > bestPrior)) {
+            bestPrior = pm.value;
+          }
+        }
+      }
+      if (bestPrior !== null && bestPrior > 0 && m.value < bestPrior * 0.9) {
+        const drop = Math.round((1 - m.value / bestPrior) * 100);
+        flags.push({
+          key: 'jump-dropoff', label: 'Jump drop-off', count: drop,
+          detail: m.name + ' is ' + drop + '% below this athlete\'s best of '
+            + bestPrior + ' (latest ' + m.value + ', ' + latestFd.date + ')',
+        });
+        break;
+      }
+    }
+  }
   return flags;
 }
 /* The wire shape of one private coach note. */
@@ -1669,6 +1738,314 @@ function publicCoachNote(n) {
     authorId: n.authorId, authorEmail: n.authorEmail,
     createdAt: n.createdAt, updatedAt: n.updatedAt,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Devices: ForceDecks, NordBord, T-APEX                               */
+/* ------------------------------------------------------------------ */
+/* Device results are TESTING results: a VALD Hub CSV (or the T-APEX
+   tablet's export, or the T-APEX quick-entry card) files each number
+   as a result on a per-device test day, under a custom test whose
+   name carries the device label — so device history shows up in the
+   Testing views, the report card, and the AMS profile with no
+   special cases downstream. The device itself is remembered on the
+   test day (day.device), which is how find-or-create stays
+   idempotent and how the AMS device strip + flags find a device's
+   sessions again. */
+const DEVICES = {
+  forcedecks: { id: 'forcedecks', name: 'ForceDecks', prefix: 'fd' },
+  nordbord: { id: 'nordbord', name: 'NordBord', prefix: 'nb' },
+  tapex: { id: 'tapex', name: 'T-APEX', prefix: 'ta' },
+};
+/* The T-APEX quick-entry card's four fields, with the metric label
+   each one files under (unit stated, so it lands in the test name). */
+const TAPEX_METRICS = [
+  { field: 'load', label: 'Load (kg)' },
+  { field: 'peakSpeed', label: 'Peak Speed (m/s)' },
+  { field: 'maxForce', label: 'Max Force (N)' },
+  { field: 'distance', label: 'Distance (m)' },
+];
+
+/* A small RFC-4180 CSV reader: quoted fields, commas and newlines
+   inside quotes, doubled-quote escapes, CRLF or LF endings, and a
+   leading BOM (spreadsheet exports carry one). Returns rows of
+   trimmed strings; the caller drops fully blank rows. */
+function parseCsv(text) {
+  const src = String(text || '').replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  const pushField = () => { row.push(field.trim()); field = ''; };
+  const pushRow = () => { pushField(); rows.push(row); row = []; };
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { field += '"'; i++; }
+        else inQ = false;
+      } else field += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ',') pushField();
+    else if (ch === '\n') pushRow();
+    else if (ch !== '\r') field += ch;
+  }
+  if (field !== '' || row.length) pushRow();
+  return rows;
+}
+/* A cell's numeric value, or null: thousands separators and a
+   trailing % are presentation, not data. */
+function deviceMetricValue(cell) {
+  const t = String(cell === null || cell === undefined ? '' : cell)
+    .trim().replace(/,/g, '').replace(/%$/, '').trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+/* Device exports write dates as YYYY-MM-DD or M/D/YYYY; anything
+   else is the caller's error to surface, never a guessed date. */
+function parseDeviceDate(raw) {
+  const t = String(raw || '').trim();
+  if (parseDateStr(t)) return t;
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if (m) {
+    const iso = m[3] + '-' + String(Number(m[1])).padStart(2, '0')
+      + '-' + String(Number(m[2])).padStart(2, '0');
+    if (parseDateStr(iso)) return iso;
+  }
+  return null;
+}
+/* Name matching is normalized EXACT only — lowercase, collapse
+   whitespace, strip punctuation. A "Last, First" cell is tried in
+   both orders (a formatting variant, not a guess). No fuzzy
+   matching ever: a name that does not land exactly comes back
+   unmatched for the coach to map by hand. Two roster athletes with
+   the same name make a row ambiguous — also unmatched, with a note. */
+function normalizePersonName(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function matchProfileByName(rawName) {
+  const raw = String(rawName || '').trim();
+  if (!raw) return { profile: null, ambiguous: false };
+  const candidates = [normalizePersonName(raw)];
+  const comma = raw.indexOf(',');
+  if (comma > 0) {
+    candidates.push(normalizePersonName(raw.slice(comma + 1) + ' ' + raw.slice(0, comma)));
+  }
+  const hits = db.profiles.filter(pr => !pr.archived
+    && candidates.includes(normalizePersonName(pr.firstName + ' ' + pr.lastName)));
+  if (hits.length === 1) return { profile: hits[0], ambiguous: false };
+  return { profile: null, ambiguous: hits.length > 1 };
+}
+
+const DEVICE_NAME_HEADERS = ['name', 'athlete', 'athlete name', 'player', 'player name', 'full name'];
+const DEVICE_DATE_HEADERS = ['date', 'test date', 'session date', 'date tested'];
+const DEVICE_UNITS = ['cm', 'mm', 'm', 's', 'ms', 'n', 'kg', 'lb', 'lbs', '%', 'w', 'reps', 'hz', 'in'];
+function normalizeHeader(h) {
+  return String(h || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+/* A metric label is the file's own column header, tidied. The unit
+   (when the header states one — in parens/brackets, or as a trailing
+   unit word) is split off so the test name can carry it in the
+   standard place. The label is also the metric's identity: the
+   custom-test key derives from it, so re-importing the same export
+   lands on the same tests. */
+function deviceMetricParts(label) {
+  let base = String(label || '').replace(/\s+/g, ' ').trim();
+  let unit = '';
+  const paren = /^(.*?)\s*[\[(]\s*([^\]\)]{1,12}?)\s*[\]\)]\s*$/.exec(base);
+  if (paren) { base = paren[1].trim(); unit = paren[2].trim(); }
+  else {
+    const toks = base.split(' ');
+    const last = toks[toks.length - 1].toLowerCase();
+    if (toks.length > 1 && DEVICE_UNITS.includes(last)) { unit = toks.pop(); base = toks.join(' '); }
+  }
+  return { base, unit };
+}
+function deviceTestKey(device, label) {
+  const slug = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return device.prefix + '_' + (slug || 'metric');
+}
+function deviceTestFor(device, label) {
+  const key = deviceTestKey(device, label);
+  let test = db.customTests.find(t => t.key === key);
+  if (!test) {
+    const parts = deviceMetricParts(label);
+    test = {
+      key,
+      name: device.name + ' · ' + parts.base + (parts.unit ? ' (' + parts.unit + ')' : ''),
+      unit: parts.unit, kind: 'measure',
+      better: /asym/i.test(label) ? 'lower' : 'higher',
+    };
+    db.customTests.push(test);
+  }
+  return test;
+}
+/* One test day per device + date, found or created. Repeat imports
+   of the same export reuse the day (and upsertResult overwrites the
+   same athlete + test), so importing twice never duplicates. */
+function deviceTestDayFor(device, date, testKeys) {
+  let day = db.testDays.find(d => d.device === device.id && d.date === date);
+  if (!day) {
+    day = {
+      id: crypto.randomUUID(), date,
+      title: device.name + ' — ' + date,
+      testKeys: [], device: device.id,
+      createdAt: new Date().toISOString(),
+    };
+    db.testDays.push(day);
+  }
+  for (const k of testKeys) if (!day.testKeys.includes(k)) day.testKeys.push(k);
+  return day;
+}
+/* File validated rows ({ profileId, date, metrics }) for one
+   device. Returns { filed, skipped, results }: a row files when its
+   athlete exists, its date parses, and it carries at least one
+   finite number; anything else is counted as skipped — visible to
+   the coach in the response, never dropped silently. */
+function fileDeviceRows(device, rows, userId) {
+  let filed = 0, skipped = 0, results = 0;
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const r = row && typeof row === 'object' ? row : {};
+    const prof = profileById(clean(r.profileId, 80));
+    const date = parseDeviceDate(r.date);
+    const entries = (isPlainObj(r.metrics) ? Object.entries(r.metrics) : [])
+      .map(([label, v]) => [label, num(v)])
+      .filter(([, v]) => v !== null);
+    if (!prof || !date || !entries.length) { skipped++; continue; }
+    const tests = entries.map(([label]) => deviceTestFor(device, label));
+    const day = deviceTestDayFor(device, date, tests.map(t => t.key));
+    entries.forEach(([label, v], i) => {
+      upsertResult(prof, day, tests[i].key,
+        { value: v, weight: null, reps: null, est1rm: null }, userId);
+      results++;
+    });
+    filed++;
+  }
+  return { filed, skipped, results };
+}
+/* Parse + map a device CSV WITHOUT writing anything: the coach
+   reviews the matches, maps the rows the file could not name, and
+   only a separate commit files data. */
+function previewDeviceCsv(device, csvText) {
+  const rows = parseCsv(csvText).filter(r => r.some(c => String(c).trim() !== ''));
+  if (!rows.length) return { error: 'That file looks empty.' };
+  if (rows.length - 1 > 2000) {
+    return { error: 'That file has more than 2,000 data rows — split it and import in parts.' };
+  }
+  const headers = rows[0].map(h => String(h || '').replace(/\s+/g, ' ').trim());
+  const norm = headers.map(normalizeHeader);
+  const nameIdx = norm.findIndex(h => DEVICE_NAME_HEADERS.includes(h));
+  if (nameIdx < 0) {
+    return { error: 'That file has no athlete name column — the import needs a column headed Name or Athlete.' };
+  }
+  const dateIdx = norm.findIndex(h => DEVICE_DATE_HEADERS.includes(h));
+  if (dateIdx < 0) {
+    return { error: 'That file has no date column — the import needs a column headed Date, Test Date, or Session Date.' };
+  }
+  /* Metric columns: every other column that carries at least one
+     number somewhere in the file — recognized VALD headers and
+     unknown ones alike. An unrecognized numeric column is captured
+     under its own header name, never discarded; a text-only column
+     (a notes or team column) is not a metric. Duplicate headers:
+     the first column wins. */
+  const seenLabels = new Set();
+  const metricCols = [];
+  headers.forEach((h, i) => {
+    if (i === nameIdx || i === dateIdx || !h || seenLabels.has(h)) return;
+    if (!rows.slice(1).some(r => deviceMetricValue(r[i]) !== null)) return;
+    seenLabels.add(h);
+    metricCols.push({ idx: i, label: h });
+  });
+  const out = { columns: headers, rows: [], errors: [] };
+  rows.slice(1).forEach((cells, i) => {
+    const rowIndex = i + 1;
+    const rawName = String(cells[nameIdx] || '').trim();
+    if (!rawName) {
+      out.errors.push({ rowIndex, rawName: '', reason: 'No athlete name in this row.' });
+      return;
+    }
+    const date = parseDeviceDate(cells[dateIdx]);
+    if (!date) {
+      out.errors.push({
+        rowIndex, rawName,
+        reason: 'Unrecognized date "' + String(cells[dateIdx] || '').trim()
+          + '" — dates must be YYYY-MM-DD or M/D/YYYY.',
+      });
+      return;
+    }
+    const metrics = {};
+    for (const mc of metricCols) {
+      const v = deviceMetricValue(cells[mc.idx]);
+      if (v !== null) metrics[mc.label] = v;
+    }
+    if (!Object.keys(metrics).length) {
+      out.errors.push({ rowIndex, rawName, reason: 'No test numbers in this row.' });
+      return;
+    }
+    const match = matchProfileByName(rawName);
+    const row = {
+      rowIndex, rawName, date,
+      profileId: match.profile ? match.profile.id : null,
+      matchStatus: match.profile ? 'matched' : 'unmatched',
+      metrics,
+    };
+    if (match.ambiguous) {
+      row.matchNote = 'More than one athlete on the roster has this name — map the row by hand.';
+    }
+    out.rows.push(row);
+  });
+  return out;
+}
+/* One device's sessions for one athlete, oldest first: a session is
+   a device test day on which the athlete has at least one result. */
+function deviceSessionsFor(profileId, deviceId) {
+  const dayById = new Map();
+  for (const d of db.testDays) if (d.device === deviceId) dayById.set(d.id, d);
+  if (!dayById.size) return [];
+  const byDay = new Map();
+  for (const r of db.testResults[profileId] || []) {
+    const day = dayById.get(r.testDayId);
+    if (!day) continue;
+    const v = displayValue(r);
+    if (v === null || v === undefined) continue;
+    if (!byDay.has(day.id)) byDay.set(day.id, { dayId: day.id, date: day.date, metrics: [] });
+    const test = findTest(r.testKey);
+    byDay.get(day.id).metrics.push({
+      testKey: r.testKey, name: test ? test.name : r.testKey, value: v,
+    });
+  }
+  return [...byDay.values()].filter(s => s.metrics.length)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+/* The NordBord left/right max-force pair out of one session, when
+   the session carries both sides. The import labels the sides
+   however the export did, so they are read off the test names
+   ("Max Force Left", "Max Force L", …). */
+function nordbordPairFor(session) {
+  let left = null, right = null;
+  for (const m of session.metrics) {
+    const n = m.name.toLowerCase();
+    if (!n.includes('max force') && !n.includes('nordic')) continue;
+    if (n.includes('left') || /(^|[\s(·])l([\s)]|$)/.test(n)) { if (left === null) left = m.value; }
+    else if (n.includes('right') || /(^|[\s(·])r([\s)]|$)/.test(n)) { if (right === null) right = m.value; }
+  }
+  return left !== null && right !== null ? { left, right } : null;
+}
+/* The AMS athlete page's Devices strip: the latest session per
+   device, only for devices the athlete actually has data on. */
+function deviceSummaryFor(profileId) {
+  const out = {};
+  for (const deviceId of Object.keys(DEVICES)) {
+    const sessions = deviceSessionsFor(profileId, deviceId);
+    if (!sessions.length) continue;
+    const latest = sessions[sessions.length - 1];
+    const entry = { date: latest.date, metrics: latest.metrics };
+    if (deviceId === 'nordbord') {
+      const pair = nordbordPairFor(latest);
+      if (pair) { entry.left = pair.left; entry.right = pair.right; }
+    }
+    out[deviceId] = entry;
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ */
@@ -2967,6 +3344,7 @@ async function handleApi(req, res, url) {
       flags: amsFlagsFor(prof, today),
       wellness,
       testing: testingHistoryFor(prof.id),
+      devices: deviceSummaryFor(prof.id),
       meetPrs: meetPrsFor(prof.id),
       recentResults,
       attendance,
@@ -3022,6 +3400,142 @@ async function handleApi(req, res, url) {
     db.coachNotes[prof.id] = next;
     saveDb();
     return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---------- Devices: ForceDecks, NordBord, T-APEX ----------
+     Coach-only like everything below the gate. File imports are
+     two steps — preview (parse + match, writes NOTHING) and commit
+     (file the rows the coach confirmed) — because athlete matching
+     is exact-only by design: rows the file cannot name wait for the
+     coach to map them by hand in the preview, and rows still
+     unmapped at commit are skipped and counted, never guessed. */
+  const devicePreviewMatch = p.match(/^\/api\/devices\/([a-z]+)\/preview$/);
+  if (devicePreviewMatch && req.method === 'POST') {
+    const device = DEVICES[devicePreviewMatch[1]];
+    if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
+    let body;
+    try {
+      body = await readJsonBody(req, 5 * 1024 * 1024);
+    } catch (err) {
+      if (err && err.status === 413) {
+        return sendJson(res, 413, { error: 'That file is too large — device exports over 5 MB are not accepted.' });
+      }
+      return sendJson(res, 400, { error: 'That request was not valid JSON.' });
+    }
+    const csv = isPlainObj(body) && typeof body.csv === 'string' ? body.csv : '';
+    if (!csv.trim()) return sendJson(res, 400, { error: 'Choose a CSV file first.' });
+    const preview = previewDeviceCsv(device, csv);
+    if (preview.error) return sendJson(res, 400, { error: preview.error });
+    return sendJson(res, 200, {
+      device: device.id, columns: preview.columns,
+      rows: preview.rows, errors: preview.errors,
+    });
+  }
+  const deviceCommitMatch = p.match(/^\/api\/devices\/([a-z]+)\/commit$/);
+  if (deviceCommitMatch && req.method === 'POST') {
+    const device = DEVICES[deviceCommitMatch[1]];
+    if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
+    let body;
+    try {
+      body = await readJsonBody(req, 5 * 1024 * 1024);
+    } catch (err) {
+      if (err && err.status === 413) {
+        return sendJson(res, 413, { error: 'That import is too large.' });
+      }
+      return sendJson(res, 400, { error: 'That request was not valid JSON.' });
+    }
+    const rows = isPlainObj(body) && Array.isArray(body.rows) ? body.rows : null;
+    if (!rows) return sendJson(res, 400, { error: 'There are no rows to file.' });
+    if (rows.length > 2000) {
+      return sendJson(res, 400, { error: 'That import has more than 2,000 rows — split it into smaller files.' });
+    }
+    const out = fileDeviceRows(device, rows, user.id);
+    if (out.filed) saveDb();
+    return sendJson(res, 200, {
+      ok: true, filed: out.filed, skipped: out.skipped, results: out.results,
+    });
+  }
+  const deviceSummaryMatch = p.match(/^\/api\/devices\/([a-z]+)\/summary$/);
+  if (deviceSummaryMatch && req.method === 'GET') {
+    const device = DEVICES[deviceSummaryMatch[1]];
+    if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
+    const days = db.testDays.filter(d => d.device === device.id)
+      .slice()
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      .slice(0, 12)
+      .map(d => {
+        const athletes = new Set();
+        let count = 0;
+        for (const [pid, list] of Object.entries(db.testResults)) {
+          for (const r of list) if (r.testDayId === d.id) { athletes.add(pid); count++; }
+        }
+        return { id: d.id, date: d.date, title: d.title, athletes: athletes.size, results: count };
+      });
+    return sendJson(res, 200, { device: device.id, name: device.name, days });
+  }
+
+  /* T-APEX quick entry: the device lives on its own tablet with no
+     feed, so the coach keys a session in by hand. It files through
+     the same path as the importers — a T-APEX test day plus the
+     labeled custom tests — so a hand-entered session and an
+     imported file read identically everywhere results show. */
+  if (p === '/api/devices/tapex/entry' && req.method === 'POST') {
+    const body = await readBody(req);
+    const prof = profileById(clean(body.profileId, 80));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const date = clean(body.date, 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const metrics = {};
+    for (const m of TAPEX_METRICS) {
+      const raw = body[m.field];
+      if (raw === undefined || raw === null || raw === '') continue;
+      const v = num(raw);
+      if (v === null || v < 0) {
+        return sendJson(res, 400, {
+          error: 'Enter a valid ' + m.label.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase() + '.',
+        });
+      }
+      metrics[m.label] = v;
+    }
+    if (!Object.keys(metrics).length) {
+      return sendJson(res, 400, {
+        error: 'Enter at least one number — load, peak speed, max force, or distance.',
+      });
+    }
+    const out = fileDeviceRows(DEVICES.tapex, [{ profileId: prof.id, date, metrics }], user.id);
+    saveDb();
+    return sendJson(res, 201, { ok: true, filed: out.filed, results: out.results });
+  }
+  if (p === '/api/devices/tapex/entries' && req.method === 'GET') {
+    const days = new Map(db.testDays.filter(d => d.device === 'tapex').map(d => [d.id, d]));
+    const byKey = new Map();
+    for (const pr of db.profiles) {
+      for (const r of db.testResults[pr.id] || []) {
+        const day = days.get(r.testDayId);
+        if (!day) continue;
+        const key = pr.id + '|' + day.id;
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            profileId: pr.id, athleteName: pr.firstName + ' ' + pr.lastName,
+            date: day.date, testDayId: day.id, values: {}, extra: [], resultIds: [],
+          });
+        }
+        const entry = byKey.get(key);
+        const tm = TAPEX_METRICS.find(m => deviceTestKey(DEVICES.tapex, m.label) === r.testKey);
+        const v = displayValue(r);
+        if (tm) entry.values[tm.field] = v;
+        else {
+          const test = findTest(r.testKey);
+          entry.extra.push({ name: test ? test.name : r.testKey, value: v });
+        }
+        entry.resultIds.push(r.id);
+      }
+    }
+    const entries = [...byKey.values()]
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1
+        : a.athleteName.localeCompare(b.athleteName)))
+      .slice(0, 30);
+    return sendJson(res, 200, { entries });
   }
 
   /* ---------- Data page: backup export / import + more CSVs ---------- */

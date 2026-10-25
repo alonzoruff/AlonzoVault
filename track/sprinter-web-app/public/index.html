@@ -160,6 +160,7 @@
       <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
       <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
       <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
+      <button type="button" class="menu-item" data-view="devices">Devices <span>ForceDecks, NordBord, and T-APEX: import each device's results file and they land in every athlete's testing history, labeled by device</span></button>
       <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access — under Account</span></button>
     </div>
   </section>
@@ -825,6 +826,15 @@
     <p class="view-sub muted">The whole team dataset, in and out: one backup file for safekeeping, restores that merge instead of wiping, and spreadsheets for everything else. Coaches only.</p>
     <div id="data-main"></div>
   </section>
+
+  <!-- DEVICES: FORCEDECKS / NORDBORD / T-APEX / VALD API (coach) -->
+  <section id="view-devices" class="view">
+    <h1>Devices</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The testing hardware: import a ForceDecks or NordBord results file from VALD Hub, key in a T-APEX session by hand, and every number lands in the athlete's testing history, labeled by device. Coaches only.</p>
+    <div id="devices-main"></div>
+  </section>
 </main>
 
 <!-- RUNNER MODE (full-screen workout walk-through overlay) -->
@@ -860,7 +870,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v35">Cadets Sprint · App v35</div>
+  <div class="app-version" data-app-version="v36">Cadets Sprint · App v36</div>
 </footer>
 
 <script src="/app.js"></script>

@@ -336,8 +336,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v35',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v35"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v36',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v36"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2021,16 +2021,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v35'") &&
-    swJs.text.includes("sprinter-app-v35"));
+    appJs.text.includes("const APP_VERSION = 'v36'") &&
+    swJs.text.includes("sprinter-app-v36"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v35"') &&
-    pageHtml.text.includes('Cadets Sprint · App v35') &&
+    pageHtml.text.includes('data-app-version="v36"') &&
+    pageHtml.text.includes('Cadets Sprint · App v36') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
@@ -3580,7 +3580,333 @@ async function main() {
   r = await api(coach, 'POST', '/api/import/backup', undefined, { raw: bigBody, contentType: 'application/json' });
   check('an import over 10 MB is 413', r.status === 413, r.status);
 
-  return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id };
+  /* ---------------- devices: ForceDecks / NordBord / T-APEX --------
+     Device results are testing results filed from VALD-style CSV
+     exports (preview -> confirm, exact-name matching only) or the
+     T-APEX quick-entry card. Own squad, so every count is exact:
+       Dana  FD jump 38.2 -> 33.5 across two sessions (drop-off),
+             FD asymmetry 12.5 in session 1 only (latest-session rule),
+             NordBord-free; T-APEX entry + a T-APEX file import.
+       Evan  FD once (no prior session -> no drop-off), NordBord
+             300/260 (13% apart -> imbalance flag).
+       Fay   NordBord 300/290 (3% -> no flag); receives Zed's
+             unmatched row by manual mapping. */
+  r = await api(coach, 'POST', '/api/groups', { name: 'Device Squad' });
+  const gDev = r.json.group.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Dana', lastName: 'Device', groupId: gDev, events: ['sprinter'] });
+  const danaD = r.json.profile.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Evan', lastName: 'Device', groupId: gDev, events: ['jumper'] });
+  const evanD = r.json.profile.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Fay', lastName: 'Device', groupId: gDev, events: ['sprinter'] });
+  const fayD = r.json.profile.id;
+
+  check('devices view is in the served page',
+    pageHtml.text.includes('id="view-devices"') && pageHtml.text.includes('id="devices-main"') &&
+    pageHtml.text.includes('data-view="devices"'));
+  check('devices wiring is in the served JS (tabs, importers, VALD API status)',
+    appJs.text.includes('renderDevices') && appJs.text.includes('/api/devices/') &&
+    appJs.text.includes("devices: 'coachhub'") && appJs.text.includes("['devices', 'Devices']") &&
+    appJs.text.includes('renderValdApiPanel') && appJs.text.includes('NOT CONNECTED') &&
+    appJs.text.includes('paintTapexPanel'));
+  {
+    const tvStart = appJs.text.indexOf('TV BOARD');
+    const tvEnd = appJs.text.indexOf('/* ---------------- boot', tvStart);
+    const tvCode = appJs.text.slice(tvStart, tvEnd);
+    check('TV render path has no device references',
+      tvStart >= 0 && tvEnd > tvStart && !tvCode.includes('/api/devices') &&
+      !tvCode.toLowerCase().includes('forcedecks') && !tvCode.toLowerCase().includes('nordbord') &&
+      !tvCode.toLowerCase().includes('t-apex'), tvCode.length);
+  }
+
+  /* Auth matrix: every device endpoint is coach-only. */
+  r = await api(athlete, 'POST', '/api/devices/forcedecks/preview', { csv: 'Name,Date\nX,2026-01-01' });
+  check('athlete is 403 on device preview', r.status === 403, r.status);
+  r = await api(null, 'POST', '/api/devices/forcedecks/preview', { csv: 'Name,Date\nX,2026-01-01' });
+  check('device preview without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'POST', '/api/devices/nordbord/commit', { rows: [] });
+  check('athlete is 403 on device commit', r.status === 403, r.status);
+  r = await api(null, 'POST', '/api/devices/nordbord/commit', { rows: [] });
+  check('device commit without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/devices/forcedecks/summary');
+  check('athlete is 403 on device summary', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/devices/forcedecks/summary');
+  check('device summary without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'POST', '/api/devices/tapex/entry', { profileId: danaD, date: '2026-10-22', load: 10 });
+  check('athlete is 403 on tapex entry', r.status === 403, r.status);
+  r = await api(null, 'POST', '/api/devices/tapex/entry', { profileId: danaD, date: '2026-10-22', load: 10 });
+  check('tapex entry without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/devices/tapex/entries');
+  check('athlete is 403 on tapex entries', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/devices/tapex/entries');
+  check('tapex entries without login is 401', r.status === 401, r.status);
+  r = await api(coach, 'GET', '/api/devices/wat/summary');
+  check('an unknown device is 404', r.status === 404, r.status);
+  r = await api(coach, 'POST', '/api/devices/wat/preview', { csv: 'Name,Date\nX,2026-01-01' });
+  check('an unknown device preview is 404', r.status === 404, r.status);
+
+  /* ForceDecks import 1: quoted fields, a thousands separator, an
+     unrecognized numeric column, one unmatched name, one bad date. */
+  const fdCsv1 = [
+    'Athlete,Date,Jump Height (cm),Peak Force (N),Flight Time (ms),L/R Asymmetry (%),Mystery Score,Session Notes',
+    'Dana Device,10/20/2026,38.2,"2,150",512,12.5,88,"felt good, strong"',
+    'Evan Device,2026-10-20,35.0,1980,498,4.0,81,ok',
+    'Zed Stranger,10/20/2026,30.1,1800,470,3.0,77,guest',
+    'Dana Device,13/40/2026,39.0,2200,520,5.0,90,bad date',
+  ].join('\n');
+  const devResultsBefore = (await api(coach, 'GET', '/api/results')).json.results.length;
+  const devDaysBefore = (await api(coach, 'GET', '/api/test-days')).json.testDays.length;
+  const devTestsBefore = (await api(coach, 'GET', '/api/tests')).json.tests.length;
+  r = await api(coach, 'POST', '/api/devices/forcedecks/preview', { csv: fdCsv1 });
+  check('forcedecks preview parses the export', r.status === 200, r.status);
+  const fdPv1 = r.json;
+  check('preview: 3 readable rows + 1 bad-date error with a plain reason',
+    fdPv1.rows.length === 3 && fdPv1.errors.length === 1 && /date/i.test(fdPv1.errors[0].reason),
+    fdPv1.errors);
+  const pvDana = fdPv1.rows.find(x => x.rawName === 'Dana Device');
+  const pvEvan = fdPv1.rows.find(x => x.rawName === 'Evan Device');
+  const pvZed = fdPv1.rows.find(x => x.rawName === 'Zed Stranger');
+  check('preview: exact-name matches land on the roster profiles, M/D/YYYY normalized',
+    !!pvDana && pvDana.profileId === danaD && pvDana.matchStatus === 'matched' &&
+    pvDana.date === '2026-10-20' && !!pvEvan && pvEvan.profileId === evanD, fdPv1.rows);
+  check('preview: an unknown name is unmatched with no profile guessed',
+    !!pvZed && pvZed.matchStatus === 'unmatched' && pvZed.profileId === null, pvZed);
+  check('preview: quoted thousands value parses; unrecognized numeric column captured; text column is not a metric',
+    !!pvDana && pvDana.metrics['Peak Force (N)'] === 2150 &&
+    pvDana.metrics['Mystery Score'] === 88 && pvDana.metrics['Jump Height (cm)'] === 38.2 &&
+    pvDana.metrics['Session Notes'] === undefined, pvDana && pvDana.metrics);
+  r = await api(coach, 'GET', '/api/results');
+  check('preview writes nothing (results unchanged)',
+    r.json.results.length === devResultsBefore, r.json.results.length);
+  r = await api(coach, 'GET', '/api/test-days');
+  check('preview writes nothing (no test day created)',
+    r.json.testDays.length === devDaysBefore, r.json.testDays.length);
+  r = await api(coach, 'GET', '/api/tests');
+  check('preview writes nothing (no custom tests created)',
+    r.json.tests.length === devTestsBefore, r.json.tests.length);
+  r = await api(coach, 'POST', '/api/devices/forcedecks/preview',
+    { csv: 'Date,Jump Height (cm)\n2026-10-20,38.2' });
+  check('a file with no name column is a plain 400',
+    r.status === 400 && /name column/i.test(r.json.error), r.json);
+  r = await api(coach, 'POST', '/api/devices/forcedecks/preview', { csv: '   ' });
+  check('an empty file is 400', r.status === 400, r.status);
+
+  const fdCommitRows = () => fdPv1.rows.map(x => ({ profileId: x.profileId, date: x.date, metrics: x.metrics }));
+  r = await api(coach, 'POST', '/api/devices/forcedecks/commit', { rows: fdCommitRows() });
+  check('commit files the matched rows and counts the unmatched one as skipped',
+    r.status === 200 && r.json.filed === 2 && r.json.skipped === 1 && r.json.results === 10, r.json);
+  r = await api(coach, 'GET', '/api/results?profileId=' + danaD);
+  const danaFd1 = r.json.results.filter(x => x.testKey.startsWith('fd_'));
+  check('dana has the 5 forcedecks results on a single device test day',
+    danaFd1.length === 5 && new Set(danaFd1.map(x => x.testDayId)).size === 1, danaFd1);
+  r = await api(coach, 'GET', '/api/test-days');
+  const fdDay1 = r.json.testDays.find(d => d.id === (danaFd1[0] || {}).testDayId);
+  check('the device test day is titled with the device name',
+    !!fdDay1 && fdDay1.title === 'ForceDecks — 2026-10-20' && fdDay1.date === '2026-10-20', fdDay1);
+  r = await api(coach, 'GET', '/api/tests');
+  const fdJumpTest = r.json.tests.find(t => t.key === 'fd_jump_height_cm');
+  check('device metrics became device-labeled custom tests (unit in the name)',
+    !!fdJumpTest && fdJumpTest.name === 'ForceDecks · Jump Height (cm)' && fdJumpTest.custom === true,
+    fdJumpTest);
+  check('the unrecognized column became its own labeled test',
+    r.json.tests.some(t => t.key === 'fd_mystery_score' && t.name === 'ForceDecks · Mystery Score'),
+    r.json.tests.filter(t => t.key.startsWith('fd_')).map(t => t.key));
+  r = await api(coach, 'GET', '/api/devices/forcedecks/summary');
+  check('forcedecks summary lists the import day with athlete + result counts',
+    r.status === 200 && r.json.days.length === 1 && r.json.days[0].date === '2026-10-20' &&
+    r.json.days[0].athletes === 2 && r.json.days[0].results === 10, r.json);
+
+  /* Idempotency: the same file committed again overwrites in place. */
+  const danaResCount = (await api(coach, 'GET', '/api/results?profileId=' + danaD)).json.results.length;
+  const fdDayCount = (await api(coach, 'GET', '/api/test-days')).json.testDays
+    .filter(d => d.title.startsWith('ForceDecks')).length;
+  r = await api(coach, 'POST', '/api/devices/forcedecks/commit', { rows: fdCommitRows() });
+  check('re-committing the same file still reports the rows filed',
+    r.status === 200 && r.json.filed === 2 && r.json.skipped === 1, r.json);
+  r = await api(coach, 'GET', '/api/results?profileId=' + danaD);
+  check('re-commit overwrites results instead of duplicating them',
+    r.json.results.length === danaResCount, r.json.results.length);
+  r = await api(coach, 'GET', '/api/test-days');
+  check('re-commit reuses the same device + date test day',
+    r.json.testDays.filter(d => d.title.startsWith('ForceDecks')).length === fdDayCount,
+    r.json.testDays.filter(d => d.title.startsWith('ForceDecks')).length);
+
+  /* AMS after import 1: asymmetry flag on, no drop-off yet, strip on. */
+  r = await api(coach, 'GET', '/api/ams/athlete/' + danaD);
+  check('ams flags: a latest-session asymmetry over 10 flags',
+    r.json.flags.some(f => f.key === 'forcedecks-asymmetry' && f.count === 13), r.json.flags);
+  check('ams flags: a first-ever session can never flag a jump drop-off',
+    !r.json.flags.some(f => f.key === 'jump-dropoff'), r.json.flags);
+  check('ams devices strip shows the forcedecks session with its metrics',
+    !!r.json.devices.forcedecks && r.json.devices.forcedecks.date === '2026-10-20' &&
+    r.json.devices.forcedecks.metrics.some(m => m.name === 'ForceDecks · Jump Height (cm)' && m.value === 38.2),
+    r.json.devices);
+  check('ams testing history carries the device-labeled tests',
+    r.json.testing.some(t => t.name === 'ForceDecks · Jump Height (cm)' && t.latest === 38.2),
+    r.json.testing.map(t => t.name));
+  r = await api(coach, 'GET', '/api/ams/athlete/' + evanD);
+  check('ams flags: evan (asymmetry 4.0, one jump session) has no device flags',
+    !r.json.flags.some(f => ['forcedecks-asymmetry', 'jump-dropoff', 'nordbord-imbalance'].includes(f.key)),
+    r.json.flags);
+
+  /* ForceDecks import 2: Dana's jump drops >10% from her prior best. */
+  const fdCsv2 = [
+    'Athlete,Test Date,Jump Height (cm),Peak Force (N),L/R Asymmetry (%)',
+    'Dana Device,11/3/2026,33.5,2050,4.0',
+  ].join('\n');
+  r = await api(coach, 'POST', '/api/devices/forcedecks/preview', { csv: fdCsv2 });
+  const fdPv2 = r.json;
+  check('second preview: the Test Date synonym works and the date normalizes',
+    r.status === 200 && fdPv2.rows.length === 1 && fdPv2.rows[0].date === '2026-11-03' &&
+    fdPv2.rows[0].profileId === danaD, fdPv2);
+  r = await api(coach, 'POST', '/api/devices/forcedecks/commit',
+    { rows: fdPv2.rows.map(x => ({ profileId: x.profileId, date: x.date, metrics: x.metrics })) });
+  check('second import files', r.status === 200 && r.json.filed === 1 && r.json.skipped === 0, r.json);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + danaD);
+  check('ams flags: a jump >10% under the best prior session flags a drop-off',
+    r.json.flags.some(f => f.key === 'jump-dropoff' && f.count === 12), r.json.flags);
+  check('ams flags: asymmetry reads off the latest session only (4.0 now — flag cleared)',
+    !r.json.flags.some(f => f.key === 'forcedecks-asymmetry'), r.json.flags);
+  check('ams devices strip moves to the latest forcedecks session',
+    r.json.devices.forcedecks.date === '2026-11-03', r.json.devices.forcedecks);
+
+  /* Manual mapping: Zed's unmatched row, committed to Fay by hand. */
+  const zedCsv = ['Athlete,Date,Jump Height (cm)', 'Zed Stranger,10/22/2026,31.0'].join('\n');
+  r = await api(coach, 'POST', '/api/devices/forcedecks/preview', { csv: zedCsv });
+  const zedPv = r.json;
+  check('manual-map fixture previews unmatched',
+    r.status === 200 && zedPv.rows.length === 1 && zedPv.rows[0].matchStatus === 'unmatched', zedPv);
+  r = await api(coach, 'POST', '/api/devices/forcedecks/commit',
+    { rows: [{ profileId: fayD, date: zedPv.rows[0].date, metrics: zedPv.rows[0].metrics }] });
+  check('a coach-mapped row files to the chosen athlete',
+    r.status === 200 && r.json.filed === 1 && r.json.skipped === 0, r.json);
+  r = await api(coach, 'GET', '/api/results?profileId=' + fayD);
+  check('the mapped result is on fay\'s record',
+    r.json.results.some(x => x.testKey === 'fd_jump_height_cm' && x.value === 31), r.json.results);
+
+  /* Commit hygiene: unusable rows are counted as skipped, not filed. */
+  r = await api(coach, 'POST', '/api/devices/forcedecks/commit', {
+    rows: [
+      { profileId: 'no-such-athlete', date: '2026-10-20', metrics: { 'Jump Height (cm)': 30 } },
+      { profileId: null, date: '2026-10-20', metrics: { 'Jump Height (cm)': 30 } },
+      { profileId: danaD, date: 'not a date', metrics: { 'Jump Height (cm)': 30 } },
+      { profileId: danaD, date: '2026-10-20', metrics: {} },
+    ],
+  });
+  check('commit counts every unusable row as skipped and files none',
+    r.status === 200 && r.json.filed === 0 && r.json.skipped === 4, r.json);
+
+  /* NordBord: a "Last, First" quoted name, L/R max force pairs. */
+  const nbCsv = [
+    'Name,Date,Max Force Left (N),Max Force Right (N),Impulse (Ns)',
+    '"Device, Evan",2026-10-21,300,260,1520',
+    'Fay Device,10/21/2026,300,290,1490',
+  ].join('\n');
+  r = await api(coach, 'POST', '/api/devices/nordbord/preview', { csv: nbCsv });
+  const nbPv = r.json;
+  check('nordbord preview: a "Last, First" name form still matches exactly',
+    r.status === 200 && nbPv.rows.length === 2 &&
+    nbPv.rows[0].profileId === evanD && nbPv.rows[1].profileId === fayD, nbPv);
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: nbPv.rows.map(x => ({ profileId: x.profileId, date: x.date, metrics: x.metrics })) });
+  check('nordbord commit files both athletes (3 metrics each)',
+    r.status === 200 && r.json.filed === 2 && r.json.skipped === 0 && r.json.results === 6, r.json);
+  r = await api(coach, 'GET', '/api/devices/nordbord/summary');
+  check('nordbord summary lists its day with counts',
+    r.status === 200 && r.json.days.length === 1 && r.json.days[0].athletes === 2 &&
+    r.json.days[0].results === 6, r.json);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + evanD);
+  check('ams flags: nordbord L/R more than 10% apart flags an imbalance',
+    r.json.flags.some(f => f.key === 'nordbord-imbalance' && f.count === 13), r.json.flags);
+  check('ams devices strip shows the nordbord session with its L/R pair',
+    !!r.json.devices.nordbord && r.json.devices.nordbord.date === '2026-10-21' &&
+    r.json.devices.nordbord.left === 300 && r.json.devices.nordbord.right === 260, r.json.devices);
+  check('ams testing history carries the nordbord tests',
+    r.json.testing.some(t => t.name === 'NordBord · Max Force Left (N)' && t.latest === 300),
+    r.json.testing.map(t => t.name));
+  r = await api(coach, 'GET', '/api/ams/athlete/' + fayD);
+  check('ams flags: a 3% nordbord difference stays under the imbalance threshold',
+    !r.json.flags.some(f => f.key === 'nordbord-imbalance'), r.json.flags);
+  r = await api(coach, 'GET', '/api/ams/roster');
+  const rosterDana = r.json.athletes.find(a => a.profile.id === danaD);
+  const rosterEvan = r.json.athletes.find(a => a.profile.id === evanD);
+  check('ams roster carries the device flags alongside the others',
+    !!rosterDana && rosterDana.flags.some(f => f.key === 'jump-dropoff') &&
+    !!rosterEvan && rosterEvan.flags.some(f => f.key === 'nordbord-imbalance'),
+    r.json.athletes.length);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + caraR);
+  check('ams devices strip is empty for an athlete with no device data',
+    r.status === 200 && (!r.json.devices || Object.keys(r.json.devices).length === 0), r.json.devices);
+
+  /* T-APEX quick entry: validation, filing, listing, delete. */
+  r = await api(coach, 'POST', '/api/devices/tapex/entry',
+    { profileId: danaD, date: '2026-10-22', load: 20, peakSpeed: 8.4, maxForce: 950, distance: 30 });
+  check('tapex quick entry files all four metrics',
+    r.status === 201 && r.json.filed === 1 && r.json.results === 4, r.json);
+  r = await api(coach, 'GET', '/api/results?profileId=' + danaD);
+  const danaTa = r.json.results.filter(x => x.testKey.startsWith('ta_'));
+  check('tapex results carry the four labeled tests',
+    danaTa.length === 4 &&
+    danaTa.some(x => x.testKey === 'ta_peak_speed_m_s' && x.value === 8.4) &&
+    danaTa.some(x => x.testKey === 'ta_load_kg' && x.value === 20), danaTa);
+  r = await api(coach, 'GET', '/api/tests');
+  check('tapex custom tests are labeled with their units',
+    r.json.tests.some(t => t.key === 'ta_load_kg' && t.name === 'T-APEX · Load (kg)') &&
+    r.json.tests.some(t => t.key === 'ta_max_force_n' && t.name === 'T-APEX · Max Force (N)') &&
+    r.json.tests.some(t => t.key === 'ta_distance_m' && t.name === 'T-APEX · Distance (m)'),
+    r.json.tests.filter(t => t.key.startsWith('ta_')).map(t => t.name));
+  r = await api(coach, 'POST', '/api/devices/tapex/entry', { profileId: danaD, date: '2026-10-22' });
+  check('tapex entry with no numbers is 400', r.status === 400, r.json);
+  r = await api(coach, 'POST', '/api/devices/tapex/entry',
+    { profileId: 'nobody', date: '2026-10-22', load: 10 });
+  check('tapex entry for a missing athlete is 404', r.status === 404, r.status);
+  r = await api(coach, 'POST', '/api/devices/tapex/entry',
+    { profileId: danaD, date: '10/22/2026', load: 10 });
+  check('tapex entry requires an ISO date', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/devices/tapex/entry',
+    { profileId: danaD, date: '2026-10-22', load: -5 });
+  check('tapex entry rejects a negative number', r.status === 400, r.json);
+  r = await api(coach, 'POST', '/api/devices/tapex/entry',
+    { profileId: evanD, date: '2026-10-22', peakSpeed: 9.1 });
+  check('tapex entry allows a single metric', r.status === 201 && r.json.results === 1, r.json);
+  r = await api(coach, 'GET', '/api/devices/tapex/entries');
+  const taDana = r.json.entries.find(e => e.profileId === danaD && e.date === '2026-10-22');
+  const taEvan = r.json.entries.find(e => e.profileId === evanD && e.date === '2026-10-22');
+  check('tapex entries list groups values per athlete + day, with result ids',
+    !!taDana && taDana.values.load === 20 && taDana.values.peakSpeed === 8.4 &&
+    taDana.values.maxForce === 950 && taDana.values.distance === 30 &&
+    taDana.resultIds.length === 4 &&
+    !!taEvan && taEvan.values.peakSpeed === 9.1 && taEvan.values.load === undefined,
+    r.json.entries);
+  for (const id of (taEvan || { resultIds: [] }).resultIds) {
+    r = await api(coach, 'DELETE', '/api/results/' + id);
+  }
+  check('tapex entry deletes through the existing result delete path', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/devices/tapex/entries');
+  check('the deleted entry leaves the recent list (the other stays)',
+    !r.json.entries.some(e => e.profileId === evanD) &&
+    r.json.entries.some(e => e.profileId === danaD), r.json.entries);
+
+  /* T-APEX file import: same two-step path as the VALD devices. */
+  const taCsv = [
+    'Athlete,Session Date,Load (kg),Peak Speed (m/s)',
+    'Dana Device,2026-10-23,25,8.9',
+  ].join('\n');
+  r = await api(coach, 'POST', '/api/devices/tapex/preview', { csv: taCsv });
+  const taPv = r.json;
+  check('tapex file preview uses the Session Date synonym',
+    r.status === 200 && taPv.rows.length === 1 && taPv.rows[0].date === '2026-10-23' &&
+    taPv.rows[0].profileId === danaD, taPv);
+  r = await api(coach, 'POST', '/api/devices/tapex/commit',
+    { rows: taPv.rows.map(x => ({ profileId: x.profileId, date: x.date, metrics: x.metrics })) });
+  check('tapex file commit files onto the tapex day',
+    r.status === 200 && r.json.filed === 1 && r.json.results === 2, r.json);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + danaD);
+  check('ams devices strip shows the latest tapex session',
+    !!r.json.devices.tapex && r.json.devices.tapex.date === '2026-10-23' &&
+    r.json.devices.tapex.metrics.some(m => m.name === 'T-APEX · Peak Speed (m/s)' && m.value === 8.9),
+    r.json.devices);
+
+  return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }
 
 async function waitForServer(tries = 60) {
@@ -3643,6 +3969,13 @@ async function waitForServer(tries = 60) {
       rAnn.json.announcements.some(a => a.body === 'Team post one') &&
       rAnn.json.announcements.some(a => a.body === 'Now for group B'),
       rAnn.json && rAnn.json.announcements && rAnn.json.announcements.length);
+    const rDev = await api(ctx.coach, 'GET', '/api/ams/athlete/' + ctx.deviceProfileId);
+    check('device results survive a server restart (AMS strip + flags intact)',
+      rDev.status === 200 && !!rDev.json.devices &&
+      !!rDev.json.devices.forcedecks && rDev.json.devices.forcedecks.date === '2026-11-03' &&
+      !!rDev.json.devices.tapex &&
+      rDev.json.flags.some(f => f.key === 'jump-dropoff'),
+      rDev.json && rDev.json.devices);
     /* Deleting the seed must not resurrect it: delete it, restart
        once more on the same store, and the list stays empty. */
     const rd = await api(ctx.coach, 'DELETE', '/api/custom-workouts/' + ctx.seedId);
