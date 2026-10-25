@@ -21,6 +21,7 @@ const state = {
   exCategory: 'All',
   exEquipment: 'All',
   exTags: [],
+  coverageFilter: 'all',
   invItems: [],
   invCat: '',
   invQ: '',
@@ -122,8 +123,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v40';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v40';
+const APP_VERSION = 'v41';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v41';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -310,12 +311,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -366,6 +367,7 @@ function showView(name) {
   if (name === 'calendar') renderCalendar();
   if (name === 'data') renderData();
   if (name === 'devices') renderDevices();
+  if (name === 'coverage') renderCoverage();
   if (name === 'exercises') renderExercises();
   window.scrollTo(0, 0);
 }
@@ -1825,6 +1827,11 @@ async function loadMedia() {
     state.media = data.media || {};
     renderDrills();
     if (state.testDays.length) renderTesting();
+    /* A demo saved from the media modal lands here with fresh
+       state; if the coverage map is on screen, re-render it so
+       the row's status flips in place. */
+    const covView = document.getElementById('view-coverage');
+    if (covView && covView.classList.contains('active')) renderCoverage();
   } catch (_) { /* media is optional */ }
 }
 function demoHtml(id, title) {
@@ -5513,6 +5520,55 @@ function backupCollectionCounts(data) {
   }
   return rows;
 }
+/* ---------------- demo coverage ----------------
+   The filming map for the goal of a coach video on every
+   movement. The server classifies each drill and test from
+   mergedMedia() — an uploaded video is 'yours', a YouTube/GIF
+   stand-in is a 'placeholder', no entry is 'none' — and this
+   view filters and lists the rows. Every row carries the same
+   demo buttons (demoHtml) the drills list uses, so watching,
+   adding, or swapping a demo is the same modal as everywhere
+   else; loadMedia re-renders this view after a modal save, so
+   a fixed row flips its status in place. */
+const COVERAGE_FILTERS = [['all', 'All'], ['yours', 'Yours'], ['placeholder', 'Placeholder'], ['none', 'None']];
+function coverageBadge(status) {
+  if (status === 'yours') return '<span class="badge done">YOUR VIDEO</span>';
+  if (status === 'placeholder') return '<span class="badge plain">PLACEHOLDER</span>';
+  return '<span class="badge">NO DEMO</span>';
+}
+async function renderCoverage() {
+  const main = $('#coverage-main');
+  if (!main) return;
+  if (!isCoachUser()) { gateHtml(main, 'Demo coverage lives here.'); return; }
+  let data;
+  try {
+    data = await api('/api/demo-coverage');
+  } catch (err) {
+    main.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    return;
+  }
+  const rows = data.rows || [];
+  const s = data.summary || { total: rows.length, yours: 0, placeholder: 0, none: 0 };
+  if (!COVERAGE_FILTERS.some(([v]) => v === state.coverageFilter)) state.coverageFilter = 'all';
+  const counts = { all: s.total, yours: s.yours, placeholder: s.placeholder, none: s.none };
+  const shown = rows.filter(r => state.coverageFilter === 'all' || r.status === state.coverageFilter);
+  main.innerHTML = `
+    <div class="card">
+      <p style="margin:0"><strong>${s.yours} of ${s.total} movements have your video</strong> · ${s.placeholder} placeholders · ${s.none} with no demo</p>
+    </div>
+    <div class="chip-row">${COVERAGE_FILTERS.map(([v, label]) =>
+      `<button type="button" class="chip ${state.coverageFilter === v ? 'active' : ''}" data-covfilter="${v}">${label} (${counts[v]})</button>`).join('')}
+    </div>
+    <div id="coverage-list">${shown.length ? shown.map(r => `
+      <div class="roster-row"><strong>${esc(r.name)}</strong> <span class="badge plain">${esc(r.kind)}</span> ${coverageBadge(r.status)} ${demoHtml(r.id, r.name)}</div>`).join('')
+      : '<p class="muted">Nothing in this bucket yet.</p>'}
+    </div>`;
+  main.querySelectorAll('[data-covfilter]').forEach(b => b.addEventListener('click', () => {
+    state.coverageFilter = b.dataset.covfilter;
+    renderCoverage();
+  }));
+}
+
 async function renderData() {
   const main = $('#data-main');
   if (!main) return;

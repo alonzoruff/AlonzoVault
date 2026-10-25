@@ -1197,6 +1197,30 @@ function mergedMedia() {
   return out;
 }
 
+/* Demo coverage: the filming map for the goal of replacing every
+   demo with the coach's own video. Computed per request from
+   mergedMedia() — nothing is stored. The universe is exactly the
+   movements the demo system can attach to: every drill in the
+   content, then every test in the battery. A movement's status is
+   its merged entry's type: an upload is the coach's own video
+   ('yours'), a YouTube or GIF entry is a stand-in ('placeholder'),
+   and no entry at all — including a tombstone, where a coach
+   removed a base demo — is 'none'. */
+function demoCoverage() {
+  const media = mergedMedia();
+  const rows = [];
+  const add = (id, name, kind) => {
+    const e = media[id];
+    const status = !e ? 'none' : (e.type === 'upload' ? 'yours' : 'placeholder');
+    rows.push({ id, name, kind, status });
+  };
+  for (const d of CONTENT.drills) add(d.id, d.name, 'Drill');
+  for (const t of allTests()) add(t.key, t.name, 'Test');
+  const summary = { total: rows.length, yours: 0, placeholder: 0, none: 0 };
+  for (const r of rows) summary[r.status]++;
+  return { rows, summary };
+}
+
 const CONCERN_AREAS = ['ankle', 'achilles', 'calf', 'shin', 'knee', 'hamstring', 'quad', 'hip-flexor', 'hip', 'groin', 'glute', 'lower-back', 'foot', 'shoulder', 'other'];
 const CONCERN_FEELINGS = ['ache', 'sharp', 'tightness', 'soreness', 'stiffness', 'swelling', 'other'];
 const EVENT_TAGS = ['sprinter', 'jumper', 'hurdler'];
@@ -5233,6 +5257,12 @@ async function handleApi(req, res, url) {
   /* ---------- movement demo media (coach-managed) ---------- */
   if (p === '/api/media' && req.method === 'GET') {
     return sendJson(res, 200, { media: mergedMedia() });
+  }
+  /* Demo coverage: every drill and test, classified by whose demo
+     is attached (see demoCoverage). Coach-only like everything in
+     this section — athletes get the gate's 403, logged-out 401. */
+  if (p === '/api/demo-coverage' && req.method === 'GET') {
+    return sendJson(res, 200, demoCoverage());
   }
   const mediaMatch = p.match(/^\/api\/media\/([^/]+)$/);
   if (mediaMatch && req.method === 'PUT') {

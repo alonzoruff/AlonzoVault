@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v40',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v40"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v41',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v41"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -999,6 +999,91 @@ async function main() {
     upTvCode.length > 500 && !upTvCode.includes('media-file') &&
     !upTvCode.includes('Upload your video') && !upTvCode.toLowerCase().includes('cloudinary'),
     upTvCode.length);
+
+  /* ---------------- demo coverage ----------------
+     The filming map: every drill + test classified from the merged
+     media by entry type — upload = yours, youtube/gif = placeholder,
+     no entry (incl. a tombstone) = none. Coach-only; computed per
+     request, so overrides flip a row's status immediately. */
+  r = await api(null, 'GET', '/api/demo-coverage');
+  check('demo coverage logged-out is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/demo-coverage');
+  check('demo coverage athlete is 403', r.status === 403, r.status);
+  r = await api(coach, 'GET', '/api/content');
+  const covDrills = r.json.drills;
+  r = await api(coach, 'GET', '/api/tests');
+  const covTests = r.json.tests;
+  r = await api(coach, 'GET', '/api/demo-coverage');
+  check('demo coverage is 200 for a coach', r.status === 200, r.status);
+  const cov = r.json;
+  const covRow = (id) => (cov.rows || []).find(x => x.id === id);
+  check('coverage universe is every drill in content order, then every test in battery order',
+    !!cov.rows && cov.rows.length === covDrills.length + covTests.length &&
+    cov.rows.slice(0, covDrills.length).every((x, i) => x.id === covDrills[i].id && x.kind === 'Drill' && x.name === covDrills[i].name) &&
+    cov.rows.slice(covDrills.length).every((x, i) => x.id === covTests[i].key && x.kind === 'Test' && x.name === covTests[i].name),
+    [cov.rows && cov.rows.length, covDrills.length, covTests.length]);
+  check('coverage summary counts match the rows',
+    !!cov.summary && cov.summary.total === cov.rows.length &&
+    cov.summary.yours === cov.rows.filter(x => x.status === 'yours').length &&
+    cov.summary.placeholder === cov.rows.filter(x => x.status === 'placeholder').length &&
+    cov.summary.none === cov.rows.filter(x => x.status === 'none').length, cov.summary);
+  check('a base YouTube demo classifies as placeholder',
+    !!covRow('DRL-01') && covRow('DRL-01').status === 'placeholder', covRow('DRL-01'));
+  check('the base uploaded demo (DRL-17) classifies as yours',
+    !!covRow('DRL-17') && covRow('DRL-17').status === 'yours', covRow('DRL-17'));
+  check('a test with no demo classifies as none',
+    !!covRow('back-squat') && covRow('back-squat').status === 'none', covRow('back-squat'));
+  /* An upload override flips placeholder -> yours, live. */
+  r = await api(coach, 'PUT', '/api/media/DRL-02', { url: CDN_OK, type: 'upload' });
+  check('coverage setup: upload override on DRL-02 saves', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/demo-coverage');
+  check('an upload override flips placeholder to yours',
+    ((r.json.rows || []).find(x => x.id === 'DRL-02') || {}).status === 'yours',
+    (r.json.rows || []).find(x => x.id === 'DRL-02'));
+  check('the flip moves the summary counts too',
+    r.json.summary.yours === cov.summary.yours + 1 &&
+    r.json.summary.placeholder === cov.summary.placeholder - 1, r.json.summary);
+  r = await api(coach, 'PUT', '/api/media/DRL-02', { url: 'https://www.youtube.com/watch?v=WpypmqTmIeA' });
+  check('coverage setup: DRL-02 restored to its YouTube demo', r.status === 200, r.status);
+  /* A tombstone flips placeholder -> none. */
+  r = await api(coach, 'DELETE', '/api/media/DRL-04');
+  check('coverage setup: DRL-04 delete is 200', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/demo-coverage');
+  check('a tombstone flips placeholder to none',
+    ((r.json.rows || []).find(x => x.id === 'DRL-04') || {}).status === 'none',
+    (r.json.rows || []).find(x => x.id === 'DRL-04'));
+  r = await api(coach, 'PUT', '/api/media/DRL-04', { url: 'https://www.youtube.com/watch?v=6aw8CAH_65Y' });
+  check('coverage setup: DRL-04 restored', r.status === 200, r.status);
+  /* A YouTube override on a none test flips none -> placeholder,
+     and removing it (no base entry) returns the test to none. */
+  r = await api(coach, 'PUT', '/api/media/back-squat', { url: 'https://www.youtube.com/watch?v=BUIu720DQH4' });
+  check('coverage setup: YouTube override on back-squat saves', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/demo-coverage');
+  check('a YouTube override flips none to placeholder',
+    ((r.json.rows || []).find(x => x.id === 'back-squat') || {}).status === 'placeholder',
+    (r.json.rows || []).find(x => x.id === 'back-squat'));
+  r = await api(coach, 'DELETE', '/api/media/back-squat');
+  check('coverage setup: back-squat override removed', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/demo-coverage');
+  check('removing the override returns the test to none',
+    ((r.json.rows || []).find(x => x.id === 'back-squat') || {}).status === 'none',
+    (r.json.rows || []).find(x => x.id === 'back-squat'));
+  /* Served wiring: view, nav, endpoint, and the TV slice stays clean. */
+  check('served page has the coverage view',
+    pageHtml.text.includes('id="view-coverage"') && pageHtml.text.includes('id="coverage-main"'));
+  check('coverage is reachable from the Coach hub and the coach sub-nav',
+    pageHtml.text.includes('data-view="coverage"') &&
+    appJs.text.includes("['coverage', 'Demo Coverage']") &&
+    appJs.text.includes("coverage: 'coachhub'"));
+  check('served JS fetches the coverage endpoint and reuses demoHtml',
+    appJs.text.includes("api('/api/demo-coverage')") && appJs.text.includes('renderCoverage') &&
+    appJs.text.includes('coverageBadge'));
+  const covTvStart = appJs.text.indexOf('TV BOARD');
+  const covTvEnd = appJs.text.indexOf('/* ---------------- boot', covTvStart);
+  const covTvCode = covTvStart >= 0 && covTvEnd > covTvStart ? appJs.text.slice(covTvStart, covTvEnd) : '';
+  check('TV board render path stays free of demo coverage',
+    covTvCode.length > 500 && !covTvCode.toLowerCase().includes('coverage') &&
+    !covTvCode.includes('/api/demo-coverage'), covTvCode.length);
 
   /* ---------------- malformed bodies ---------------- */
   r = await api(coach, 'POST', '/api/groups', undefined, { raw: 'this is not json{', contentType: 'application/json' });
@@ -2218,16 +2303,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v40'") &&
-    swJs.text.includes("sprinter-app-v40"));
+    appJs.text.includes("const APP_VERSION = 'v41'") &&
+    swJs.text.includes("sprinter-app-v41"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v40"') &&
-    pageHtml.text.includes('Cadets Sprint · App v40') &&
+    pageHtml.text.includes('data-app-version="v41"') &&
+    pageHtml.text.includes('Cadets Sprint · App v41') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
