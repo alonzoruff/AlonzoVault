@@ -122,8 +122,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v38';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v38';
+const APP_VERSION = 'v39';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v39';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -1833,6 +1833,52 @@ function demoHtml(id, title) {
   const view = m ? `<button class="btn secondary demo-btn" type="button" data-demo="${esc(id)}" data-demo-title="${esc(title || id)}">▶ Demo</button>` : '';
   return `<span class="demo-zone">${view}<button class="btn secondary demo-edit-btn" type="button" data-demo-edit="${esc(id)}" data-demo-title="${esc(title || id)}">${m ? 'Edit demo' : 'Add demo'}</button></span>`;
 }
+/* The one player every demo surface uses: a YouTube embed for a
+   YouTube demo, a native video element for the coach's own uploaded
+   video (type 'upload', hosted on Cloudinary), an img for a GIF. */
+function mediaPlayerHtml(m) {
+  if (m.type === 'youtube') {
+    return `<div class="media-frame"><iframe src="${esc(m.embedUrl)}" title="Demo video" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`;
+  }
+  if (m.type === 'upload') {
+    return `<video class="media-video" src="${esc(m.url)}" controls playsinline preload="metadata"></video>`;
+  }
+  return `<img class="media-gif" src="${esc(m.url)}" alt="Demo animation">`;
+}
+/* Upload one video file straight from the browser to the coach's
+   Cloudinary account with the unsigned preset the server ships in
+   the content payload. Resolves with the secure_url to save as the
+   movement's demo; rejects with Cloudinary's own message so the
+   coach sees exactly what it said. Nothing is saved on failure. */
+function uploadDemoVideo(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const vu = (state.content && state.content.videoUpload) || null;
+    if (!vu) { reject(new Error('Video upload is not set up yet.')); return; }
+    const form = new FormData();
+    form.append('file', file);
+    form.append('upload_preset', vu.preset);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://api.cloudinary.com/v1_1/' + vu.cloudName + '/video/upload');
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    });
+    xhr.addEventListener('load', () => {
+      let json = null;
+      try { json = JSON.parse(xhr.responseText); } catch (_) { /* not JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300 && json && json.secure_url) {
+        resolve(json.secure_url);
+        return;
+      }
+      const msg = (json && json.error && json.error.message)
+        || ('Upload failed (HTTP ' + xhr.status + ').');
+      reject(new Error(msg));
+    });
+    xhr.addEventListener('error', () => {
+      reject(new Error('Upload failed — check your connection and try again.'));
+    });
+    xhr.send(form);
+  });
+}
 let mediaTarget = null;
 function openMedia(id, title, editOnly) {
   mediaTarget = id;
@@ -1840,20 +1886,22 @@ function openMedia(id, title, editOnly) {
   $('#media-title').textContent = (title || id) + ' — demo';
   const player = $('#media-player');
   if (m && !editOnly) {
-    player.innerHTML = m.type === 'youtube'
-      ? `<div class="media-frame"><iframe src="${esc(m.embedUrl)}" title="Demo video" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`
-      : `<img class="media-gif" src="${esc(m.url)}" alt="Demo animation">`;
+    player.innerHTML = mediaPlayerHtml(m);
   } else {
     player.innerHTML = m ? '' : '<p class="muted">No demo attached to this movement yet.</p>';
   }
   const ed = $('#media-edit');
   if (isCoachUser()) {
+    const vu = (state.content && state.content.videoUpload) || null;
     ed.innerHTML = `<label>Demo link — YouTube or a .gif
       <input type="url" id="media-url" value="${m ? esc(m.url) : ''}" placeholder="https://www.youtube.com/watch?v=…"></label>
       <div class="filter-row">
         <button class="btn primary" id="media-save" type="button" style="width:auto">Save demo</button>
         ${m ? '<button class="btn danger" id="media-remove" type="button" style="width:auto">Remove</button>' : ''}
       </div>
+      ${vu ? `<label>Upload your video
+        <input type="file" id="media-file" accept="video/*"></label>
+      <p class="muted" id="media-upload-status">Your own demo video (up to 100 MB) — it plays right in the app, for you and your athletes.</p>` : ''}
       <p class="error" id="media-err"></p>`;
     $('#media-save').addEventListener('click', async () => {
       try {
@@ -1861,6 +1909,36 @@ function openMedia(id, title, editOnly) {
         closeMedia();
         await loadMedia();
       } catch (err) { $('#media-err').textContent = err.message; }
+    });
+    const fileInput = $('#media-file');
+    if (fileInput) fileInput.addEventListener('change', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const errEl = $('#media-err');
+      const status = $('#media-upload-status');
+      errEl.textContent = '';
+      if (file.type && !file.type.startsWith('video/')) {
+        errEl.textContent = 'That file is not a video.';
+        fileInput.value = '';
+        return;
+      }
+      if (file.size > 100 * 1024 * 1024) {
+        errEl.textContent = 'That video is over 100 MB — trim it or export a smaller file.';
+        fileInput.value = '';
+        return;
+      }
+      try {
+        const secureUrl = await uploadDemoVideo(file, (pct) => {
+          if (status) status.textContent = 'Uploading… ' + pct + '%';
+        });
+        await apiPut('/api/media/' + encodeURIComponent(mediaTarget), { url: secureUrl, type: 'upload' });
+        closeMedia();
+        await loadMedia();
+      } catch (err) {
+        if (status) status.textContent = 'Your own demo video (up to 100 MB) — it plays right in the app, for you and your athletes.';
+        errEl.textContent = err.message;
+        fileInput.value = '';
+      }
     });
     const rm = $('#media-remove');
     if (rm) rm.addEventListener('click', async () => {
@@ -3583,6 +3661,25 @@ function runnerNextExercise(fromIdx) {
   }
   return null;
 }
+/* The demo for a runner exercise, when one is attached to the
+   movement it names. Runner steps carry free-text names, so the
+   match is exact on the normalized name against the drills and the
+   test battery — the movements the media map is keyed by. What the
+   runner shows is the movement's current demo, uploaded videos
+   included, through the same player as everywhere else. */
+function demoForRunnerExercise(name) {
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const target = norm(name);
+  if (!target) return null;
+  const drills = (state.content && state.content.drills) || [];
+  for (const d of drills) {
+    if (norm(d.name) === target && state.media[d.id]) return state.media[d.id];
+  }
+  for (const t of state.tests || []) {
+    if (norm(t.name) === target && state.media[t.key]) return state.media[t.key];
+  }
+  return null;
+}
 function renderRunnerStep() {
   runnerStopTick();
   const main = $('#runner-main');
@@ -3614,15 +3711,22 @@ function renderRunnerStep() {
     else if (nxt.type === 'rest' && nxtEx) nextText = 'Next: rest ' + fmtCountdown(nxt.seconds) + ', then ' + esc(nxtEx.name) + ' × ' + esc(repsLabel(nxtEx.reps));
     else if (nxtEx) nextText = 'Next: ' + esc(nxtEx.name) + ' × ' + esc(repsLabel(nxtEx.reps));
     else nextText = '';
+    const demo = demoForRunnerExercise(step.name);
     main.innerHTML = head + `
       <p class="runner-where">Block ${step.block + 1} of ${step.blocks} · Round ${step.round} of ${step.rounds}</p>
       <h2 class="runner-ex-name">${esc(step.name)}</h2>
       <p class="runner-ex-reps">× ${esc(repsLabel(step.reps))}</p>
       <p class="runner-next">${nextText}</p>
+      ${demo ? `<div class="runner-demo"><button class="btn secondary" id="runner-demo-btn" type="button">▶ Watch demo</button><div id="runner-demo-slot"></div></div>` : ''}
       <div class="runner-controls">
         <button class="btn runner-btn secondary" id="runner-back" type="button" ${runner.idx === 0 ? 'disabled' : ''}>← Back</button>
         <button class="btn runner-btn primary" id="runner-advance" type="button">Done — next →</button>
       </div>`;
+    const demoBtn = $('#runner-demo-btn');
+    if (demoBtn) demoBtn.addEventListener('click', () => {
+      $('#runner-demo-slot').innerHTML = mediaPlayerHtml(demo);
+      demoBtn.remove();
+    });
     $('#runner-advance').addEventListener('click', runnerAdvance);
     const back = $('#runner-back');
     if (back) back.addEventListener('click', runnerBack);

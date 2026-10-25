@@ -433,8 +433,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v38',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v38"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v39',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v39"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -899,6 +899,74 @@ async function main() {
   await api(coach, 'DELETE', '/api/media/custom-move-2');
   r = await api(coach, 'GET', '/api/media');
   check('coach-only entries delete cleanly', !('custom-move-1' in r.json.media) && !('custom-move-2' in r.json.media));
+
+  /* ---------------- uploaded demo videos (Cloudinary) ----------------
+     The coach's own videos, uploaded from the browser with an
+     unsigned preset and saved as type 'upload' overrides. The
+     server accepts ONLY an https res.cloudinary.com URL under
+     AJ's cloud (l8qblw99) for an upload — a different cloud, a
+     different host, or plain http is a 400 and saves nothing. */
+  r = await api(coach, 'GET', '/api/content');
+  check('content payload carries the video upload config',
+    !!r.json.videoUpload && r.json.videoUpload.cloudName === 'l8qblw99' &&
+    r.json.videoUpload.preset === 'sjc-demos', r.json.videoUpload);
+  const CDN_OK = 'https://res.cloudinary.com/l8qblw99/video/upload/v1700000000/sjc-demos/9090-demo.mp4';
+  r = await api(coach, 'PUT', '/api/media/upload-move-1', { url: CDN_OK, type: 'upload' });
+  check('coach upload save is 200 and typed upload',
+    r.status === 200 && r.json.media && r.json.media.type === 'upload' && r.json.media.url === CDN_OK, r.json);
+  r = await api(coach, 'GET', '/api/media');
+  check('upload override serves as source=coach with the upload type',
+    r.json.media['upload-move-1'] && r.json.media['upload-move-1'].type === 'upload' &&
+    r.json.media['upload-move-1'].source === 'coach', r.json.media['upload-move-1']);
+  r = await api(coach, 'PUT', '/api/media/upload-move-2',
+    { url: 'https://res.cloudinary.com/someoneelse/video/upload/v1/sjc-demos/x.mp4', type: 'upload' });
+  check('upload from a different cloud is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/media/upload-move-2',
+    { url: 'https://videos.example.com/l8qblw99/demo.mp4', type: 'upload' });
+  check('upload claim on a non-Cloudinary host is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/media/upload-move-2',
+    { url: 'http://res.cloudinary.com/l8qblw99/video/upload/v1/sjc-demos/x.mp4', type: 'upload' });
+  check('non-https Cloudinary URL is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/media');
+  check('rejected uploads saved nothing',
+    !('upload-move-2' in r.json.media) && r.json.media['upload-move-1'].url === CDN_OK,
+    Object.keys(r.json.media).length);
+  r = await api(athlete, 'PUT', '/api/media/upload-move-1', { url: CDN_OK, type: 'upload' });
+  check('athlete upload save is 403', r.status === 403, r.status);
+  r = await api(coach, 'GET', '/api/media');
+  check('athlete attempt changed nothing', r.json.media['upload-move-1'].url === CDN_OK);
+  r = await api(coach, 'DELETE', '/api/media/upload-move-1');
+  check('upload override delete is 200', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/media');
+  check('clearing the upload restores the movement default (no demo)',
+    !('upload-move-1' in r.json.media));
+  /* An upload can replace a base YouTube demo and be removed again
+     through the same editor paths; the YouTube save is untouched. */
+  r = await api(coach, 'PUT', '/api/media/DRL-03', { url: CDN_OK, type: 'upload' });
+  check('upload can replace a base demo', r.status === 200 && r.json.media.type === 'upload', r.json);
+  r = await api(coach, 'PUT', '/api/media/DRL-03', { url: 'https://www.youtube.com/watch?v=EBmvMaPc1kg' });
+  check('YouTube save still works over an upload (regression)',
+    r.status === 200 && r.json.media.type === 'youtube', r.json);
+  /* Served bundle: the upload call, the native-video playback
+     branch, the editor file input, and the runner demo wiring. */
+  check('served JS uploads to the Cloudinary endpoint with the preset field',
+    appJs.text.includes('https://api.cloudinary.com/v1_1/') && appJs.text.includes('upload_preset') &&
+    appJs.text.includes('videoUpload'));
+  check('served JS plays uploads with a native video element',
+    appJs.text.includes("m.type === 'upload'") && appJs.text.includes('<video class="media-video"') &&
+    appJs.text.includes('playsinline') && appJs.text.includes('mediaPlayerHtml'));
+  check('served JS has the coach upload file input and client guards',
+    appJs.text.includes('id="media-file"') && appJs.text.includes('accept="video/*"') &&
+    appJs.text.includes('100 * 1024 * 1024'));
+  check('served JS wires the runner demo to the same player',
+    appJs.text.includes('runner-demo-btn') && appJs.text.includes('demoForRunnerExercise'));
+  const upTvStart = appJs.text.indexOf('TV BOARD');
+  const upTvEnd = appJs.text.indexOf('/* ---------------- boot', upTvStart);
+  const upTvCode = upTvStart >= 0 && upTvEnd > upTvStart ? appJs.text.slice(upTvStart, upTvEnd) : '';
+  check('TV board render path has no upload UI or Cloudinary reference',
+    upTvCode.length > 500 && !upTvCode.includes('media-file') &&
+    !upTvCode.includes('Upload your video') && !upTvCode.toLowerCase().includes('cloudinary'),
+    upTvCode.length);
 
   /* ---------------- malformed bodies ---------------- */
   r = await api(coach, 'POST', '/api/groups', undefined, { raw: 'this is not json{', contentType: 'application/json' });
@@ -2118,16 +2186,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v38'") &&
-    swJs.text.includes("sprinter-app-v38"));
+    appJs.text.includes("const APP_VERSION = 'v39'") &&
+    swJs.text.includes("sprinter-app-v39"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v38"') &&
-    pageHtml.text.includes('Cadets Sprint · App v38') &&
+    pageHtml.text.includes('data-app-version="v39"') &&
+    pageHtml.text.includes('Cadets Sprint · App v39') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&

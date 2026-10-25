@@ -1119,6 +1119,23 @@ function leaderboardData() {
 /* ------------------------------------------------------------------ */
 /* Movement demo media: optional base file + coach overrides           */
 /* ------------------------------------------------------------------ */
+/* Cloudinary video uploads: the coach's own demo videos, uploaded
+   straight from the browser with an unsigned preset and played
+   natively in the app. The cloud name and preset are public
+   identifiers — they ship to the client in the content payload —
+   and the account API secret is never used anywhere in this app.
+   An upload entry is accepted ONLY as an https URL on
+   res.cloudinary.com under this account's cloud, so a link pasted
+   into the demo editor can never smuggle in an outside host, a
+   different account, or a non-https URL under an upload's name. */
+const VIDEO_UPLOAD = { cloudName: 'l8qblw99', preset: 'sjc-demos' };
+function uploadEntry(url, title) {
+  let u;
+  try { u = new URL(url); } catch (_) { return null; }
+  if (u.protocol !== 'https:' || u.hostname !== 'res.cloudinary.com') return null;
+  if (!u.pathname.startsWith('/' + VIDEO_UPLOAD.cloudName + '/')) return null;
+  return { type: 'upload', url, embedUrl: url, title: clean(title, 120) };
+}
 function loadMediaBase() {
   try {
     const raw = fs.readFileSync(path.join(CONTENT_DIR, 'movement_media.json'), 'utf8');
@@ -1150,6 +1167,12 @@ function youtubeId(url) {
 function mediaEntry(raw) {
   if (!raw || typeof raw !== 'object' || typeof raw.url !== 'string') return null;
   const url = raw.url.trim();
+  /* Uploads are decided first and strictly: any URL on the
+     Cloudinary host — and anything claiming type 'upload' — must
+     be this account's https delivery URL or it is not an entry. */
+  let host = '';
+  try { host = new URL(url).hostname; } catch (_) { /* not a URL */ }
+  if (host === 'res.cloudinary.com' || raw.type === 'upload') return uploadEntry(url, raw.title);
   const yid = youtubeId(url);
   if (yid) return { type: 'youtube', url, embedUrl: 'https://www.youtube.com/embed/' + yid, title: clean(raw.title, 120) };
   if (/^https?:\/\//i.test(url) && /\.gif($|\?)/i.test(url)) {
@@ -2393,7 +2416,7 @@ async function handleApi(req, res, url) {
   const q = url.searchParams;
 
   if (p === '/api/content' && req.method === 'GET') {
-    return sendJson(res, 200, CONTENT);
+    return sendJson(res, 200, Object.assign({}, CONTENT, { videoUpload: VIDEO_UPLOAD }));
   }
 
   /* Warm-up card edits are public to read (the cards themselves are
@@ -5221,7 +5244,10 @@ async function handleApi(req, res, url) {
     const url = clean(body.url, 500);
     const entry = mediaEntry({ url, type: body.type, title: body.title });
     if (!entry) {
-      return sendJson(res, 400, { error: 'That link is not a YouTube video or a GIF. Paste a YouTube watch/share link or a direct .gif link.' });
+      const uploadAttempt = body.type === 'upload' || /cloudinary\.com/i.test(url);
+      return sendJson(res, 400, { error: uploadAttempt
+        ? 'That is not a video from your Cloudinary account. Add your own video with the Upload your video button instead.'
+        : 'That link is not a YouTube video or a GIF. Paste a YouTube watch/share link or a direct .gif link.' });
     }
     db.mediaOverrides[movementId] = { type: entry.type, url: entry.url, title: entry.title || '' };
     saveDb();
