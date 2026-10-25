@@ -68,9 +68,15 @@ async function main() {
   /* ---------------- content + auth ---------------- */
   let r = await api(null, 'GET', '/api/content');
   check('content loads', r.status === 200);
-  check('content counts are 57/16/29 (49 library + 8 Instagram sessions)',
-    r.json.sessions.length === 57 && r.json.drills.length === 16 && r.json.weeks.length === 29,
+  check('content counts are 57/17/29 (49 library + 8 Instagram sessions)',
+    r.json.sessions.length === 57 && r.json.drills.length === 17 && r.json.weeks.length === 29,
     [r.json.sessions.length, r.json.drills.length, r.json.weeks.length]);
+  const drl17 = (r.json.drills || []).find(d => d.id === 'DRL-17');
+  check('DRL-17 is the 90/90 Hip Switches drill with the exact fields',
+    !!drl17 && drl17.name === '90/90 Hip Switches' && drl17.category === 'dynamic_stretch' &&
+    drl17.distance_or_reps === '8-10 switches' &&
+    drl17.coaching_cue === "Hips square, sit tall — rotate, don't lean" &&
+    drl17.source === 'AJ demo, Oct 2026', drl17);
   r = await api(null, 'GET', '/');
   check('home page serves', r.status === 200);
 
@@ -153,8 +159,14 @@ async function main() {
       .split(' ').filter(tok => tok && !/^\d+(m|km|s)?$/.test(tok)).join(' ');
     const glossNorms = new Set(gloss.map(e => normTerm(e.term)));
     const drillNames = (contentJson.drills || []).map(d => d.name);
-    check('all 16 drill names appear as glossary terms',
-      drillNames.length === 16 && drillNames.every(n => glossNorms.has(normTerm(n))),
+    /* DRL-17 (90/90 Hip Switches) is AJ's own demo drill, added for its
+       video; the glossary covers the movement as "90/90 Hip Rotations",
+       so the define-every-drill guard below keeps its original scope
+       (the 16 AJ-plan drills) while the count moves to the new truth. */
+    const definedDrillNames = drillNames.filter(n => n !== '90/90 Hip Switches');
+    check('all 16 AJ-plan drill names appear as glossary terms (17 drills total)',
+      drillNames.length === 17 && definedDrillNames.length === 16 &&
+      definedDrillNames.every(n => glossNorms.has(normTerm(n))),
       drillNames.filter(n => !glossNorms.has(normTerm(n))));
   }
   check('definitions view markers are in the served page',
@@ -433,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v39',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v39"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v40',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v40"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -870,7 +882,27 @@ async function main() {
   /* ---------------- movement media ---------------- */
   r = await api(coach, 'GET', '/api/media');
   const media = r.json.media;
-  check('media serves all 24 base entries', Object.keys(media).length === 24, Object.keys(media).length);
+  check('media serves all 25 base entries', Object.keys(media).length === 25, Object.keys(media).length);
+  check("DRL-17 serves as AJ's uploaded 90/90 demo (type upload, exact Cloudinary URL, source base)",
+    !!media['DRL-17'] && media['DRL-17'].type === 'upload' &&
+    media['DRL-17'].url === 'https://res.cloudinary.com/l8qblw99/video/upload/v1792951016/aj-90-90-floating-words-v1.mp4' &&
+    media['DRL-17'].source === 'base' && media['DRL-17'].title === '90/90 Hip Switches — Coach AJ',
+    media['DRL-17']);
+  /* The runner demo matcher is a client function over state; extract
+     it the way the suite extracts its other pure cores and feed it
+     the live content + media, so the name AJ's athletes run under
+     resolves to his uploaded video. */
+  const runnerDemoMatch = appJs.text.match(/function demoForRunnerExercise\(name\) \{[\s\S]*?\n\}/);
+  check('runner demo matcher is extractable from the served JS', !!runnerDemoMatch);
+  if (runnerDemoMatch) {
+    const demoFor = new Function('state', runnerDemoMatch[0] + '\nreturn demoForRunnerExercise;')(
+      { content: contentJson, media, tests: [] });
+    const resolved = demoFor('90/90 Hip Switches');
+    check('runner resolves "90/90 Hip Switches" to the DRL-17 upload',
+      !!resolved && resolved.type === 'upload' &&
+      resolved.url === 'https://res.cloudinary.com/l8qblw99/video/upload/v1792951016/aj-90-90-floating-words-v1.mp4',
+      resolved);
+  }
   check('ankle dribbles embed URL is correct', media['DRL-16'] && media['DRL-16'].embedUrl === 'https://www.youtube.com/embed/fPzTm57KOKk', media['DRL-16']);
   check('base media is marked source=base', media['squat'] && media['squat'].source === 'base', media['squat']);
   r = await api(coach, 'PUT', '/api/media/custom-move-1', { url: 'https://www.youtube.com/watch?v=X0J1m-R6CKk' });
@@ -2186,16 +2218,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v39'") &&
-    swJs.text.includes("sprinter-app-v39"));
+    appJs.text.includes("const APP_VERSION = 'v40'") &&
+    swJs.text.includes("sprinter-app-v40"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v39"') &&
-    pageHtml.text.includes('Cadets Sprint · App v39') &&
+    pageHtml.text.includes('data-app-version="v40"') &&
+    pageHtml.text.includes('Cadets Sprint · App v40') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&

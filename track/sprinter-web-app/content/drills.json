@@ -126,5 +126,13 @@
   "distance_or_reps": "20m",
   "coaching_cue": "Short quick steps on the balls of the feet",
   "source": "AJ plan warm-up Part B"
+ },
+ {
+  "id": "DRL-17",
+  "name": "90/90 Hip Switches",
+  "category": "dynamic_stretch",
+  "distance_or_reps": "8-10 switches",
+  "coaching_cue": "Hips square, sit tall \u2014 rotate, don't lean",
+  "source": "AJ demo, Oct 2026"
  }
 ]
