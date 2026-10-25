@@ -77,6 +77,9 @@ const state = {
   checkinToday: null,
   checkinMine: null,
   ciMsg: '',
+  memberLogsData: null,
+  memberLogEdit: null,
+  mlMsg: '',
   profiles: [],
   pfGroup: '',
   pfEvent: '',
@@ -343,7 +346,7 @@ function showView(name) {
      the app chrome (CSS), and its timers run only while it shows. */
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
-  if (name === 'home' || name === 'log') renderCheckin();
+  if (name === 'home' || name === 'log') { renderCheckin(); renderMemberLogs(); }
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
   if (name === 'coach') renderCoach();
@@ -1345,6 +1348,244 @@ async function renderCheckin() {
   }
 }
 
+/* ---------------- member workout logs ----------------
+   Members log their own training (this product's deliberate
+   difference from the school app): fast on a phone, free-text
+   sets/reps/load per exercise, prefilled from today's assigned
+   session or straight out of the runner. The server binds every
+   read and write to the member's own linked profile, so this UI
+   only ever handles the caller's own logs. Coaches read them in
+   AMS; the member's Today card and My Log list both live here. */
+function memberLogStatusBadge(l) {
+  return l.status === 'partial'
+    ? '<span class="badge plain">PARTIAL</span>'
+    : '<span class="badge low">DONE</span>';
+}
+function memberLogMetaLine(l) {
+  const bits = [];
+  if (l.rpe != null) bits.push('RPE ' + l.rpe);
+  if (l.durationMin != null) bits.push(l.durationMin + ' min');
+  return bits.join(' · ');
+}
+async function renderMemberLogs() {
+  const todaySlot = $('#memberlog-slot');
+  const listSlot = $('#member-logs-slot');
+  if (!isAthleteUser()) {
+    if (todaySlot) todaySlot.innerHTML = '';
+    if (listSlot) listSlot.innerHTML = '';
+    return;
+  }
+  let data;
+  try {
+    data = await api('/api/my/logs');
+    state.memberLogsData = data;
+  } catch (err) {
+    if (todaySlot) todaySlot.innerHTML = '';
+    if (listSlot) listSlot.innerHTML = `<div class="card"><h2>My workout logs</h2><p class="error">Could not load your workout logs: ${esc(err.message)}</p><button class="btn secondary" id="ml-retry" type="button">Retry</button></div>`;
+    const rb = listSlot && listSlot.querySelector('#ml-retry');
+    if (rb) rb.addEventListener('click', renderMemberLogs);
+    return;
+  }
+  paintMemberLogToday(data);
+  paintMemberLogsList(data);
+}
+function paintMemberLogToday(data) {
+  const slot = $('#memberlog-slot');
+  if (!slot) return;
+  if (!data.linked) { slot.innerHTML = ''; return; }
+  const today = dateStrOf(todayLocal());
+  const todaysLog = (data.logs || []).find(l => l.date === today) || null;
+  const weekLine = data.weekCount > 0
+    ? `<p class="checkin-streak">🏋️ ${data.weekCount} workout${data.weekCount === 1 ? '' : 's'} logged this week</p>` : '';
+  let body;
+  if (todaysLog) {
+    body = `<p><strong>Today's workout is logged ✓</strong></p>
+      <p>${esc(todaysLog.title)} ${memberLogStatusBadge(todaysLog)}</p>
+      ${memberLogMetaLine(todaysLog) ? `<p class="muted">${esc(memberLogMetaLine(todaysLog))}</p>` : ''}
+      <button class="btn secondary" id="ml-today-edit" type="button">Edit today's log</button>`;
+  } else if (data.todayAssignment) {
+    body = `<p><strong>${esc(data.todayAssignment.title)}</strong></p>
+      <p class="muted">Done it? Log it — sets, reps and loads in your own words. Your coach sees these.</p>
+      <button class="btn primary" id="ml-today-log" type="button">Log today's workout</button>`;
+  } else {
+    body = `<p class="muted">No session is assigned today. Trained anyway? Log it — your coach sees these.</p>
+      <button class="btn secondary" id="ml-today-log" type="button">Log a workout</button>`;
+  }
+  slot.innerHTML = `<div class="card memberlog-card">
+    <h2>Workout Log</h2>
+    ${weekLine}
+    ${body}
+  </div>`;
+  const logBtn = $('#ml-today-log');
+  if (logBtn) logBtn.addEventListener('click', () => {
+    openMemberLogEditor(data.todayAssignment ? memberLogPrefillForAssignment(data.todayAssignment) : { date: today });
+  });
+  const editBtn = $('#ml-today-edit');
+  if (editBtn && todaysLog) editBtn.addEventListener('click', () => openMemberLogEditorFromLog(todaysLog));
+}
+/* Prefill for "log today's workout": the assignment's session,
+   with the exercise list shaped from the session's runner steps
+   (best-effort, like the runner itself). */
+function memberLogPrefillForAssignment(a) {
+  const prefill = { date: dateStrOf(todayLocal()), sessionCode: a.sessionCode, title: a.title, entries: [] };
+  const s = state.sessions.get(a.sessionCode);
+  if (s) prefill.entries = memberLogEntriesFromSteps(buildRunnerSteps(sessionToRunnerPlan(s)));
+  return prefill;
+}
+function openMemberLogEditor(prefill) {
+  state.memberLogEdit = Object.assign({
+    id: null, date: dateStrOf(todayLocal()), sessionCode: '', title: '',
+    status: 'done', rpe: '', durationMin: '', entries: [], note: '',
+  }, prefill || {});
+  state.mlMsg = '';
+  showView('log');
+  renderMemberLogs();
+  setTimeout(() => {
+    const el = $('#ml-editor');
+    if (el) el.scrollIntoView({ block: 'start' });
+  }, 450);
+}
+function openMemberLogEditorFromLog(l) {
+  openMemberLogEditor({
+    id: l.id, date: l.date, sessionCode: l.sessionCode || '', title: l.title || '',
+    status: l.status, rpe: l.rpe == null ? '' : String(l.rpe),
+    durationMin: l.durationMin == null ? '' : String(l.durationMin),
+    entries: (l.entries || []).map(e => ({ exercise: e.exercise, detail: e.detail || '' })),
+    note: l.note || '',
+  });
+}
+function paintMemberLogsList(data) {
+  const slot = $('#member-logs-slot');
+  if (!slot) return;
+  if (!data.linked) {
+    slot.innerHTML = `<div class="card">
+      <h2>My workout logs</h2>
+      <p><strong>Ask your coach to link your account.</strong></p>
+      <p class="muted">Once your coach links this email (${esc(state.user.email)}) to your name on the member roster, you can log your workouts here — and your coach can follow your training between sessions.</p>
+    </div>`;
+    return;
+  }
+  const logs = data.logs || [];
+  slot.innerHTML = `<div class="card">
+    <h2>My workout logs</h2>
+    <p class="muted">Your coach sees these — they're how your coach follows your training between sessions. Everything here is yours: edit or delete anything you wrote.</p>
+    <button class="btn primary" id="ml-add" type="button" style="width:auto">Log a workout</button>
+    ${state.mlMsg ? `<p class="muted">${esc(state.mlMsg)}</p>` : ''}
+    <div id="ml-editor"></div>
+    ${logs.length ? logs.map(l => `
+    <div class="roster-row" style="display:block">
+      <p><strong>${esc(fmtDate(parseDate(l.date)))}</strong> · ${esc(l.title)} ${memberLogStatusBadge(l)}
+      <button class="btn secondary" data-ml-edit="${l.id}" type="button" style="width:auto">Edit</button>
+      <button class="btn secondary" data-ml-del="${l.id}" type="button" style="width:auto">Delete</button></p>
+      ${memberLogMetaLine(l) ? `<p class="muted">${esc(memberLogMetaLine(l))}</p>` : ''}
+      ${(l.entries || []).length ? `<p class="muted">${l.entries.map(e => esc(e.exercise) + (e.detail ? ' — ' + esc(e.detail) : '')).join('<br>')}</p>` : ''}
+      ${l.note ? `<p class="muted">${esc(l.note)}</p>` : ''}
+    </div>`).join('') : '<p class="muted">No workouts logged yet — your first log takes under a minute.</p>'}
+  </div>`;
+  $('#ml-add').addEventListener('click', () => {
+    const today = dateStrOf(todayLocal());
+    const already = logs.some(l => l.date === today);
+    openMemberLogEditor(!already && data.todayAssignment
+      ? memberLogPrefillForAssignment(data.todayAssignment) : { date: today });
+  });
+  slot.querySelectorAll('[data-ml-edit]').forEach(b => b.addEventListener('click', () => {
+    const l = logs.find(x => x.id === b.dataset.mlEdit);
+    if (l) openMemberLogEditorFromLog(l);
+  }));
+  slot.querySelectorAll('[data-ml-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!window.confirm('Delete this workout log?')) return;
+    try {
+      await apiDel('/api/my/logs/' + encodeURIComponent(b.dataset.mlDel));
+      if (state.memberLogEdit && state.memberLogEdit.id === b.dataset.mlDel) state.memberLogEdit = null;
+      state.mlMsg = 'Log deleted.';
+      renderMemberLogs();
+    } catch (err) { alert(err.message); }
+  }));
+  paintMemberLogEditor();
+}
+function collectMemberLogRows() {
+  const ed = state.memberLogEdit;
+  if (!ed) return;
+  const rows = $$('#ml-entries .ml-row');
+  if (!rows.length) return;
+  ed.entries = rows.map(row => ({
+    exercise: row.querySelector('[data-ml-ex]').value,
+    detail: row.querySelector('[data-ml-detail]').value,
+  }));
+}
+function paintMemberLogEditor() {
+  const slot = $('#ml-editor');
+  if (!slot) return;
+  const ed = state.memberLogEdit;
+  if (!ed) { slot.innerHTML = ''; return; }
+  const rowHtml = (e) => `<div class="ml-row filter-row">
+      <label>Exercise <input type="text" data-ml-ex maxlength="120" value="${esc(e.exercise || '')}" placeholder="e.g. Back Squat"></label>
+      <label>Sets / reps / load <input type="text" data-ml-detail maxlength="200" value="${esc(e.detail || '')}" placeholder="e.g. 3x5 @ 185"></label>
+      <button class="btn secondary" data-ml-row-del type="button" style="width:auto">Remove</button>
+    </div>`;
+  slot.innerHTML = `<div class="card" style="margin-top:12px">
+    <h3>${ed.id ? 'Edit workout log' : 'Log a workout'}</h3>
+    <label>Date <input type="date" id="ml-date" value="${esc(ed.date)}"></label>
+    <label>Session code (optional) <input type="text" id="ml-code" maxlength="40" value="${esc(ed.sessionCode || '')}" placeholder="e.g. ACC-01"></label>
+    <label>Title <input type="text" id="ml-title" maxlength="120" value="${esc(ed.title || '')}" placeholder="What did you train?"></label>
+    <div class="filter-row">
+      <label>Status <select id="ml-status">
+        <option value="done" ${ed.status === 'done' ? 'selected' : ''}>Done</option>
+        <option value="partial" ${ed.status === 'partial' ? 'selected' : ''}>Partial — didn't finish it all</option>
+      </select></label>
+      <label>RPE (optional) <select id="ml-rpe">
+        <option value="">—</option>
+        ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${String(ed.rpe) === String(n) ? 'selected' : ''}>${n}${n === 1 ? ' — easy' : ''}${n === 10 ? ' — max effort' : ''}</option>`).join('')}
+      </select></label>
+      <label>Minutes (optional) <input type="number" id="ml-duration" min="1" max="600" value="${esc(ed.durationMin === '' || ed.durationMin == null ? '' : String(ed.durationMin))}" placeholder="e.g. 45"></label>
+    </div>
+    <div id="ml-entries">${(ed.entries || []).map(rowHtml).join('')}</div>
+    <button class="btn secondary" id="ml-add-row" type="button" style="width:auto">Add an exercise</button>
+    <label>Note (optional) <input type="text" id="ml-note" maxlength="500" value="${esc(ed.note || '')}" placeholder="Anything your coach should know"></label>
+    <p>
+      <button class="btn primary" id="ml-save" type="button" style="width:auto">${ed.id ? 'Save changes' : 'Save log'}</button>
+      <button class="btn secondary" id="ml-cancel" type="button" style="width:auto">Cancel</button>
+    </p>
+  </div>`;
+  $('#ml-add-row').addEventListener('click', () => {
+    collectMemberLogRows();
+    state.memberLogEdit.entries.push({ exercise: '', detail: '' });
+    paintMemberLogEditor();
+  });
+  slot.querySelectorAll('[data-ml-row-del]').forEach(b => b.addEventListener('click', () => {
+    collectMemberLogRows();
+    const rows = $$('#ml-entries .ml-row');
+    const idx = rows.indexOf(b.closest('.ml-row'));
+    if (idx >= 0) state.memberLogEdit.entries.splice(idx, 1);
+    paintMemberLogEditor();
+  }));
+  $('#ml-cancel').addEventListener('click', () => {
+    state.memberLogEdit = null;
+    paintMemberLogsList(state.memberLogsData);
+  });
+  $('#ml-save').addEventListener('click', async () => {
+    collectMemberLogRows();
+    const cur = state.memberLogEdit;
+    const payload = {
+      date: $('#ml-date').value,
+      sessionCode: $('#ml-code').value.trim(),
+      title: $('#ml-title').value.trim(),
+      status: $('#ml-status').value,
+      rpe: $('#ml-rpe').value === '' ? null : parseInt($('#ml-rpe').value, 10),
+      durationMin: $('#ml-duration').value === '' ? null : parseInt($('#ml-duration').value, 10),
+      entries: (cur.entries || []).filter(e => (e.exercise || '').trim()),
+      note: $('#ml-note').value,
+    };
+    try {
+      if (cur.id) await apiPut('/api/my/logs/' + encodeURIComponent(cur.id), payload);
+      else await apiPost('/api/my/logs', payload);
+      state.memberLogEdit = null;
+      state.mlMsg = 'Saved — your coach can see it. ✓';
+      renderMemberLogs();
+    } catch (err) { alert(err.message); }
+  });
+}
+
 /* Reports → Health: the check-in aggregates block. Shows the
    participation-by-week bars and the team-average trend when
    check-ins exist; a clean "not yet" line when they don't. */
@@ -1582,7 +1823,7 @@ async function renderAms() {
           ${Object.keys(AMS_STATUS_LABELS).map(s => `<option value="${s}" ${state.amsStatus === s ? 'selected' : ''}>${AMS_STATUS_LABELS[s]}</option>`).join('')}
         </select></label>
       </div>
-      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Attendance = 2+ absences in the last 14 days · Health = an open aches &amp; pains concern · plus the device flags from the latest ForceDecks / NordBord sessions (imbalance, asymmetry, jump drop-off). Tap an athlete for their full page.</p>
+      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Attendance = 2+ absences in the last 14 days · Health = an open aches &amp; pains concern · No logs this week = a linked member who has logged workouts before but none in the last 7 days · plus the device flags from the latest ForceDecks / NordBord sessions (imbalance, asymmetry, jump drop-off). Tap an athlete for their full page.</p>
       <div id="ams-table"></div>
     </div>`;
   const paintTable = () => {
@@ -1596,15 +1837,16 @@ async function renderAms() {
       return true;
     });
     slot.innerHTML = `<div class="table-wrap"><table class="ranked">
-      <thead><tr><th>Athlete</th><th>Group</th><th>Events</th><th>Status</th><th>Account</th><th>Attention</th></tr></thead>
+      <thead><tr><th>Athlete</th><th>Group</th><th>Events</th><th>Status</th><th>Account</th><th>Last log</th><th>Attention</th></tr></thead>
       <tbody>${rows.length ? rows.map(a => `<tr>
         <td><button type="button" class="code-link" data-ams-open="${a.profile.id}">${esc(a.profile.name)}</button>${a.profile.topAthlete ? ' <span class="badge star">★</span>' : ''}${a.profile.archived ? ' <span class="badge plain">ARCHIVED</span>' : ''}</td>
         <td>${esc(a.profile.groupName || 'No group')}</td>
         <td>${esc((a.profile.events || []).join(', ') || '—')}</td>
         <td>${esc(AMS_STATUS_LABELS[a.status] || a.status)}</td>
         <td>${a.linked ? esc(a.profile.linkedEmail) : '<span class="badge plain">NOT LINKED</span>'}</td>
+        <td>${a.lastLogDate ? esc(fmtDate(parseDate(a.lastLogDate))) : '<span class="muted">No logs yet</span>'}</td>
         <td>${amsFlagBadges(a.flags)}</td>
-      </tr>`).join('') : '<tr><td colspan="6">No athletes match.</td></tr>'}</tbody>
+      </tr>`).join('') : '<tr><td colspan="7">No athletes match.</td></tr>'}</tbody>
     </table></div>`;
     slot.querySelectorAll('[data-ams-open]').forEach(b => b.addEventListener('click', () => {
       state.amsProfileId = b.dataset.amsOpen;
@@ -1624,6 +1866,7 @@ async function renderAmsProfile(el, profileId) {
   const p = d.profile;
   const w = d.wellness;
   const att = d.attendance;
+  const ml = d.memberLogs || { recent: [], total: 0, lastLogDate: null, last7Count: 0 };
   const attLine = (label, win) => `<p><strong>${label}:</strong> ${win.marked} marked · ${win.attended} attended · ${win.absent} absent${win.percent == null ? '' : ' · ' + win.percent + '% attended'}</p>`;
   /* Devices strip: the latest session per device (server-computed
      from the same testing store the Testing card reads), shown only
@@ -1696,6 +1939,18 @@ async function renderAmsProfile(el, profileId) {
         <div class="roster-row"><span>${esc(fmtDate(parseDate(m.date)))}</span><span class="badge ${m.status === 'absent' ? 'high' : 'plain'}">${esc(m.status).toUpperCase()}</span></div>`).join('') : '<p class="muted">No attendance marks yet.</p>'}
     </div>
     <div class="card">
+      <h2>Member logs</h2>
+      <p class="muted">${ml.total} logged total · ${ml.last7Count} in the last 7 days · last log ${ml.lastLogDate ? esc(fmtDate(parseDate(ml.lastLogDate))) : 'never'}</p>
+      <p class="muted">Members write their own workout logs. Coaches can't create or edit them — you can delete one here if it's wrong or inappropriate.</p>
+      ${ml.recent.length ? ml.recent.map(l => `
+        <div class="roster-row" style="display:block">
+          <p><strong>${esc(fmtDate(parseDate(l.date)))}</strong> · ${esc(l.title)} ${memberLogStatusBadge(l)}${memberLogMetaLine(l) ? ' · ' + esc(memberLogMetaLine(l)) : ''}
+          <button class="btn secondary" data-ams-log-del="${l.id}" type="button" style="width:auto">Delete</button></p>
+          ${(l.entries || []).length ? `<p class="muted">${l.entries.map(e => esc(e.exercise) + (e.detail ? ' — ' + esc(e.detail) : '')).join('<br>')}</p>` : ''}
+          ${l.note ? `<p class="muted">${esc(l.note)}</p>` : ''}
+        </div>`).join('') : '<p class="muted">No workouts logged yet.</p>'}
+    </div>
+    <div class="card">
       <h2>Health — aches &amp; pains</h2>
       <p class="muted">${d.health.counts.open} new · ${d.health.counts.monitoring} monitoring · ${d.health.counts.cleared} cleared · ${d.health.counts.total} total</p>
       ${d.health.concerns.length ? d.health.concerns.map(c => `
@@ -1728,6 +1983,13 @@ async function renderAmsProfile(el, profileId) {
       </div>
     </div>`;
   $('#ams-back').addEventListener('click', () => { state.amsProfileId = null; renderAms(); window.scrollTo(0, 0); });
+  el.querySelectorAll('[data-ams-log-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!window.confirm('Delete this member log? Logs are the member\'s own record — this is a moderation action.')) return;
+    try {
+      await apiDel('/api/ams/athlete/' + encodeURIComponent(profileId) + '/logs/' + encodeURIComponent(b.dataset.amsLogDel));
+      renderAms();
+    } catch (err) { alert(err.message); }
+  }));
   $('#ams-status').addEventListener('change', async (e) => {
     try {
       await apiPut('/api/profiles/' + encodeURIComponent(profileId), { status: e.target.value });
@@ -3549,6 +3811,43 @@ function featuredRunSessionId(info) {
 }
 /* TODAY-RUN-END */
 
+/* MEMBER-LOG-RUNNER-BEGIN */
+/* The runner -> member-log handoff, as pure data shaping (the test
+   suite evaluates this section directly). The exercise list is the
+   run's exercise steps deduped by name — the first reps label wins
+   — and the payload is one 'done' log for the day: the plan's
+   title, its session code when the title names one ("CODE · Name",
+   matched by the session-code shape so a custom workout's title
+   can never masquerade as a code), and the elapsed whole minutes. */
+function memberLogEntriesFromSteps(steps) {
+  const seen = new Set();
+  const entries = [];
+  for (const s of steps || []) {
+    if (!s || s.type !== 'exercise' || !s.name) continue;
+    const key = String(s.name).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({ exercise: s.name, detail: s.reps ? String(s.reps) : '' });
+    if (entries.length >= 40) break;
+  }
+  return entries;
+}
+function memberLogFromRunner(plan, steps, elapsedMs, today) {
+  const title = (plan && plan.title) || 'Workout';
+  const codePart = title.split(' · ')[0];
+  return {
+    date: today,
+    sessionCode: /^[A-Z]{2,3}-\d{2}$/.test(codePart) ? codePart : '',
+    title,
+    status: 'done',
+    rpe: null,
+    durationMin: Math.max(1, Math.round((elapsedMs || 0) / 60000)),
+    entries: memberLogEntriesFromSteps(steps),
+    note: '',
+  };
+}
+/* MEMBER-LOG-RUNNER-END */
+
 /* The big scarlet Run button for the Today screen. The button
    carries data-run-today with a session id; wireRunTodayButtons
    launches the runner through the same sessionToRunnerPlan +
@@ -3751,8 +4050,23 @@ function renderRunnerStep() {
         <h2 class="runner-done-title">Workout complete</h2>
         <p class="runner-done-stats">${exCount} exercises · Total time ${fmtElapsed(Date.now() - runner.startedAt)}</p>
         <button class="btn runner-btn primary" id="runner-done-btn" type="button">Done</button>
+        ${isAthleteUser() ? '<button class="btn runner-btn" id="runner-log-btn" type="button">Log this workout</button>' : ''}
       </div>`;
     $('#runner-done-btn').addEventListener('click', closeRunner);
+    const runnerLogBtn = $('#runner-log-btn');
+    if (runnerLogBtn) runnerLogBtn.addEventListener('click', async () => {
+      runnerLogBtn.disabled = true;
+      try {
+        const payload = memberLogFromRunner(runner.plan, runner.steps,
+          Date.now() - runner.startedAt, dateStrOf(todayLocal()));
+        await apiPost('/api/my/logs', payload);
+        runnerLogBtn.textContent = 'Logged ✓';
+        state.memberLogsData = null;
+      } catch (err) {
+        runnerLogBtn.disabled = false;
+        alert(err.message);
+      }
+    });
     runnerBeep();
     return;
   }

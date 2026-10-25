@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v1 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v1"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v2 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v2"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v1'") &&
-    swJs.text.includes("ruffin-performance-v1"));
+    appJs.text.includes("const APP_VERSION = 'v2'") &&
+    swJs.text.includes("ruffin-performance-v2"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v1"') &&
-    pageHtml.text.includes('Ruffin Performance · App v1') &&
+    pageHtml.text.includes('data-app-version="v2"') &&
+    pageHtml.text.includes('Ruffin Performance · App v2') &&
     appJs.text.includes('appVersionHtml'));
   /* ---------------- Ruffin Performance: landing + brand + theme ----
      The logged-out home is the landing page for AJ's own membership.
@@ -3910,7 +3910,7 @@ async function main() {
     typeof bkEnv.exportedAt === 'string' && !!bkEnv.data, bkEnv.app + '/' + bkEnv.kind + '/' + bkEnv.version);
   const BK_ARRAYS = ['groups', 'profiles', 'customTests', 'testDays', 'customWeeklyMetrics',
     'inventory', 'meetResults', 'meets', 'meetEntries', 'schoolRecords', 'goals', 'coachInvites', 'clientInvites',
-    'customWorkouts', 'programs', 'programApplications', 'announcements'];
+    'customWorkouts', 'programs', 'programApplications', 'announcements', 'memberLogs'];
   const BK_OBJECTS = ['overrides', 'completions', 'testResults', 'weekly', 'concerns',
     'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins', 'attendance', 'coachNotes'];
   check('backup carries every team-data collection with the right shape',
@@ -4349,6 +4349,295 @@ async function main() {
     !!r.json.devices.tapex && r.json.devices.tapex.date === '2026-10-23' &&
     r.json.devices.tapex.metrics.some(m => m.name === 'T-APEX · Peak Speed (m/s)' && m.value === 8.9),
     r.json.devices);
+
+  /* ---------------- member workout logs (Build B) ----------------
+     This product's members log their own training — the deliberate
+     opposite of the school app. Logs belong to roster profiles and
+     are written only from the linked account; coaches read them in
+     AMS (roster Last log + the profile page's Member logs card),
+     can delete one for moderation, and can never create or edit
+     one. Fixtures are a dedicated squad; every window runs off the
+     server's own today (reportToday):
+       Logan — logs today, -1, -3, -6, -7, -10 (counts + CRUD).
+       Lena  — one log 8 days ago ("gone quiet" flag), then one at
+               -6 (inside the window: the flag clears).
+       Lou   — linked, never logs (never flagged, Last log null).
+       Nina  — registered but NOT linked (every write is 403). */
+  check('member logs slots are in the served page',
+    pageHtml.text.includes('id="memberlog-slot"') && pageHtml.text.includes('id="member-logs-slot"'));
+  check('member logs wiring is in the served JS',
+    appJs.text.includes('renderMemberLogs') && appJs.text.includes('/api/my/logs') &&
+    appJs.text.includes('Log this workout') && appJs.text.includes('data-ams-log-del') &&
+    appJs.text.includes('memberLogPrefillForAssignment'));
+  {
+    const mlTvStart = appJs.text.indexOf('TV BOARD');
+    const mlTvEnd = appJs.text.indexOf('/* ---------------- boot', mlTvStart);
+    const mlTvCode = appJs.text.slice(mlTvStart, mlTvEnd);
+    check('TV render path has no member-log references',
+      mlTvStart >= 0 && mlTvEnd > mlTvStart && !mlTvCode.includes('memberLog') &&
+      !mlTvCode.includes('/api/my/logs'), mlTvCode.length);
+  }
+
+  /* The runner handoff, evaluated from the shipped pure section:
+     dedupe by exercise name, session code from the plan title, a
+     custom workout never masquerading as a coded session. */
+  const mlMatch = appJs.text.match(/\/\* MEMBER-LOG-RUNNER-BEGIN \*\/([\s\S]*?)\/\* MEMBER-LOG-RUNNER-END \*\//);
+  check('member-log runner section is in the shipped JS', !!mlMatch);
+  if (mlMatch) {
+    const mlc = new Function(mlMatch[1] +
+      '\nreturn { memberLogEntriesFromSteps, memberLogFromRunner };')();
+    const rSteps = [
+      { type: 'exercise', name: 'Back Squat', reps: '3x5' },
+      { type: 'rest', seconds: 90 },
+      { type: 'exercise', name: 'Back Squat', reps: '3x5' },
+      { type: 'exercise', name: 'Bench Press', reps: '' },
+    ];
+    const rEntries = mlc.memberLogEntriesFromSteps(rSteps);
+    check('runner log entries dedupe by exercise name, first reps wins, rests skipped',
+      rEntries.length === 2 && rEntries[0].exercise === 'Back Squat' && rEntries[0].detail === '3x5' &&
+      rEntries[1].exercise === 'Bench Press' && rEntries[1].detail === '', rEntries);
+    const rPayload = mlc.memberLogFromRunner(
+      { title: 'ACC-01 · Block starts and short drives' }, rSteps, 47 * 60000 + 20000, reportToday);
+    check('runner handoff payload: a done log with session code, title, elapsed minutes',
+      rPayload.date === reportToday && rPayload.sessionCode === 'ACC-01' &&
+      rPayload.title === 'ACC-01 · Block starts and short drives' && rPayload.status === 'done' &&
+      rPayload.durationMin === 47 && rPayload.entries.length === 2, rPayload);
+    const cwPayload = mlc.memberLogFromRunner({ title: 'My Custom Workout' }, rSteps, 600000, reportToday);
+    check('runner handoff for a custom workout carries no session code',
+      cwPayload.sessionCode === '' && cwPayload.title === 'My Custom Workout' && cwPayload.durationMin === 10,
+      cwPayload);
+  }
+
+  /* Fixtures: squad, accounts, links. */
+  r = await api(coach, 'POST', '/api/groups', { name: 'Log Squad' });
+  const logGroup = r.json.group;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Logan', lastName: 'Logs', groupId: logGroup.id, events: ['sprinter'] });
+  const loganP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Lena', lastName: 'Logs', groupId: logGroup.id, events: ['sprinter'] });
+  const lenaP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Lou', lastName: 'Logs', groupId: logGroup.id, events: [] });
+  const louP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Nina', lastName: 'Logs', groupId: logGroup.id, events: [] });
+  const ninaP = r.json.profile;
+  for (const em of ['logan@test.com', 'lena@test.com', 'lou@test.com', 'nina@test.com']) {
+    await api(coach, 'POST', '/api/client-invites', { email: em });
+  }
+  const regMember = async (em) => cookieOf(await api(null, 'POST', '/api/register', { email: em, password: 'testpass123' }));
+  const logan = await regMember('logan@test.com');
+  const lena = await regMember('lena@test.com');
+  const lou = await regMember('lou@test.com');
+  const nina = await regMember('nina@test.com');
+  await api(coach, 'PUT', '/api/profiles/' + loganP.id + '/link', { email: 'logan@test.com' });
+  await api(coach, 'PUT', '/api/profiles/' + lenaP.id + '/link', { email: 'lena@test.com' });
+  await api(coach, 'PUT', '/api/profiles/' + louP.id + '/link', { email: 'lou@test.com' });
+  check('member-log fixtures: three members linked, Nina deliberately not',
+    !!loganP.id && !!lenaP.id && !!louP.id && !!ninaP.id);
+
+  /* Auth + the unlinked wall. */
+  r = await api(null, 'GET', '/api/my/logs');
+  check('member logs without login are 401', r.status === 401, r.status);
+  r = await api(null, 'POST', '/api/my/logs', { title: 'X' });
+  check('member log create without login is 401', r.status === 401, r.status);
+  r = await api(nina, 'GET', '/api/my/logs');
+  check('unlinked member reads an empty, unlinked log state',
+    r.status === 200 && r.json.linked === false && r.json.logs.length === 0 && r.json.weekCount === 0, r.json);
+  r = await api(nina, 'POST', '/api/my/logs', { title: 'Should not save' });
+  check('unlinked member cannot create a log (403, notLinked)',
+    r.status === 403 && r.json.notLinked === true, r.json);
+  r = await api(nina, 'PUT', '/api/my/logs/anything', { title: 'X' });
+  check('unlinked member cannot edit a log', r.status === 403, r.status);
+  r = await api(nina, 'DELETE', '/api/my/logs/anything');
+  check('unlinked member cannot delete a log', r.status === 403, r.status);
+  r = await api(coach, 'POST', '/api/my/logs', { title: 'Coach-written log' });
+  check('a coach cannot create a member log (the record is the member\'s own)',
+    r.status === 403 && r.json.notLinked === true, r.json);
+  r = await api(lou, 'GET', '/api/my/logs');
+  check('linked member with no logs reads a clean empty state',
+    r.status === 200 && r.json.linked === true && r.json.logs.length === 0 &&
+    r.json.weekCount === 0 && r.json.lastLogDate === null, r.json);
+
+  /* Today's assignment prefill: a coach override on the squad's
+     group resolves through the same assignment path as everywhere. */
+  r = await api(coach, 'POST', '/api/assignments/override',
+    { groupId: logGroup.id, date: reportToday, sessionId: 'ACC-01' });
+  check('member-log fixture: override sets today\'s session for the squad', r.status === 200, r.status);
+  r = await api(logan, 'GET', '/api/my/logs');
+  check('today assignment prefill carries the session code + name',
+    !!r.json.todayAssignment && r.json.todayAssignment.sessionCode === 'ACC-01' &&
+    r.json.todayAssignment.title === 'ACC-01 · Block starts and short drives', r.json.todayAssignment);
+
+  /* Create: a bare session code borrows the library session's name. */
+  r = await api(logan, 'POST', '/api/my/logs', { sessionCode: 'ACC-01' });
+  check('member log create is 201 with the session name as its title',
+    r.status === 201 && r.json.log.athleteId === loganP.id && r.json.log.date === reportToday &&
+    r.json.log.sessionCode === 'ACC-01' && r.json.log.title === 'ACC-01 · Block starts and short drives' &&
+    r.json.log.status === 'done' && r.json.log.rpe === null && r.json.log.entries.length === 0, r.json.log);
+
+  /* Validation: clean 400s, nothing half-saved. */
+  const badLogs = [
+    [{ title: 'X', status: 'skipped' }, 'unknown status'],
+    [{ title: 'X', rpe: 0 }, 'rpe below range'],
+    [{ title: 'X', rpe: 11 }, 'rpe above range'],
+    [{ title: 'X', rpe: 5.5 }, 'rpe not whole'],
+    [{ title: 'X', durationMin: 0 }, 'duration below range'],
+    [{ title: 'X', durationMin: 601 }, 'duration above range'],
+    [{ title: 'X', date: addDays(reportToday, 1) }, 'future date'],
+    [{ title: 'X', date: addDays(reportToday, -31) }, 'date over 30 days back'],
+    [{ title: 'X', date: '2026-02-30' }, 'impossible date'],
+    [{}, 'no title and no session code'],
+    [{ title: 'X', entries: 'nope' }, 'entries not a list'],
+    [{ title: 'X', note: 'x'.repeat(501) }, 'note over 500 chars'],
+  ];
+  for (const [body, label] of badLogs) {
+    r = await api(logan, 'POST', '/api/my/logs', body);
+    check('member log validation 400: ' + label, r.status === 400, r.status);
+  }
+  r = await api(logan, 'POST', '/api/my/logs', { title: 'Blank rows', entries: [{ exercise: '  ', detail: 'x' }, { exercise: 'Pogo Hops', detail: '3x20' }] });
+  check('a blank exercise row is dropped, the named row is kept',
+    r.status === 201 && r.json.log.entries.length === 1 && r.json.log.entries[0].exercise === 'Pogo Hops', r.json.log);
+  const blankRowLogId = r.json.log.id;
+  r = await api(logan, 'DELETE', '/api/my/logs/' + blankRowLogId);
+  check('member deletes their own log', r.status === 200, r.status);
+  r = await api(logan, 'DELETE', '/api/my/logs/' + blankRowLogId);
+  check('deleting the same log twice is 404', r.status === 404, r.status);
+  r = await api(logan, 'GET', '/api/my/logs');
+  check('failed validations saved nothing (only the ACC-01 log stands)',
+    r.status === 200 && r.json.logs.length === 1, r.json.logs.length);
+
+  /* Counts: five more logs at known offsets; the week window is
+     the Mon–Sun week containing today, computed here with the
+     same rule so the expectation is exact on any weekday. */
+  const mondayOfT = (s) => { let d = s; while (new Date(d + 'T12:00:00').getDay() !== 1) d = addDays(d, -1); return d; };
+  const logOffs = [-1, -3, -6, -7, -10];
+  for (const off of logOffs) {
+    r = await api(logan, 'POST', '/api/my/logs', { date: addDays(reportToday, off), title: 'Session ' + off, status: 'done' });
+    check('member-log counts fixture saves at offset ' + off, r.status === 201, r.status);
+  }
+  const allOffs = [0, ...logOffs];
+  const monT = mondayOfT(reportToday);
+  const expectedWeek = allOffs.filter(o => { const d = addDays(reportToday, o); return d >= monT && d <= addDays(monT, 6); }).length;
+  r = await api(logan, 'GET', '/api/my/logs');
+  check('member logs list: all six logs, newest first',
+    r.status === 200 && r.json.logs.length === 6 && r.json.logs[0].date === reportToday &&
+    r.json.logs[5].date === addDays(reportToday, -10), r.json.logs.map(l => l.date));
+  check('member week count matches the Mon-Sun window exactly',
+    r.json.weekCount === expectedWeek, { weekCount: r.json.weekCount, expectedWeek });
+  check('member last log date is today', r.json.lastLogDate === reportToday, r.json.lastLogDate);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + loganP.id);
+  check('ams page member logs: totals, last-7 count (today, -1, -3, -6), last date',
+    r.status === 200 && r.json.memberLogs.total === 6 && r.json.memberLogs.last7Count === 4 &&
+    r.json.memberLogs.lastLogDate === reportToday && r.json.memberLogs.recent.length === 6 &&
+    r.json.memberLogs.recent[0].date === reportToday, r.json.memberLogs);
+  r = await api(coach, 'GET', '/api/ams/roster');
+  const logRow = (pid) => (r.json.athletes || []).find(a => a.profile.id === pid);
+  check('ams roster: Logan last log is today, Lou has none yet',
+    !!logRow(loganP.id) && logRow(loganP.id).lastLogDate === reportToday &&
+    !!logRow(louP.id) && logRow(louP.id).lastLogDate === null,
+    { logan: logRow(loganP.id) && logRow(loganP.id).lastLogDate, lou: logRow(louP.id) && logRow(louP.id).lastLogDate });
+  check('ams flags: neither the active logger nor the never-logger earns No logs this week',
+    !logRow(loganP.id).flags.some(f => f.key === 'no-logs') &&
+    !logRow(louP.id).flags.some(f => f.key === 'no-logs'),
+    { logan: logRow(loganP.id).flags.map(f => f.key), lou: logRow(louP.id).flags.map(f => f.key) });
+
+  /* CRUD + isolation: Lena cannot touch Logan's log — it does not
+     exist from where she stands. */
+  r = await api(logan, 'POST', '/api/my/logs', {
+    date: yDay, title: 'Edit me', status: 'partial', rpe: 7, durationMin: 45,
+    entries: [{ exercise: 'Back Squat', detail: '3x5 @ 185' }], note: 'Felt strong',
+  });
+  check('member log full create round-trips every field',
+    r.status === 201 && r.json.log.status === 'partial' && r.json.log.rpe === 7 &&
+    r.json.log.durationMin === 45 && r.json.log.entries.length === 1 &&
+    r.json.log.entries[0].detail === '3x5 @ 185' && r.json.log.note === 'Felt strong', r.json.log);
+  const editLogId = r.json.log.id;
+  r = await api(lena, 'PUT', '/api/my/logs/' + editLogId, { title: 'Hijacked' });
+  check('another member editing Logan\'s log is 404 (invisible, not forbidden)', r.status === 404, r.status);
+  r = await api(lena, 'DELETE', '/api/my/logs/' + editLogId);
+  check('another member deleting Logan\'s log is 404', r.status === 404, r.status);
+  r = await api(lena, 'GET', '/api/my/logs');
+  check('Lena\'s own list holds none of Logan\'s logs',
+    r.status === 200 && r.json.logs.length === 0, r.json.logs.length);
+  r = await api(logan, 'PUT', '/api/my/logs/' + editLogId, {
+    date: yDay, title: 'Edited title', status: 'done', rpe: 8, durationMin: 50,
+    entries: [{ exercise: 'Back Squat', detail: '4x5 @ 185' }], note: '',
+  });
+  check('member edits their own log',
+    r.status === 200 && r.json.log.title === 'Edited title' && r.json.log.status === 'done' &&
+    r.json.log.rpe === 8 && r.json.log.durationMin === 50 && r.json.log.entries[0].detail === '4x5 @ 185', r.json.log);
+  r = await api(logan, 'PUT', '/api/my/logs/' + editLogId, { title: 'Edited title', rpe: 99 });
+  check('a bad edit is 400', r.status === 400, r.status);
+  r = await api(logan, 'GET', '/api/my/logs');
+  check('the bad edit changed nothing',
+    (r.json.logs.find(l => l.id === editLogId) || {}).rpe === 8, r.json.logs.length);
+  r = await api(logan, 'DELETE', '/api/my/logs/' + editLogId);
+  check('member deletes the edited log', r.status === 200, r.status);
+  r = await api(logan, 'GET', '/api/my/logs');
+  check('the deleted log is gone from the member list',
+    !r.json.logs.some(l => l.id === editLogId) && r.json.logs.length === 6, r.json.logs.length);
+
+  /* A log is training data: words about soreness in a note never
+     file a health concern (that flow is the check-in's alone). */
+  r = await api(coach, 'GET', '/api/concerns');
+  const loganConcernsBefore = r.json.concerns.filter(c => c.profileId === loganP.id).length;
+  r = await api(logan, 'POST', '/api/my/logs', { title: 'Sore day', note: 'Hamstring felt tight the whole session' });
+  check('a log with a pain-flavored note still saves as a log', r.status === 201, r.status);
+  const soreLogId = r.json.log.id;
+  r = await api(coach, 'GET', '/api/concerns');
+  check('logging a workout files NO health concern',
+    r.json.concerns.filter(c => c.profileId === loganP.id).length === loganConcernsBefore,
+    r.json.concerns.filter(c => c.profileId === loganP.id).length);
+  r = await api(logan, 'DELETE', '/api/my/logs/' + soreLogId);
+  check('cleanup: the sore-day log is deleted again', r.status === 200, r.status);
+
+  /* Gone quiet: Lena logged 8 days ago and nothing since — flagged.
+     Lou never logged — not flagged. A fresh log inside the window
+     clears Lena's flag (the -6 edge is inside the last 7 days). */
+  r = await api(lena, 'POST', '/api/my/logs', { date: addDays(reportToday, -8), title: 'Last week session' });
+  check('lena fixture log (8 days ago) saves', r.status === 201, r.status);
+  const lenaOldLogId = r.json.log.id;
+  r = await api(coach, 'GET', '/api/ams/athlete/' + lenaP.id);
+  check('ams page member logs: Lena totals (1 total, 0 in the last 7 days)',
+    r.json.memberLogs.total === 1 && r.json.memberLogs.last7Count === 0 &&
+    r.json.memberLogs.lastLogDate === addDays(reportToday, -8), r.json.memberLogs);
+  r = await api(coach, 'GET', '/api/ams/roster');
+  const lenaRow = (r.json.athletes || []).find(a => a.profile.id === lenaP.id);
+  const lenaQuiet = lenaRow && lenaRow.flags.find(f => f.key === 'no-logs');
+  check('ams flags: logged before but quiet for 8 days = No logs this week',
+    !!lenaQuiet && lenaQuiet.count === 8 && lenaQuiet.detail.includes('no workouts logged in the last 7 days'),
+    lenaRow && lenaRow.flags);
+  check('ams roster: Lena last log date is 8 days ago',
+    !!lenaRow && lenaRow.lastLogDate === addDays(reportToday, -8), lenaRow && lenaRow.lastLogDate);
+  r = await api(lena, 'POST', '/api/my/logs', { date: addDays(reportToday, -6), title: 'Back at it' });
+  check('lena fixture log (6 days ago, inside the window) saves', r.status === 201, r.status);
+  const lenaNewLogId = r.json.log.id;
+  r = await api(coach, 'GET', '/api/ams/roster');
+  const lenaRow2 = (r.json.athletes || []).find(a => a.profile.id === lenaP.id);
+  check('ams flags: a log 6 days ago clears the quiet flag (window edge)',
+    !!lenaRow2 && !lenaRow2.flags.some(f => f.key === 'no-logs'), lenaRow2 && lenaRow2.flags);
+
+  /* Coach moderation: delete works, exactly once, on the right
+     profile; athletes cannot use the coach path at all. */
+  r = await api(lena, 'DELETE', '/api/ams/athlete/' + lenaP.id + '/logs/' + lenaOldLogId);
+  check('an athlete cannot use the coach log-delete path', r.status === 403, r.status);
+  r = await api(coach, 'DELETE', '/api/ams/athlete/' + loganP.id + '/logs/' + lenaOldLogId);
+  check('coach delete under the wrong profile is 404', r.status === 404, r.status);
+  r = await api(coach, 'DELETE', '/api/ams/athlete/' + lenaP.id + '/logs/' + lenaOldLogId);
+  check('coach deletes a member log for moderation', r.status === 200, r.status);
+  r = await api(lena, 'GET', '/api/my/logs');
+  check('the moderated log is gone from the member\'s own list',
+    r.status === 200 && r.json.logs.length === 1 && r.json.logs[0].id === lenaNewLogId, r.json.logs);
+  r = await api(coach, 'DELETE', '/api/ams/athlete/' + lenaP.id + '/logs/' + lenaOldLogId);
+  check('moderating the same log twice is 404', r.status === 404, r.status);
+  r = await api(coach, 'DELETE', '/api/ams/athlete/nope/logs/' + lenaNewLogId);
+  check('coach log delete for an unknown profile is 404', r.status === 404, r.status);
+
+  /* The backup carries member logs (roster data, not login data). */
+  const bk2 = JSON.parse((await apiText(coach, '/api/export/backup')).text);
+  check('backup carries the member logs with their profile binding',
+    Array.isArray(bk2.data.memberLogs) &&
+    bk2.data.memberLogs.some(l => l.athleteId === loganP.id && l.title === 'ACC-01 · Block starts and short drives') &&
+    bk2.data.memberLogs.some(l => l.id === lenaNewLogId) &&
+    !('users' in bk2.data), bk2.data.memberLogs && bk2.data.memberLogs.length);
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }

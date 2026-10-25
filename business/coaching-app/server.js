@@ -73,8 +73,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v1',
-  cache: 'ruffin-performance-v1',
+  version: 'v2',
+  cache: 'ruffin-performance-v2',
 };
 
 /* ------------------------------------------------------------------ */
@@ -122,6 +122,7 @@ let db = {
   attendance: {},
   coachNotes: {},
   announcements: [],
+  memberLogs: [],
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -236,6 +237,14 @@ function migrate() {
   // deletes precisely those overrides and nothing else.
   db.programs = Array.isArray(db.programs) ? db.programs : [];
   db.programApplications = Array.isArray(db.programApplications) ? db.programApplications : [];
+  // Member workout logs: one flat list of { id, athleteId, date,
+  // sessionCode, title, status ('done'|'partial'), rpe, durationMin,
+  // entries: [{ exercise, detail }], note, createdAt, updatedAt } —
+  // written by the member themselves from their own account (this
+  // product's members log their own training; the coach reads them
+  // in AMS and can delete one for moderation, never edit). Training
+  // data only — a log never files a health concern.
+  db.memberLogs = Array.isArray(db.memberLogs) ? db.memberLogs : [];
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     // The first account is the head coach (owner). Stores written
@@ -1641,6 +1650,123 @@ function checkinStreak(profileId) {
   while (cursor && byDate[cursor]) { n++; cursor = addDaysStr(cursor, -1); }
   return n;
 }
+/* ------------------------------------------------------------------ */
+/* Member workout logs (member-entered training record)                */
+/* ------------------------------------------------------------------ */
+/* This product's members log their own training — the deliberate
+   opposite of the school app. A log belongs to a roster PROFILE
+   (athleteId), is written only from the account linked to that
+   profile, and is read back by the member (their own list) and by
+   coaches in AMS. Coaches can delete a log for moderation but can
+   never create or edit one: the record is the member's own. */
+function publicMemberLog(l) {
+  return {
+    id: l.id, athleteId: l.athleteId, date: l.date,
+    sessionCode: l.sessionCode || '', title: l.title || '',
+    status: l.status === 'partial' ? 'partial' : 'done',
+    rpe: l.rpe != null ? l.rpe : null,
+    durationMin: l.durationMin != null ? l.durationMin : null,
+    entries: (l.entries || []).map(e => ({ exercise: e.exercise, detail: e.detail || '' })),
+    note: l.note || '',
+    createdAt: l.createdAt, updatedAt: l.updatedAt,
+  };
+}
+/* One profile's logs, newest first (date, then most recently made). */
+function memberLogsFor(profileId) {
+  return db.memberLogs
+    .filter(l => l.athleteId === profileId)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1
+      : (a.createdAt < b.createdAt ? 1 : -1)))
+    .map(publicMemberLog);
+}
+/* The counts every surface reads, computed one way:
+   - lastLogDate: the most recent log's date, or null.
+   - last7Count: logs dated today or in the 6 days before it.
+   - weekCount: logs in the current Mon–Sun week (the plan's own
+     week shape), through Sunday — future-dated logs cannot exist
+     (the write path rejects them), so the top of the window never
+     actually binds. */
+function memberLogSummaryFor(profileId, today) {
+  const logs = db.memberLogs.filter(l => l.athleteId === profileId);
+  const lastLogDate = logs.length
+    ? logs.map(l => l.date).sort().pop() : null;
+  const start7 = addDaysStr(today, -6);
+  const mon = mondayOf(today);
+  const sun = addDaysStr(mon, 6);
+  let last7Count = 0, weekCount = 0;
+  for (const l of logs) {
+    if (l.date >= start7 && l.date <= today) last7Count++;
+    if (l.date >= mon && l.date <= sun) weekCount++;
+  }
+  return { total: logs.length, lastLogDate, last7Count, weekCount };
+}
+/* The write-path rules, in one place (create + edit share them, so
+   an edit can never smuggle in a value a create would reject):
+   a real date, not in the future, not more than 30 days back; a
+   session code or a free title (a bare code borrows the library
+   session's name); status done/partial; RPE a whole 1–10 when
+   given; duration a whole 1–600 minutes when given; up to 40
+   exercise rows, each a name plus free-text sets/reps/load detail.
+   Returns { fields } or { error }. */
+function validateMemberLog(body) {
+  const today = todayStr();
+  const date = body.date !== undefined && body.date !== null && body.date !== ''
+    ? clean(body.date, 10) : today;
+  if (!parseDateStr(date)) return { error: 'Date must be YYYY-MM-DD.' };
+  if (date > today) return { error: 'You cannot log a workout for a day that has not happened yet.' };
+  if (date < addDaysStr(today, -30)) return { error: 'Logs can only reach back 30 days — ask your coach about anything older.' };
+  const sessionCode = clean(body.sessionCode, 40);
+  let title = clean(body.title, 120);
+  if (!title && sessionCode) {
+    const s = SESSION_BY_ID.get(sessionCode);
+    title = s ? s.id + ' · ' + s.name : sessionCode;
+  }
+  if (!title) return { error: 'Name the workout — pick the session you ran or write a short title.' };
+  if (typeof body.title === 'string' && body.title.length > 120) {
+    return { error: 'Keep the title to 120 characters or less.' };
+  }
+  const status = body.status === undefined || body.status === null || body.status === ''
+    ? 'done' : body.status;
+  if (status !== 'done' && status !== 'partial') {
+    return { error: 'Status must be done or partial.' };
+  }
+  let rpe = null;
+  if (body.rpe !== undefined && body.rpe !== null && body.rpe !== '') {
+    rpe = num(body.rpe);
+    if (rpe === null || !Number.isInteger(rpe) || rpe < 1 || rpe > 10) {
+      return { error: 'RPE must be a whole number from 1 to 10.' };
+    }
+  }
+  let durationMin = null;
+  if (body.durationMin !== undefined && body.durationMin !== null && body.durationMin !== '') {
+    durationMin = num(body.durationMin);
+    if (durationMin === null || !Number.isInteger(durationMin) || durationMin < 1 || durationMin > 600) {
+      return { error: 'Duration must be a whole number of minutes, 1 to 600.' };
+    }
+  }
+  const entries = [];
+  if (body.entries !== undefined && body.entries !== null) {
+    if (!Array.isArray(body.entries)) return { error: 'Exercise rows must be a list.' };
+    if (body.entries.length > 40) return { error: 'A log holds at most 40 exercise rows.' };
+    for (const e of body.entries) {
+      if (!isPlainObj(e)) return { error: 'Each exercise row needs a name.' };
+      const exercise = clean(e.exercise, 120);
+      if (!exercise) continue; /* a blank row is just filler — drop it */
+      entries.push({ exercise, detail: clean(e.detail, 200) });
+    }
+  }
+  if (typeof body.note === 'string' && body.note.length > 500) {
+    return { error: 'Keep the note to 500 characters or less.' };
+  }
+  return {
+    fields: {
+      date, sessionCode, title, status, rpe, durationMin, entries,
+      note: clean(body.note, 500),
+    },
+  };
+}
+
 /* File an athlete-reported concern in the existing Aches & Pains
    store. The athlete only gives words ("right hamstring is tight"),
    so the structured coach fields take neutral values: area/feeling
@@ -1782,6 +1908,10 @@ function testingHistoryFor(profileId) {
      (the concern store's live statuses are new/monitoring/cleared;
      'open' is accepted defensively so a future status rename can
      never silently hide an active concern).
+   - No logs this week: a LINKED member who has logged at least one
+     workout ever but none in the last 7 days. Members who have
+     never logged are never flagged — quiet only means something
+     against a habit that existed.
    Plus three device flags from the athlete's latest ForceDecks /
    NordBord sessions — NordBord imbalance (>10% left/right max
    force apart), ForceDecks asymmetry (an 'asym' metric over 10),
@@ -1838,6 +1968,16 @@ function amsFlagsFor(pr, today) {
       key: 'health', label: 'Health', count: openConcerns,
       detail: openConcerns + (openConcerns === 1 ? ' open concern' : ' open concerns'),
     });
+  }
+  if (linkedEmailForProfile(pr.id)) {
+    const logSummary = memberLogSummaryFor(pr.id, today);
+    if (logSummary.total >= 1 && logSummary.lastLogDate < weekStart) {
+      const daysSince = Math.round((parseDateStr(today) - parseDateStr(logSummary.lastLogDate)) / 86400000);
+      flags.push({
+        key: 'no-logs', label: 'No logs this week', count: daysSince,
+        detail: 'Last log ' + logSummary.lastLogDate + ' — no workouts logged in the last 7 days',
+      });
+    }
   }
   /* Device flags, each read off the athlete's LATEST session for
      that device (deviceSessionsFor):
@@ -2260,7 +2400,9 @@ const numStr = (v) => (v === null || v === undefined ? '' : String(Math.round(v 
    password hashes, or the session secret — so the file is safe to
    keep anywhere. The collections are the whole team-data store minus
    accounts (users) and the per-account practice logs (logs / swaps,
-   which belong to individual logins, not the team dataset). */
+   which belong to individual logins, not the team dataset). Member
+   workout logs DO ride along: they belong to roster profiles, not
+   to logins, and they are the members' training record. */
 const isPlainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 /* Id-keyed collections and the field their records upsert by.
    customTests / customWeeklyMetrics are keyed by `key`, not `id`;
@@ -2270,7 +2412,7 @@ const BACKUP_ARRAY_KEYS = {
   customWeeklyMetrics: 'key', inventory: 'id', meetResults: 'id',
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
-  announcements: 'id',
+  announcements: 'id', memberLogs: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
@@ -2296,7 +2438,7 @@ function buildBackupData() {
     customWorkouts: db.customWorkouts,
     customWorkoutsSeeded: db.customWorkoutsSeeded === true,
     programs: db.programs, programApplications: db.programApplications,
-    announcements: db.announcements,
+    announcements: db.announcements, memberLogs: db.memberLogs,
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -2777,6 +2919,85 @@ async function handleApi(req, res, url) {
     return sendJson(res, existing ? 200 : 201, {
       ok: true, created: !existing, checkin: publicCheckin(entry),
     });
+  }
+
+  /* ---------- member workout logs (member-entered) ----------
+     This product's members log their own training. The profile
+     always comes from the caller's own link binding, never from
+     the request, so a member can only ever read or write their
+     own logs — another member's log id simply does not exist from
+     where they stand (404, not 403: nothing to leak). Coaches
+     never write here; their read + delete-for-moderation path is
+     the AMS endpoint below the coach gate. */
+  if (p === '/api/my/logs' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    const today = todayStr();
+    if (!prof) {
+      return sendJson(res, 200, { linked: false, logs: [], weekCount: 0, lastLogDate: null, todayAssignment: null });
+    }
+    const summary = memberLogSummaryFor(prof.id, today);
+    const a = resolveAssignment(prof.groupId, today);
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      logs: memberLogsFor(prof.id).slice(0, 60),
+      weekCount: summary.weekCount, lastLogDate: summary.lastLogDate,
+      todayAssignment: a && a.sessionId
+        ? { date: today, sessionCode: a.sessionId, title: a.sessionId + ' · ' + a.sessionName }
+        : null,
+    });
+  }
+
+  if (p === '/api/my/logs' && req.method === 'POST') {
+    const prof = linkedProfileFor(user);
+    if (prof && prof.archived) {
+      return sendJson(res, 403, {
+        error: 'This roster profile is archived. Ask your coach to restore it before logging workouts.',
+        notLinked: false,
+      });
+    }
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can log workouts.',
+        notLinked: true,
+      });
+    }
+    const body = await readBody(req);
+    const v = validateMemberLog(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const now = new Date().toISOString();
+    const log = Object.assign(
+      { id: crypto.randomUUID(), athleteId: prof.id, createdAt: now, updatedAt: now },
+      v.fields
+    );
+    db.memberLogs.push(log);
+    saveDb();
+    return sendJson(res, 201, { ok: true, log: publicMemberLog(log) });
+  }
+
+  const myLogMatch = p.match(/^\/api\/my\/logs\/([^/]+)$/);
+  if (myLogMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
+    const prof = linkedProfileFor(user);
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can log workouts.',
+        notLinked: true,
+      });
+    }
+    const logId = decodeURIComponent(myLogMatch[1]);
+    const idx = db.memberLogs.findIndex(l => l.id === logId && l.athleteId === prof.id);
+    if (idx < 0) return sendJson(res, 404, { error: 'Log not found.' });
+    if (req.method === 'DELETE') {
+      db.memberLogs.splice(idx, 1);
+      saveDb();
+      return sendJson(res, 200, { ok: true });
+    }
+    const body = await readBody(req);
+    const v = validateMemberLog(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    Object.assign(db.memberLogs[idx], v.fields, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { ok: true, log: publicMemberLog(db.memberLogs[idx]) });
   }
 
   /* ---------- athlete goals (read-only, own goals only) ----------
@@ -3530,7 +3751,7 @@ async function handleApi(req, res, url) {
      The coach-side home for everything the app holds on one
      athlete: a roster table with coach-set status and computed
      attention flags, one aggregate page per athlete (wellness,
-     testing, meet PRs, attendance, health, goals), and a private
+     member logs, testing, meet PRs, attendance, health, goals), and a private
      coach-notes thread. Everything here sits below the coach
      gate: athletes get 403, logged-out 401. Notes in particular
      are coach-only data — they are served ONLY by these endpoints
@@ -3549,6 +3770,7 @@ async function handleApi(req, res, url) {
           profile: pub,
           status: pub.status,
           linked: !!pub.linkedEmail,
+          lastLogDate: memberLogSummaryFor(pr.id, today).lastLogDate,
           flags: amsFlagsFor(pr, today),
         };
       });
@@ -3603,6 +3825,13 @@ async function handleApi(req, res, url) {
     const notes = (db.coachNotes[prof.id] || []).slice()
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .map(publicCoachNote);
+    const logSummary = memberLogSummaryFor(prof.id, today);
+    const memberLogs = {
+      recent: memberLogsFor(prof.id).slice(0, 10),
+      total: logSummary.total,
+      lastLogDate: logSummary.lastLogDate,
+      last7Count: logSummary.last7Count,
+    };
     const pub = publicProfile(prof);
     return sendJson(res, 200, {
       profile: pub,
@@ -3610,6 +3839,7 @@ async function handleApi(req, res, url) {
       linked: !!pub.linkedEmail,
       linkedEmail: pub.linkedEmail,
       flags: amsFlagsFor(prof, today),
+      memberLogs,
       wellness,
       testing: testingHistoryFor(prof.id),
       devices: deviceSummaryFor(prof.id),
@@ -3666,6 +3896,23 @@ async function handleApi(req, res, url) {
     const next = list.filter(n => n.id !== decodeURIComponent(amsNoteMatch[2]));
     if (next.length === list.length) return sendJson(res, 404, { error: 'Note not found.' });
     db.coachNotes[prof.id] = next;
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  /* Member logs, the coach's one write: delete for moderation.
+     Logs are the member's own record — coaches read them on the
+     AMS page above but can never create or edit one (there is no
+     coach POST/PUT for them anywhere). Deleting is the moderation
+     tool for a log that is wrong or inappropriate. */
+  const amsLogMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)\/logs\/([^/]+)$/);
+  if (amsLogMatch && req.method === 'DELETE') {
+    const prof = profileById(decodeURIComponent(amsLogMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const logId = decodeURIComponent(amsLogMatch[2]);
+    const idx = db.memberLogs.findIndex(l => l.id === logId && l.athleteId === prof.id);
+    if (idx < 0) return sendJson(res, 404, { error: 'Log not found.' });
+    db.memberLogs.splice(idx, 1);
     saveDb();
     return sendJson(res, 200, { ok: true });
   }
