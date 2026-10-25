@@ -349,13 +349,305 @@ else:
 # (track/sprinter-workout-database/instagram_movements.json) is the
 # one to edit — 85 movements mined from AJ's saved Instagram training
 # posts, each with what it trains, its equipment, coaching cues, and
-# its source post. If the source is ever missing, PRESERVE the
-# bundled copy; a content refresh must never wipe the library out.
+# its source post. The shipped copy is NOT a verbatim copy: the
+# builder derives the Exercise Library's depth fields from the mined
+# facts — exactly one `category` per movement (the explicit mapping
+# below), `trainsTags` (muscle/focus tags keyword-derived from the
+# trains text) and `equipmentTags` (the equipment text split and
+# normalized through the segment map below). The mined fields ship
+# untouched; the derived fields are added, never renamed or removed.
+# The build FAILS LOUDLY (exit 1) when a movement has no category
+# mapping, a mapping names a movement that is not in the source, a
+# category value is outside the fixed set, an equipment segment is
+# unmapped, or a movement ends up with no tags — a new mined movement
+# must be categorized and mapped here before it can ship.
+# If the source is ever missing, PRESERVE the bundled copy; a
+# content refresh must never wipe the library out.
+
+# The fixed category set, in display order. Finalized from what the
+# 85 mined movements actually contain: a large isometric cluster
+# earns its own category, and the only conditioning-flavored pieces
+# are the sprint drills, which live in Sprint Mechanics.
+EXERCISE_CATEGORIES = [
+    "Sprint Mechanics", "Plyometrics", "Olympic Lifts", "Strength",
+    "Isometrics", "Core", "Mobility",
+]
+
+# Exactly one category per movement, keyed by the movement's exact
+# name in the source. This table is the editorial decision; the
+# keyword rules below only derive tags, never categories.
+EXERCISE_CATEGORY_BY_NAME = {
+    # Sprint Mechanics — drills, starts and sprints (6)
+    "Wall Drill (Acceleration Wall Series)": "Sprint Mechanics",
+    "Kneeling Start Sprint": "Sprint Mechanics",
+    "Band-Resisted Acceleration March (Low Position)": "Sprint Mechanics",
+    "Agility Ladder Footwork": "Sprint Mechanics",
+    "Flying 10-Yard Sprint": "Sprint Mechanics",
+    "Block Start": "Sprint Mechanics",
+    # Plyometrics — jumps, hops and reactive/elastic work (16)
+    "Step Box Jump": "Plyometrics",
+    "Single-Leg Ball-Drop Plyometric on 45-Degree Hyperextension Bench": "Plyometrics",
+    "Kneeling Medicine Ball Catch": "Plyometrics",
+    "Banded Quick Step-Up": "Plyometrics",
+    "Hurdle Hops": "Plyometrics",
+    "Box Jump": "Plyometrics",
+    "Vertical Jump + Single-Leg Broad Jump": "Plyometrics",
+    "Broad Jump + Pogo Hop": "Plyometrics",
+    "Consecutive Single-Leg Broad Jump with Bounce": "Plyometrics",
+    "Split Stance Pogo Hops": "Plyometrics",
+    "Lateral Box Jump": "Plyometrics",
+    "Hurdle Slalom Hops": "Plyometrics",
+    "Skater Tuck Jump": "Plyometrics",
+    "Rapid Plate Hops": "Plyometrics",
+    "Hurdle Skater Hop": "Plyometrics",
+    "Platform Drop Reactive Landing": "Plyometrics",
+    # Olympic Lifts (2)
+    "Clean (Teaching Progression)": "Olympic Lifts",
+    "Single-Leg Clean": "Olympic Lifts",
+    # Strength — loaded, eccentric and single-leg strength work (24)
+    "Single-Leg Eccentric Hamstring Curl": "Strength",
+    "Single-Leg Eccentric Calf Raise": "Strength",
+    "Nordic Hamstring Curl": "Strength",
+    "Cable-Resisted Eccentric Leg Extension in High Hip Flexion": "Strength",
+    "Straight Leg Bridge": "Strength",
+    "Rear Foot Elevated Split Squat (Eccentric Overload)": "Strength",
+    "Supine Feet-Elevated Banded Hip Flexion": "Strength",
+    "Banded Glute Bridge": "Strength",
+    "Band Lying Hamstring Curl": "Strength",
+    "Glute Bridge": "Strength",
+    "Band Seated Hamstring Curl": "Strength",
+    "Cable Knee Drive": "Strength",
+    "Hip Flexor Crunch": "Strength",
+    "Banded Hip Flexor In-and-Out": "Strength",
+    "ATG Split Squat": "Strength",
+    "Slider Hip Flexion": "Strength",
+    "Banded Explosive Lunge": "Strength",
+    "Barbell Step-Up": "Strength",
+    "Barbell Split Squat": "Strength",
+    "Band-Assisted Pull-Up": "Strength",
+    "Single-Leg Dumbbell Romanian Deadlift": "Strength",
+    "Single-Leg Raise": "Strength",
+    "Single-Leg Bridge": "Strength",
+    "Explosive Step-Up": "Strength",
+    # Isometrics — the isometric cluster (8)
+    "Long-Duration Isometric Lunge": "Isometrics",
+    "Trap Bar Isometric Hold": "Isometrics",
+    "Hip Flexion Overcoming Isometric into Pad (3-Bucket Position)": "Isometrics",
+    "Yielding Isometric Hold": "Isometrics",
+    "Overcoming Isometric": "Isometrics",
+    "Ballistic Pulse Isometric": "Isometrics",
+    "Ballistic Catch Isometric": "Isometrics",
+    "Oscillating Isometric": "Isometrics",
+    # Core — trunk stability and control (10)
+    "Copenhagen Plank Hold": "Core",
+    "Medicine Ball Slam": "Core",
+    "Suitcase March on Foam": "Core",
+    "Anti-Rotation Back Pedal": "Core",
+    "Plank Press-Up": "Core",
+    "Plank Bird Dog": "Core",
+    "Hyperextension with Reach": "Core",
+    "Plank Walkout": "Core",
+    "Stir the Pot": "Core",
+    "Stability Ball Mountain Climber": "Core",
+    # Mobility — stretches, CARs and positional mobility (19)
+    "Butterfly PAILs/RAILs": "Mobility",
+    "ELDOA L5-S1": "Mobility",
+    "Acupuncture Mat Standing": "Mobility",
+    "Prone Shoulder Abduction with Internal Rotation": "Mobility",
+    "Psoas Fascial Stretch": "Mobility",
+    "Banded Hip Flexor Stretch": "Mobility",
+    "Kneeling Hip Hinge": "Mobility",
+    "Side-Lying Hip Stretch": "Mobility",
+    "Down Dog to Lunge Reach": "Mobility",
+    "Standing Hip Flexor Stretch with Rotation": "Mobility",
+    "Kneeling Hip Stretch": "Mobility",
+    "Hip Rockers": "Mobility",
+    "External Hip Hold": "Mobility",
+    "Kneeling Switches": "Mobility",
+    "Elevated Pigeon Stretch": "Mobility",
+    "90/90 Hip Stretch": "Mobility",
+    "Kettlebell Hip Shift": "Mobility",
+    "World's Greatest Stretch (Modified)": "Mobility",
+    "Quadruped Hip CARs": "Mobility",
+}
+
+# Muscle tags, keyword-derived from the trains text ONLY (a name
+# like "Anti-Rotation Back Pedal" must not fake a back tag). Rules
+# run in order; a movement collects every tag whose pattern hits.
+EXERCISE_MUSCLE_TAG_RULES = [
+    ("Hamstrings", [r"hamstring"]),
+    ("Glutes", [r"glute"]),
+    ("Hip Flexors", [r"hip flexor", r"iliopsoas", r"psoas"]),
+    ("Calves & Ankles", [r"calf", r"achilles", r"ankle", r"\bfoot\b", r"\bfeet\b"]),
+    ("Adductors", [r"adductor", r"groin"]),
+    ("Posterior Chain", [r"posterior chain", r"hinge"]),
+    ("Core & Trunk", [r"core", r"trunk", r"anti-rotation"]),
+    ("Shoulders", [r"shoulder"]),
+    ("Back & Spine", [r"low back", r"spine", r"spinal", r"\bback\b"]),
+    # "knee flexion" (hamstring curls) and "knee drive" (hip flexor
+    # work) are not quad/knee training — the lookahead excludes them.
+    ("Quads & Knees", [r"\bknee\b(?!\s+(flexion|drive))"]),
+    ("Hip Mobility", [r"hip mobility", r"hip internal", r"hip external",
+                      r"hip joint", r"\bhips\b"]),
+]
+
+# Focus tags, keyword-derived from name + trains (the contraction
+# type is often stated in the name itself: "Overcoming Isometric").
+EXERCISE_FOCUS_TAG_RULES = [
+    ("Isometric", [r"isometric"]),
+    ("Eccentric", [r"eccentric"]),
+    ("Single-Leg", [r"single-leg", r"unilateral", r"one leg"]),
+    ("Reactive & Elastic", [r"reactive", r"elastic", r"plyometric", r"stiffness"]),
+    ("Power", [r"power", r"explosive"]),
+    # Bare "sprint" is excluded on purpose: half the library is FOR
+    # sprinters. The tag means the movement trains sprinting itself.
+    ("Sprint & Acceleration", [r"acceleration", r"first step", r"front-side",
+                               r"max velocity", r"block start", r"out of the blocks"]),
+]
+
+# Equipment normalization: the mined equipment text is a list of
+# ";" segments. Each segment (lowercased) maps to the canonical
+# equipment tags it stands for. Segments that name a helper or a
+# loading note rather than gear ("partner", "trainer assist", ...)
+# map to an empty list — the movement's real gear segment carries
+# its tags. An unmapped segment fails the build.
+EXERCISE_EQUIPMENT_MAP = {
+    "45-degree hyperextension bench": ["Bench"],
+    "acupuncture mat": ["Mat"],
+    "agility ladder": ["Agility Ladder"],
+    "band or cable": ["Resistance Band", "Cable Machine"],
+    "bar and pad": ["Immovable Object"],
+    "barbell": ["Barbell"],
+    "barbell or dumbbell": ["Barbell", "Dumbbells"],
+    "bench": ["Bench"],
+    "bench or partner anchor": ["Bench"],
+    "box": ["Box / Platform"],
+    "cable machine": ["Cable Machine"],
+    "chair, desk, table or floor": ["Chair / Table"],
+    "coach to hold band": [],
+    "cones": ["Cones"],
+    "dumbbell": ["Dumbbells"],
+    "dumbbells": ["Dumbbells"],
+    "foam block": ["Foam Pad / Block"],
+    "foam pad": ["Foam Pad / Block"],
+    "heavy load or machine": ["Machine"],
+    "hurdle": ["Hurdles"],
+    "hurdles": ["Hurdles"],
+    "hyperextension bench or floor": ["Bench"],
+    "immovable object": ["Immovable Object"],
+    "immovable object (rack, pins or wall)": ["Immovable Object"],
+    "kettlebell": ["Kettlebell"],
+    "leg curl machine": ["Machine"],
+    "mat": ["Mat"],
+    "medicine ball": ["Medicine Ball"],
+    "none": ["No Equipment"],
+    "none (floor)": ["No Equipment"],
+    "none (floor or turf)": ["No Equipment"],
+    "none or light load": ["No Equipment"],
+    "partner": [],
+    "partner or trainer assist": [],
+    "platform or curb": ["Box / Platform"],
+    "plyo box": ["Box / Platform"],
+    "plyo boxes": ["Box / Platform"],
+    "pull-up bar": ["Pull-Up Bar"],
+    "raised step or platform": ["Box / Platform"],
+    "resistance band": ["Resistance Band"],
+    "resistance band anchored to a sled": ["Resistance Band"],
+    "resistance band on the foot": ["Resistance Band"],
+    "sliders": ["Sliders"],
+    "smith machine or support for balance": ["Machine"],
+    "stability ball": ["Stability Ball"],
+    "starting blocks": ["Starting Blocks"],
+    "track": ["Track / Turf"],
+    "trainer assist": [],
+    "trap bar": ["Trap Bar"],
+    "turf/track": ["Track / Turf"],
+    "two heavy dumbbells": ["Dumbbells"],
+    "wall": ["Wall"],
+    "wall/floor": ["Wall"],
+    "weight in one hand": [],
+    "weight plates": ["Weight Plates"],
+    "wooden boxes": ["Box / Platform"],
+}
+
+# Canonical equipment tag order for the shipped lists.
+EXERCISE_EQUIPMENT_ORDER = [
+    "No Equipment", "Barbell", "Dumbbells", "Kettlebell", "Trap Bar",
+    "Cable Machine", "Machine", "Resistance Band", "Medicine Ball",
+    "Box / Platform", "Bench", "Hurdles", "Wall", "Immovable Object",
+    "Pull-Up Bar", "Sliders", "Stability Ball", "Foam Pad / Block",
+    "Mat", "Agility Ladder", "Starting Blocks", "Cones",
+    "Weight Plates", "Chair / Table", "Track / Turf",
+]
+
+
+def _tags_for(rules, text):
+    return [tag for tag, pats in rules
+            if any(re.search(p, text) for p in pats)]
+
+
+def exercise_library(movements):
+    """Derive category / trainsTags / equipmentTags for every mined
+    movement. Returns the shipped list; exits loudly on any gap."""
+    names = [m["name"] for m in movements]
+    if len(set(names)) != len(names):
+        raise SystemExit("instagram movements: duplicate movement names — "
+                         "the category mapping is keyed by name")
+    missing = [n for n in names if n not in EXERCISE_CATEGORY_BY_NAME]
+    if missing:
+        raise SystemExit("instagram movements: NO CATEGORY MAPPED for: "
+                         + "; ".join(missing)
+                         + " — add each to EXERCISE_CATEGORY_BY_NAME in build-content.py")
+    stale = [n for n in EXERCISE_CATEGORY_BY_NAME if n not in names]
+    if stale:
+        raise SystemExit("instagram movements: category mapping names movements "
+                         "not in the source (renamed?): " + "; ".join(stale))
+    out = []
+    for m in movements:
+        category = EXERCISE_CATEGORY_BY_NAME[m["name"]]
+        if category not in EXERCISE_CATEGORIES:
+            raise SystemExit("instagram movements: %r maps to unknown category %r"
+                             % (m["name"], category))
+        trains_tags = _tags_for(EXERCISE_MUSCLE_TAG_RULES, m["trains"].lower())
+        focus_tags = _tags_for(EXERCISE_FOCUS_TAG_RULES,
+                               (m["name"] + " " + m["trains"]).lower())
+        trains_tags += [t for t in focus_tags if t not in trains_tags]
+        equip = []
+        for seg in m["equipment"].split(";"):
+            key = seg.strip().lower()
+            if key not in EXERCISE_EQUIPMENT_MAP:
+                raise SystemExit("instagram movements: UNMAPPED equipment segment "
+                                 "%r on %r — add it to EXERCISE_EQUIPMENT_MAP "
+                                 "in build-content.py" % (seg.strip(), m["name"]))
+            for tag in EXERCISE_EQUIPMENT_MAP[key]:
+                if tag not in equip:
+                    equip.append(tag)
+        equip.sort(key=EXERCISE_EQUIPMENT_ORDER.index)
+        if not trains_tags:
+            raise SystemExit("instagram movements: %r derived NO trains tags — "
+                             "extend the tag rules in build-content.py" % m["name"])
+        if not equip:
+            raise SystemExit("instagram movements: %r derived NO equipment tags — "
+                             "check its equipment segments" % m["name"])
+        entry = dict(m)
+        entry["category"] = category
+        entry["trainsTags"] = trains_tags
+        entry["equipmentTags"] = equip
+        out.append(entry)
+    return out
+
+
 igm_src = os.path.join(DB, "instagram_movements.json")
 igm_out = os.path.join(OUT, "instagram_movements.json")
 if os.path.exists(igm_src):
-    shutil.copy(igm_src, igm_out)
-    print("instagram movements:", len(json.load(open(igm_out))), "entries (from source of truth)")
+    mined = json.load(open(igm_src))
+    built = exercise_library(mined)
+    json.dump(built, open(igm_out, "w"), indent=1)
+    dist = {}
+    for m in built:
+        dist[m["category"]] = dist.get(m["category"], 0) + 1
+    print("instagram movements:", len(built), "entries (from source of truth,",
+          "categories:", ", ".join("%s %d" % (c, dist.get(c, 0)) for c in EXERCISE_CATEGORIES), ")")
 elif os.path.exists(igm_out):
     print("instagram movements: WARNING — source of truth missing, kept existing bundled copy with",
           len(json.load(open(igm_out))), "entries")

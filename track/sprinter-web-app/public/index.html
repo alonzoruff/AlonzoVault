@@ -553,7 +553,14 @@
     <div class="subnav-slot"></div>
     <p class="view-sub muted">Movements mined from the training posts saved on Instagram — what each one trains, the gear it needs, and the coaching cues.</p>
     <p class="muted">Every movement links back to the post it came from, so you can watch the original.</p>
-    <p id="ex-count" class="muted"></p>
+    <div class="filters card">
+      <input id="ex-search" type="search" placeholder="Search movements (try “nordic”, “hip flexor”, “partner”)">
+      <div class="chip-row" id="ex-chips"></div>
+      <div class="chip-row" id="ex-eq-chips"></div>
+      <div class="chip-row" id="ex-tag-chips"></div>
+      <p id="ex-count" class="muted"></p>
+      <button type="button" class="btn secondary" id="ex-clear" hidden>Clear filters</button>
+    </div>
     <div id="ex-list" class="def-list"></div>
   </section>
 
@@ -870,7 +877,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v36">Cadets Sprint · App v36</div>
+  <div class="app-version" data-app-version="v37">Cadets Sprint · App v37</div>
 </footer>
 
 <script src="/app.js"></script>

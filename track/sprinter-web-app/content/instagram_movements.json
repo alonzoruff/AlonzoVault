@@ -13,7 +13,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/Dexvq-0P3pq/",
   "sourceUsername": "joeybergles",
-  "postId": "18017119472839640"
+  "postId": "18017119472839640",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings",
+   "Eccentric",
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "Machine"
+  ]
  },
  {
   "name": "Single-Leg Eccentric Calf Raise",
@@ -29,7 +38,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/Dexvq-0P3pq/",
   "sourceUsername": "joeybergles",
-  "postId": "18017119472839640"
+  "postId": "18017119472839640",
+  "category": "Strength",
+  "trainsTags": [
+   "Calves & Ankles",
+   "Eccentric",
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "Box / Platform"
+  ]
  },
  {
   "name": "Long-Duration Isometric Lunge",
@@ -45,7 +63,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/Desl_NMPHz3/",
   "sourceUsername": "joeybergles",
-  "postId": "18127344337861439"
+  "postId": "18127344337861439",
+  "category": "Isometrics",
+  "trainsTags": [
+   "Isometric",
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "Dumbbells"
+  ]
  },
  {
   "name": "Trap Bar Isometric Hold",
@@ -62,7 +88,15 @@
   "sourceUrl": "https://www.instagram.com/reel/Dejlzg5Oabi/",
   "sourceUsername": "brayllln",
   "postId": "17956927887267854",
-  "programming": "3 sets x 10 sec (as shown on screen)"
+  "programming": "3 sets x 10 sec (as shown on screen)",
+  "category": "Isometrics",
+  "trainsTags": [
+   "Posterior Chain",
+   "Isometric"
+  ],
+  "equipmentTags": [
+   "Trap Bar"
+  ]
  },
  {
   "name": "Nordic Hamstring Curl",
@@ -84,7 +118,15 @@
   "sourceUrl": "https://www.instagram.com/reel/Dejlzg5Oabi/",
   "sourceUsername": "brayllln",
   "postId": "17956927887267854",
-  "programming": "3 sets x 5 reps (as shown on screen)"
+  "programming": "3 sets x 5 reps (as shown on screen)",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings",
+   "Eccentric"
+  ],
+  "equipmentTags": [
+   "Bench"
+  ]
  },
  {
   "name": "Step Box Jump",
@@ -100,7 +142,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/Dejlzg5Oabi/",
   "sourceUsername": "brayllln",
-  "postId": "17956927887267854"
+  "postId": "17956927887267854",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Reactive & Elastic"
+  ],
+  "equipmentTags": [
+   "Box / Platform"
+  ]
  },
  {
   "name": "Single-Leg Ball-Drop Plyometric on 45-Degree Hyperextension Bench",
@@ -116,7 +165,17 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DbZffzAot5I/",
   "sourceUsername": "dereksamuelmpt",
-  "postId": "18076670168331727"
+  "postId": "18076670168331727",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Hamstrings",
+   "Single-Leg",
+   "Reactive & Elastic"
+  ],
+  "equipmentTags": [
+   "Medicine Ball",
+   "Bench"
+  ]
  },
  {
   "name": "Cable-Resisted Eccentric Leg Extension in High Hip Flexion",
@@ -132,7 +191,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DbZffzAot5I/",
   "sourceUsername": "dereksamuelmpt",
-  "postId": "18076670168331727"
+  "postId": "18076670168331727",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings",
+   "Eccentric"
+  ],
+  "equipmentTags": [
+   "Cable Machine"
+  ]
  },
  {
   "name": "Straight Leg Bridge",
@@ -148,7 +215,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DbLrD31uTZa/",
   "sourceUsername": "anatomyofspeedofficial",
-  "postId": "17959928112150563"
+  "postId": "17959928112150563",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings",
+   "Glutes",
+   "Posterior Chain"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Wall Drill (Acceleration Wall Series)",
@@ -164,7 +240,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DYNFYcEIR28/",
   "sourceUsername": "nickytreatz",
-  "postId": "17936350380055072"
+  "postId": "17936350380055072",
+  "category": "Sprint Mechanics",
+  "trainsTags": [
+   "Sprint & Acceleration"
+  ],
+  "equipmentTags": [
+   "Wall"
+  ]
  },
  {
   "name": "Hip Flexion Overcoming Isometric into Pad (3-Bucket Position)",
@@ -181,7 +264,17 @@
   "sourceUrl": "https://www.instagram.com/reel/DYFxEWZhq8M/",
   "sourceUsername": "coach_benh",
   "postId": "18103468522980865",
-  "programming": "3-4 sets x 1 rep x 8-10 sec per leg"
+  "programming": "3-4 sets x 1 rep x 8-10 sec per leg",
+  "category": "Isometrics",
+  "trainsTags": [
+   "Hip Flexors",
+   "Isometric",
+   "Sprint & Acceleration"
+  ],
+  "equipmentTags": [
+   "Resistance Band",
+   "Immovable Object"
+  ]
  },
  {
   "name": "Butterfly PAILs/RAILs",
@@ -197,7 +290,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DXp-6_yPm6Q/",
   "sourceUsername": "joeybergles",
-  "postId": "18585534001056453"
+  "postId": "18585534001056453",
+  "category": "Mobility",
+  "trainsTags": [
+   "Adductors",
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "Wall"
+  ]
  },
  {
   "name": "ELDOA L5-S1",
@@ -213,7 +314,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DXp-6_yPm6Q/",
   "sourceUsername": "joeybergles",
-  "postId": "18585534001056453"
+  "postId": "18585534001056453",
+  "category": "Mobility",
+  "trainsTags": [
+   "Back & Spine"
+  ],
+  "equipmentTags": [
+   "Wall"
+  ]
  },
  {
   "name": "Acupuncture Mat Standing",
@@ -229,7 +337,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DXp-6_yPm6Q/",
   "sourceUsername": "joeybergles",
-  "postId": "18585534001056453"
+  "postId": "18585534001056453",
+  "category": "Mobility",
+  "trainsTags": [
+   "Calves & Ankles"
+  ],
+  "equipmentTags": [
+   "Mat"
+  ]
  },
  {
   "name": "Prone Shoulder Abduction with Internal Rotation",
@@ -245,7 +360,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DXp-6_yPm6Q/",
   "sourceUsername": "joeybergles",
-  "postId": "18585534001056453"
+  "postId": "18585534001056453",
+  "category": "Mobility",
+  "trainsTags": [
+   "Shoulders"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Psoas Fascial Stretch",
@@ -261,7 +383,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DXp-6_yPm6Q/",
   "sourceUsername": "joeybergles",
-  "postId": "18585534001056453"
+  "postId": "18585534001056453",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Flexors"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Rear Foot Elevated Split Squat (Eccentric Overload)",
@@ -277,7 +406,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DXRikU4kRge/",
   "sourceUsername": "ashleykowalewski",
-  "postId": "18244983967305563"
+  "postId": "18244983967305563",
+  "category": "Strength",
+  "trainsTags": [
+   "Eccentric",
+   "Single-Leg",
+   "Reactive & Elastic"
+  ],
+  "equipmentTags": [
+   "Dumbbells"
+  ]
  },
  {
   "name": "Kneeling Medicine Ball Catch",
@@ -293,7 +431,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DW7olFqvhc4/",
   "sourceUsername": "joeybergles",
-  "postId": "17934112677218155"
+  "postId": "17934112677218155",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Hamstrings",
+   "Reactive & Elastic"
+  ],
+  "equipmentTags": [
+   "Medicine Ball"
+  ]
  },
  {
   "name": "Kneeling Start Sprint",
@@ -309,7 +455,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DWCtDBADmxQ/",
   "sourceUsername": "myronflowers",
-  "postId": "18061648031348388"
+  "postId": "18061648031348388",
+  "category": "Sprint Mechanics",
+  "trainsTags": [
+   "Power",
+   "Sprint & Acceleration"
+  ],
+  "equipmentTags": [
+   "Track / Turf"
+  ]
  },
  {
   "name": "Clean (Teaching Progression)",
@@ -325,7 +479,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DUtlYQ5kh3j/",
   "sourceUsername": "tjsider",
-  "postId": "18081893426007901"
+  "postId": "18081893426007901",
+  "category": "Olympic Lifts",
+  "trainsTags": [
+   "Power"
+  ],
+  "equipmentTags": [
+   "Barbell"
+  ]
  },
  {
   "name": "Supine Feet-Elevated Banded Hip Flexion",
@@ -342,7 +503,16 @@
   "sourceUrl": "https://www.instagram.com/reel/DU3P-KbDR8U/",
   "sourceUsername": "dr.petegrasso",
   "postId": "18090530459037673",
-  "programming": "2-3 sets x 8-10 reps per side (as stated by creator)"
+  "programming": "2-3 sets x 8-10 reps per side (as stated by creator)",
+  "category": "Strength",
+  "trainsTags": [
+   "Hip Flexors",
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "Resistance Band",
+   "Box / Platform"
+  ]
  },
  {
   "name": "Banded Hip Flexor Stretch",
@@ -358,7 +528,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DU0ZdsyjvKt/",
   "sourceUsername": "dr.gabygo",
-  "postId": "17911875282323445"
+  "postId": "17911875282323445",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Flexors"
+  ],
+  "equipmentTags": [
+   "Resistance Band",
+   "Bench"
+  ]
  },
  {
   "name": "Banded Glute Bridge",
@@ -374,7 +552,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DU0ZdsyjvKt/",
   "sourceUsername": "dr.gabygo",
-  "postId": "17911875282323445"
+  "postId": "17911875282323445",
+  "category": "Strength",
+  "trainsTags": [
+   "Glutes",
+   "Hip Flexors"
+  ],
+  "equipmentTags": [
+   "Resistance Band"
+  ]
  },
  {
   "name": "Band-Resisted Acceleration March (Low Position)",
@@ -390,7 +576,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DUBLRwFlECG/",
   "sourceUsername": "toysoldiertraining",
-  "postId": "18091591250067368"
+  "postId": "18091591250067368",
+  "category": "Sprint Mechanics",
+  "trainsTags": [
+   "Power",
+   "Sprint & Acceleration"
+  ],
+  "equipmentTags": [
+   "Resistance Band"
+  ]
  },
  {
   "name": "Band Lying Hamstring Curl",
@@ -406,7 +600,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DTBhszgjoau/",
   "sourceUsername": "northstar_performance_training",
-  "postId": "18092315911752222"
+  "postId": "18092315911752222",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings"
+  ],
+  "equipmentTags": [
+   "Resistance Band"
+  ]
  },
  {
   "name": "Glute Bridge",
@@ -422,7 +623,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DTBhszgjoau/",
   "sourceUsername": "northstar_performance_training",
-  "postId": "18092315911752222"
+  "postId": "18092315911752222",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings",
+   "Glutes"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Band Seated Hamstring Curl",
@@ -438,7 +647,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DTBhszgjoau/",
   "sourceUsername": "northstar_performance_training",
-  "postId": "18092315911752222"
+  "postId": "18092315911752222",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings"
+  ],
+  "equipmentTags": [
+   "Resistance Band",
+   "Bench"
+  ]
  },
  {
   "name": "Cable Knee Drive",
@@ -454,7 +671,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/p/DLRubpEsGAH/",
   "sourceUsername": "scientificallyfaster",
-  "postId": "18147582220353155"
+  "postId": "18147582220353155",
+  "category": "Strength",
+  "trainsTags": [
+   "Hip Flexors"
+  ],
+  "equipmentTags": [
+   "Cable Machine"
+  ]
  },
  {
   "name": "Hip Flexor Crunch",
@@ -470,7 +694,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DJKYHsWxvgd/",
   "sourceUsername": "basedfasho",
-  "postId": "18067612417942513"
+  "postId": "18067612417942513",
+  "category": "Strength",
+  "trainsTags": [
+   "Hip Flexors"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Banded Hip Flexor In-and-Out",
@@ -486,7 +717,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DJKYHsWxvgd/",
   "sourceUsername": "basedfasho",
-  "postId": "18067612417942513"
+  "postId": "18067612417942513",
+  "category": "Strength",
+  "trainsTags": [
+   "Hip Flexors"
+  ],
+  "equipmentTags": [
+   "Resistance Band"
+  ]
  },
  {
   "name": "ATG Split Squat",
@@ -502,7 +740,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DJKYHsWxvgd/",
   "sourceUsername": "basedfasho",
-  "postId": "18067612417942513"
+  "postId": "18067612417942513",
+  "category": "Strength",
+  "trainsTags": [
+   "Quads & Knees"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Copenhagen Plank Hold",
@@ -518,7 +763,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DJKYHsWxvgd/",
   "sourceUsername": "basedfasho",
-  "postId": "18067612417942513"
+  "postId": "18067612417942513",
+  "category": "Core",
+  "trainsTags": [
+   "Adductors"
+  ],
+  "equipmentTags": [
+   "Bench"
+  ]
  },
  {
   "name": "Slider Hip Flexion",
@@ -534,7 +786,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DJKYHsWxvgd/",
   "sourceUsername": "basedfasho",
-  "postId": "18067612417942513"
+  "postId": "18067612417942513",
+  "category": "Strength",
+  "trainsTags": [
+   "Hip Flexors"
+  ],
+  "equipmentTags": [
+   "Sliders"
+  ]
  },
  {
   "name": "Yielding Isometric Hold",
@@ -551,7 +810,14 @@
   "sourceUrl": "https://www.instagram.com/reel/DIwfJVTuiss/",
   "sourceUsername": "coach.jondavis",
   "postId": "17905940415138922",
-  "programming": "30 sec up to 1 min+ holds"
+  "programming": "30 sec up to 1 min+ holds",
+  "category": "Isometrics",
+  "trainsTags": [
+   "Isometric"
+  ],
+  "equipmentTags": [
+   "Machine"
+  ]
  },
  {
   "name": "Overcoming Isometric",
@@ -568,7 +834,14 @@
   "sourceUrl": "https://www.instagram.com/reel/DIwfJVTuiss/",
   "sourceUsername": "coach.jondavis",
   "postId": "17905940415138922",
-  "programming": "3-5 sec max effort x 3 reps"
+  "programming": "3-5 sec max effort x 3 reps",
+  "category": "Isometrics",
+  "trainsTags": [
+   "Isometric"
+  ],
+  "equipmentTags": [
+   "Immovable Object"
+  ]
  },
  {
   "name": "Ballistic Pulse Isometric",
@@ -584,7 +857,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DIwfJVTuiss/",
   "sourceUsername": "coach.jondavis",
-  "postId": "17905940415138922"
+  "postId": "17905940415138922",
+  "category": "Isometrics",
+  "trainsTags": [
+   "Isometric"
+  ],
+  "equipmentTags": [
+   "Immovable Object"
+  ]
  },
  {
   "name": "Ballistic Catch Isometric",
@@ -600,7 +880,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DIwfJVTuiss/",
   "sourceUsername": "coach.jondavis",
-  "postId": "17905940415138922"
+  "postId": "17905940415138922",
+  "category": "Isometrics",
+  "trainsTags": [
+   "Isometric"
+  ],
+  "equipmentTags": [
+   "Immovable Object"
+  ]
  },
  {
   "name": "Oscillating Isometric",
@@ -617,7 +904,14 @@
   "sourceUrl": "https://www.instagram.com/reel/DIwfJVTuiss/",
   "sourceUsername": "coach.jondavis",
   "postId": "17905940415138922",
-  "programming": "3-5 sec of as many reps as possible"
+  "programming": "3-5 sec of as many reps as possible",
+  "category": "Isometrics",
+  "trainsTags": [
+   "Isometric"
+  ],
+  "equipmentTags": [
+   "Immovable Object"
+  ]
  },
  {
   "name": "Banded Explosive Lunge",
@@ -633,7 +927,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DDfXe00RHPc/",
   "sourceUsername": "basedfasho",
-  "postId": "18349401613125269"
+  "postId": "18349401613125269",
+  "category": "Strength",
+  "trainsTags": [
+   "Single-Leg",
+   "Power",
+   "Sprint & Acceleration"
+  ],
+  "equipmentTags": [
+   "Resistance Band"
+  ]
  },
  {
   "name": "Single-Leg Clean",
@@ -649,7 +952,17 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DDfXe00RHPc/",
   "sourceUsername": "basedfasho",
-  "postId": "18349401613125269"
+  "postId": "18349401613125269",
+  "category": "Olympic Lifts",
+  "trainsTags": [
+   "Posterior Chain",
+   "Single-Leg",
+   "Power"
+  ],
+  "equipmentTags": [
+   "Barbell",
+   "Dumbbells"
+  ]
  },
  {
   "name": "Barbell Step-Up",
@@ -665,7 +978,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DDfXe00RHPc/",
   "sourceUsername": "basedfasho",
-  "postId": "18349401613125269"
+  "postId": "18349401613125269",
+  "category": "Strength",
+  "trainsTags": [
+   "Glutes",
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "Barbell",
+   "Box / Platform"
+  ]
  },
  {
   "name": "Banded Quick Step-Up",
@@ -681,7 +1003,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DDfXe00RHPc/",
   "sourceUsername": "basedfasho",
-  "postId": "18349401613125269"
+  "postId": "18349401613125269",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Reactive & Elastic",
+   "Power"
+  ],
+  "equipmentTags": [
+   "Resistance Band",
+   "Box / Platform"
+  ]
  },
  {
   "name": "Hurdle Hops",
@@ -697,7 +1028,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DDfXe00RHPc/",
   "sourceUsername": "basedfasho",
-  "postId": "18349401613125269"
+  "postId": "18349401613125269",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Power"
+  ],
+  "equipmentTags": [
+   "Hurdles"
+  ]
  },
  {
   "name": "Medicine Ball Slam",
@@ -713,7 +1051,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DDfXe00RHPc/",
   "sourceUsername": "basedfasho",
-  "postId": "18349401613125269"
+  "postId": "18349401613125269",
+  "category": "Core",
+  "trainsTags": [
+   "Core & Trunk",
+   "Power"
+  ],
+  "equipmentTags": [
+   "Medicine Ball"
+  ]
  },
  {
   "name": "Kneeling Hip Hinge",
@@ -729,7 +1075,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DCRiY5ox8Yr/",
   "sourceUsername": "dr.petegrasso",
-  "postId": "18319981567090991"
+  "postId": "18319981567090991",
+  "category": "Mobility",
+  "trainsTags": [
+   "Posterior Chain",
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "Kettlebell",
+   "Foam Pad / Block"
+  ]
  },
  {
   "name": "Side-Lying Hip Stretch",
@@ -745,7 +1100,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DCRiY5ox8Yr/",
   "sourceUsername": "dr.petegrasso",
-  "postId": "18319981567090991"
+  "postId": "18319981567090991",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Down Dog to Lunge Reach",
@@ -761,7 +1123,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/DCRiY5ox8Yr/",
   "sourceUsername": "dr.petegrasso",
-  "postId": "18319981567090991"
+  "postId": "18319981567090991",
+  "category": "Mobility",
+  "trainsTags": [
+   "Shoulders",
+   "Back & Spine",
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Barbell Split Squat",
@@ -777,7 +1148,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C4gSef3Jddo/",
   "sourceUsername": "giavanniruffin",
-  "postId": "18258643564173754"
+  "postId": "18258643564173754",
+  "category": "Strength",
+  "trainsTags": [
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "Barbell"
+  ]
  },
  {
   "name": "Band-Assisted Pull-Up",
@@ -793,7 +1171,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C4gSef3Jddo/",
   "sourceUsername": "giavanniruffin",
-  "postId": "18258643564173754"
+  "postId": "18258643564173754",
+  "category": "Strength",
+  "trainsTags": [
+   "Back & Spine"
+  ],
+  "equipmentTags": [
+   "Resistance Band",
+   "Pull-Up Bar"
+  ]
  },
  {
   "name": "Single-Leg Dumbbell Romanian Deadlift",
@@ -809,7 +1195,17 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C4gSef3Jddo/",
   "sourceUsername": "giavanniruffin",
-  "postId": "18258643564173754"
+  "postId": "18258643564173754",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings",
+   "Glutes",
+   "Posterior Chain",
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "Dumbbells"
+  ]
  },
  {
   "name": "Box Jump",
@@ -825,7 +1221,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C4gSef3Jddo/",
   "sourceUsername": "giavanniruffin",
-  "postId": "18258643564173754"
+  "postId": "18258643564173754",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Power"
+  ],
+  "equipmentTags": [
+   "Box / Platform"
+  ]
  },
  {
   "name": "Agility Ladder Footwork",
@@ -841,7 +1244,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C4gSef3Jddo/",
   "sourceUsername": "giavanniruffin",
-  "postId": "18258643564173754"
+  "postId": "18258643564173754",
+  "category": "Sprint Mechanics",
+  "trainsTags": [
+   "Calves & Ankles"
+  ],
+  "equipmentTags": [
+   "Agility Ladder"
+  ]
  },
  {
   "name": "Flying 10-Yard Sprint",
@@ -857,7 +1267,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7nPEU2MIK0/",
   "sourceUsername": "joeybergles",
-  "postId": "18014560064139037"
+  "postId": "18014560064139037",
+  "category": "Sprint Mechanics",
+  "trainsTags": [
+   "Sprint & Acceleration"
+  ],
+  "equipmentTags": [
+   "Track / Turf"
+  ]
  },
  {
   "name": "Vertical Jump + Single-Leg Broad Jump",
@@ -873,7 +1290,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7c-0ZrMb7C/",
   "sourceUsername": "joeybergles",
-  "postId": "18084953953412628"
+  "postId": "18084953953412628",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Single-Leg",
+   "Reactive & Elastic",
+   "Power"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Broad Jump + Pogo Hop",
@@ -889,7 +1315,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7c-0ZrMb7C/",
   "sourceUsername": "joeybergles",
-  "postId": "18084953953412628"
+  "postId": "18084953953412628",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Reactive & Elastic",
+   "Power"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Consecutive Single-Leg Broad Jump with Bounce",
@@ -905,7 +1339,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7c-0ZrMb7C/",
   "sourceUsername": "joeybergles",
-  "postId": "18084953953412628"
+  "postId": "18084953953412628",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Single-Leg",
+   "Reactive & Elastic",
+   "Power"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Split Stance Pogo Hops",
@@ -921,7 +1364,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7c-0ZrMb7C/",
   "sourceUsername": "joeybergles",
-  "postId": "18084953953412628"
+  "postId": "18084953953412628",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Calves & Ankles",
+   "Reactive & Elastic"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Suitcase March on Foam",
@@ -937,7 +1388,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7cJ6cCoRkd/",
   "sourceUsername": "overtimeathletes",
-  "postId": "18259001359244514"
+  "postId": "18259001359244514",
+  "category": "Core",
+  "trainsTags": [
+   "Core & Trunk",
+   "Back & Spine"
+  ],
+  "equipmentTags": [
+   "Foam Pad / Block"
+  ]
  },
  {
   "name": "Anti-Rotation Back Pedal",
@@ -953,7 +1412,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7cJ6cCoRkd/",
   "sourceUsername": "overtimeathletes",
-  "postId": "18259001359244514"
+  "postId": "18259001359244514",
+  "category": "Core",
+  "trainsTags": [
+   "Core & Trunk"
+  ],
+  "equipmentTags": [
+   "Cable Machine",
+   "Resistance Band"
+  ]
  },
  {
   "name": "Plank Press-Up",
@@ -969,7 +1436,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7cJ6cCoRkd/",
   "sourceUsername": "overtimeathletes",
-  "postId": "18259001359244514"
+  "postId": "18259001359244514",
+  "category": "Core",
+  "trainsTags": [
+   "Core & Trunk",
+   "Shoulders"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Plank Bird Dog",
@@ -985,7 +1460,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7cJ6cCoRkd/",
   "sourceUsername": "overtimeathletes",
-  "postId": "18259001359244514"
+  "postId": "18259001359244514",
+  "category": "Core",
+  "trainsTags": [
+   "Core & Trunk"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Hyperextension with Reach",
@@ -1001,7 +1483,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7cJ6cCoRkd/",
   "sourceUsername": "overtimeathletes",
-  "postId": "18259001359244514"
+  "postId": "18259001359244514",
+  "category": "Core",
+  "trainsTags": [
+   "Posterior Chain",
+   "Core & Trunk"
+  ],
+  "equipmentTags": [
+   "Bench"
+  ]
  },
  {
   "name": "Plank Walkout",
@@ -1017,7 +1507,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7cJ6cCoRkd/",
   "sourceUsername": "overtimeathletes",
-  "postId": "18259001359244514"
+  "postId": "18259001359244514",
+  "category": "Core",
+  "trainsTags": [
+   "Core & Trunk"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Stir the Pot",
@@ -1033,7 +1530,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7cJ6cCoRkd/",
   "sourceUsername": "overtimeathletes",
-  "postId": "18259001359244514"
+  "postId": "18259001359244514",
+  "category": "Core",
+  "trainsTags": [
+   "Core & Trunk"
+  ],
+  "equipmentTags": [
+   "Stability Ball"
+  ]
  },
  {
   "name": "Standing Hip Flexor Stretch with Rotation",
@@ -1049,7 +1553,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C7QG2QlI5SX/",
   "sourceUsername": "joeybergles",
-  "postId": "18029947517072386"
+  "postId": "18029947517072386",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Flexors"
+  ],
+  "equipmentTags": [
+   "Machine"
+  ]
  },
  {
   "name": "Kneeling Hip Stretch",
@@ -1065,7 +1576,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6Zu6cGr1l8/",
   "sourceUsername": "powershipperformance",
-  "postId": "18071598988500490"
+  "postId": "18071598988500490",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Hip Rockers",
@@ -1081,7 +1599,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6Zu6cGr1l8/",
   "sourceUsername": "powershipperformance",
-  "postId": "18071598988500490"
+  "postId": "18071598988500490",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Single-Leg Raise",
@@ -1097,7 +1622,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6Zu6cGr1l8/",
   "sourceUsername": "powershipperformance",
-  "postId": "18071598988500490"
+  "postId": "18071598988500490",
+  "category": "Strength",
+  "trainsTags": [
+   "Hip Flexors",
+   "Core & Trunk",
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "External Hip Hold",
@@ -1113,7 +1647,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6Zu6cGr1l8/",
   "sourceUsername": "powershipperformance",
-  "postId": "18071598988500490"
+  "postId": "18071598988500490",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Single-Leg Bridge",
@@ -1129,7 +1670,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6Zu6cGr1l8/",
   "sourceUsername": "powershipperformance",
-  "postId": "18071598988500490"
+  "postId": "18071598988500490",
+  "category": "Strength",
+  "trainsTags": [
+   "Hamstrings",
+   "Glutes",
+   "Single-Leg"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Kneeling Switches",
@@ -1145,7 +1695,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6Zu6cGr1l8/",
   "sourceUsername": "powershipperformance",
-  "postId": "18071598988500490"
+  "postId": "18071598988500490",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Lateral Box Jump",
@@ -1161,7 +1718,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6JSljxO_Dr/",
   "sourceUsername": "bradjbecca",
-  "postId": "18017253539240291"
+  "postId": "18017253539240291",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Power"
+  ],
+  "equipmentTags": [
+   "Box / Platform"
+  ]
  },
  {
   "name": "Hurdle Slalom Hops",
@@ -1177,7 +1741,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6JSljxO_Dr/",
   "sourceUsername": "bradjbecca",
-  "postId": "18017253539240291"
+  "postId": "18017253539240291",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Reactive & Elastic"
+  ],
+  "equipmentTags": [
+   "Hurdles"
+  ]
  },
  {
   "name": "Skater Tuck Jump",
@@ -1193,7 +1764,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6JSljxO_Dr/",
   "sourceUsername": "bradjbecca",
-  "postId": "18017253539240291"
+  "postId": "18017253539240291",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Power"
+  ],
+  "equipmentTags": [
+   "Cones"
+  ]
  },
  {
   "name": "Rapid Plate Hops",
@@ -1209,7 +1787,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6JSljxO_Dr/",
   "sourceUsername": "bradjbecca",
-  "postId": "18017253539240291"
+  "postId": "18017253539240291",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Calves & Ankles",
+   "Reactive & Elastic"
+  ],
+  "equipmentTags": [
+   "Weight Plates"
+  ]
  },
  {
   "name": "Hurdle Skater Hop",
@@ -1225,7 +1811,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/C6JSljxO_Dr/",
   "sourceUsername": "bradjbecca",
-  "postId": "18017253539240291"
+  "postId": "18017253539240291",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Power"
+  ],
+  "equipmentTags": [
+   "Hurdles"
+  ]
  },
  {
   "name": "Block Start",
@@ -1241,7 +1834,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/CryNR7tp-cp/",
   "sourceUsername": "proforceathletics",
-  "postId": "17978302487319233"
+  "postId": "17978302487319233",
+  "category": "Sprint Mechanics",
+  "trainsTags": [
+   "Sprint & Acceleration"
+  ],
+  "equipmentTags": [
+   "Starting Blocks"
+  ]
  },
  {
   "name": "Elevated Pigeon Stretch",
@@ -1257,7 +1857,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/CiKZzwzpJXP/",
   "sourceUsername": "livfitkarl",
-  "postId": "18027806524403892"
+  "postId": "18027806524403892",
+  "category": "Mobility",
+  "trainsTags": [
+   "Back & Spine",
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "Chair / Table"
+  ]
  },
  {
   "name": "90/90 Hip Stretch",
@@ -1273,7 +1881,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/CiDZLoXNeJl/",
   "sourceUsername": "athletedocrehab",
-  "postId": "17955360959009528"
+  "postId": "17955360959009528",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "Mat"
+  ]
  },
  {
   "name": "Kettlebell Hip Shift",
@@ -1289,7 +1904,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/CiDZLoXNeJl/",
   "sourceUsername": "athletedocrehab",
-  "postId": "17955360959009528"
+  "postId": "17955360959009528",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "Kettlebell"
+  ]
  },
  {
   "name": "World's Greatest Stretch (Modified)",
@@ -1305,7 +1927,16 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/CiDZLoXNeJl/",
   "sourceUsername": "athletedocrehab",
-  "postId": "17955360959009528"
+  "postId": "17955360959009528",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hamstrings",
+   "Back & Spine",
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Quadruped Hip CARs",
@@ -1321,7 +1952,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/reel/CiDZLoXNeJl/",
   "sourceUsername": "athletedocrehab",
-  "postId": "17955360959009528"
+  "postId": "17955360959009528",
+  "category": "Mobility",
+  "trainsTags": [
+   "Hip Mobility"
+  ],
+  "equipmentTags": [
+   "No Equipment"
+  ]
  },
  {
   "name": "Platform Drop Reactive Landing",
@@ -1337,7 +1975,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/p/CDW60jrp1iY/",
   "sourceUsername": "adonis.harrison",
-  "postId": "18109579237147982"
+  "postId": "18109579237147982",
+  "category": "Plyometrics",
+  "trainsTags": [
+   "Reactive & Elastic"
+  ],
+  "equipmentTags": [
+   "Box / Platform"
+  ]
  },
  {
   "name": "Explosive Step-Up",
@@ -1353,7 +1998,15 @@
   ],
   "sourceUrl": "https://www.instagram.com/p/CDW60jrp1iY/",
   "sourceUsername": "adonis.harrison",
-  "postId": "18109579237147982"
+  "postId": "18109579237147982",
+  "category": "Strength",
+  "trainsTags": [
+   "Quads & Knees",
+   "Power"
+  ],
+  "equipmentTags": [
+   "Box / Platform"
+  ]
  },
  {
   "name": "Stability Ball Mountain Climber",
@@ -1369,6 +2022,14 @@
   ],
   "sourceUrl": "https://www.instagram.com/p/CCEwMX0pMIt/",
   "sourceUsername": "adonis.harrison",
-  "postId": "18025965415272133"
+  "postId": "18025965415272133",
+  "category": "Core",
+  "trainsTags": [
+   "Core & Trunk"
+  ],
+  "equipmentTags": [
+   "Box / Platform",
+   "Stability Ball"
+  ]
  }
 ]

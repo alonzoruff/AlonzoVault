@@ -233,6 +233,103 @@ async function main() {
     appJs.text.includes('exCardHtml') && appJs.text.includes('exerciseLibrary') &&
     appJs.text.includes('localeCompare') && appJs.text.includes('more') &&
     appJs.text.includes("name === 'exercises'"));
+  /* Exercise Library depth (stage 6): every movement ships one
+     category from the fixed set, keyword-derived trains tags and
+     normalized equipment tags — all derived at content-build time
+     in scripts/build-content.py. The view filters over them with
+     the pure EXERCISE-FILTER core, exercised here at the data
+     level against the real library, runner-core style. */
+  if (Array.isArray(exlib)) {
+    const EX_CATS = ['Sprint Mechanics', 'Plyometrics', 'Olympic Lifts', 'Strength',
+      'Isometrics', 'Core', 'Mobility'];
+    check('every movement ships a fixed-set category plus non-empty tag lists',
+      exlib.every(m => EX_CATS.includes(m.category)
+        && Array.isArray(m.trainsTags) && m.trainsTags.length > 0
+        && m.trainsTags.every(t => typeof t === 'string' && t.trim())
+        && Array.isArray(m.equipmentTags) && m.equipmentTags.length > 0
+        && m.equipmentTags.every(t => typeof t === 'string' && t.trim())));
+    const catDist = {};
+    for (const m of exlib) catDist[m.category] = (catDist[m.category] || 0) + 1;
+    check('category distribution covers all 85 movements, each category >= 2',
+      EX_CATS.every(c => (catDist[c] || 0) >= 2)
+      && Object.values(catDist).reduce((a, b) => a + b, 0) === 85,
+      catDist);
+    check('original mined fields survive alongside the derived depth fields',
+      exlib.every(m => ['name', 'trains', 'equipment', 'cues', 'sources',
+        'sourceUrl', 'sourceUsername', 'postId']
+        .every(f => m[f] !== undefined)));
+    const byName6 = n => exlib.find(m => m.name === n);
+    const nordic6 = byName6('Nordic Hamstring Curl');
+    check('spot check: Nordic is Strength, Hamstrings + Eccentric tags, Bench gear',
+      !!nordic6 && nordic6.category === 'Strength'
+      && nordic6.trainsTags.includes('Hamstrings') && nordic6.trainsTags.includes('Eccentric')
+      && nordic6.equipmentTags.includes('Bench'), nordic6);
+    const clean6 = byName6('Clean (Teaching Progression)');
+    check('spot check: the Clean progression is Olympic Lifts with Barbell gear',
+      !!clean6 && clean6.category === 'Olympic Lifts'
+      && clean6.equipmentTags.includes('Barbell'), clean6);
+    const hip9090 = byName6('90/90 Hip Stretch');
+    check('spot check: 90/90 is Mobility, Hip Mobility tag, Mat gear',
+      !!hip9090 && hip9090.category === 'Mobility'
+      && hip9090.trainsTags.includes('Hip Mobility')
+      && hip9090.equipmentTags.includes('Mat'), hip9090);
+    const block6 = byName6('Block Start');
+    check('spot check: Block Start is Sprint Mechanics with Starting Blocks gear',
+      !!block6 && block6.category === 'Sprint Mechanics'
+      && block6.equipmentTags.includes('Starting Blocks'), block6);
+    const bridge6 = byName6('Glute Bridge');
+    check('spot check: a floor movement normalizes to exactly No Equipment',
+      !!bridge6 && bridge6.equipmentTags.length === 1
+      && bridge6.equipmentTags[0] === 'No Equipment', bridge6);
+    const pedal6 = byName6('Anti-Rotation Back Pedal');
+    check('spot check: back-pedal earns no Back & Spine tag (muscle rules read trains only)',
+      !!pedal6 && pedal6.trainsTags.includes('Core & Trunk')
+      && !pedal6.trainsTags.includes('Back & Spine'), pedal6);
+  }
+  check('exercise depth controls are in the served page (search, three chip rows, clear)',
+    pageHtml.text.includes('id="ex-search"') && pageHtml.text.includes('id="ex-chips"') &&
+    pageHtml.text.includes('id="ex-eq-chips"') && pageHtml.text.includes('id="ex-tag-chips"') &&
+    pageHtml.text.includes('id="ex-clear"'));
+  check('exercise depth wiring is in the served JS (filter core, facets, clear, empty state)',
+    appJs.text.includes('EXERCISE-FILTER-BEGIN') && appJs.text.includes('exerciseMatches') &&
+    appJs.text.includes('EX_CATEGORIES') && appJs.text.includes('data-excat') &&
+    appJs.text.includes('data-exequip') && appJs.text.includes('data-extag') &&
+    appJs.text.includes('clearExerciseFilters') &&
+    appJs.text.includes('No movements match — clear filters'));
+  const exCoreMatch = appJs.text.match(/\/\* EXERCISE-FILTER-BEGIN \*\/([\s\S]*?)\/\* EXERCISE-FILTER-END \*\//);
+  check('exercise filter core is extractable for data-level tests', !!exCoreMatch);
+  if (exCoreMatch && Array.isArray(exlib)) {
+    const exCore = new Function(exCoreMatch[1] + '\nreturn { exerciseMatches };')();
+    const runEx = f => exlib.filter(m => exCore.exerciseMatches(m, f));
+    check('filter: no facets returns the whole library',
+      runEx({ query: '', category: 'All', equipment: 'All', tags: [] }).length === 85);
+    const mobCount = exlib.filter(m => m.category === 'Mobility').length;
+    check('filter: a category returns exactly its members',
+      runEx({ query: '', category: 'Mobility', equipment: 'All', tags: [] }).length === mobCount,
+      mobCount);
+    const interCount = exlib.filter(m => m.trainsTags.includes('Hamstrings')
+      && m.trainsTags.includes('Eccentric')).length;
+    check('filter: multiple tags must ALL match (AND semantics)',
+      runEx({ query: '', category: 'All', equipment: 'All', tags: ['Hamstrings', 'Eccentric'] }).length === interCount
+      && interCount > 0
+      && interCount < exlib.filter(m => m.trainsTags.includes('Hamstrings')).length,
+      interCount);
+    const bandCount = exlib.filter(m => m.equipmentTags.includes('Resistance Band')).length;
+    check('filter: an equipment value returns exactly its carriers',
+      runEx({ query: '', category: 'All', equipment: 'Resistance Band', tags: [] }).length === bandCount,
+      bandCount);
+    check('filter: search hits name, trains and cues',
+      runEx({ query: 'nordic', category: 'All', equipment: 'All', tags: [] }).length === 1
+      && runEx({ query: 'nordic', category: 'All', equipment: 'All', tags: [] })[0].name === 'Nordic Hamstring Curl'
+      && runEx({ query: 'iliopsoas', category: 'All', equipment: 'All', tags: [] }).length >= 1
+      && runEx({ query: 'partner helps', category: 'All', equipment: 'All', tags: [] })
+        .some(m => m.name === 'Single-Leg Eccentric Hamstring Curl'));
+    check('filter: facets combine (category AND equipment AND search)',
+      runEx({ query: 'band', category: 'Strength', equipment: 'Resistance Band', tags: [] }).length >= 1
+      && runEx({ query: 'band', category: 'Strength', equipment: 'Resistance Band', tags: [] })
+        .every(m => m.category === 'Strength' && m.equipmentTags.includes('Resistance Band'))
+      && runEx({ query: 'band', category: 'Mobility', equipment: 'Barbell', tags: [] }).length === 0);
+  }
   const allSessions = contentJson.sessions;
   const igSessions = allSessions.filter(s => s.id.startsWith('IG-'));
   const origIds = ['ACC-01', 'ACC-02', 'ACC-03', 'ACC-04', 'MAX-01', 'MAX-02', 'MAX-03',
@@ -336,8 +433,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v36',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v36"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v37',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v37"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2021,16 +2118,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v36'") &&
-    swJs.text.includes("sprinter-app-v36"));
+    appJs.text.includes("const APP_VERSION = 'v37'") &&
+    swJs.text.includes("sprinter-app-v37"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v36"') &&
-    pageHtml.text.includes('Cadets Sprint · App v36') &&
+    pageHtml.text.includes('data-app-version="v37"') &&
+    pageHtml.text.includes('Cadets Sprint · App v37') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&

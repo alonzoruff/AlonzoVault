@@ -17,6 +17,10 @@ const state = {
   eduBucket: 'All',
   eduFocus: '',
   eduQuery: '',
+  exQuery: '',
+  exCategory: 'All',
+  exEquipment: 'All',
+  exTags: [],
   invItems: [],
   invCat: '',
   invQ: '',
@@ -118,8 +122,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v36';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v36';
+const APP_VERSION = 'v37';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v37';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -890,10 +894,37 @@ function renderDefinitions() {
 /* ---------------- exercise library ----------------
    Movements mined from AJ's saved Instagram training posts
    (content/instagram_movements.json, served as exerciseLibrary).
-   A plain alphabetical list for now — name, what it trains, the
-   equipment, the coaching cues, and a link back to the source post
-   (with a note when a movement was saved from more than one post).
-   Categories/tags/search build on this list in a later stage. */
+   Every movement ships with a category, trains tags and equipment
+   tags derived at content-build time (scripts/build-content.py).
+   This view filters over them: a text search (name, trains, cues),
+   one category, one equipment value, and any number of trains
+   tags — a movement must carry every selected tag. The cards are
+   unchanged: name, what it trains, the equipment, the coaching
+   cues, and a link back to the source post (with a note when a
+   movement was saved from more than one post). */
+const EX_CATEGORIES = ['Sprint Mechanics', 'Plyometrics', 'Olympic Lifts', 'Strength',
+  'Isometrics', 'Core', 'Mobility'];
+
+/* Pure filter core: extracted by the test suite and exercised
+   against the real library data. Keep it free of DOM and state:
+   exerciseMatches(movement, {query, category, equipment, tags}). */
+/* EXERCISE-FILTER-BEGIN */
+function exerciseMatches(m, f) {
+  if (f.category && f.category !== 'All' && m.category !== f.category) return false;
+  if (f.equipment && f.equipment !== 'All'
+    && !(Array.isArray(m.equipmentTags) && m.equipmentTags.includes(f.equipment))) return false;
+  const tags = Array.isArray(f.tags) ? f.tags : [];
+  for (const t of tags) {
+    if (!(Array.isArray(m.trainsTags) && m.trainsTags.includes(t))) return false;
+  }
+  const q = String(f.query || '').trim().toLowerCase();
+  if (q && !(String(m.name || '').toLowerCase().includes(q)
+    || String(m.trains || '').toLowerCase().includes(q)
+    || String(m.cues || '').toLowerCase().includes(q))) return false;
+  return true;
+}
+/* EXERCISE-FILTER-END */
+
 function exCardHtml(m) {
   const count = Array.isArray(m.sources) ? m.sources.length : 0;
   const more = count > 1
@@ -914,15 +945,64 @@ function renderExercises() {
   if (!list) return;
   const lib = ((state.content && state.content.exerciseLibrary) || []).slice()
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const catCounts = {}, eqCounts = {}, tagCounts = {};
+  for (const m of lib) {
+    if (m.category) catCounts[m.category] = (catCounts[m.category] || 0) + 1;
+    for (const t of m.equipmentTags || []) eqCounts[t] = (eqCounts[t] || 0) + 1;
+    for (const t of m.trainsTags || []) tagCounts[t] = (tagCounts[t] || 0) + 1;
+  }
+  const cats = EX_CATEGORIES.filter(c => catCounts[c]);
+  for (const c of Object.keys(catCounts)) if (!cats.includes(c)) cats.push(c);
+  const eqs = Object.keys(eqCounts).sort((a, b) => a.localeCompare(b));
+  const tags = Object.keys(tagCounts).sort((a, b) => a.localeCompare(b));
+  if (state.exCategory !== 'All' && !catCounts[state.exCategory]) state.exCategory = 'All';
+  if (state.exEquipment !== 'All' && !eqCounts[state.exEquipment]) state.exEquipment = 'All';
+  state.exTags = (state.exTags || []).filter(t => tagCounts[t]);
+  $('#ex-chips').innerHTML =
+    '<span class="muted">Category</span>' +
+    `<button type="button" class="chip ${state.exCategory === 'All' ? 'active' : ''}" data-excat="All">All (${lib.length})</button>` +
+    cats.map(c => `<button type="button" class="chip ${state.exCategory === c ? 'active' : ''}" data-excat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('');
+  $('#ex-eq-chips').innerHTML =
+    '<span class="muted">Equipment</span>' +
+    `<button type="button" class="chip ${state.exEquipment === 'All' ? 'active' : ''}" data-exequip="All">All</button>` +
+    eqs.map(t => `<button type="button" class="chip ${state.exEquipment === t ? 'active' : ''}" data-exequip="${esc(t)}">${esc(t)} (${eqCounts[t]})</button>`).join('');
+  $('#ex-tag-chips').innerHTML =
+    '<span class="muted">Trains</span>' +
+    tags.map(t => `<button type="button" class="chip ${state.exTags.includes(t) ? 'active' : ''}" data-extag="${esc(t)}">${esc(t)} (${tagCounts[t]})</button>`).join('');
+  const rows = lib.filter(m => exerciseMatches(m, {
+    query: state.exQuery, category: state.exCategory,
+    equipment: state.exEquipment, tags: state.exTags,
+  }));
   const countEl = $('#ex-count');
   if (countEl) {
     countEl.textContent = lib.length
-      ? `${lib.length} movements, A–Z.`
+      ? `Showing ${rows.length} of ${lib.length} movements.`
       : 'The exercise library has not loaded.';
   }
-  list.innerHTML = lib.length
-    ? lib.map(exCardHtml).join('')
-    : '<p class="muted">No movements yet.</p>';
+  const clearBtn = $('#ex-clear');
+  if (clearBtn) {
+    clearBtn.hidden = !(state.exCategory !== 'All' || state.exEquipment !== 'All'
+      || state.exTags.length > 0 || (state.exQuery || '').trim() !== '');
+  }
+  if (!lib.length) {
+    list.innerHTML = '<p class="muted">No movements yet.</p>';
+    return;
+  }
+  list.innerHTML = rows.length
+    ? rows.map(exCardHtml).join('')
+    : '<p class="muted">No movements match — clear filters</p>'
+      + '<button type="button" class="btn secondary" id="ex-clear-list">Clear filters</button>';
+  const listClear = $('#ex-clear-list');
+  if (listClear) listClear.addEventListener('click', clearExerciseFilters);
+}
+function clearExerciseFilters() {
+  state.exQuery = '';
+  state.exCategory = 'All';
+  state.exEquipment = 'All';
+  state.exTags = [];
+  const search = $('#ex-search');
+  if (search) search.value = '';
+  renderExercises();
 }
 
 /* ---------------- coach education ---------------- */
@@ -4150,6 +4230,29 @@ $('#edu-chips').addEventListener('click', (e) => {
   renderEducation();
 });
 $('#edu-focus').addEventListener('change', (e) => { state.eduFocus = e.target.value; renderEducation(); });
+$('#ex-search').addEventListener('input', (e) => { state.exQuery = e.target.value; renderExercises(); });
+$('#ex-chips').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-excat]');
+  if (!chip) return;
+  state.exCategory = chip.dataset.excat;
+  renderExercises();
+});
+$('#ex-eq-chips').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-exequip]');
+  if (!chip) return;
+  state.exEquipment = chip.dataset.exequip;
+  renderExercises();
+});
+$('#ex-tag-chips').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-extag]');
+  if (!chip) return;
+  const t = chip.dataset.extag;
+  state.exTags = state.exTags.includes(t)
+    ? state.exTags.filter(x => x !== t)
+    : state.exTags.concat([t]);
+  renderExercises();
+});
+$('#ex-clear').addEventListener('click', clearExerciseFilters);
 function playVideoThumb(thumb) {
   const yid = thumb.dataset.play;
   if (!yid || thumb.dataset.playing) return;
