@@ -230,7 +230,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is bumped to v14',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v14"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v15"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1012,11 +1012,14 @@ async function main() {
   check('coach re-saves the card 1 edit for the restart check', r.status === 200, r.status);
 
   /* ---------------- TV board (weight-room display) ----------------
-     A coach-only display view that is a pure client of the existing
-     coach endpoints — it adds no server surface — so the checks
-     cover the served page/JS wiring, the gates on the endpoints it
-     reads, and the hard privacy rule: its render path never touches
-     the aches-and-pains data. */
+     The board is the Workout of the Day: one full-screen page per
+     group, each page carrying the group's warm-up card and the
+     complete session. It is a pure client of the coach today
+     endpoint plus the app's own session/plan content — it adds no
+     server surface — so the checks cover the served page/JS
+     wiring, the gates on the one endpoint it reads, and the hard
+     privacy rule: its render path never touches the aches-and-
+     pains data. */
   check('TV board view is in the served page',
     pageHtml.text.includes('id="view-tv"') && pageHtml.text.includes('id="tv-main"') &&
     pageHtml.text.includes('id="tv-exit"') && pageHtml.text.includes('Exit TV board'));
@@ -1029,30 +1032,46 @@ async function main() {
   const tvEnd = appJs.text.indexOf('/* ---------------- boot', tvStart);
   const tvCode = tvStart >= 0 && tvEnd > tvStart ? appJs.text.slice(tvStart, tvEnd) : '';
   check('TV board code block is present in the served JS', tvCode.length > 500, tvCode.length);
-  check('TV board reads the coach today, weekly dashboard, tests and results endpoints',
-    tvCode.includes('/api/coach/today') && tvCode.includes('/api/weekly/dashboard') &&
-    tvCode.includes('/api/tests') && tvCode.includes('/api/results'));
+  check('TV board reads only the coach today endpoint (no tracker or testing data)',
+    tvCode.includes('/api/coach/today') && !tvCode.includes('/api/weekly/dashboard') &&
+    !tvCode.includes('/api/tests') && !tvCode.includes('/api/results'));
+  check('TV board has no leaderboard panel',
+    !tvCode.toLowerCase().includes('leaderboard') && !tvCode.includes('tvBoards') &&
+    !tvCode.includes('Testing results will appear here'));
   check('TV board render path never references aches-and-pains data',
-    !tvCode.toLowerCase().includes('concern') && !tvCode.includes('healthFlags'));
-  check('TV board rotates panels (~20s) and pauses on interaction',
+    !tvCode.toLowerCase().includes('concern') && !tvCode.includes('healthFlags') &&
+    !tvCode.includes('a.note'));
+  check('TV board header is the Workout of the Day',
+    tvCode.includes('Workout of the Day') && tvCode.includes('tvWodHeaderHtml'));
+  check('TV board builds one page per group from its units',
+    tvCode.includes('tvGroupUnits') && tvCode.includes('tvPageHtml') && tvCode.includes('tv-page'));
+  check('TV board rotates between group pages (~20s) and pauses on interaction',
     tvCode.includes('TV_ROTATE_MS = 20000') && tvCode.includes('setInterval') &&
     tvCode.includes('tvPaused') && tvCode.includes('pointerdown'));
+  check('TV board long pages split or auto-scroll instead of clipping type',
+    tvCode.includes('tv-autoscroll') && tvCode.includes('--tv-scale') && tvCode.includes('TV_MIN_SCALE'));
   check('TV board honors reduced motion (no auto-rotation)',
     tvCode.includes('prefersReducedMotion'));
   check('TV board re-fetches its data about every 5 minutes',
     tvCode.includes('TV_REFRESH_MS = 5 * 60 * 1000'));
-  check('TV board warm-up panel clones the live printed card (coach edits included)',
-    tvCode.includes('cloneNode') && tvCode.includes('tvCardIdForToday'));
-  check('TV board leaderboard has the empty-state placeholder',
-    tvCode.includes('Testing results will appear here'));
-  r = await api(coach, 'GET', '/api/results');
-  check('TV board data source: coach can read all results',
-    r.status === 200 && Array.isArray(r.json.results) && r.json.results.length >= 1,
-    r.json && r.json.results && r.json.results.length);
-  r = await api(athlete, 'GET', '/api/results');
-  check('athlete is 403 on the results the TV board reads', r.status === 403, r.status);
-  r = await api(null, 'GET', '/api/results');
-  check('results without login is 401', r.status === 401, r.status);
+  check('TV board puts the warm-up inside each group page (live card, coach edits included)',
+    tvCode.includes('cloneNode') && tvCode.includes('tv-wu-slot') && tvCode.includes('tvCardIdForGroup'));
+  check('TV board renders the full session (spec grid and coaching cues)',
+    tvCode.includes('tvSessionHtml') && tvCode.includes('Coaching cues') &&
+    tvCode.includes('Total volume') && tvCode.includes('coaching_cues'));
+  check('TV board rest day shows the no-workout page with the next training day',
+    tvCode.includes('No workout today') && tvCode.includes('tvNextTrainingDay'));
+  const acc01 = (contentJson.sessions || []).find(s => s.id === 'ACC-01');
+  check('a known session carries the full detail the TV page renders',
+    !!acc01 && !!acc01.coaching_cues && !!acc01.reps && !!acc01.rest,
+    acc01 && acc01.id);
+  r = await api(coach, 'GET', '/api/coach/today');
+  check('TV board data source: coach reads today with its groups',
+    r.status === 200 && Array.isArray(r.json.groups), r.status);
+  r = await api(athlete, 'GET', '/api/coach/today');
+  check('athlete is 403 on the today data the TV board reads', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/coach/today');
+  check('today data without login is 401', r.status === 401, r.status);
 
   /* ---------------- reports, test-day grid, meet results ----------
      Fresh fixtures (own group + athletes) so every count is exact. */
@@ -1400,14 +1419,16 @@ async function waitForServer(tries = 60) {
         check('seeded list has no duplicates after restart',
           sr.status === 200 && (sr.json.invites || []).length === 1, sr.json && sr.json.invites);
         /* TV board empty state, data layer: on a fresh store the
-           board's sources are empty (leaderboard placeholder), while
-           the plan-based Today panel still resolves a season week. */
+           board's one source — coach today — has no groups yet,
+           while the plan-based day still resolves a season week,
+           so the board falls back to the plan workout page. The
+           tracker and results stores are likewise empty. */
         sr = await seedApi(seedOwner2, 'GET', '/api/weekly/dashboard');
-        check('fresh store: TV board weekly source is empty',
+        check('fresh store: weekly dashboard is empty',
           sr.status === 200 && Array.isArray(sr.json.topAthletes) && sr.json.topAthletes.length === 0 &&
           Object.keys(sr.json.entries || {}).length === 0, sr.json && sr.json.topAthletes);
         sr = await seedApi(seedOwner2, 'GET', '/api/results');
-        check('fresh store: TV board results source is empty',
+        check('fresh store: results are empty',
           sr.status === 200 && Array.isArray(sr.json.results) && sr.json.results.length === 0,
           sr.json && sr.json.results && sr.json.results.length);
         sr = await seedApi(seedOwner2, 'GET', '/api/coach/today');
