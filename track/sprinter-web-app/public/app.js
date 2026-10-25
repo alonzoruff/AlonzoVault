@@ -52,6 +52,12 @@ const state = {
   meetEvents: [],
   meetEditId: null,
   meetProgAthlete: null,
+  meetDayId: null,
+  meetDayEvent: null,
+  meetDayFlags: null,
+  recEvents: [],
+  recEvent: '100m',
+  recEditId: null,
   checkinToday: null,
   checkinMine: null,
   ciMsg: '',
@@ -213,14 +219,14 @@ function md(src) {
    listener below routes them all. */
 const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
-  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train',
+  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
   videos: 'learn', definitions: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', reports: 'coachhub', custom: 'coachhub', wellness: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', reports: 'coachhub', custom: 'coachhub', wellness: 'coachhub',
 };
 const GROUP_SUBNAV = {
-  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['reports', 'Reports'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['reports', 'Reports'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -242,6 +248,8 @@ function showView(name) {
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'reports') renderReports();
   if (name === 'meets') renderMeets();
+  if (name === 'meetday') renderMeetDay();
+  if (name === 'records') renderRecords();
   if (name === 'custom') renderCustomWorkouts();
   window.scrollTo(0, 0);
 }
@@ -897,7 +905,7 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
-  renderMeets(); renderReports(); renderWellness(); renderCustomWorkouts();
+  renderMeets(); renderMeetDay(); renderReports(); renderWellness(); renderCustomWorkouts();
   renderWarmupCards();
   if (isCoach) loadMedia();
 }
@@ -3336,6 +3344,368 @@ async function renderMeets() {
   };
   const mp = $('#mp-athlete');
   if (mp) { mp.addEventListener('change', renderProg); renderProg(); }
+}
+
+/* ================================================================
+   MEET DAY — one screen to run a meet: entries grouped by event,
+   a checklist the server computes from the data itself, and quick
+   results that write through the meet-results path and come back
+   with PR flags. Editing a mark later happens in Meet Results.
+   ================================================================ */
+async function renderMeetDay() {
+  const el = $('#meetday-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Meet day lives here.'); return; }
+  await refreshProfiles();
+  let meets, events;
+  try {
+    const [ms, ev] = await Promise.all([api('/api/meets'), api('/api/meet-events')]);
+    meets = ms.meets; events = ev.events;
+    state.meetEvents = events;
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  if (state.meetDayId && !meets.some(m => m.id === state.meetDayId)) {
+    state.meetDayId = null; state.meetDayFlags = null;
+  }
+  if (!state.meetDayId && meets.length) state.meetDayId = meets[0].id;
+  let detail = null;
+  if (state.meetDayId) {
+    try { detail = await api('/api/meets/' + encodeURIComponent(state.meetDayId)); }
+    catch (err) { state.meetDayId = null; detail = null; }
+  }
+  const markHint = (type) => type === 'time'
+    ? 'Time: seconds (10.87) or minutes:seconds (1:55.20).'
+    : 'Mark: feet-inches (21-06.5), 21\'6.5, a plain number in feet, or meters with an m (6.45m).';
+  let html = `
+    <form class="card" id="md-create-form">
+      <h2>New meet</h2>
+      <div class="filter-row">
+        <label>Meet name <input type="text" id="md-name" placeholder="e.g. WCAC Championships" required></label>
+        <label>Date <input type="date" id="md-date" value="${todayStr()}" required></label>
+        <label>Location <input type="text" id="md-location" placeholder="optional"></label>
+      </div>
+      <button class="btn primary" type="submit">Create meet</button>
+      <p class="error" id="md-create-err"></p>
+    </form>
+    <div class="card">
+      <h2>Meets</h2>
+      ${meets.length ? `<div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Meet</th><th>Date</th><th>Location</th><th>Entries</th><th>Results</th><th>PRs</th><th></th></tr></thead>
+        <tbody>${meets.map(m => `<tr${m.id === state.meetDayId ? ' class="selected"' : ''}><td><strong>${esc(m.name)}</strong></td><td>${esc(m.date)}</td><td>${esc(m.location || '')}</td><td>${m.summary.entries}</td><td>${m.summary.resultsEntered}</td><td>${m.summary.prs}</td>
+          <td><button class="btn secondary" data-md-open="${m.id}" type="button" style="width:auto;padding:2px 10px">Open</button></td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="muted">No meets yet — create the first one above.</p>'}
+    </div>`;
+  if (detail) {
+    const m = detail.meet;
+    const c = detail.checklist;
+    const s = detail.summary;
+    const enteredEvents = events.filter(ev => detail.entries.some(e => e.event === ev.key));
+    const qrEvent = enteredEvents.some(ev => ev.key === state.meetDayEvent)
+      ? state.meetDayEvent : (enteredEvents.length ? enteredEvents[0].key : null);
+    const qrEv = qrEvent ? events.find(ev => ev.key === qrEvent) : null;
+    const resultFor = (pid, evKey) => detail.results.find(r => r.profileId === pid && r.event === evKey) || null;
+    const flagBadge = (pid) => {
+      if (!state.meetDayFlags || state.meetDayFlags.event !== qrEvent) return '';
+      const st = state.meetDayFlags.byProfile[pid];
+      if (st === 'pr') return ' <span class="badge star">PR ★</span>';
+      if (st === 'first') return ' <span class="badge plain">First mark</span>';
+      return '';
+    };
+    html += `
+    <div class="card">
+      <h2>${esc(m.name)}</h2>
+      <p class="rc-line">${esc(m.date)}${m.location ? ' · ' + esc(m.location) : ''} — <strong>${s.resultsEntered}</strong> result${s.resultsEntered === 1 ? '' : 's'} in · <strong>${s.prs}</strong> PR${s.prs === 1 ? '' : 's'} · <strong>${s.entries}</strong> entr${s.entries === 1 ? 'y' : 'ies'}</p>
+      <label class="check-line"><input type="checkbox" disabled ${c.entriesAdded ? 'checked' : ''}> Entries added</label>
+      <label class="check-line"><input type="checkbox" disabled ${c.everyEventHasResult ? 'checked' : ''}> Every entered event has at least one result</label>
+      <label class="check-line"><input type="checkbox" disabled ${c.allResultsEntered ? 'checked' : ''}> All results entered</label>
+      <form id="md-edit-form">
+        <div class="filter-row">
+          <label>Name <input type="text" id="md-edit-name" value="${esc(m.name)}" required></label>
+          <label>Date <input type="date" id="md-edit-date" value="${esc(m.date)}" required></label>
+          <label>Location <input type="text" id="md-edit-location" value="${esc(m.location || '')}"></label>
+        </div>
+        <button class="btn secondary" type="submit">Save meet details</button>
+        <button class="btn danger" id="md-delete" type="button">Delete meet</button>
+        <p class="error" id="md-edit-err"></p>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Entries</h2>
+      <form id="md-entry-form">
+        <div class="filter-row">
+          <label>Athlete <select id="md-entry-athlete">${profileOptions(null, true)}</select></label>
+          <label>Event <select id="md-entry-event">${events.map(ev => `<option value="${ev.key}">${esc(ev.name)}</option>`).join('')}</select></label>
+        </div>
+        <button class="btn primary" type="submit">Add entry</button>
+        <p class="error" id="md-entry-err"></p>
+      </form>
+      ${enteredEvents.length ? enteredEvents.map(ev => `
+        <h3>${esc(ev.name)}</h3>
+        <div class="table-wrap"><table class="ranked"><tbody>
+          ${detail.entries.filter(e => e.event === ev.key).map(e => {
+            const r = resultFor(e.profileId, ev.key);
+            return `<tr><td>${esc(e.athleteName)}</td><td>${r ? '<strong>' + esc(r.mark) + '</strong>' : '<span class="muted">no result yet</span>'}</td>
+            <td><button class="btn danger" data-md-entry-del="${e.id}" type="button" style="width:auto;padding:2px 10px">Remove</button></td></tr>`;
+          }).join('')}
+        </tbody></table></div>`).join('')
+        : '<p class="muted">No entries yet — add who is racing, jumping, or throwing above.</p>'}
+    </div>
+    <div class="card">
+      <h2>Quick results</h2>
+      ${qrEv ? `
+      <div class="filter-row">
+        <label>Event <select id="md-qr-event">${enteredEvents.map(ev => `<option value="${ev.key}" ${ev.key === qrEvent ? 'selected' : ''}>${esc(ev.name)}</option>`).join('')}</select></label>
+      </div>
+      <p class="muted" id="md-qr-hint">${markHint(qrEv.type)}</p>
+      ${detail.entries.filter(e => e.event === qrEvent).map(e => {
+        const r = resultFor(e.profileId, qrEvent);
+        return `<div class="filter-row"><label>${esc(e.athleteName)}${flagBadge(e.profileId)} <input type="text" data-md-mark="${e.profileId}" value="${r ? esc(r.mark) : ''}" placeholder="mark"></label></div>`;
+      }).join('')}
+      <button class="btn primary" id="md-qr-save" type="button">Save results</button>
+      <p class="error" id="md-qr-err"></p>
+      <p class="muted">Saving a mark that is already in updates it in place. To change a mark after the day, or fix anything else, <button class="btn secondary" data-view="meets" type="button" style="width:auto;padding:2px 10px">open Meet Results</button>.</p>`
+      : '<p class="muted">Add entries first — quick results cover the athletes entered in each event.</p>'}
+    </div>`;
+  }
+  el.innerHTML = html;
+
+  $('#md-create-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const out = await apiPost('/api/meets', {
+        name: $('#md-name').value,
+        date: $('#md-date').value,
+        location: $('#md-location').value,
+      });
+      state.meetDayId = out.meet.id;
+      state.meetDayEvent = null;
+      state.meetDayFlags = null;
+      renderMeetDay();
+    } catch (err) { $('#md-create-err').textContent = err.message; }
+  });
+  el.querySelectorAll('[data-md-open]').forEach(b => b.addEventListener('click', () => {
+    state.meetDayId = b.dataset.mdOpen;
+    state.meetDayEvent = null;
+    state.meetDayFlags = null;
+    renderMeetDay();
+  }));
+  if (!detail) return;
+  $('#md-edit-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await apiPut('/api/meets/' + encodeURIComponent(state.meetDayId), {
+        name: $('#md-edit-name').value,
+        date: $('#md-edit-date').value,
+        location: $('#md-edit-location').value,
+      });
+      renderMeetDay();
+    } catch (err) { $('#md-edit-err').textContent = err.message; }
+  });
+  $('#md-delete').addEventListener('click', async () => {
+    if (!confirm('Delete this meet? Its entries go with it — results already recorded stay in Meet Results.')) return;
+    try {
+      await apiDel('/api/meets/' + encodeURIComponent(state.meetDayId));
+      state.meetDayId = null;
+      state.meetDayFlags = null;
+      renderMeetDay();
+    } catch (err) { alert(err.message); }
+  });
+  $('#md-entry-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost('/api/meets/' + encodeURIComponent(state.meetDayId) + '/entries', {
+        profileId: $('#md-entry-athlete').value,
+        event: $('#md-entry-event').value,
+      });
+      renderMeetDay();
+    } catch (err) { $('#md-entry-err').textContent = err.message; }
+  });
+  el.querySelectorAll('[data-md-entry-del]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await apiDel('/api/meets/' + encodeURIComponent(state.meetDayId) + '/entries/' + encodeURIComponent(b.dataset.mdEntryDel));
+      renderMeetDay();
+    } catch (err) { alert(err.message); }
+  }));
+  const qrSel = $('#md-qr-event');
+  if (qrSel) qrSel.addEventListener('change', () => {
+    state.meetDayEvent = qrSel.value;
+    state.meetDayFlags = null;
+    renderMeetDay();
+  });
+  const qrSave = $('#md-qr-save');
+  if (qrSave) qrSave.addEventListener('click', async () => {
+    const marks = [];
+    el.querySelectorAll('[data-md-mark]').forEach(inp => {
+      const mark = inp.value.trim();
+      if (mark) marks.push({ profileId: inp.dataset.mdMark, mark });
+    });
+    const errEl = $('#md-qr-err');
+    if (!marks.length) { errEl.textContent = 'Type at least one mark first.'; return; }
+    try {
+      const out = await apiPost('/api/meets/' + encodeURIComponent(state.meetDayId) + '/results', {
+        event: qrSel.value,
+        marks,
+      });
+      const byProfile = {};
+      for (const sv of out.saved) byProfile[sv.profileId] = sv.prStatus;
+      state.meetDayFlags = { event: qrSel.value, byProfile };
+      state.meetDayEvent = qrSel.value;
+      renderMeetDay();
+    } catch (err) { errEl.textContent = err.message; }
+  });
+}
+
+/* ================================================================
+   SCHOOL RECORDS — the all-time top 10 board. Everyone can read
+   it (it is program history, under Train); only coaches manage
+   it. The board itself comes from the public /api/records/board;
+   the manager below it (form, full list, and the roster-best
+   promotion helper) renders for coaches only.
+   ================================================================ */
+async function renderRecords() {
+  const main = $('#records-main');
+  const manage = $('#records-manage');
+  if (!main) return;
+  let events, board;
+  try {
+    const [e, b] = await Promise.all([api('/api/record-events'), api('/api/records/board')]);
+    events = e.events; board = b.board;
+    state.recEvents = events;
+  } catch (err) { main.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  if (!events.some(ev => ev.key === state.recEvent)) state.recEvent = events.length ? events[0].key : '100m';
+  const sel = board.find(b => b.event === state.recEvent);
+  const anyMarks = board.some(b => b.entries.length);
+  main.innerHTML = `
+    <div class="chip-row" role="group" aria-label="Pick an event">
+      ${events.map(ev => {
+        const n = (board.find(b => b.event === ev.key) || { entries: [] }).entries.length;
+        return `<button type="button" class="chip${ev.key === state.recEvent ? ' active' : ''}" data-rec-event="${ev.key}">${esc(ev.name)}${n ? ` (${n})` : ''}</button>`;
+      }).join('')}
+    </div>
+    <div class="card">
+      <h2>${esc(sel ? sel.name : '')} — Top 10</h2>
+      ${sel && sel.entries.length ? `<div class="table-wrap"><table class="ranked">
+        <thead><tr><th>#</th><th>Athlete</th><th>Mark</th><th>Year</th><th>Meet</th></tr></thead>
+        <tbody>${sel.entries.map(r => `<tr><td>${r.rank}</td><td><strong>${esc(r.name)}</strong></td><td><strong>${esc(r.mark)}</strong></td><td>${r.year ? esc(r.year) : '—'}</td><td>${esc(r.meet || '—')}</td></tr>`).join('')}</tbody></table></div>`
+        : `<p class="muted">No records yet${sel ? ' for the ' + esc(sel.name) : ''} — the board fills in as real marks are added.</p>`}
+      ${anyMarks ? '' : '<p class="muted">The board starts empty on purpose: every mark here is real St. John\'s history, added by a coach.</p>'}
+    </div>`;
+  main.querySelectorAll('[data-rec-event]').forEach(b => b.addEventListener('click', () => {
+    state.recEvent = b.dataset.recEvent;
+    renderRecords();
+  }));
+
+  if (!manage) return;
+  if (!isCoachUser()) { manage.innerHTML = ''; return; }
+  await refreshProfiles();
+  let records, rosterBest;
+  try {
+    const [r, rb] = await Promise.all([api('/api/records'), api('/api/records/roster-best')]);
+    records = r.records; rosterBest = rb.best;
+  } catch (err) { manage.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const edit = state.recEditId ? records.find(r => r.id === state.recEditId) : null;
+  if (state.recEditId && !edit) state.recEditId = null;
+  const markHint = (type) => type === 'time'
+    ? 'Time: seconds (10.87) or minutes:seconds (1:55.20).'
+    : 'Mark: feet-inches (21-06.5), 21\'6.5, a plain number in feet, or meters with an m (6.45m).';
+  const editEvent = edit ? events.find(e2 => e2.key === edit.event) : null;
+  const promoRows = rosterBest.filter(rb => rb.best);
+  manage.innerHTML = `
+    <div class="card">
+      <h2>From today's roster</h2>
+      <p class="muted">The best meet mark the current roster owns in each event, and where it would land on the board. Adding is always your tap — nothing is promoted automatically.</p>
+      ${promoRows.length ? `<div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Event</th><th>Roster best</th><th>Mark</th><th>On the board</th><th></th></tr></thead>
+        <tbody>${promoRows.map(rb => {
+          const already = records.some(r => r.event === rb.event && r.profileId === rb.best.profileId && r.value === rb.best.value);
+          return `<tr><td>${esc(rb.name)}</td><td>${esc(rb.best.athleteName)}</td><td><strong>${esc(rb.best.mark)}</strong></td>
+          <td>${rb.makesBoard ? 'Would rank #' + rb.rank : 'Outside the top 10'}</td>
+          <td>${already ? '<span class="muted">On the board ✓</span>' : `<button class="btn secondary" data-rec-promote="${rb.event}" type="button" style="width:auto;padding:2px 10px">Add to board</button>`}</td></tr>`;
+        }).join('')}</tbody></table></div>`
+        : '<p class="muted">No meet results yet — roster bests appear here as results are entered.</p>'}
+    </div>
+    <form class="card" id="record-form">
+      <h2>${edit ? 'Edit record' : 'Add a record'}</h2>
+      <div class="filter-row">
+        <label>Event <select id="rf-event">${events.map(ev => `<option value="${ev.key}" ${edit && edit.event === ev.key ? 'selected' : ''}>${esc(ev.name)}${ev.relay ? ' (relay)' : ''}</option>`).join('')}</select></label>
+        <label>Name <input type="text" id="rf-name" placeholder="Who set it — or the relay team" value="${edit ? esc(edit.name) : ''}" required></label>
+      </div>
+      <div class="filter-row">
+        <label>Mark <input type="text" id="rf-mark" placeholder="10.87 · 43.50 · 21-06.5" value="${edit ? esc(edit.mark) : ''}" required></label>
+        <label>Year <input type="number" id="rf-year" min="1950" max="2100" placeholder="optional" value="${edit && edit.year ? edit.year : ''}"></label>
+      </div>
+      <div class="filter-row">
+        <label>Meet <input type="text" id="rf-meet" placeholder="optional" value="${edit ? esc(edit.meet || '') : ''}"></label>
+        <label>Date <input type="date" id="rf-date" value="${edit ? esc(edit.date || '') : ''}"></label>
+      </div>
+      <label>Current athlete (optional — links this record to a roster profile)
+        <select id="rf-profile">${profileOptions(edit ? edit.profileId : null, true)}</select></label>
+      <p class="muted" id="rf-hint">${markHint(editEvent ? editEvent.type : 'time')}</p>
+      <button class="btn primary" type="submit">${edit ? 'Save changes' : 'Add record'}</button>
+      ${edit ? '<button class="btn secondary" id="rf-cancel" type="button">Cancel edit</button>' : ''}
+      <p class="error" id="rf-err"></p>
+    </form>
+    <div class="card">
+      <h2>All records (${records.length})</h2>
+      ${records.length ? events.map(ev => {
+        const rows = records.filter(r => r.event === ev.key);
+        if (!rows.length) return '';
+        const ranked = rows.slice().sort((a, b) => (ev.type === 'time' ? a.value - b.value : b.value - a.value));
+        return `<h3>${esc(ev.name)}</h3><div class="table-wrap"><table class="ranked">
+          <thead><tr><th>#</th><th>Athlete</th><th>Mark</th><th>Year</th><th>Meet</th><th></th></tr></thead>
+          <tbody>${ranked.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td><strong>${esc(r.mark)}</strong></td><td>${r.year ? esc(r.year) : '—'}</td><td>${esc(r.meet || '—')}</td>
+            <td><button class="btn secondary" data-rec-edit="${r.id}" type="button" style="width:auto;padding:2px 10px">Edit</button>
+            <button class="btn danger" data-rec-del="${r.id}" type="button" style="width:auto;padding:2px 10px">Delete</button></td></tr>`).join('')}</tbody></table></div>`;
+      }).join('')
+        : '<p class="muted">No records on the board yet.</p>'}
+    </div>`;
+  const evSel = $('#rf-event');
+  if (evSel) evSel.addEventListener('change', () => {
+    const ev = state.recEvents.find(e2 => e2.key === evSel.value);
+    $('#rf-hint').textContent = markHint(ev ? ev.type : 'time');
+  });
+  $('#record-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const yearRaw = $('#rf-year').value;
+    const body = {
+      event: $('#rf-event').value,
+      name: $('#rf-name').value,
+      mark: $('#rf-mark').value,
+      year: yearRaw === '' ? null : Number(yearRaw),
+      meet: $('#rf-meet').value,
+      date: $('#rf-date').value || null,
+      profileId: $('#rf-profile').value || null,
+    };
+    try {
+      if (state.recEditId) await apiPut('/api/records/' + encodeURIComponent(state.recEditId), body);
+      else await apiPost('/api/records', body);
+      state.recEditId = null;
+      renderRecords();
+    } catch (err) { $('#rf-err').textContent = err.message; }
+  });
+  const cancel = $('#rf-cancel');
+  if (cancel) cancel.addEventListener('click', () => { state.recEditId = null; renderRecords(); });
+  manage.querySelectorAll('[data-rec-edit]').forEach(b => b.addEventListener('click', () => {
+    state.recEditId = b.dataset.recEdit;
+    renderRecords();
+    window.scrollTo(0, 0);
+  }));
+  manage.querySelectorAll('[data-rec-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Delete this record?')) return;
+    try { await apiDel('/api/records/' + encodeURIComponent(b.dataset.recDel)); renderRecords(); }
+    catch (err) { alert(err.message); }
+  }));
+  manage.querySelectorAll('[data-rec-promote]').forEach(b => b.addEventListener('click', async () => {
+    const rb = rosterBest.find(x => x.event === b.dataset.recPromote);
+    if (!rb || !rb.best) return;
+    try {
+      await apiPost('/api/records', {
+        event: rb.event, mark: rb.best.mark, name: rb.best.athleteName,
+        profileId: rb.best.profileId, meet: rb.best.meet, date: rb.best.date || null,
+        year: rb.best.date ? Number(rb.best.date.slice(0, 4)) : null,
+      });
+      renderRecords();
+    } catch (err) { alert(err.message); }
+  }));
 }
 
 /* ================================================================

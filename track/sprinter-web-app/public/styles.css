@@ -1507,6 +1507,7 @@ table.matrix th, table.matrix td, table.ranked th, table.ranked td {
   border: 1px solid var(--line); padding: 6px 8px; text-align: left; white-space: nowrap;
 }
 table.matrix thead th, table.ranked thead th { background: #f4f4f6; }
+table.ranked tr.selected td { background: #fdf0f3; }
 table.matrix td:not(:first-child) { text-align: center; }
 .test-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; margin: 8px 0; }
 .rapid-test { border-top: 1px solid var(--line); padding: 10px 0; }

@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v16',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v17"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v18',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v19"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1225,8 +1225,8 @@ async function main() {
 
   /* ---- meet results ---- */
   r = await api(coach, 'GET', '/api/meet-events');
-  check('meet events list has 17 events with directions',
-    r.status === 200 && r.json.events.length === 17 &&
+  check('meet events list has 19 events with directions',
+    r.status === 200 && r.json.events.length === 19 &&
     r.json.events.find(e => e.key === '100m').better === 'lower' &&
     r.json.events.find(e => e.key === 'long-jump').better === 'higher', r.json.events.length);
   r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2026-12-05', meet: 'Winter Invite', event: '100m', mark: '11.20' });
@@ -1301,6 +1301,307 @@ async function main() {
     appJs.text.includes('renderReports') && appJs.text.includes('renderMeets') &&
     appJs.text.includes('/api/results/bulk') && appJs.text.includes('/api/reports/athlete/') &&
     appJs.text.includes('/api/meet-results'));
+
+  /* ---- school record board (top 10) ---- */
+  r = await api(null, 'GET', '/api/record-events');
+  check('record events are public: 23 events (19 meet + 4 relays)',
+    r.status === 200 && r.json.events.length === 23 &&
+    r.json.events.find(e => e.key === '1600m') && r.json.events.find(e => e.key === '3200m') &&
+    r.json.events.filter(e => e.relay).map(e => e.key).join(',') === '4x100m,4x200m,4x400m,4x800m',
+    r.json.events && r.json.events.length);
+  r = await api(coach, 'GET', '/api/meet-events');
+  check('meet events include 1600m/3200m but never the relays',
+    r.status === 200 && r.json.events.some(e => e.key === '1600m') &&
+    r.json.events.some(e => e.key === '3200m') &&
+    !r.json.events.some(e => e.key.startsWith('4x')), r.json.events.length);
+  r = await api(coach, 'POST', '/api/meet-results', { profileId: amyR, date: '2027-01-09', meet: 'X', event: '4x100m', mark: '43.50' });
+  check('a relay can never be entered as an individual meet result', r.status === 400, r.status);
+  r = await api(null, 'GET', '/api/records/board');
+  check('record board is public and starts empty',
+    r.status === 200 && r.json.board.length === 23 &&
+    r.json.board.every(b => Array.isArray(b.entries) && b.entries.length === 0), r.json.board && r.json.board.length);
+  r = await api(null, 'GET', '/api/records');
+  check('records list is a public read, empty at first', r.status === 200 && r.json.records.length === 0, r.status);
+
+  /* Promotion source, before any records exist: Amy owns the 100m
+     roster best (11.05 from the meet section), Ben the long jump. */
+  r = await api(coach, 'GET', '/api/records/roster-best');
+  const rb100 = r.json.best.find(b => b.event === '100m');
+  const rbLj = r.json.best.find(b => b.event === 'long-jump');
+  const rbRelay = r.json.best.find(b => b.event === '4x100m');
+  check('roster best for the 100m is Amy at 11.05, would rank #1 on an empty board',
+    !!rb100 && rb100.best && rb100.best.profileId === amyR && rb100.best.value === 11.05 &&
+    rb100.rank === 1 && rb100.makesBoard === true, rb100);
+  check('roster best for the long jump is Ben at 22-01',
+    !!rbLj && rbLj.best && rbLj.best.profileId === benR && rbLj.best.mark === '22-01', rbLj);
+  check('relays have no roster-best source', !!rbRelay && rbRelay.best === null && rbRelay.rank === null, rbRelay);
+  r = await api(athlete, 'GET', '/api/records/roster-best');
+  check('athlete is 403 on the roster-best helper', r.status === 403, r.status);
+
+  /* The one-tap promotion, exactly as the client sends it. */
+  r = await api(coach, 'POST', '/api/records', {
+    event: '100m', mark: '11.05', name: 'Amy Report', profileId: amyR,
+    meet: 'Holiday Classic', date: '2026-12-12', year: 2026,
+  });
+  check('promotion creates a record prefilled from the meet result',
+    r.status === 201 && r.json.record.profileId === amyR && r.json.record.value === 11.05 &&
+    r.json.record.meet === 'Holiday Classic' && r.json.record.year === 2026 &&
+    r.json.record.eventName === '100m', r.json);
+  r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '10.95', name: 'Old Timer', year: 1998 });
+  check('record with a faster historic time is 201', r.status === 201 && r.json.record.value === 10.95, r.json);
+  r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '11.50', name: 'Slow Sam' });
+  const samRec = r.json.record.id;
+  r = await api(null, 'GET', '/api/records/board');
+  const recBoard100 = r.json.board.find(b => b.event === '100m');
+  check('time records rank fastest first with ranks 1-2-3',
+    !!recBoard100 && recBoard100.entries.map(e => e.mark).join(',') === '10.95,11.05,11.50' &&
+    recBoard100.entries.map(e => e.rank).join(',') === '1,2,3', recBoard100 && recBoard100.entries);
+  r = await api(coach, 'GET', '/api/records/roster-best');
+  check('after promotion + a faster historic mark, Amy would rank #2',
+    r.json.best.find(b => b.event === '100m').rank === 2, r.json.best.find(b => b.event === '100m'));
+
+  /* Field direction: longer beats shorter. */
+  await api(coach, 'POST', '/api/records', { event: 'long-jump', mark: '20-00', name: 'Shorter Sal' });
+  await api(coach, 'POST', '/api/records', { event: 'long-jump', mark: '21-06.5', name: 'Historic Hank', year: 2005 });
+  r = await api(null, 'GET', '/api/records/board');
+  const recBoardLj = r.json.board.find(b => b.event === 'long-jump');
+  check('field records rank longest first',
+    !!recBoardLj && recBoardLj.entries.map(e => e.mark).join(',') === '21-06.5,20-00', recBoardLj && recBoardLj.entries);
+
+  /* Relay records live on the board (team marks, no profile). */
+  r = await api(coach, 'POST', '/api/records', { event: '4x100m', mark: '43.50', name: 'Cadets 2019', year: 2019, meet: 'WCAC Championships' });
+  check('relay record is 201 with normalized seconds', r.status === 201 && r.json.record.value === 43.5, r.json);
+  r = await api(null, 'GET', '/api/records/board');
+  const recBoardRelay = r.json.board.find(b => b.event === '4x100m');
+  check('relay record shows on the board', !!recBoardRelay && recBoardRelay.entries.length === 1 && recBoardRelay.entries[0].name === 'Cadets 2019', recBoardRelay);
+
+  /* Validation: the shared parser guards every write. */
+  r = await api(coach, 'POST', '/api/records', { event: '100m', mark: 'fast', name: 'X' });
+  check('record with an unparseable time is a clean 400', r.status === 400 && /could not be read/.test(r.json.error || ''), r.json);
+  r = await api(coach, 'POST', '/api/records', { event: 'long-jump', mark: '21-13', name: 'X' });
+  check('record with impossible feet-inches (21-13) is a clean 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/records', { event: 'marathon', mark: '2:00:00', name: 'X' });
+  check('record with an unknown event is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '11.00', name: '' });
+  check('record without a name is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '11.00', name: 'X', year: 1800 });
+  check('record with a year before 1950 is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '11.00', name: 'X', profileId: 'nope' });
+  check('record with an unknown profile is 404', r.status === 404, r.status);
+  r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '11.00', name: 'X', date: '2026-02-30' });
+  check('record with Feb 30 is 400', r.status === 400, r.status);
+
+  /* Top-10 cut: eleven 200m marks, the slowest never shows. */
+  for (let i = 0; i <= 10; i++) {
+    await api(coach, 'POST', '/api/records', { event: '200m', mark: (21 + i * 0.1).toFixed(2), name: 'Two ' + i });
+  }
+  r = await api(null, 'GET', '/api/records/board');
+  const recBoard200 = r.json.board.find(b => b.event === '200m');
+  check('board caps an event at the top 10 and drops the 11th best',
+    !!recBoard200 && recBoard200.entries.length === 10 &&
+    recBoard200.entries[0].value === 21 && recBoard200.entries[9].value === 21.9 &&
+    !recBoard200.entries.some(e => e.name === 'Two 10'), recBoard200 && recBoard200.entries.map(e => e.mark));
+
+  /* Edit + delete, with the same validate-first discipline. */
+  r = await api(coach, 'PUT', '/api/records/' + samRec, { mark: '11.30' });
+  check('record edit re-normalizes the mark', r.status === 200 && r.json.record.value === 11.3, r.json);
+  r = await api(null, 'GET', '/api/records/board');
+  check('edited record re-ranks between its neighbours',
+    r.json.board.find(b => b.event === '100m').entries.map(e => e.mark).join(',') === '10.95,11.05,11.30',
+    r.json.board.find(b => b.event === '100m').entries);
+  r = await api(coach, 'PUT', '/api/records/' + samRec, { mark: 'bogus' });
+  check('record edit with an unparseable mark is 400', r.status === 400, r.status);
+  r = await api(null, 'GET', '/api/records/board');
+  check('failed record edit changed nothing',
+    r.json.board.find(b => b.event === '100m').entries.map(e => e.mark).join(',') === '10.95,11.05,11.30');
+  r = await api(coach, 'DELETE', '/api/records/' + samRec);
+  check('record delete is 200', r.status === 200, r.status);
+  r = await api(coach, 'DELETE', '/api/records/' + samRec);
+  check('record delete twice is 404', r.status === 404, r.status);
+
+  /* Gates: writes are coach-only; reads are for everyone. */
+  r = await api(athlete, 'POST', '/api/records', { event: '100m', mark: '11.00', name: 'X' });
+  check('athlete is 403 creating a record', r.status === 403, r.status);
+  r = await api(athlete, 'PUT', '/api/records/' + samRec, { mark: '11.00' });
+  check('athlete is 403 editing a record', r.status === 403, r.status);
+  r = await api(athlete, 'DELETE', '/api/records/' + samRec);
+  check('athlete is 403 deleting a record', r.status === 403, r.status);
+  r = await api(athlete, 'GET', '/api/records/board');
+  check('athlete can read the record board', r.status === 200, r.status);
+  r = await api(null, 'POST', '/api/records', { event: '100m', mark: '11.00', name: 'X' });
+  check('record create without login is 401', r.status === 401, r.status);
+  check('records view is in the served page',
+    pageHtml.text.includes('id="view-records"') && pageHtml.text.includes('data-view="records"'));
+  check('records wiring is in the served JS',
+    appJs.text.includes('renderRecords') && appJs.text.includes('/api/records'));
+
+  /* ---- meet day hub ---- */
+  r = await api(coach, 'GET', '/api/meets');
+  check('meets list starts empty', r.status === 200 && r.json.meets.length === 0, r.json);
+  r = await api(coach, 'POST', '/api/meets', { name: '', date: '2027-01-16' });
+  check('meet without a name is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/meets', { name: 'X', date: '2026-02-30' });
+  check('meet with Feb 30 is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/meets', { name: 'Winter Classic', date: '2027-01-16', location: 'Home Track' });
+  check('meet create is 201 with its fields',
+    r.status === 201 && r.json.meet.name === 'Winter Classic' &&
+    r.json.meet.date === '2027-01-16' && r.json.meet.location === 'Home Track', r.json);
+  const meet1 = r.json.meet.id;
+  r = await api(coach, 'POST', '/api/meets', { name: 'Early Bird Open', date: '2027-01-23' });
+  check('meet without a location is fine', r.status === 201 && r.json.meet.location === '', r.json);
+  const meet2 = r.json.meet.id;
+  r = await api(coach, 'PUT', '/api/meets/' + meet2, { location: 'Away Stadium' });
+  check('meet edit updates the location', r.status === 200 && r.json.meet.location === 'Away Stadium', r.json);
+  r = await api(coach, 'PUT', '/api/meets/' + meet2, { date: '2027-13-01' });
+  check('meet edit with a bad date is 400 and changes nothing', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/meets/nope', { name: 'Ghost' });
+  check('editing a missing meet is 404', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/meets/' + meet1);
+  check('fresh meet detail is empty with an untouched checklist',
+    r.status === 200 && r.json.entries.length === 0 && r.json.results.length === 0 &&
+    r.json.checklist.entriesAdded === false && r.json.checklist.everyEventHasResult === false &&
+    r.json.checklist.allResultsEntered === false &&
+    r.json.summary.entries === 0 && r.json.summary.resultsEntered === 0 && r.json.summary.prs === 0, r.json);
+  r = await api(coach, 'GET', '/api/meets/nope');
+  check('missing meet detail is 404', r.status === 404, r.status);
+
+  /* Entries */
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/entries', { profileId: amyR, event: '200m' });
+  check('entry add is 201 with names resolved',
+    r.status === 201 && r.json.entry.event === '200m' && r.json.entry.eventName === '200m' &&
+    r.json.entry.athleteName === 'Amy Report', r.json);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/entries', { profileId: amyR, event: '200m' });
+  check('duplicate entry (same athlete + event + meet) is a clear 400',
+    r.status === 400 && /already entered/.test(r.json.error || ''), r.json);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/entries', { profileId: benR, event: '200m' });
+  check('second athlete enters the same event fine', r.status === 201, r.status);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/entries', { profileId: amyR, event: 'shot-put' });
+  check('same athlete can enter a second event', r.status === 201, r.status);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/entries', { profileId: amyR, event: 'marathon' });
+  check('entry with an unknown event is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/entries', { profileId: 'nope', event: '200m' });
+  check('entry for an unknown athlete is 404', r.status === 404, r.status);
+  r = await api(coach, 'POST', '/api/meets/nope/entries', { profileId: amyR, event: '200m' });
+  check('entry on a missing meet is 404', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/meets/' + meet1);
+  check('checklist after entries: first box only',
+    r.json.checklist.entriesAdded === true &&
+    r.json.checklist.everyEventHasResult === false &&
+    r.json.checklist.allResultsEntered === false && r.json.summary.entries === 3, r.json.checklist);
+
+  /* Quick results: validation rejects the whole batch */
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/results',
+    { event: 'shot-put', marks: [{ profileId: benR, mark: '30-00' }] });
+  check('a mark for an athlete not entered in the event is 400',
+    r.status === 400 && /not entered/.test(r.json.error || ''), r.json);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/results',
+    { event: '200m', marks: [{ profileId: amyR, mark: 'fast' }] });
+  check('an unparseable quick mark is a clean 400', r.status === 400 && /could not be read/.test(r.json.error || ''), r.json);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/results', { event: '200m', marks: [] });
+  check('an empty quick-results batch is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/meets/' + meet1);
+  check('the rejected batches wrote nothing', r.json.results.length === 0 && r.json.summary.resultsEntered === 0, r.json.summary);
+
+  /* Quick results land in meet results, flagged */
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/results',
+    { event: '200m', marks: [{ profileId: amyR, mark: '24.10' }, { profileId: benR, mark: '24.50' }] });
+  const save1 = Object.fromEntries((r.json.saved || []).map(s => [s.profileId, s]));
+  check('first-ever marks flag as "first" for both athletes',
+    r.status === 200 && save1[amyR] && save1[amyR].prStatus === 'first' &&
+    save1[benR] && save1[benR].prStatus === 'first', r.json);
+  check('quick save reports the running summary',
+    r.json.summary.resultsEntered === 2 && r.json.checklist.everyEventHasResult === false, r.json);
+  r = await api(coach, 'GET', '/api/meet-results?event=200m');
+  check('quick results are visible through the meet-results endpoints',
+    r.status === 200 && r.json.results.length === 2 &&
+    r.json.results.every(x => x.meet === 'Winter Classic' && x.date === '2027-01-16'), r.json.results);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/results',
+    { event: 'shot-put', marks: [{ profileId: amyR, mark: '30-06' }] });
+  check('a first field mark flags as "first" (field direction)',
+    r.status === 200 && r.json.saved[0].prStatus === 'first', r.json);
+  r = await api(coach, 'GET', '/api/meets/' + meet1);
+  check('checklist completes once every entry has a result; all three marks stand as PRs',
+    r.json.checklist.everyEventHasResult === true && r.json.checklist.allResultsEntered === true &&
+    r.json.summary.entries === 3 && r.json.summary.resultsEntered === 3 && r.json.summary.prs === 3, r.json);
+
+  /* Ben picks up a shot-put mark at the first meet too — his
+     previous best for the second-meet flag checks below. */
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/entries', { profileId: benR, event: 'shot-put' });
+  check('Ben enters the shot at the first meet', r.status === 201, r.status);
+  r = await api(coach, 'POST', '/api/meets/' + meet1 + '/results',
+    { event: 'shot-put', marks: [{ profileId: benR, mark: '27-00' }] });
+  check('Ben\'s first-ever shot mark flags "first"',
+    r.status === 200 && r.json.saved[0].prStatus === 'first', r.json);
+
+  /* A second meet: slower is null, a corrected mark updates in place, faster is a PR */
+  await api(coach, 'POST', '/api/meets/' + meet2 + '/entries', { profileId: amyR, event: '200m' });
+  await api(coach, 'POST', '/api/meets/' + meet2 + '/entries', { profileId: benR, event: 'shot-put' });
+  await api(coach, 'POST', '/api/meets/' + meet2 + '/entries', { profileId: amyR, event: 'shot-put' });
+  r = await api(coach, 'POST', '/api/meets/' + meet2 + '/results',
+    { event: '200m', marks: [{ profileId: amyR, mark: '24.30' }] });
+  check('a slower second mark flags null (not a PR)',
+    r.status === 200 && r.json.saved[0].prStatus === null, r.json);
+  r = await api(coach, 'POST', '/api/meets/' + meet2 + '/results',
+    { event: 'shot-put', marks: [{ profileId: benR, mark: '28-00' }, { profileId: amyR, mark: '29-00' }] });
+  const save2 = Object.fromEntries((r.json.saved || []).map(s => [s.profileId, s]));
+  check('field flags: Ben\'s longer throw flags "pr", Amy\'s shorter throw flags null',
+    save2[benR] && save2[benR].prStatus === 'pr' &&
+    save2[amyR] && save2[amyR].prStatus === null, r.json);
+  r = await api(coach, 'POST', '/api/meets/' + meet2 + '/results',
+    { event: '200m', marks: [{ profileId: amyR, mark: '23.90' }] });
+  check('re-saving a faster mark at the same meet flags "pr"',
+    r.status === 200 && r.json.saved[0].prStatus === 'pr', r.json);
+  r = await api(coach, 'GET', '/api/meet-results?profileId=' + amyR + '&event=200m');
+  const amyM2 = r.json.results.filter(x => x.meet === 'Early Bird Open');
+  check('the re-save updated in place — one result for the meet, at the new mark',
+    amyM2.length === 1 && amyM2[0].mark === '23.90', amyM2);
+  r = await api(coach, 'POST', '/api/meets/' + meet2 + '/results',
+    { event: 'shot-put', marks: [{ profileId: benR, mark: '31-00' }] });
+  check('a longer throw re-saved at the same meet flags "pr" (field direction)',
+    r.status === 200 && r.json.saved[0].prStatus === 'pr', r.json);
+
+  /* Entry removal */
+  r = await api(coach, 'POST', '/api/meets/' + meet2 + '/entries', { profileId: caraR, event: '100m' });
+  const caraEntry = r.json.entry.id;
+  check('entry add for a third athlete is 201', r.status === 201, r.status);
+  r = await api(coach, 'DELETE', '/api/meets/' + meet2 + '/entries/' + caraEntry);
+  check('entry remove is 200', r.status === 200, r.status);
+  r = await api(coach, 'DELETE', '/api/meets/' + meet2 + '/entries/' + caraEntry);
+  check('entry remove twice is 404', r.status === 404, r.status);
+
+  /* Deleting a meet removes the plan, never the record */
+  r = await api(coach, 'POST', '/api/meets', { name: 'Throwaway Invite', date: '2027-01-30' });
+  const meet3 = r.json.meet.id;
+  await api(coach, 'POST', '/api/meets/' + meet3 + '/entries', { profileId: amyR, event: '400m' });
+  r = await api(coach, 'POST', '/api/meets/' + meet3 + '/results',
+    { event: '400m', marks: [{ profileId: amyR, mark: '58.00' }] });
+  check('throwaway meet takes a result', r.status === 200 && r.json.saved[0].prStatus === 'first', r.json);
+  r = await api(coach, 'DELETE', '/api/meets/' + meet3);
+  check('meet delete is 200', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/meets/' + meet3);
+  check('the deleted meet and its entries are gone', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/meet-results?event=400m');
+  check('its recorded result still stands in Meet Results under the meet name',
+    r.status === 200 && r.json.results.length === 1 &&
+    r.json.results[0].meet === 'Throwaway Invite' && r.json.results[0].mark === '58.00', r.json.results);
+
+  /* Gates */
+  r = await api(athlete, 'GET', '/api/meets');
+  check('athlete is 403 on the meets list', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/meets', { name: 'Nope', date: '2027-02-01' });
+  check('athlete is 403 creating a meet', r.status === 403, r.status);
+  r = await api(athlete, 'GET', '/api/meets/' + meet1);
+  check('athlete is 403 on meet detail', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/meets/' + meet1 + '/entries', { profileId: amyR, event: '100m' });
+  check('athlete is 403 adding an entry', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/meets/' + meet1 + '/results', { event: '200m', marks: [{ profileId: amyR, mark: '24.00' }] });
+  check('athlete is 403 on quick results', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/meets');
+  check('meets list without login is 401', r.status === 401, r.status);
+  check('meet day view is in the served page',
+    pageHtml.text.includes('id="view-meetday"') && pageHtml.text.includes('data-view="meetday"'));
+  check('meet day wiring is in the served JS',
+    appJs.text.includes('renderMeetDay') && appJs.text.includes('/api/meets'));
 
   /* ---------------- custom workouts + runner mode ---------------- */
   r = await api(coach, 'GET', '/api/custom-workouts');

@@ -81,6 +81,9 @@ let db = {
   inventory: [],
   warmupCardEdits: {},
   meetResults: [],
+  meets: [],
+  meetEntries: [],
+  schoolRecords: [],
   coachInvites: [],
   coachInvitesSeeded: [],
   athleteLinks: {},
@@ -113,6 +116,18 @@ function migrate() {
   // is the normalized number (seconds for times, inches for field
   // marks) that PR comparisons run on.
   db.meetResults = Array.isArray(db.meetResults) ? db.meetResults : [];
+  // Meet Day hub: meets a coach is running ({ id, name, date,
+  // location, createdAt }) and who is entered where ({ id, meetId,
+  // profileId, event }). Entries are the plan for the day; results
+  // live in db.meetResults as always, keyed by the meet's name + date.
+  db.meets = Array.isArray(db.meets) ? db.meets : [];
+  db.meetEntries = Array.isArray(db.meetEntries) ? db.meetEntries : [];
+  // School record board: one flat list of { id, event, mark, value,
+  // name, profileId, year, meet, date, createdAt } — the all-time
+  // top 10 per event. name is free text (most record holders are not
+  // on the current roster); profileId links a current athlete when
+  // the mark is theirs. Starts empty — real SJC history only.
+  db.schoolRecords = Array.isArray(db.schoolRecords) ? db.schoolRecords : [];
   // Coach-built custom workouts for runner mode: a flat list of
   // { id, title, blocks: [{ rounds, restBetweenRounds, restAfterBlock,
   // exercises: [{ name, reps }] }], createdAt, updatedAt }. The seeded
@@ -471,6 +486,8 @@ const MEET_EVENTS = [
   { key: '300m', name: '300m', type: 'time' },
   { key: '400m', name: '400m', type: 'time' },
   { key: '800m', name: '800m', type: 'time' },
+  { key: '1600m', name: '1600m', type: 'time' },
+  { key: '3200m', name: '3200m', type: 'time' },
   { key: '55m-hurdles', name: '55m Hurdles', type: 'time' },
   { key: '110m-hurdles', name: '110m Hurdles', type: 'time' },
   { key: '300m-hurdles', name: '300m Hurdles', type: 'time' },
@@ -585,6 +602,183 @@ function meetSeriesFor(profileId) {
     }
   }
   return out;
+}
+/* Validate one meet-result input in the order POST /api/meet-results
+   always has (profile → date → meet name → event → parseable mark).
+   Returns the normalized pieces, or { status, error }. This is the
+   ONLY validation for meet marks — the Meet Day hub runs its quick
+   results through it too, so a mark means the same thing wherever it
+   was typed. */
+function validateMeetResultInput(input) {
+  const prof = profileById(clean(input.profileId, 80));
+  if (!prof) return { status: 404, error: 'Profile not found.' };
+  const date = clean(input.date, 10);
+  if (!parseDateStr(date)) return { status: 400, error: 'Date must be YYYY-MM-DD.' };
+  const meet = clean(input.meet, 80);
+  if (!meet) return { status: 400, error: 'Name the meet.' };
+  const ev = findMeetEvent(clean(input.event, 30));
+  if (!ev) return { status: 400, error: 'Unknown event.' };
+  const rawMark = typeof input.mark === 'string' ? input.mark.trim().slice(0, 20) : '';
+  const parsed = parseMeetMark(ev, rawMark);
+  if (parsed.error) return { status: 400, error: parsed.error };
+  return { prof, date, meet, ev, rawMark, value: parsed.value };
+}
+/* Insert one already-validated meet result and return the record.
+   The single write path behind both POST /api/meet-results and the
+   Meet Day hub's quick results. Callers saveDb(). */
+function insertMeetResult(v, notes, enteredBy) {
+  const now = new Date().toISOString();
+  const r = {
+    id: crypto.randomUUID(), profileId: v.prof.id, date: v.date, meet: v.meet,
+    event: v.ev.key, mark: v.rawMark, value: v.value,
+    notes: clean(notes, 500), enteredBy: enteredBy || null,
+    createdAt: now, updatedAt: now,
+  };
+  db.meetResults.push(r);
+  return r;
+}
+
+/* ------------------------------------------------------------------ */
+/* Meet Day hub: meets, entries, checklist                           */
+/* ------------------------------------------------------------------ */
+function meetById(id) { return db.meets.find(m => m.id === id) || null; }
+function publicMeet(m) {
+  return { id: m.id, name: m.name, date: m.date, location: m.location || '', createdAt: m.createdAt };
+}
+function publicMeetEntry(e) {
+  const pr = profileById(e.profileId);
+  const ev = findMeetEvent(e.event);
+  return {
+    id: e.id, meetId: e.meetId, profileId: e.profileId,
+    athleteName: pr ? pr.firstName + ' ' + pr.lastName : '',
+    event: e.event, eventName: ev ? ev.name : e.event,
+  };
+}
+function meetEntriesFor(meetId) { return db.meetEntries.filter(e => e.meetId === meetId); }
+/* A meet's results: meet results carry the meet's NAME and DATE as
+   plain text (that is the meet-results model), so a meet's results
+   are the records whose meet + date match its own. */
+function meetResultsFor(meet) {
+  return db.meetResults.filter(r => r.meet === meet.name && r.date === meet.date);
+}
+/* The meet-day checklist is read off the data, never stored as
+   toggles: entries added → every entered event has at least one
+   result → every entry has its result. */
+function meetChecklist(meet) {
+  const entries = meetEntriesFor(meet.id);
+  const results = meetResultsFor(meet);
+  const enteredEvents = [...new Set(entries.map(e => e.event))];
+  const eventsWithResults = enteredEvents.filter(k => results.some(r => r.event === k));
+  const entriesWithResults = entries.filter(e =>
+    results.some(r => r.profileId === e.profileId && r.event === e.event));
+  return {
+    entriesAdded: entries.length > 0,
+    everyEventHasResult: entries.length > 0 && eventsWithResults.length === enteredEvents.length,
+    allResultsEntered: entries.length > 0 && entriesWithResults.length === entries.length,
+  };
+}
+function meetSummary(meet) {
+  const entries = meetEntriesFor(meet.id);
+  const results = meetResultsFor(meet);
+  // PR count: marks from this meet that still stand as the athlete's
+  // PR in that event.
+  let prs = 0;
+  for (const r of results) {
+    const pr = meetPrsFor(r.profileId).find(x => x.event === r.event);
+    if (pr && pr.resultId === r.id) prs++;
+  }
+  return { entries: entries.length, resultsEntered: results.length, prs };
+}
+/* How a just-saved mark stacks up for quick-results flagging:
+   'first' when it is the athlete's first recorded mark in the event,
+   'pr' when it beats their previous best by the event's direction,
+   else null. The athlete's own earlier mark AT THIS MEET (excludeId)
+   is being replaced by the save, so it never competes with itself. */
+function meetPrStatus(profileId, ev, value, excludeId) {
+  const others = db.meetResults.filter(r =>
+    r.profileId === profileId && r.event === ev.key && r.id !== excludeId);
+  if (!others.length) return 'first';
+  let best = others[0].value;
+  for (const r of others) {
+    best = ev.type === 'time' ? Math.min(best, r.value) : Math.max(best, r.value);
+  }
+  return (ev.type === 'time' ? value < best : value > best) ? 'pr' : null;
+}
+
+/* ------------------------------------------------------------------ */
+/* School record board: all-time top 10 per event                      */
+/* ------------------------------------------------------------------ */
+/* Records events = the meet events PLUS relay events. The split is
+   deliberate and load-bearing: relays are TEAM marks, so they live
+   only in RECORD_ONLY_EVENTS and are only ever looked up through
+   findRecordEvent (the records endpoints). findMeetEvent — which
+   drives meet-result entry and all individual PR logic — never sees
+   them, so a relay mark can never be entered as an individual's
+   result or skew a PR board. Marks parse through the same shared
+   parseMeetMark / parseTimeMark / parseFieldMark used by meet
+   results; record events carry the same { key, name, type } shape. */
+const RECORD_ONLY_EVENTS = [
+  { key: '4x100m', name: '4x100m Relay', type: 'time' },
+  { key: '4x200m', name: '4x200m Relay', type: 'time' },
+  { key: '4x400m', name: '4x400m Relay', type: 'time' },
+  { key: '4x800m', name: '4x800m Relay', type: 'time' },
+];
+const RECORD_EVENTS = MEET_EVENTS.concat(RECORD_ONLY_EVENTS);
+function findRecordEvent(key) { return RECORD_EVENTS.find(e => e.key === key) || null; }
+function recordEventView(ev) {
+  return Object.assign(meetEventView(ev), {
+    relay: RECORD_ONLY_EVENTS.some(e => e.key === ev.key),
+  });
+}
+/* Direction-aware comparison on normalized values: negative when a
+   is the better mark. Ties keep the earlier entry first. */
+function compareMarkValues(ev, a, b) {
+  return ev.type === 'time' ? a - b : b - a;
+}
+function rankedRecords(eventKey, limit) {
+  const ev = findRecordEvent(eventKey);
+  if (!ev) return [];
+  return db.schoolRecords
+    .filter(r => r.event === eventKey)
+    .slice()
+    .sort((a, b) => compareMarkValues(ev, a.value, b.value)
+      || (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+    .slice(0, limit || 10);
+}
+/* The rank a mark WOULD take on the board: 1 + the number of records
+   strictly better than it. rank <= 10 means it makes the board. */
+function recordWouldRank(ev, value) {
+  let better = 0;
+  for (const r of db.schoolRecords) {
+    if (r.event !== ev.key) continue;
+    if (ev.type === 'time' ? r.value < value : r.value > value) better++;
+  }
+  return better + 1;
+}
+function publicRecord(r) {
+  const ev = findRecordEvent(r.event);
+  return Object.assign({}, r, { eventName: ev ? ev.name : r.event });
+}
+/* Best current-roster meet mark for an event (the promotion source).
+   Individual events only — relays have no meet-result source and
+   return null. Mirrors the team PR board: archived profiles out. */
+function rosterBestForEvent(eventKey) {
+  const ev = findMeetEvent(eventKey);
+  if (!ev) return null;
+  let best = null;
+  for (const r of db.meetResults) {
+    if (r.event !== eventKey) continue;
+    const pr = profileById(r.profileId);
+    if (!pr || pr.archived) continue;
+    if (!best || compareMarkValues(ev, r.value, best.value) < 0) best = r;
+  }
+  if (!best) return null;
+  const pr = profileById(best.profileId);
+  return {
+    profileId: best.profileId,
+    athleteName: pr.firstName + ' ' + pr.lastName,
+    mark: best.mark, value: best.value, date: best.date, meet: best.meet,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1129,6 +1323,37 @@ async function handleApi(req, res, url) {
      public) — only cards a coach has edited appear here. */
   if (p === '/api/warmup-cards' && req.method === 'GET') {
     return sendJson(res, 200, { cards: db.warmupCardEdits });
+  }
+
+  /* School record board reads are public like other content reads —
+     the board is program history, on display for students. Writes
+     are coach-only (below the coach gate). */
+  if (p === '/api/record-events' && req.method === 'GET') {
+    return sendJson(res, 200, { events: RECORD_EVENTS.map(recordEventView) });
+  }
+
+  if (p === '/api/records' && req.method === 'GET') {
+    const evParam = clean(q.get('event') || '', 30);
+    const records = db.schoolRecords
+      .filter(r => !evParam || r.event === evParam)
+      .slice()
+      .sort((a, b) => (a.event < b.event ? -1 : a.event > b.event ? 1
+        : (a.createdAt < b.createdAt ? -1 : 1)))
+      .map(publicRecord);
+    return sendJson(res, 200, { records });
+  }
+
+  if (p === '/api/records/board' && req.method === 'GET') {
+    // One entry per record event, each with its ranked top 10
+    // (empty until a coach adds real marks).
+    const board = RECORD_EVENTS.map(ev => ({
+      event: ev.key, name: ev.name, type: ev.type,
+      better: ev.type === 'time' ? 'lower' : 'higher',
+      relay: RECORD_ONLY_EVENTS.some(e => e.key === ev.key),
+      entries: rankedRecords(ev.key, 10).map((r, i) =>
+        Object.assign(publicRecord(r), { rank: i + 1 })),
+    }));
+    return sendJson(res, 200, { board });
   }
 
   if (p === '/api/register' && req.method === 'POST') {
@@ -2307,25 +2532,9 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/meet-results' && req.method === 'POST') {
     const body = await readBody(req);
-    const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
-    const date = clean(body.date, 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
-    const meet = clean(body.meet, 80);
-    if (!meet) return sendJson(res, 400, { error: 'Name the meet.' });
-    const ev = findMeetEvent(clean(body.event, 30));
-    if (!ev) return sendJson(res, 400, { error: 'Unknown event.' });
-    const rawMark = typeof body.mark === 'string' ? body.mark.trim().slice(0, 20) : '';
-    const parsed = parseMeetMark(ev, rawMark);
-    if (parsed.error) return sendJson(res, 400, { error: parsed.error });
-    const now = new Date().toISOString();
-    const r = {
-      id: crypto.randomUUID(), profileId: prof.id, date, meet,
-      event: ev.key, mark: rawMark, value: parsed.value,
-      notes: clean(body.notes, 500), enteredBy: user.id,
-      createdAt: now, updatedAt: now,
-    };
-    db.meetResults.push(r);
+    const v = validateMeetResultInput(body);
+    if (v.error) return sendJson(res, v.status, { error: v.error });
+    const r = insertMeetResult(v, body.notes, user.id);
     saveDb();
     return sendJson(res, 201, { result: publicMeetResult(r) });
   }
@@ -2430,6 +2639,289 @@ async function handleApi(req, res, url) {
         ev ? ev.name : r.event, r.mark]);
     }
     return sendCsv(res, 'meet-results.csv', rows);
+  }
+
+  /* ---------- school records (coach writes; reads are public) --- */
+  /* Validate + normalize one record payload. full=true for creates
+     (event, name, mark required); edits pass the existing record and
+     only the fields present are re-validated, into a candidate, so a
+     bad field changes nothing — the meet-results pattern. */
+  function validateRecordFields(body, base) {
+    const next = base ? Object.assign({}, base) : {
+      event: '', mark: '', value: null, name: '',
+      profileId: null, year: null, meet: '', date: '',
+    };
+    if (!base || body.event !== undefined) {
+      const ev = findRecordEvent(clean(body.event, 30));
+      if (!ev) return { error: 'Unknown event.', status: 400 };
+      next.event = ev.key;
+    }
+    if (!base || body.name !== undefined) {
+      const name = clean(body.name, 60);
+      if (!name) return { error: 'Name who set the mark.', status: 400 };
+      next.name = name;
+    }
+    if (!base || body.event !== undefined || body.mark !== undefined) {
+      const ev = findRecordEvent(next.event);
+      const rawMark = body.mark !== undefined
+        ? (typeof body.mark === 'string' ? body.mark.trim().slice(0, 20) : '')
+        : next.mark;
+      const parsed = parseMeetMark(ev, rawMark);
+      if (parsed.error) return { error: parsed.error, status: 400 };
+      next.mark = rawMark;
+      next.value = parsed.value;
+    }
+    if (body.profileId !== undefined) {
+      if (body.profileId === null || body.profileId === '') {
+        next.profileId = null;
+      } else {
+        const prof = profileById(clean(body.profileId, 80));
+        if (!prof) return { error: 'Profile not found.', status: 404 };
+        next.profileId = prof.id;
+      }
+    }
+    if (body.year !== undefined) {
+      if (body.year === null || body.year === '') {
+        next.year = null;
+      } else {
+        const y = Number(body.year);
+        if (!Number.isInteger(y) || y < 1950 || y > 2100) {
+          return { error: 'Year must be between 1950 and 2100.', status: 400 };
+        }
+        next.year = y;
+      }
+    }
+    if (body.meet !== undefined) next.meet = clean(body.meet, 80);
+    if (body.date !== undefined) {
+      if (body.date === null || body.date === '') {
+        next.date = '';
+      } else {
+        const d = clean(body.date, 10);
+        if (!parseDateStr(d)) return { error: 'Date must be YYYY-MM-DD.', status: 400 };
+        next.date = d;
+      }
+    }
+    return { fields: next };
+  }
+
+  if (p === '/api/records' && req.method === 'POST') {
+    const body = await readBody(req);
+    const v = validateRecordFields(body, null);
+    if (v.error) return sendJson(res, v.status, { error: v.error });
+    const now = new Date().toISOString();
+    const r = Object.assign({
+      id: crypto.randomUUID(), enteredBy: user.id, createdAt: now, updatedAt: now,
+    }, v.fields);
+    db.schoolRecords.push(r);
+    saveDb();
+    return sendJson(res, 201, { record: publicRecord(r) });
+  }
+
+  const recordMatch = p.match(/^\/api\/records\/([^/]+)$/);
+  if (recordMatch && req.method === 'PUT') {
+    const r = db.schoolRecords.find(x => x.id === decodeURIComponent(recordMatch[1]));
+    if (!r) return sendJson(res, 404, { error: 'Record not found.' });
+    const body = await readBody(req);
+    const base = {
+      event: r.event, mark: r.mark, value: r.value, name: r.name,
+      profileId: r.profileId, year: r.year, meet: r.meet, date: r.date,
+    };
+    const v = validateRecordFields(body, base);
+    if (v.error) return sendJson(res, v.status, { error: v.error });
+    Object.assign(r, v.fields, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { record: publicRecord(r) });
+  }
+  if (recordMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(recordMatch[1]);
+    if (!db.schoolRecords.some(r => r.id === id)) {
+      return sendJson(res, 404, { error: 'Record not found.' });
+    }
+    db.schoolRecords = db.schoolRecords.filter(r => r.id !== id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (p === '/api/records/roster-best' && req.method === 'GET') {
+    // Promotion helper source: per individual event, the best mark
+    // the current roster owns in meet results, and the rank it would
+    // take on the record board. The coach's tap does the adding —
+    // nothing is ever promoted automatically.
+    const best = RECORD_EVENTS.map(ev => {
+      const rb = rosterBestForEvent(ev.key);
+      return {
+        event: ev.key, name: ev.name, type: ev.type,
+        better: ev.type === 'time' ? 'lower' : 'higher',
+        best: rb,
+        rank: rb ? recordWouldRank(ev, rb.value) : null,
+        makesBoard: rb ? recordWouldRank(ev, rb.value) <= 10 : false,
+      };
+    });
+    return sendJson(res, 200, { best });
+  }
+
+  /* ---------- meet day hub (coach) ---------- */
+  if (p === '/api/meets' && req.method === 'GET') {
+    const meets = db.meets.slice()
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1
+        : (a.createdAt < b.createdAt ? 1 : -1)))
+      .map(m => Object.assign(publicMeet(m), { summary: meetSummary(m) }));
+    return sendJson(res, 200, { meets });
+  }
+
+  if (p === '/api/meets' && req.method === 'POST') {
+    const body = await readBody(req);
+    const name = clean(body.name, 80);
+    if (!name) return sendJson(res, 400, { error: 'Name the meet.' });
+    const date = clean(body.date, 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const m = {
+      id: crypto.randomUUID(), name, date,
+      location: clean(body.location, 80),
+      createdAt: new Date().toISOString(),
+    };
+    db.meets.push(m);
+    saveDb();
+    return sendJson(res, 201, { meet: publicMeet(m) });
+  }
+
+  const meetMatch = p.match(/^\/api\/meets\/([^/]+)$/);
+  if (meetMatch && req.method === 'GET') {
+    const m = meetById(decodeURIComponent(meetMatch[1]));
+    if (!m) return sendJson(res, 404, { error: 'Meet not found.' });
+    return sendJson(res, 200, {
+      meet: publicMeet(m),
+      entries: meetEntriesFor(m.id).map(publicMeetEntry),
+      results: meetResultsFor(m).map(publicMeetResult),
+      checklist: meetChecklist(m),
+      summary: meetSummary(m),
+    });
+  }
+  if (meetMatch && req.method === 'PUT') {
+    const m = meetById(decodeURIComponent(meetMatch[1]));
+    if (!m) return sendJson(res, 404, { error: 'Meet not found.' });
+    const body = await readBody(req);
+    // Validate the whole update first; a bad field changes nothing.
+    const next = { name: m.name, date: m.date, location: m.location || '' };
+    if (body.name !== undefined) {
+      const n = clean(body.name, 80);
+      if (!n) return sendJson(res, 400, { error: 'Name the meet.' });
+      next.name = n;
+    }
+    if (body.date !== undefined) {
+      const d = clean(body.date, 10);
+      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      next.date = d;
+    }
+    if (body.location !== undefined) next.location = clean(body.location, 80);
+    Object.assign(m, next);
+    saveDb();
+    return sendJson(res, 200, { meet: publicMeet(m) });
+  }
+  if (meetMatch && req.method === 'DELETE') {
+    const m = meetById(decodeURIComponent(meetMatch[1]));
+    if (!m) return sendJson(res, 404, { error: 'Meet not found.' });
+    // Deleting a meet deletes the meet and its entries only. Results
+    // already recorded stand in Meet Results under the meet's name and
+    // date — the meet-day plan is disposable, the record is not.
+    db.meets = db.meets.filter(x => x.id !== m.id);
+    db.meetEntries = db.meetEntries.filter(e => e.meetId !== m.id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  const meetEntriesMatch = p.match(/^\/api\/meets\/([^/]+)\/entries$/);
+  if (meetEntriesMatch && req.method === 'POST') {
+    const m = meetById(decodeURIComponent(meetEntriesMatch[1]));
+    if (!m) return sendJson(res, 404, { error: 'Meet not found.' });
+    const body = await readBody(req);
+    const prof = profileById(clean(body.profileId, 80));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const ev = findMeetEvent(clean(body.event, 30));
+    if (!ev) return sendJson(res, 400, { error: 'Unknown event.' });
+    if (db.meetEntries.some(e => e.meetId === m.id && e.profileId === prof.id && e.event === ev.key)) {
+      return sendJson(res, 400, {
+        error: prof.firstName + ' ' + prof.lastName + ' is already entered in ' + ev.name + ' at this meet.',
+      });
+    }
+    const entry = { id: crypto.randomUUID(), meetId: m.id, profileId: prof.id, event: ev.key };
+    db.meetEntries.push(entry);
+    saveDb();
+    return sendJson(res, 201, { entry: publicMeetEntry(entry) });
+  }
+
+  const meetEntryMatch = p.match(/^\/api\/meets\/([^/]+)\/entries\/([^/]+)$/);
+  if (meetEntryMatch && req.method === 'DELETE') {
+    const meetId = decodeURIComponent(meetEntryMatch[1]);
+    const entryId = decodeURIComponent(meetEntryMatch[2]);
+    if (!meetById(meetId)) return sendJson(res, 404, { error: 'Meet not found.' });
+    if (!db.meetEntries.some(e => e.id === entryId && e.meetId === meetId)) {
+      return sendJson(res, 404, { error: 'Entry not found.' });
+    }
+    db.meetEntries = db.meetEntries.filter(e => e.id !== entryId);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  const meetQuickMatch = p.match(/^\/api\/meets\/([^/]+)\/results$/);
+  if (meetQuickMatch && req.method === 'POST') {
+    const m = meetById(decodeURIComponent(meetQuickMatch[1]));
+    if (!m) return sendJson(res, 404, { error: 'Meet not found.' });
+    const body = await readBody(req);
+    const ev = findMeetEvent(clean(body.event, 30));
+    if (!ev) return sendJson(res, 400, { error: 'Unknown event.' });
+    const marks = Array.isArray(body.marks) ? body.marks : null;
+    if (!marks || !marks.length) return sendJson(res, 400, { error: 'Enter at least one mark.' });
+    if (marks.length > 100) return sendJson(res, 400, { error: 'Too many marks in one save (max 100).' });
+    // Validate the whole batch through the shared meet-result rules
+    // first — one bad mark saves nothing.
+    const seen = new Set();
+    const validated = [];
+    for (const mk of marks) {
+      const profileId = clean(mk && mk.profileId, 80);
+      if (seen.has(profileId)) {
+        return sendJson(res, 400, { error: 'Two marks for the same athlete in one save.' });
+      }
+      seen.add(profileId);
+      const prof = profileById(profileId);
+      if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+      if (!db.meetEntries.some(e => e.meetId === m.id && e.profileId === profileId && e.event === ev.key)) {
+        return sendJson(res, 400, {
+          error: prof.firstName + ' ' + prof.lastName + ' is not entered in ' + ev.name + ' at this meet.',
+        });
+      }
+      const v = validateMeetResultInput({
+        profileId, date: m.date, meet: m.name, event: ev.key, mark: mk && mk.mark,
+      });
+      if (v.error) return sendJson(res, v.status, { error: v.error });
+      validated.push(v);
+    }
+    // Flags are read against the marks on record before this save,
+    // then each mark writes through the shared path. An athlete who
+    // already has a mark for this meet + event gets it updated in
+    // place — re-saving a corrected mark never duplicates the record.
+    const saved = [];
+    for (const v of validated) {
+      const existing = db.meetResults.find(r =>
+        r.meet === m.name && r.date === m.date && r.profileId === v.prof.id && r.event === ev.key);
+      const prStatus = meetPrStatus(v.prof.id, ev, v.value, existing ? existing.id : null);
+      let r;
+      if (existing) {
+        existing.mark = v.rawMark;
+        existing.value = v.value;
+        existing.updatedAt = new Date().toISOString();
+        r = existing;
+      } else {
+        r = insertMeetResult(v, '', user.id);
+      }
+      saved.push(Object.assign(publicMeetResult(r), { prStatus }));
+    }
+    saveDb();
+    return sendJson(res, 200, {
+      saved,
+      checklist: meetChecklist(m),
+      summary: meetSummary(m),
+    });
   }
 
   /* ---------- reports (coach-only analytics) ---------- */
