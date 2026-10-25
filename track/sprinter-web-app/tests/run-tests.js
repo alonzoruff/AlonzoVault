@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v18',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v19"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v21',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v21"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1980,6 +1980,182 @@ async function main() {
     check('check-in state without login is 401', r.status === 401, r.status);
   }
 
+  /* ---------------- athlete goals ----------------
+     Coach-set target marks with progress computed from real meet
+     results: baseline = first recorded mark, current = PR. Fixtures
+     are built so the expected percentages come out exact:
+       Gail 100m:      12.00 -> 11.50, target 11.00  => 50%, gap 0.5s
+       Gail long jump: 18-00 -> 19-06, target 21-00  => 50%, gap 18in
+       Gail 800m:      one mark (2:10.00), target 2:00.00 => 0%     */
+  r = await api(coach, 'POST', '/api/groups', { name: 'Goal Squad' });
+  const gGoal = r.json.group.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Gail', lastName: 'Goals', groupId: gGoal, events: ['sprinter', 'jumper'] });
+  const gailG = r.json.profile.id;
+  await api(coach, 'POST', '/api/meet-results', { profileId: gailG, date: '2027-02-01', meet: 'Opener', event: '100m', mark: '12.00' });
+  await api(coach, 'POST', '/api/meet-results', { profileId: gailG, date: '2027-02-15', meet: 'Classic', event: '100m', mark: '11.50' });
+  await api(coach, 'POST', '/api/meet-results', { profileId: gailG, date: '2027-02-01', meet: 'Opener', event: 'long-jump', mark: '18-00' });
+  await api(coach, 'POST', '/api/meet-results', { profileId: gailG, date: '2027-02-15', meet: 'Classic', event: 'long-jump', mark: '19-06' });
+  await api(coach, 'POST', '/api/meet-results', { profileId: gailG, date: '2027-02-01', meet: 'Opener', event: '800m', mark: '2:10.00' });
+
+  /* Create + progress math on a time event. */
+  r = await api(coach, 'POST', '/api/goals', { profileId: gailG, event: '100m', target: '11.00' });
+  check('goal create is 201 and not a replace',
+    r.status === 201 && r.json.replaced === false && !!r.json.goal.id, r.json);
+  const gailGoal100 = r.json.goal.id;
+  check('goal progress (time): baseline is the first mark, current is the PR',
+    r.json.goal.baseline.mark === '12.00' && r.json.goal.baseline.value === 12 &&
+    r.json.goal.current.mark === '11.50' && r.json.goal.current.value === 11.5, r.json.goal);
+  check('goal progress (time): halfway to target is 50%, gap is 0.5 sec',
+    r.json.goal.progressPct === 50 && r.json.goal.gap === 0.5 && r.json.goal.gapUnit === 'sec' &&
+    r.json.goal.achieved === false, r.json.goal);
+
+  /* Replace on duplicate pair: the same id, the new target, and an
+     achieved state when the PR already beats the target. */
+  r = await api(coach, 'POST', '/api/goals', { profileId: gailG, event: '100m', target: '11.60' });
+  check('re-setting the same pair replaces it in place',
+    r.status === 200 && r.json.replaced === true && r.json.goal.id === gailGoal100 &&
+    r.json.goal.targetText === '11.60', r.json);
+  check('a PR already past the target reads achieved at 100%',
+    r.json.goal.achieved === true && r.json.goal.progressPct === 100, r.json.goal);
+  r = await api(coach, 'GET', '/api/goals?profileId=' + gailG);
+  check('coach list still holds exactly one goal for the pair',
+    r.status === 200 && r.json.goals.length === 1 && r.json.goals[0].event === '100m', r.json);
+  r = await api(coach, 'PUT', '/api/goals/' + gailGoal100, { target: '11.00' });
+  check('goal edit restores the 50% progress',
+    r.status === 200 && r.json.goal.targetText === '11.00' && r.json.goal.progressPct === 50 &&
+    r.json.goal.achieved === false, r.json);
+
+  /* Field event math (higher is better, inches). */
+  r = await api(coach, 'POST', '/api/goals', { profileId: gailG, event: 'long-jump', target: '21-00' });
+  check('goal progress (field): halfway is 50%, gap is 18 in',
+    r.status === 201 && r.json.goal.progressPct === 50 && r.json.goal.gap === 18 &&
+    r.json.goal.gapUnit === 'in' && r.json.goal.baseline.value === 216 &&
+    r.json.goal.current.value === 234 && r.json.goal.targetValue === 252, r.json.goal);
+  const gailGoalLj = r.json.goal.id;
+
+  /* Single mark: baseline == current, so progress is 0%. */
+  r = await api(coach, 'POST', '/api/goals', { profileId: gailG, event: '800m', target: '2:00.00' });
+  check('a lone first mark is the baseline: progress 0%',
+    r.status === 201 && r.json.goal.progressPct === 0 && r.json.goal.achieved === false &&
+    r.json.goal.baseline.value === 130 && r.json.goal.current.value === 130 &&
+    r.json.goal.gap === 10, r.json.goal);
+
+  /* No marks yet: progress is null, never a made-up number. */
+  r = await api(coach, 'POST', '/api/goals', { profileId: gailG, event: 'shot-put', target: '30-00' });
+  check('goal with no marks yet: progress null, current null, gap null',
+    r.status === 201 && r.json.goal.progressPct === null && r.json.goal.current === null &&
+    r.json.goal.baseline === null && r.json.goal.gap === null && r.json.goal.achieved === false,
+    r.json.goal);
+  const gailGoalSp = r.json.goal.id;
+
+  /* Validation: shared-parser 400s, unknown athlete/event 400s, and
+     a bad edit changes nothing. */
+  const badGoals = [
+    [{ profileId: gailG, event: '100m', target: 'fast' }, 'unparseable time target'],
+    [{ profileId: gailG, event: 'long-jump', target: '21-13' }, 'inches over 12'],
+    [{ profileId: gailG, event: 'marathon', target: '2:00:00' }, 'unknown event'],
+    [{ profileId: 'nope', event: '100m', target: '11.00' }, 'unknown athlete'],
+    [{ profileId: gailG, event: '100m', target: '' }, 'empty target'],
+  ];
+  for (const [body, label] of badGoals) {
+    r = await api(coach, 'POST', '/api/goals', body);
+    check('goal create 400: ' + label, r.status === 400, r.status);
+  }
+  r = await api(coach, 'PUT', '/api/goals/' + gailGoal100, { target: 'bogus' });
+  check('goal edit with a bad mark is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/goals?profileId=' + gailG);
+  check('the bad edit changed nothing',
+    r.json.goals.find(g => g.id === gailGoal100).targetText === '11.00', r.json.goals);
+  r = await api(coach, 'PUT', '/api/goals/nope', { target: '11.00' });
+  check('goal edit on an unknown id is 404', r.status === 404, r.status);
+  r = await api(coach, 'DELETE', '/api/goals/nope');
+  check('goal delete on an unknown id is 404', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/goals?profileId=nope');
+  check('coach goal list for an unknown athlete is 400', r.status === 400, r.status);
+
+  /* Edit onto an occupied pair replaces the older goal: the shot-put
+     goal moves to long jump at 20-00; the original long-jump goal
+     (21-00) goes away, and progress recomputes (216 -> 234 of the
+     way to 240 = 75%, gap 6 in). */
+  r = await api(coach, 'PUT', '/api/goals/' + gailGoalSp, { event: 'long-jump', target: '20-00' });
+  check('moving a goal onto an occupied pair succeeds',
+    r.status === 200 && r.json.goal.event === 'long-jump' && r.json.goal.progressPct === 75 &&
+    r.json.goal.gap === 6, r.json);
+  r = await api(coach, 'GET', '/api/goals?profileId=' + gailG);
+  check('the occupied pair still has exactly one goal, and it is the moved one',
+    r.json.goals.length === 3 &&
+    r.json.goals.filter(g => g.event === 'long-jump').length === 1 &&
+    r.json.goals.find(g => g.event === 'long-jump').id === gailGoalSp &&
+    !r.json.goals.some(g => g.id === gailGoalLj), r.json.goals.map(g => g.event));
+
+  /* Athlete gates: the coach surface is closed to athletes. */
+  r = await api(athlete, 'GET', '/api/goals');
+  check('athlete is 403 on the coach goal list', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/goals', { profileId: gailG, event: '100m', target: '11.00' });
+  check('athlete is 403 creating a goal', r.status === 403, r.status);
+  r = await api(athlete, 'PUT', '/api/goals/' + gailGoal100, { target: '10.00' });
+  check('athlete is 403 editing a goal', r.status === 403, r.status);
+  r = await api(athlete, 'DELETE', '/api/goals/' + gailGoal100);
+  check('athlete is 403 deleting a goal', r.status === 403, r.status);
+
+  /* /api/goals/mine: unlinked reads the clear not-linked state;
+     a linked athlete reads ONLY their own goals. */
+  r = await api(athlete, 'GET', '/api/goals/mine');
+  check('unlinked athlete goals state is linked:false with no goals',
+    r.status === 200 && r.json.linked === false && r.json.goals.length === 0, r.json);
+  r = await api(will, 'GET', '/api/goals/mine');
+  check('linked athlete with no goals reads an empty list',
+    r.status === 200 && r.json.linked === true && r.json.profileId === willP.id &&
+    r.json.goals.length === 0, r.json);
+  r = await api(coach, 'POST', '/api/goals', { profileId: willP.id, event: '55m', target: '7.00' });
+  check('coach sets a goal for the linked athlete', r.status === 201, r.status);
+  r = await api(will, 'GET', '/api/goals/mine');
+  check('athlete mine returns only their own goals',
+    r.status === 200 && r.json.goals.length === 1 &&
+    r.json.goals.every(g => g.profileId === willP.id) &&
+    r.json.goals[0].event === '55m' && r.json.goals[0].progressPct === null, r.json);
+
+  /* Report card: goals ride along additively; an athlete with no
+     goals gets an empty array (the section omits itself client-side). */
+  r = await api(coach, 'GET', '/api/reports/athlete/' + gailG);
+  check('report card carries the goals with computed progress',
+    r.status === 200 && Array.isArray(r.json.goals) && r.json.goals.length === 3 &&
+    r.json.goals.find(g => g.event === '100m').progressPct === 50 &&
+    r.json.goals.find(g => g.event === '100m').gap === 0.5 &&
+    r.json.goals.find(g => g.event === '800m').progressPct === 0, r.json.goals);
+  r = await api(coach, 'GET', '/api/reports/athlete/' + benR);
+  check('report card for an athlete with no goals: empty goals array',
+    r.status === 200 && Array.isArray(r.json.goals) && r.json.goals.length === 0, r.json.goals);
+
+  /* Delete: removes exactly that goal; a second delete is 404. */
+  r = await api(coach, 'DELETE', '/api/goals/' + gailGoalSp);
+  check('goal delete works', r.status === 200 && r.json.ok === true, r.json);
+  r = await api(coach, 'GET', '/api/goals?profileId=' + gailG);
+  check('the deleted goal is gone from the list',
+    r.json.goals.length === 2 && !r.json.goals.some(g => g.id === gailGoalSp), r.json.goals);
+  r = await api(coach, 'DELETE', '/api/goals/' + gailGoalSp);
+  check('deleting the same goal again is 404', r.status === 404, r.status);
+
+  /* Served wiring + privacy: the Goals view/manager/athlete card
+     ship in the page and JS, and goal data never reaches the TV
+     board's render path. */
+  {
+    const tvStart2 = appJs.text.indexOf('TV BOARD');
+    const tvEnd2 = appJs.text.indexOf('/* ---------------- boot', tvStart2);
+    const tvCode2 = appJs.text.slice(tvStart2, tvEnd2);
+    check('TV render path has no goal references',
+      tvStart2 >= 0 && tvEnd2 > tvStart2 && !tvCode2.includes('/api/goals') &&
+      !tvCode2.toLowerCase().includes('goal'), tvCode2.length);
+    check('goals view + hub + sub-nav entries are in the served page',
+      pageHtml.text.includes('id="view-goals"') && pageHtml.text.includes('id="goals-main"') &&
+      pageHtml.text.includes('data-view="goals"') && pageHtml.text.includes('id="goals-slot"'),
+      pageHtml.text.length);
+    check('goals wiring is in the served JS',
+      appJs.text.includes('renderGoals') && appJs.text.includes('renderMyGoals') &&
+      appJs.text.includes('/api/goals') && appJs.text.includes("['goals', 'Goals']") &&
+      appJs.text.includes("goals: 'coachhub'"));
+  }
+
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id };
 }
 
@@ -2143,6 +2319,243 @@ async function waitForServer(tries = 60) {
       } finally {
         seedChild.kill('SIGKILL');
         fs.rmSync(SEED_DIR, { recursive: true, force: true });
+      }
+    }
+
+    /* Weekly coach digest: a fresh store with fixtures at known
+       dates, so every aggregate can be asserted exactly. Check-ins
+       accept past dates, so they land in the last completed week;
+       testing results and concerns carry the server's own timestamps,
+       so those sections key on the current week; fixed season dates
+       carry the training and meet sections. */
+    {
+      const D_BASE = 'http://127.0.0.1:3219';
+      const dApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+        const res = await fetch(D_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const dText = async (p) => {
+        const res = await fetch(D_BASE + p);
+        return { status: res.status, text: await res.text() };
+      };
+      const D_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-digest-'));
+      let dLog = '';
+      const dChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+        env: Object.assign({}, process.env, {
+          PORT: '3219', DATA_DIR: D_DIR, SESSION_SECRET: 'digest-secret',
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      dChild.stdout.on('data', d => { dLog += d; });
+      dChild.stderr.on('data', d => { dLog += d; });
+      const waitD = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(D_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      const dPad = (n) => String(n).padStart(2, '0');
+      const dFmt = (d) => d.getFullYear() + '-' + dPad(d.getMonth() + 1) + '-' + dPad(d.getDate());
+      const dAdd = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return dFmt(d); };
+      const dMonday = (s) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return dFmt(d); };
+      try {
+        check('digest server starts', await waitD(), dLog);
+        const dPage = await dText('/');
+        check('digest view markers are in the served page',
+          dPage.status === 200 && dPage.text.includes('id="view-digest"') &&
+          dPage.text.includes('data-view="digest"') && dPage.text.includes('id="digest-main"'));
+        const dJs = await dText('/app.js');
+        check('digest wiring is in the served JS',
+          dJs.status === 200 && dJs.text.includes('renderDigest') && dJs.text.includes('/api/digest'));
+
+        let dr = await dApi(null, 'POST', '/api/register', { email: 'dcoach@test.com', password: 'testpass123' });
+        check('digest store: first account is coach', dr.status === 201 && dr.json.role === 'coach', dr.json);
+        const dCoach = cookieOf(dr);
+        dr = await dApi(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123' });
+        const dAmy = cookieOf(dr);
+        dr = await dApi(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123' });
+        const dBen = cookieOf(dr);
+
+        dr = await dApi(dAmy, 'GET', '/api/digest');
+        check('digest is 403 for athletes', dr.status === 403, dr.status);
+        dr = await dApi(null, 'GET', '/api/digest');
+        check('digest is 401 logged out', dr.status === 401, dr.status);
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=2026-02-30');
+        check('digest rejects an impossible week date', dr.status === 400, dr.status);
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=banana');
+        check('digest rejects a non-date week', dr.status === 400, dr.status);
+
+        dr = await dApi(dCoach, 'POST', '/api/groups', { name: 'Digest Group' });
+        const dGroup = dr.json.group;
+        dr = await dApi(dCoach, 'POST', '/api/profiles', { firstName: 'Amy', lastName: 'Ace', groupId: dGroup.id, events: ['sprinter'] });
+        const amyP = dr.json.profile;
+        dr = await dApi(dCoach, 'POST', '/api/profiles', { firstName: 'Ben', lastName: 'Bolt', groupId: dGroup.id, events: ['sprinter'] });
+        const benP = dr.json.profile;
+        dr = await dApi(dCoach, 'PUT', '/api/profiles/' + amyP.id + '/link', { email: 'amy@test.com' });
+        check('digest fixtures: amy linked to her profile', dr.status === 200 && dr.json.accountLinked === true, dr.json);
+        await dApi(dCoach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
+
+        /* --- check-ins, in the last completed week --- */
+        const todayS = dFmt(new Date());
+        const thisMon = dMonday(todayS);
+        const lastMon = dAdd(thisMon, -7);
+        const inLast = (n) => dAdd(lastMon, n);
+        const ci = (cookie, date, body) => dApi(cookie, 'POST', '/api/checkin', Object.assign({ date }, body));
+        let cr = await ci(dAmy, inLast(0), { sleep: 5, soreness: 5, energy: 2 });
+        check('digest fixtures: amy monday check-in saves', cr.status === 201, cr.status);
+        await ci(dAmy, inLast(2), { sleep: 5.5, soreness: 3, energy: 4 });
+        await ci(dAmy, inLast(4), { sleep: 8, soreness: 2, energy: 5 });
+        await ci(dBen, inLast(1), { sleep: 7, soreness: 4, energy: 3 });
+
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + inLast(2));
+        check('digest normalizes a Wednesday to its Monday',
+          dr.status === 200 && dr.json.week === lastMon && dr.json.weekEnd === dAdd(lastMon, 6),
+          dr.json && dr.json.week);
+        const dci = dr.json.checkins;
+        check('digest check-ins: participation is recorded / roster x 7',
+          dci.recorded === 4 && dci.possible === 14 && dci.percent === 29 && dci.roster === 2, dci);
+        check('digest check-ins: team averages',
+          dci.avgSleep === 6.38 && dci.avgSoreness === 3.5 && dci.avgEnergy === 3.5, dci);
+        check('digest check-ins: most-flagged first, with the main flag named',
+          dci.flaggedCount === 2 && dci.flagged.length === 2 &&
+          dci.flagged[0].name === 'Amy Ace' && dci.flagged[0].flaggedDays === 2 && dci.flagged[0].mainFlag === 'low-sleep' &&
+          dci.flagged[1].name === 'Ben Bolt' && dci.flagged[1].mainFlag === 'high-soreness', dci.flagged);
+        dr = await dApi(dCoach, 'GET', '/api/digest');
+        check('digest default week is the most recent completed week',
+          dr.status === 200 && dr.json.week === lastMon && dr.json.checkins.recorded === 4,
+          dr.json && dr.json.week);
+
+        /* --- training, on fixed season dates (week 2) --- */
+        const W2 = '2026-11-02';
+        await dApi(dCoach, 'POST', '/api/completions', { profileId: amyP.id, date: '2026-11-02' });
+        await dApi(dCoach, 'POST', '/api/completions', { profileId: amyP.id, date: '2026-11-04' });
+        await dApi(dCoach, 'POST', '/api/completions', { profileId: benP.id, date: '2026-11-02' });
+        await dApi(dCoach, 'POST', '/api/completions', { profileId: amyP.id, date: '2026-10-26' });
+        const dContent = (await dApi(null, 'GET', '/api/content')).json;
+        const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+        const wk2 = dContent.weeks.find(w => w.start === W2);
+        const assignedW2 = dayKeys.filter(k => /[A-Z]{2,3}-\d{2}/.test(String(wk2[k] || ''))).length;
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + W2);
+        const dtr = dr.json.training.groups.find(g => g.group.id === dGroup.id);
+        check('digest training: completions counted per group for the week, other weeks excluded',
+          !!dtr && dtr.completions === 3 && dtr.completedDays === 2, dtr);
+        check('digest training: assigned days match the season plan for the week',
+          !!dtr && assignedW2 > 0 && dtr.assigned === assignedW2, dtr && [dtr.assigned, assignedW2]);
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=2026-10-26');
+        const dtr1 = dr.json.training.groups.find(g => g.group.id === dGroup.id);
+        check('digest training: week 1 sees only its own completion',
+          !!dtr1 && dtr1.completions === 1 && dtr1.completedDays === 1, dtr1);
+
+        /* --- week ahead snapshot for the W2 digest --- */
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + W2);
+        const wa = dr.json.weekAhead;
+        const wk3 = dContent.weeks.find(w => w.start === '2026-11-09');
+        const sessById = {};
+        for (const s of dContent.sessions) sessById[s.id] = s;
+        let expTrain = 0, expHigh = 0;
+        for (const k of dayKeys) {
+          const text = String(wk3[k] || '');
+          const codes = text.match(/[A-Z]{2,3}-\d{2}/g) || [];
+          const isMeet = /\bMEET\b|championships/i.test(text);
+          const isTest = /\bTEST\b/i.test(text);
+          const isOff = !codes.length && !isMeet && !isTest && /off/i.test(text);
+          if (!isOff) expTrain++;
+          if (!isOff && (codes.some(c => sessById[c] && sessById[c].cns_demand === 'high') || isTest || isMeet)) expHigh++;
+        }
+        check('digest week ahead: plan snapshot matches the season plan',
+          wa.week === '2026-11-09' && wa.weekEnd === '2026-11-15' && wa.seasonWeek === 3 &&
+          wa.trainingDays === expTrain && wa.highDays === expHigh && wa.days.length === 7 &&
+          wa.days[0].codes.join('+') === 'ACC-01+STR-01',
+          { got: [wa.week, wa.seasonWeek, wa.trainingDays, wa.highDays], exp: [expTrain, expHigh] });
+
+        /* --- meet results + the record board --- */
+        const rec100 = ['10.80', '10.85', '10.90', '10.95', '11.00', '11.05', '11.10', '11.15', '11.20', '11.25'];
+        for (let i = 0; i < rec100.length; i++) {
+          await dApi(dCoach, 'POST', '/api/records', { event: '100m', mark: rec100[i], name: 'Record ' + (i + 1), year: 2000 + i });
+        }
+        await dApi(dCoach, 'POST', '/api/records', { event: '200m', mark: '22.50', name: 'Record A', year: 2001 });
+        await dApi(dCoach, 'POST', '/api/records', { event: '200m', mark: '23.00', name: 'Record B', year: 2002 });
+        const mr = (profileId, date, event, mark) =>
+          dApi(dCoach, 'POST', '/api/meet-results', { profileId, date, meet: 'November Classic', event, mark });
+        await mr(benP.id, '2026-10-31', '200m', '24.00');
+        await mr(amyP.id, '2026-10-31', '200m', '23.40');
+        await mr(amyP.id, '2026-11-07', '200m', '22.40');
+        await mr(amyP.id, '2026-11-07', '100m', '11.30');
+        await mr(benP.id, '2026-11-07', '100m', '11.40');
+        await mr(amyP.id, '2026-11-08', '200m', '22.90');
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + W2);
+        const dperf = dr.json.performance;
+        check('digest performance: meet results counted in window only',
+          dperf.meetResults.count === 4, dperf.meetResults);
+        check('digest performance: standing PRs only — beaten and non-PR marks excluded',
+          dperf.meetResults.prs.length === 3 &&
+          dperf.meetResults.prs.every(pr => pr.date >= '2026-11-02' && pr.date <= '2026-11-08'),
+          dperf.meetResults.prs);
+        const amy200 = dperf.meetResults.prs.find(pr => pr.profileId === amyP.id && pr.event === '200m');
+        check('digest performance: a PR that cracks the record board is flagged with its rank',
+          !!amy200 && amy200.recordBoard === true && amy200.recordRank === 1 && amy200.mark === '22.40', amy200);
+        const amy100 = dperf.meetResults.prs.find(pr => pr.profileId === amyP.id && pr.event === '100m');
+        check('digest performance: a PR off a deep board is not flagged',
+          !!amy100 && amy100.recordBoard === false && amy100.recordRank === 11, amy100);
+
+        /* --- testing entered this week (server timestamps) --- */
+        dr = await dApi(dCoach, 'POST', '/api/test-days', { date: lastMon, title: 'Digest Test Day', testKeys: ['vertical-jump', 'broad-jump'] });
+        const dDay = dr.json.testDay;
+        await dApi(dCoach, 'POST', '/api/results', { profileId: amyP.id, testDayId: dDay.id, testKey: 'vertical-jump', value: 24 });
+        await dApi(dCoach, 'POST', '/api/results', { profileId: benP.id, testDayId: dDay.id, testKey: 'vertical-jump', value: 22 });
+        await dApi(dCoach, 'POST', '/api/results', { profileId: amyP.id, testDayId: dDay.id, testKey: 'broad-jump', value: 96 });
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + todayS);
+        const dtest = dr.json.performance.testing;
+        check('digest performance: testing entered this week, counted by test',
+          dtest.total === 3 && dtest.byTest.length === 2 &&
+          (dtest.byTest.find(t => t.testKey === 'vertical-jump') || {}).count === 2 &&
+          (dtest.byTest.find(t => t.testKey === 'broad-jump') || {}).count === 1, dtest);
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + W2);
+        check('digest performance: no testing leaks into another week',
+          dr.json.performance.testing.total === 0, dr.json.performance.testing);
+
+        /* --- health: opened/cleared this week + current snapshot --- */
+        dr = await dApi(dCoach, 'POST', '/api/concerns', { profileId: amyP.id, area: 'knee', side: 'left', feeling: 'ache', impact: 'modified', started: todayS, pain: 5 });
+        check('digest fixtures: concern opens', dr.status === 201, dr.status);
+        dr = await dApi(dCoach, 'POST', '/api/concerns', { profileId: benP.id, area: 'shin', side: 'right', feeling: 'soreness', impact: 'none', started: todayS, pain: 3 });
+        const benConcern = dr.json.concern;
+        dr = await dApi(dCoach, 'PUT', '/api/concerns/' + benConcern.id, { status: 'cleared' });
+        check('digest fixtures: concern clears', dr.status === 200 && dr.json.concern.status === 'cleared', dr.status);
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + todayS);
+        check('digest health: opened + cleared this week, with the current snapshot',
+          dr.json.health.opened === 2 && dr.json.health.cleared === 1 &&
+          dr.json.health.open === 1 && dr.json.health.monitoring === 0, dr.json.health);
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=' + W2);
+        check('digest health: nothing opened or cleared in a fixed past week',
+          dr.json.health.opened === 0 && dr.json.health.cleared === 0, dr.json.health);
+
+        /* --- a week with nothing in it --- */
+        dr = await dApi(dCoach, 'GET', '/api/digest?week=2027-06-09');
+        check('digest: an untouched week returns every section empty, still 200',
+          dr.status === 200 && dr.json.checkins.recorded === 0 && dr.json.checkins.avgSleep === null &&
+          dr.json.checkins.flagged.length === 0 &&
+          dr.json.training.groups.every(g => g.completions === 0) &&
+          dr.json.performance.meetResults.count === 0 && dr.json.performance.meetResults.prs.length === 0 &&
+          dr.json.performance.testing.total === 0 &&
+          dr.json.health.opened === 0 && dr.json.health.cleared === 0 &&
+          dr.json.weekAhead.days.length === 7, dr.json && dr.json.week);
+      } finally {
+        dChild.kill('SIGKILL');
+        fs.rmSync(D_DIR, { recursive: true, force: true });
       }
     }
   } catch (err) {

@@ -1445,6 +1445,17 @@ details.card summary { cursor: pointer; }
   opacity: .55; animation-duration: 3s;
 }
 
+/* Weekly digest */
+.digest-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.digest-nav h2 { flex: 1 1 auto; text-align: center; margin: 0; font-size: 20px; }
+.digest-nav .btn { width: auto; min-height: 44px; }
+.digest-list { margin: 6px 0 4px; padding-left: 20px; }
+.digest-list li { margin: 5px 0; }
+.digest-badge {
+  display: inline-block; background: var(--red); color: #fff; border-radius: 999px;
+  font-size: 12px; font-weight: 700; padding: 2px 9px; margin-left: 4px; white-space: nowrap;
+}
+
 /* Hero stats (numbers count up via app.js) */
 .hero-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .hero-stat {
@@ -1975,3 +1986,17 @@ body.runner-mode { overflow: hidden; }
 .ci-hurts input { width: 22px; height: 22px; }
 .ci-save { width: 100%; min-height: 52px; font-size: 18px; margin-top: 14px; }
 .wellness-row.flagged { background: #fdeef1; border-left: 4px solid var(--scarlet); border-radius: 8px; }
+
+/* GOALS (coach manager + athlete card + report card) */
+.goal-row { padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
+.goal-row:last-child { border-bottom: none; }
+.goal-head { font-size: 17px; margin-bottom: 4px; }
+.goal-bar {
+  height: 12px; border-radius: 999px; background: #e5e7eb;
+  overflow: hidden; margin: 6px 0 2px;
+}
+.goal-bar-fill { height: 100%; background: var(--red); border-radius: 999px; }
+@media print {
+  .goal-bar { border: 1px solid #999; }
+  .goal-bar-fill { background: #999 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

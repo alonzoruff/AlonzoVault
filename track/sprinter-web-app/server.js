@@ -84,6 +84,7 @@ let db = {
   meets: [],
   meetEntries: [],
   schoolRecords: [],
+  goals: [],
   coachInvites: [],
   coachInvitesSeeded: [],
   athleteLinks: {},
@@ -159,6 +160,11 @@ function migrate() {
   // Daily check-ins: { profileId: { 'YYYY-MM-DD': checkin } }.
   db.checkins = (db.checkins && typeof db.checkins === 'object' && !Array.isArray(db.checkins))
     ? db.checkins : {};
+  // Athlete goals: one flat list of { id, profileId, event,
+  // targetText, targetValue, createdAt, updatedAt } — coach-set
+  // target marks, one ACTIVE goal per athlete per event (setting a
+  // new target for a pair replaces the old one; no goal history).
+  db.goals = Array.isArray(db.goals) ? db.goals : [];
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     // The first account is the head coach (owner). Stores written
@@ -636,6 +642,85 @@ function insertMeetResult(v, notes, enteredBy) {
   };
   db.meetResults.push(r);
   return r;
+}
+
+/* ------------------------------------------------------------------ */
+/* Athlete goals: coach-set target marks, honest progress            */
+/* ------------------------------------------------------------------ */
+/* Progress is computed from the athlete's real meet results only —
+   the shared helpers above, never a forked parser or PR rule.
+   Baseline is the athlete's FIRST recorded mark in the event
+   (meetSeriesFor's first point); current is their PR (meetPrsFor).
+   The percentage is how far the PR has travelled from the baseline
+   toward the target along the event's direction, clamped 0-100;
+   the plain gap to the target (seconds or inches still to make up)
+   rides along so the number never hides behind a percentage. */
+function goalProgressFor(goal) {
+  const ev = findMeetEvent(goal.event);
+  const target = { mark: goal.targetText, value: goal.targetValue };
+  const series = meetSeriesFor(goal.profileId).find(s => s.event === goal.event);
+  const pr = meetPrsFor(goal.profileId).find(x => x.event === goal.event) || null;
+  if (!ev || !series || !series.points.length || !pr) {
+    return { baseline: null, current: null, target, progressPct: null, achieved: false, gap: null };
+  }
+  const first = series.points[0];
+  const baseline = { mark: first.mark, value: first.value, date: first.date };
+  const current = { mark: pr.mark, value: pr.value, date: pr.date };
+  const lower = ev.type === 'time';
+  const achieved = lower ? current.value <= target.value : current.value >= target.value;
+  let progressPct;
+  if (achieved) {
+    progressPct = 100;
+  } else {
+    const denom = lower ? baseline.value - target.value : target.value - baseline.value;
+    if (denom === 0) {
+      // Degenerate: the baseline already IS the target, and the PR
+      // has not met it (the best mark sits on the wrong side of the
+      // first one) — no travel to measure, so 0.
+      progressPct = 0;
+    } else {
+      const num = lower ? baseline.value - current.value : current.value - baseline.value;
+      progressPct = Math.max(0, Math.min(100, Math.round((num / denom) * 100)));
+    }
+  }
+  const gap = round2(lower ? current.value - target.value : target.value - current.value);
+  return { baseline, current, target, progressPct, achieved, gap };
+}
+
+function publicGoal(goal) {
+  const prof = profileById(goal.profileId);
+  const ev = findMeetEvent(goal.event);
+  const prog = goalProgressFor(goal);
+  return {
+    id: goal.id, profileId: goal.profileId,
+    athleteName: prof ? prof.firstName + ' ' + prof.lastName : '',
+    event: goal.event, eventName: ev ? ev.name : goal.event,
+    type: ev ? ev.type : null,
+    better: ev ? (ev.type === 'time' ? 'lower' : 'higher') : null,
+    targetText: goal.targetText, targetValue: goal.targetValue,
+    baseline: prog.baseline, current: prog.current,
+    progressPct: prog.progressPct, achieved: prog.achieved, gap: prog.gap,
+    gapUnit: ev ? (ev.type === 'time' ? 'sec' : 'in') : null,
+    createdAt: goal.createdAt, updatedAt: goal.updatedAt,
+  };
+}
+
+function goalsForProfile(profileId) {
+  return db.goals.filter(g => g.profileId === profileId).map(publicGoal);
+}
+
+/* Validate a goal create in one pass. Unknown athlete/event and an
+   unparseable target are all clean 400s a coach can act on; the
+   target runs through parseMeetMark, the same parser as results. */
+function validateGoalInput(body) {
+  const prof = profileById(clean(body.profileId, 80));
+  if (!prof) return { status: 400, error: 'Unknown athlete.' };
+  const ev = findMeetEvent(clean(body.event, 30));
+  if (!ev) return { status: 400, error: 'Unknown event.' };
+  const rawTarget = typeof body.target === 'string' ? body.target.trim().slice(0, 20) : '';
+  const parsed = parseMeetMark(ev, rawTarget);
+  if (parsed.error) return { status: 400, error: parsed.error };
+  return { prof, ev, rawTarget, value: parsed.value };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1574,6 +1659,21 @@ async function handleApi(req, res, url) {
     saveDb();
     return sendJson(res, existing ? 200 : 201, {
       ok: true, created: !existing, checkin: publicCheckin(entry),
+    });
+  }
+
+  /* ---------- athlete goals (read-only, own goals only) ----------
+     Targets are coach-set; a linked athlete reads their own, with
+     progress computed from their meet results. The profile always
+     comes from the caller's own binding, never from the request,
+     so another athlete's goals are unreachable by construction. */
+  if (p === '/api/goals/mine' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    if (!prof) return sendJson(res, 200, { linked: false, goals: [] });
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      goals: goalsForProfile(prof.id),
     });
   }
 
@@ -2641,6 +2741,83 @@ async function handleApi(req, res, url) {
     return sendCsv(res, 'meet-results.csv', rows);
   }
 
+  /* ---------- athlete goals (coach-set target marks) ---------- */
+  if (p === '/api/goals' && req.method === 'GET') {
+    const profParam = clean(q.get('profileId') || '', 80);
+    if (profParam && !profileById(profParam)) {
+      return sendJson(res, 400, { error: 'Unknown athlete.' });
+    }
+    const goals = db.goals
+      .filter(g => !profParam || g.profileId === profParam)
+      .map(publicGoal);
+    return sendJson(res, 200, { goals });
+  }
+
+  if (p === '/api/goals' && req.method === 'POST') {
+    const body = await readBody(req);
+    const v = validateGoalInput(body);
+    if (v.error) return sendJson(res, v.status, { error: v.error });
+    const now = new Date().toISOString();
+    /* One ACTIVE goal per athlete per event: setting a new target
+       for a pair that already has one replaces it in place — the
+       goal keeps its id and createdAt, only the target moves. */
+    const existing = db.goals.find(g => g.profileId === v.prof.id && g.event === v.ev.key);
+    if (existing) {
+      existing.targetText = v.rawTarget;
+      existing.targetValue = v.value;
+      existing.updatedAt = now;
+      saveDb();
+      return sendJson(res, 200, { goal: publicGoal(existing), replaced: true });
+    }
+    const goal = {
+      id: crypto.randomUUID(), profileId: v.prof.id, event: v.ev.key,
+      targetText: v.rawTarget, targetValue: v.value, createdAt: now, updatedAt: now,
+    };
+    db.goals.push(goal);
+    saveDb();
+    return sendJson(res, 201, { goal: publicGoal(goal), replaced: false });
+  }
+
+  const goalMatch = p.match(/^\/api\/goals\/([^/]+)$/);
+  if (goalMatch && req.method === 'PUT') {
+    const goal = db.goals.find(g => g.id === decodeURIComponent(goalMatch[1]));
+    if (!goal) return sendJson(res, 404, { error: 'Goal not found.' });
+    const body = await readBody(req);
+    /* Validate the whole update into a candidate first; a bad field
+       changes nothing — the meet-results pattern. */
+    const ev = findMeetEvent(body.event !== undefined ? clean(body.event, 30) : goal.event);
+    if (!ev) return sendJson(res, 400, { error: 'Unknown event.' });
+    const next = { event: ev.key, targetText: goal.targetText, targetValue: goal.targetValue };
+    if (body.event !== undefined || body.target !== undefined) {
+      const rawTarget = body.target !== undefined
+        ? (typeof body.target === 'string' ? body.target.trim().slice(0, 20) : '')
+        : goal.targetText;
+      const parsed = parseMeetMark(ev, rawTarget);
+      if (parsed.error) return sendJson(res, 400, { error: parsed.error });
+      next.targetText = rawTarget;
+      next.targetValue = parsed.value;
+    }
+    /* Keep one active goal per pair: if this edit moves the goal
+       onto an event the athlete already targets, that older goal is
+       replaced (removed) — the edit the coach just made wins. */
+    if (next.event !== goal.event) {
+      db.goals = db.goals.filter(g =>
+        !(g.profileId === goal.profileId && g.event === next.event && g.id !== goal.id));
+    }
+    Object.assign(goal, next, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { goal: publicGoal(goal) });
+  }
+  if (goalMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(goalMatch[1]);
+    if (!db.goals.some(g => g.id === id)) {
+      return sendJson(res, 404, { error: 'Goal not found.' });
+    }
+    db.goals = db.goals.filter(g => g.id !== id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
   /* ---------- school records (coach writes; reads are public) --- */
   /* Validate + normalize one record payload. full=true for creates
      (event, name, mark required); edits pass the existing record and
@@ -3131,6 +3308,192 @@ async function handleApi(req, res, url) {
       health,
       meetPrs: meetPrsFor(prof.id),
       meetSeries: meetSeriesFor(prof.id),
+      goals: goalsForProfile(prof.id),
+    });
+  }
+
+  if (p === '/api/digest' && req.method === 'GET') {
+    /* Weekly coach digest: one week of the program, assembled from
+       the same stores and helpers the other coach views read — no
+       new data, never forked math. ?week= is any date in the week to
+       summarize (normalized to its Monday); omitted, it defaults to
+       the most recent COMPLETED week (last week's Monday). Sections
+       are computed independently and simply come back empty when a
+       week has none of their data. */
+    const rawWeek = q.get('week');
+    let monday;
+    if (rawWeek === null || rawWeek === '') {
+      monday = addDaysStr(mondayOf(todayStr()), -7);
+    } else {
+      if (!parseDateStr(rawWeek)) {
+        return sendJson(res, 400, { error: 'Week must be a date (YYYY-MM-DD).' });
+      }
+      monday = mondayOf(rawWeek);
+    }
+    const sunday = addDaysStr(monday, 6);
+    const inWeek = (ds) => !!ds && ds >= monday && ds <= sunday;
+
+    /* --- check-ins: participation against the live roster (the
+       roster × 7 denominator the Reports health aggregates use),
+       team averages, and who kept flagging. Flags mean what
+       checkinFlags says everywhere else. --- */
+    const roster = db.profiles.filter(pr => !pr.archived);
+    let ciRecorded = 0;
+    const ciWeek = [];
+    const flagByAthlete = new Map();
+    for (const pr of roster) {
+      const byDate = db.checkins[pr.id] || {};
+      for (const ds of Object.keys(byDate)) {
+        if (!inWeek(ds)) continue;
+        const c = byDate[ds];
+        ciRecorded++;
+        ciWeek.push(c);
+        const flags = checkinFlags(c);
+        if (!flags.length) continue;
+        let rec = flagByAthlete.get(pr.id);
+        if (!rec) {
+          rec = { profileId: pr.id, name: pr.firstName + ' ' + pr.lastName, flaggedDays: 0, counts: {} };
+          flagByAthlete.set(pr.id, rec);
+        }
+        rec.flaggedDays++;
+        for (const f of flags) rec.counts[f] = (rec.counts[f] || 0) + 1;
+      }
+    }
+    const ciAvg = (key) => (ciWeek.length
+      ? round2(ciWeek.reduce((s, c) => s + c[key], 0) / ciWeek.length) : null);
+    const flagged = [...flagByAthlete.values()].map(rec => {
+      let mainFlag = null, most = -1;
+      for (const f of ['low-sleep', 'high-soreness', 'low-energy']) {
+        if ((rec.counts[f] || 0) > most) { most = rec.counts[f] || 0; mainFlag = f; }
+      }
+      return {
+        profileId: rec.profileId, name: rec.name,
+        flaggedDays: rec.flaggedDays, mainFlag, flags: rec.counts,
+      };
+    }).sort((a, b) => b.flaggedDays - a.flaggedDays || a.name.localeCompare(b.name)).slice(0, 5);
+    const ciPossible = roster.length * 7;
+    const checkins = {
+      recorded: ciRecorded, possible: ciPossible,
+      percent: ciPossible ? Math.round((ciRecorded / ciPossible) * 100) : 0,
+      roster: roster.length,
+      avgSleep: ciAvg('sleep'), avgSoreness: ciAvg('soreness'), avgEnergy: ciAvg('energy'),
+      flaggedCount: flagByAthlete.size,
+      flagged,
+    };
+
+    /* --- training: per group, the Reports-completions counting for
+       this one week — assigned = days whose resolved assignment has
+       a session; completions = coach-marked records that week, with
+       the distinct days they cover. --- */
+    const training = {
+      groups: db.groups.map(g => {
+        let assigned = 0;
+        for (let i = 0; i < 7; i++) {
+          const a = resolveAssignment(g.id, addDaysStr(monday, i));
+          if (a && a.sessionId) assigned++;
+        }
+        const days = new Set();
+        let completions = 0;
+        for (const c of Object.values(db.completions)) {
+          if (c.groupId !== g.id || !inWeek(c.date)) continue;
+          completions++;
+          days.add(c.date);
+        }
+        return {
+          group: { id: g.id, name: g.name },
+          assigned, completedDays: days.size, completions,
+        };
+      }),
+    };
+
+    /* --- performance: meet results dated that week whose mark still
+       stands as the athlete's PR (the meetPrsFor / Meet Day summary
+       definition of a PR), each with its would-be rank on the school
+       record board; plus testing results ENTERED that week (their
+       createdAt week), counted by test. --- */
+    const weekResults = db.meetResults.filter(r => inWeek(r.date));
+    const prs = [];
+    for (const r of weekResults) {
+      const ev = findMeetEvent(r.event);
+      if (!ev) continue;
+      const standing = meetPrsFor(r.profileId).find(x => x.event === r.event);
+      if (!standing || standing.resultId !== r.id) continue;
+      const prof = profileById(r.profileId);
+      const recEv = findRecordEvent(r.event) || ev;
+      const rank = recordWouldRank(recEv, r.value);
+      prs.push({
+        profileId: r.profileId,
+        athleteName: prof ? prof.firstName + ' ' + prof.lastName : '',
+        event: r.event, eventName: ev.name,
+        mark: r.mark, value: r.value, date: r.date, meet: r.meet,
+        recordBoard: rank <= 10, recordRank: rank,
+      });
+    }
+    prs.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const byTestCount = new Map();
+    let testingTotal = 0;
+    for (const pid of Object.keys(db.testResults)) {
+      for (const r of db.testResults[pid] || []) {
+        if (!inWeek(String(r.createdAt || '').slice(0, 10))) continue;
+        testingTotal++;
+        byTestCount.set(r.testKey, (byTestCount.get(r.testKey) || 0) + 1);
+      }
+    }
+    const performance = {
+      meetResults: { count: weekResults.length, prs },
+      testing: {
+        total: testingTotal,
+        byTest: allTests().filter(t => byTestCount.has(t.key))
+          .map(t => ({ testKey: t.key, name: t.name, unit: t.unit, count: byTestCount.get(t.key) })),
+      },
+    };
+
+    /* --- health: concerns opened that week (createdAt), concerns
+       cleared that week (status cleared and its updatedAt — the
+       moment the status last changed — inside the week), and the
+       current open/monitoring snapshot. --- */
+    let opened = 0, cleared = 0, openNow = 0, monitoringNow = 0;
+    for (const pid of Object.keys(db.concerns)) {
+      for (const c of db.concerns[pid] || []) {
+        if (c.status === 'new') openNow++;
+        else if (c.status === 'monitoring') monitoringNow++;
+        if (inWeek(String(c.createdAt || '').slice(0, 10))) opened++;
+        if (c.status === 'cleared' && inWeek(String(c.updatedAt || '').slice(0, 10))) cleared++;
+      }
+    }
+    const health = { opened, cleared, open: openNow, monitoring: monitoringNow };
+
+    /* --- the week after the one summarized: the plan snapshot, so
+       the digest reads "last week / the week coming". planDayFor
+       clamps outside the season edges, as everywhere else. --- */
+    const aheadMonday = addDaysStr(monday, 7);
+    const aheadDays = [];
+    let trainingDays = 0, highDays = 0;
+    for (let i = 0; i < 7; i++) {
+      const ds = addDaysStr(aheadMonday, i);
+      const plan = ds ? planDayFor(ds) : null;
+      if (!plan) {
+        aheadDays.push({ date: ds, dayKey: DAY_KEYS[i], codes: [], isHigh: false, isOff: true, isMeet: false, isTest: false });
+        continue;
+      }
+      if (!plan.isOff) trainingDays++;
+      if (plan.isHigh) highDays++;
+      aheadDays.push({
+        date: ds, dayKey: plan.dayKey, codes: plan.codes,
+        isHigh: plan.isHigh, isOff: plan.isOff, isMeet: plan.isMeet, isTest: plan.isTest,
+      });
+    }
+    const aheadPlan = planDayFor(aheadMonday);
+    const weekAhead = {
+      week: aheadMonday, weekEnd: addDaysStr(aheadMonday, 6),
+      seasonWeek: aheadPlan ? aheadPlan.week : null,
+      phase: aheadPlan ? aheadPlan.phase : '',
+      trainingDays, highDays, days: aheadDays,
+    };
+
+    return sendJson(res, 200, {
+      week: monday, weekEnd: sunday,
+      checkins, training, performance, health, weekAhead,
     });
   }
 

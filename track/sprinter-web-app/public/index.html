@@ -98,6 +98,7 @@
       </div>
     </div>
     <div id="checkin-slot"></div>
+    <div id="goals-slot"></div>
     <div id="home-content"><p class="muted">Loading…</p></div>
   </section>
 
@@ -144,8 +145,10 @@
       <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
       <button type="button" class="menu-item" data-view="meets">Meet Results <span>Race and field marks, PRs, and the team PR board</span></button>
       <button type="button" class="menu-item" data-view="meetday">Meet Day <span>Run the meet: entries by event, a live checklist, and fast results with PR flags</span></button>
+      <button type="button" class="menu-item" data-view="goals">Goals <span>Season target marks for every athlete, with progress from their real results</span></button>
       <button type="button" class="menu-item" data-view="records">School Records <span>Manage the all-time top 10 board</span></button>
       <button type="button" class="menu-item" data-view="reports">Reports <span>Team trends, completion and load charts, and athlete report cards</span></button>
+      <button type="button" class="menu-item" data-view="digest">Weekly Digest <span>Last week at a glance — check-ins, training, PRs, health — and the week coming</span></button>
       <button type="button" class="menu-item" data-view="wellness">Daily Wellness <span>Who checked in today — sleep, soreness, and energy, with flags</span></button>
       <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
       <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
@@ -631,6 +634,15 @@
     <div id="meetday-main"></div>
   </section>
 
+  <!-- GOALS (coach) -->
+  <section id="view-goals" class="view">
+    <h1>Goals</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One target mark per athlete per event. Progress is figured from their real meet results — the first mark they record is the baseline, their PR is where they stand. Coaches only.</p>
+    <div id="goals-main"></div>
+  </section>
+
   <!-- REPORTS (coach) -->
   <section id="view-reports" class="view">
     <h1>Reports</h1>
@@ -638,6 +650,15 @@
     <div class="subnav-slot"></div>
     <p class="view-sub muted">The program in charts: strength trends, who is completing the work, planned load, and health — plus a printable report card for every athlete.</p>
     <div id="reports-main"></div>
+  </section>
+
+  <!-- WEEKLY DIGEST (coach) -->
+  <section id="view-digest" class="view">
+    <h1>Weekly Digest</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One week of the program, assembled for you: who checked in, who trained, what got faster, what needs attention — and the week coming.</p>
+    <div id="digest-main"></div>
   </section>
 
   <!-- WELLNESS (coach) -->

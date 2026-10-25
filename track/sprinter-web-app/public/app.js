@@ -49,9 +49,13 @@ const state = {
   reportTest: null,
   reportGroup: null,
   reportAthleteId: null,
+  digestWeek: null,
   meetEvents: [],
   meetEditId: null,
   meetProgAthlete: null,
+  goalAthleteId: null,
+  goalEditId: null,
+  myGoals: null,
   meetDayId: null,
   meetDayEvent: null,
   meetDayFlags: null,
@@ -221,12 +225,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
   videos: 'learn', definitions: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', reports: 'coachhub', custom: 'coachhub', wellness: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['reports', 'Reports'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -247,6 +251,8 @@ function showView(name) {
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'reports') renderReports();
+  if (name === 'goals') renderGoals();
+  if (name === 'digest') renderDigest();
   if (name === 'meets') renderMeets();
   if (name === 'meetday') renderMeetDay();
   if (name === 'records') renderRecords();
@@ -809,6 +815,7 @@ function logEntryHtml(e) {
 }
 function renderLog() {
   renderCheckin();
+  renderMyGoals();
   const gate = $('#log-gate');
   const main = $('#log-main');
   if (!state.user) {
@@ -905,7 +912,7 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
-  renderMeets(); renderMeetDay(); renderReports(); renderWellness(); renderCustomWorkouts();
+  renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderWellness(); renderCustomWorkouts();
   renderWarmupCards();
   if (isCoach) loadMedia();
 }
@@ -3176,7 +3183,7 @@ async function renderReportCard() {
   catch (err) { zone.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   const pr = data.profile;
   const hasData = !!(data.testing.length || data.weekly.length || data.meetPrs.length
-    || data.completions.total || data.health.total);
+    || data.completions.total || data.health.total || (data.goals && data.goals.length));
   const compLine = data.completions.percent !== null
     ? `<strong>${data.completions.count}</strong> of <strong>${data.completions.denominator}</strong> assigned session days completed (<strong>${data.completions.percent}%</strong>) since they joined the roster`
     : `<strong>${data.completions.total}</strong> sessions marked complete — no assigned-day window to compare against yet`;
@@ -3187,6 +3194,7 @@ async function renderReportCard() {
       { name: t.name, unit: t.unit, better: 'higher' }, true)).join('');
   const weeklyRows = data.weekly.map(w => `<tr><td>${esc(w.metric.name)}</td><td>${w.best !== null && w.best !== undefined ? fmtNum(w.best) + ' ' + esc(w.metric.unit) : '—'}</td><td>${fmtNum(w.latest)} ${esc(w.metric.unit)}</td><td>${deltaHtml(w.metric, w)}</td></tr>`).join('');
   const meetRows = data.meetPrs.map(m => `<tr><td>${esc(m.name)}</td><td><strong>${esc(m.mark)}</strong></td><td>${esc(m.date)}</td><td>${esc(m.meet)}</td></tr>`).join('');
+  const goalRows = (data.goals || []).map(g => `<tr><td>${esc(g.eventName)}</td><td><strong>${esc(g.targetText)}</strong></td><td>${g.current ? esc(g.current.mark) : '—'}</td><td>${g.progressPct === null ? 'No marks yet' : g.progressPct + '%' + (g.achieved ? ' ★ Goal hit' : '')}</td><td>${esc(goalGapText(g) || '')}</td></tr>`).join('');
   zone.innerHTML = `
     <div class="report-card" id="report-card-print">
       <div class="rc-head">
@@ -3204,6 +3212,8 @@ async function renderReportCard() {
       ${data.meetPrs.length
         ? `<div class="table-wrap"><table class="ranked"><thead><tr><th>Event</th><th>PR</th><th>Date</th><th>Meet</th></tr></thead><tbody>${meetRows}</tbody></table></div>`
         : '<p class="muted">No meet results yet.</p>'}
+      ${data.goals && data.goals.length ? `<h4>Goals</h4>
+      <div class="table-wrap"><table class="ranked"><thead><tr><th>Event</th><th>Target</th><th>Current PR</th><th>Progress</th><th>Gap</th></tr></thead><tbody>${goalRows}</tbody></table></div>` : ''}
       <h4>Health (coach record)</h4>
       <p class="rc-line">Open: <strong>${data.health.open}</strong> · Monitoring: <strong>${data.health.monitoring}</strong> · Cleared: <strong>${data.health.cleared}</strong> · Total recorded: <strong>${data.health.total}</strong></p>`
       : '<p class="muted">No data recorded yet for this athlete — testing, weekly numbers, completions, and meet results will build this card.</p>'}
@@ -3225,6 +3235,104 @@ async function renderReportCard() {
   });
 }
 
+/* ---------------- weekly digest (coach) ----------------
+   One week of the program on a single screen, read from
+   GET /api/digest. state.digestWeek is the Monday being viewed;
+   null lets the server pick its default (the most recent completed
+   week). Prev/next step seven days from the week on screen. */
+const digestDayLabel = (ds) => parseDate(ds).toLocaleDateString(undefined, { weekday: 'short' });
+const digestRangeLabel = (a, b) => fmtDate(parseDate(a)) + ' – ' + fmtDate(parseDate(b));
+async function renderDigest() {
+  const el = $('#digest-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The weekly digest lives here.'); return; }
+  let data;
+  try {
+    data = await api('/api/digest' + (state.digestWeek ? '?week=' + encodeURIComponent(state.digestWeek) : ''));
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  state.digestWeek = data.week;
+  const ci = data.checkins;
+  const ciHtml = ci.recorded
+    ? `<div class="hero-stats">
+        <div class="hero-stat"><div class="stat-num">${ci.recorded}/${ci.possible}</div><div class="stat-label">Check-ins (${ci.percent}%)</div></div>
+        <div class="hero-stat"><div class="stat-num">${ci.avgSleep}h</div><div class="stat-label">Avg sleep</div></div>
+        <div class="hero-stat"><div class="stat-num">${ci.avgSoreness}</div><div class="stat-label">Avg soreness</div></div>
+        <div class="hero-stat"><div class="stat-num">${ci.avgEnergy}</div><div class="stat-label">Avg energy</div></div>
+      </div>`
+      + (ci.flagged.length
+        ? `<p><strong>${ci.flaggedCount} athlete${ci.flaggedCount === 1 ? '' : 's'} flagged</strong> — most flagged:</p><ul class="digest-list">${ci.flagged.map(f =>
+          `<li><strong>${esc(f.name)}</strong> — flagged ${f.flaggedDays} day${f.flaggedDays === 1 ? '' : 's'}, mostly ${esc(CHECKIN_FLAG_LABELS[f.mainFlag] || f.mainFlag)}</li>`).join('')}</ul>`
+        : '<p class="muted">Nobody flagged all week — sleep, soreness, and energy stayed in range.</p>')
+    : '<p class="muted">No check-ins recorded that week.</p>';
+  const trHtml = data.training.groups.length
+    ? `<div class="table-wrap"><table class="ranked"><thead><tr><th>Group</th><th>Days done</th><th>Assigned days</th><th>Completions</th></tr></thead><tbody>${data.training.groups.map(g =>
+      `<tr><td>${esc(g.group.name)}</td><td><strong>${g.completedDays}</strong></td><td>${g.assigned}</td><td>${g.completions}</td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="muted">No groups yet — completions by group appear here once the roster has groups.</p>';
+  const perf = data.performance;
+  const prHtml = perf.meetResults.prs.length
+    ? `<ul class="digest-list">${perf.meetResults.prs.map(pr =>
+      `<li><strong>${esc(pr.athleteName)}</strong> — ${esc(pr.eventName)}: <strong>${esc(pr.mark)}</strong> (${esc(pr.meet)}, ${esc(pr.date)})${pr.recordBoard ? ` <span class="digest-badge">Top 10 all-time — would rank #${pr.recordRank}</span>` : ''}</li>`).join('')}</ul>`
+    : '';
+  const testHtml = perf.testing.total
+    ? `<p>${perf.testing.byTest.map(t => `<strong>${t.count}</strong> × ${esc(t.name)}`).join(' · ')} entered this week.</p>`
+    : '';
+  const perfHtml = (perf.meetResults.count || perf.testing.total)
+    ? `<p class="muted">${perf.meetResults.count} meet result${perf.meetResults.count === 1 ? '' : 's'} recorded this week${perf.meetResults.prs.length ? `, ${perf.meetResults.prs.length} standing as PRs` : ''}.</p>${prHtml}${testHtml}`
+    : '<p class="muted">No meet results or testing entered that week.</p>';
+  const h = data.health;
+  const healthHtml = `<div class="hero-stats">
+      <div class="hero-stat"><div class="stat-num">${h.opened}</div><div class="stat-label">Opened this week</div></div>
+      <div class="hero-stat"><div class="stat-num">${h.cleared}</div><div class="stat-label">Cleared this week</div></div>
+      <div class="hero-stat"><div class="stat-num">${h.open}</div><div class="stat-label">Open now</div></div>
+      <div class="hero-stat"><div class="stat-num">${h.monitoring}</div><div class="stat-label">Monitoring now</div></div>
+    </div>`
+    + (!h.opened && !h.cleared && !h.open && !h.monitoring
+      ? '<p class="muted">No aches &amp; pains on the books — nothing opened, nothing outstanding.</p>' : '');
+  const wa = data.weekAhead;
+  const waHtml = `<p><strong>Season week ${wa.seasonWeek}${wa.phase ? ' · ' + esc(wa.phase) : ''}</strong> — ${wa.trainingDays} training day${wa.trainingDays === 1 ? '' : 's'}, ${wa.highDays} high-CNS.</p>`
+    + `<div class="table-wrap"><table class="ranked"><thead><tr><th>Day</th><th>Sessions</th><th></th></tr></thead><tbody>${wa.days.map(d =>
+      `<tr><td>${digestDayLabel(d.date)} ${esc(d.date.slice(5))}</td><td>${d.isOff ? '<span class="muted">Off</span>' : d.codes.map(esc).join(' + ')}</td><td>${d.isMeet ? 'Meet' : d.isTest ? 'Test day' : d.isHigh ? 'High' : d.isOff ? '' : 'Low'}</td></tr>`).join('')}</tbody></table></div>`;
+  el.innerHTML = `
+    <div class="card digest-head">
+      <div class="digest-nav">
+        <button type="button" class="btn" id="digest-prev">← Prev week</button>
+        <h2>Week of ${digestRangeLabel(data.week, data.weekEnd)}</h2>
+        <button type="button" class="btn" id="digest-next">Next week →</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Check-ins</h2>
+      <p class="muted">Daily sleep, soreness, and energy from the athletes — ${ci.roster} on the roster.</p>
+      ${ciHtml}
+    </div>
+    <div class="card">
+      <h2>Training</h2>
+      <p class="muted">Assigned session days vs the days each group got work marked complete.</p>
+      ${trHtml}
+    </div>
+    <div class="card">
+      <h2>Performance</h2>
+      ${perfHtml}
+    </div>
+    <div class="card">
+      <h2>Health</h2>
+      ${healthHtml}
+    </div>
+    <div class="card">
+      <h2>The week coming — ${digestRangeLabel(wa.week, wa.weekEnd)}</h2>
+      ${waHtml}
+    </div>`;
+  const stepWeek = (delta) => {
+    const d = parseDate(data.week);
+    d.setDate(d.getDate() + delta);
+    state.digestWeek = dateStrOf(d);
+    renderDigest();
+  };
+  const pv = $('#digest-prev');
+  if (pv) pv.addEventListener('click', () => stepWeek(-7));
+  const nx = $('#digest-next');
+  if (nx) nx.addEventListener('click', () => stepWeek(7));
+}
 async function renderMeets() {
   const el = $('#meets-main');
   if (!el) return;
@@ -3706,6 +3814,146 @@ async function renderRecords() {
       renderRecords();
     } catch (err) { alert(err.message); }
   }));
+}
+
+/* ================================================================
+   GOALS — coach-set target marks, one active goal per athlete per
+   event. The server computes progress from the athlete's real meet
+   results (first mark = baseline, PR = current) through the shared
+   meet parser, so a goal reads the same in this manager, on the
+   athlete's own Today page, and on the printed report card.
+   ================================================================ */
+function goalGapText(g) {
+  if (!g.current || g.gap === null || g.gap === undefined) return '';
+  if (g.achieved) return 'Target hit';
+  return fmtNum(g.gap) + ' ' + (g.type === 'time' ? 'sec' : 'in') + ' to go';
+}
+function goalProgressInner(g) {
+  if (!g.current) {
+    return '<p class="muted">No marks yet — first race sets the baseline.</p>';
+  }
+  return `<p class="rc-line">PR: <strong>${esc(g.current.mark)}</strong>`
+    + (g.baseline ? ` · Started at ${esc(g.baseline.mark)}` : '')
+    + (goalGapText(g) ? ` · ${esc(goalGapText(g))}` : '') + '</p>'
+    + `<div class="goal-bar"><div class="goal-bar-fill" style="width:${g.progressPct}%"></div></div>`
+    + `<p class="muted">${g.progressPct}% of the way from the first mark to the goal.</p>`;
+}
+
+async function renderGoals() {
+  const el = $('#goals-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Athlete goals live here.'); return; }
+  await refreshProfiles();
+  let events, goals;
+  try {
+    const [e, g] = await Promise.all([api('/api/meet-events'), api('/api/goals')]);
+    events = e.events; goals = g.goals;
+    state.meetEvents = events;
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const roster = state.profiles.filter(p => !p.archived);
+  if (!state.goalAthleteId || !roster.some(p => p.id === state.goalAthleteId)) {
+    state.goalAthleteId = roster.length ? roster[0].id : null;
+  }
+  const pid = state.goalAthleteId;
+  const prof = pid ? state.profiles.find(p => p.id === pid) : null;
+  const mine = goals.filter(g => g.profileId === pid);
+  const edit = state.goalEditId ? mine.find(g => g.id === state.goalEditId) : null;
+  if (state.goalEditId && !edit) state.goalEditId = null;
+  const markHint = (type) => type === 'time'
+    ? 'Time: seconds (10.87) or minutes:seconds (1:55.20).'
+    : 'Mark: feet-inches (21-06.5), 21\'6.5, a plain number in feet, or meters with an m (6.45m).';
+  const editEvent = edit ? events.find(e2 => e2.key === edit.event) : null;
+  el.innerHTML = `
+    <div class="card">
+      <h2>Pick an athlete</h2>
+      <label>Athlete <select id="goal-athlete">${profileOptions(pid, true)}</select></label>
+    </div>
+    <form class="card" id="goal-form">
+      <h2>${edit ? 'Edit goal' : 'Set a goal'}${prof ? ' — ' + esc(prof.name) : ''}</h2>
+      <div class="filter-row">
+        <label>Event <select id="gf-event">${events.map(ev => `<option value="${ev.key}" ${edit && edit.event === ev.key ? 'selected' : ''}>${esc(ev.name)} (${ev.type === 'time' ? 'time' : 'field'})</option>`).join('')}</select></label>
+        <label>Target mark <input type="text" id="gf-target" placeholder="10.87 · 1:55.20 · 21-06.5" value="${edit ? esc(edit.targetText) : ''}" required></label>
+      </div>
+      <p class="muted" id="gf-hint">${markHint(editEvent ? editEvent.type : 'time')}</p>
+      <p class="muted">One goal per athlete per event — setting a target for an event that already has one replaces it.</p>
+      <button class="btn primary" type="submit">${edit ? 'Save changes' : 'Set goal'}</button>
+      ${edit ? '<button class="btn secondary" id="gf-cancel" type="button">Cancel edit</button>' : ''}
+      <p class="error" id="gf-err"></p>
+    </form>
+    <div class="card">
+      <h2>${prof ? esc(prof.name) + ' — goals' : 'Goals'}</h2>
+      ${mine.length ? mine.map(g => `
+        <div class="goal-row">
+          <div class="goal-head"><strong>${esc(g.eventName)}</strong> <span class="muted">Target: <strong>${esc(g.targetText)}</strong></span>
+          ${g.achieved ? '<span class="badge star">GOAL HIT ★</span>' : ''}</div>
+          ${goalProgressInner(g)}
+          <p><button class="btn secondary" data-goal-edit="${g.id}" type="button" style="width:auto;padding:2px 10px">Edit</button>
+          <button class="btn danger" data-goal-del="${g.id}" type="button" style="width:auto;padding:2px 10px">Delete</button></p>
+        </div>`).join('')
+        : '<p class="muted">No goals yet for this athlete — set the first target above.</p>'}
+    </div>`;
+  const athSel = $('#goal-athlete');
+  if (athSel) athSel.addEventListener('change', () => {
+    state.goalAthleteId = athSel.value || null;
+    state.goalEditId = null;
+    renderGoals();
+  });
+  const evSel = $('#gf-event');
+  if (evSel) evSel.addEventListener('change', () => {
+    const ev = events.find(e2 => e2.key === evSel.value);
+    $('#gf-hint').textContent = markHint(ev ? ev.type : 'time');
+  });
+  $('#goal-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!pid) { $('#gf-err').textContent = 'Pick an athlete first.'; return; }
+    const body = { event: $('#gf-event').value, target: $('#gf-target').value };
+    try {
+      if (state.goalEditId) await apiPut('/api/goals/' + encodeURIComponent(state.goalEditId), body);
+      else await apiPost('/api/goals', Object.assign({ profileId: pid }, body));
+      state.goalEditId = null;
+      renderGoals();
+    } catch (err) { $('#gf-err').textContent = err.message; }
+  });
+  const cancel = $('#gf-cancel');
+  if (cancel) cancel.addEventListener('click', () => { state.goalEditId = null; renderGoals(); });
+  el.querySelectorAll('[data-goal-edit]').forEach(b => b.addEventListener('click', () => {
+    state.goalEditId = b.dataset.goalEdit;
+    renderGoals();
+    window.scrollTo(0, 0);
+  }));
+  el.querySelectorAll('[data-goal-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Delete this goal?')) return;
+    try {
+      await apiDel('/api/goals/' + encodeURIComponent(b.dataset.goalDel));
+      if (state.goalEditId === b.dataset.goalDel) state.goalEditId = null;
+      renderGoals();
+    } catch (err) { alert(err.message); }
+  }));
+}
+
+/* The athlete's own goals card (Today page). Read-only, and only
+   for a linked athlete — an unlinked account sees nothing here. */
+async function renderMyGoals() {
+  const slot = $('#goals-slot');
+  if (!slot) return;
+  if (!isAthleteUser()) { slot.innerHTML = ''; state.myGoals = null; return; }
+  let data;
+  try { data = await api('/api/goals/mine'); }
+  catch (_) { slot.innerHTML = ''; return; }
+  state.myGoals = data;
+  if (!data.linked) { slot.innerHTML = ''; return; }
+  slot.innerHTML = `<div class="card">
+    <h2>My Goals</h2>
+    ${data.goals.length
+      ? '<p class="muted">The target marks your coach set for you — and how close your PR is getting.</p>'
+        + data.goals.map(g => `
+        <div class="goal-row">
+          <div class="goal-head"><strong>${esc(g.eventName)}</strong> <span class="muted">Target: <strong>${esc(g.targetText)}</strong></span>
+          ${g.achieved ? '<span class="badge star">GOAL HIT ★</span>' : ''}</div>
+          ${goalProgressInner(g)}
+        </div>`).join('')
+      : '<p class="muted">No goals set yet — when your coach sets a target mark for you, it shows up here with your progress toward it.</p>'}
+  </div>`;
 }
 
 /* ================================================================
