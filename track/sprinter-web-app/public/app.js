@@ -33,6 +33,7 @@ const state = {
   testDays: [],
   testDayId: null,
   rapidAthleteId: null,
+  histAthleteId: null,
   topMetric: 'fly-30m',
   entryMetric: 'fly-30m',
   topWeek: null,
@@ -50,6 +51,7 @@ const state = {
   reportGroup: null,
   reportAthleteId: null,
   digestWeek: null,
+  digestLatest: null,
   meetEvents: [],
   meetEditId: null,
   meetProgAthlete: null,
@@ -61,6 +63,7 @@ const state = {
   meetDayFlags: null,
   recEvents: [],
   recEvent: '100m',
+  recEventPicked: false,
   recEditId: null,
   checkinToday: null,
   checkinMine: null,
@@ -71,6 +74,7 @@ const state = {
   pfTop: false,
   pfQ: '',
   importReport: null,
+  importText: '',
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -240,6 +244,13 @@ function renderSubnav(name, area) {
     slot.innerHTML = '<nav class="seg" aria-label="In this section">' + items.map(([v, label]) =>
       `<button type="button" class="seg-btn${v === name ? ' active' : ''}" data-view="${v}">${label}</button>`).join('') + '</nav>';
   });
+  /* The active pill can sit off the right edge of the scrolling strip on
+     phones; scroll the strip (never the page) so it's visible. */
+  const actBtn = activeSection ? activeSection.querySelector('.seg-btn.active') : null;
+  if (actBtn && actBtn.parentElement) {
+    const nav = actBtn.parentElement;
+    nav.scrollLeft += actBtn.getBoundingClientRect().left - nav.getBoundingClientRect().left - 24;
+  }
 }
 function showView(name) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
@@ -250,6 +261,14 @@ function showView(name) {
      the app chrome (CSS), and its timers run only while it shows. */
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
+  if (name === 'home' || name === 'log') renderCheckin();
+  if (name === 'coach') renderCoach();
+  if (name === 'groups') renderGroups();
+  if (name === 'testing') renderTesting();
+  if (name === 'top') renderTop();
+  if (name === 'health') renderHealth();
+  if (name === 'inventory') renderInventory();
+  if (name === 'wellness') renderWellness();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
   if (name === 'digest') renderDigest();
@@ -327,14 +346,26 @@ function sessionDetailHtml(s) {
     <p class="muted">Source: ${esc(s.source)}</p>
   </div>`;
 }
+const DETAIL_FROM_LABELS = { home: 'Today', season: 'Season Plan', coach: "Today's Checklist", log: 'My Log' };
 function openSession(id) {
   const s = state.sessions.get(id);
   if (!s) return;
+  const activeView = (document.querySelector('.view.active') || {}).id || '';
+  const from = activeView.replace('view-', '');
+  const fromLabel = DETAIL_FROM_LABELS[from];
   showView('library');
   $('#lib-list').innerHTML = '';
   $('#lib-count').textContent = '';
+  const filtersCard = $('#lib-filters');
+  if (filtersCard) filtersCard.hidden = true;
   $('#lib-detail').innerHTML = sessionDetailHtml(s);
-  $('#detail-back').addEventListener('click', () => { $('#lib-detail').innerHTML = ''; renderLibrary(); });
+  const backBtn = $('#detail-back');
+  if (fromLabel) backBtn.textContent = `← Back to ${fromLabel}`;
+  backBtn.addEventListener('click', () => {
+    $('#lib-detail').innerHTML = '';
+    renderLibrary();
+    if (fromLabel) showView(from);
+  });
   const runBtn = $('#detail-run');
   if (runBtn) runBtn.addEventListener('click', () => openRunner(sessionToRunnerPlan(s)));
   window.scrollTo(0, 0);
@@ -428,6 +459,7 @@ function renderHome() {
       </ol>
     </div>`;
 
+  $('#home-content').removeAttribute('aria-busy');
   $('#home-content').innerHTML = `
     <h1>Today</h1>
     ${LANE_DIVIDER}
@@ -455,11 +487,13 @@ function renderHome() {
     <button class="btn" id="home-open-season" type="button">Open the full season plan</button>
     ${state.user ? '<h2>Your latest log entries</h2>' + LANE_DIVIDER + '<div id="home-logs"></div>' : '<div class="card"><strong>Keep a practice log.</strong><p class="muted">Create a free account to save what your group actually ran, and to save cross-training swaps. <button class="btn secondary" data-goto="account" type="button">Go to account</button></p></div>'}
   `;
-  $('#home-search-btn').addEventListener('click', () => {
+  const runHomeSearch = () => {
     state.libQuery = $('#home-search').value;
     $('#lib-search').value = state.libQuery;
     showView('library'); renderLibrary();
-  });
+  };
+  $('#home-search-btn').addEventListener('click', runHomeSearch);
+  $('#home-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runHomeSearch(); } });
   $('#home-open-season').addEventListener('click', () => { state.week = wkNum; renderSeason(); showView('season'); });
   const warmBtn = $('#home-warmup-card');
   if (warmBtn) warmBtn.addEventListener('click', openWarmupCard);
@@ -488,7 +522,11 @@ async function renderCoachToday() {
   if (!el) return;
   let data;
   try { data = await api('/api/coach/today'); }
-  catch (_) { el.innerHTML = ''; return; }
+  catch (err) {
+    el.innerHTML = `<div class="card"><p class="error">Could not load today's coach summary: ${esc(err.message)}</p><button class="btn secondary" id="ct-retry" type="button">Retry</button></div>`;
+    const rb = $('#ct-retry'); if (rb) rb.addEventListener('click', renderCoachToday);
+    return;
+  }
   const planLabel = data.week
     ? `Week ${data.week} · ${esc(data.phase || '')} · ${esc(data.dayName || '')}`
     : 'Outside the season plan';
@@ -613,7 +651,16 @@ function renderLibrary() {
   });
   $('#lib-count').textContent = `Showing ${list.length} of ${state.content.sessions.length} workouts.`;
   $('#lib-detail').innerHTML = '';
-  $('#lib-list').innerHTML = list.length ? list.map(sessionRow).join('') : '<p class="muted">No workouts match. Try clearing a filter.</p>';
+  const filtersCard = $('#lib-filters');
+  if (filtersCard) filtersCard.hidden = false;
+  $('#lib-list').innerHTML = list.length ? list.map(sessionRow).join('') : '<p class="muted">No workouts match those filters.</p><button class="btn secondary" id="lib-clear" type="button">Clear search &amp; filters</button>';
+  const clearBtn = $('#lib-clear');
+  if (clearBtn) clearBtn.addEventListener('click', () => {
+    state.libQuery = '';
+    $('#lib-search').value = '';
+    $('#lib-quality').value = ''; $('#lib-phase').value = ''; $('#lib-cns').value = '';
+    renderLibrary();
+  });
 }
 function fillLibFilters() {
   const qualities = [...new Set(state.content.sessions.map(s => s.quality))];
@@ -825,7 +872,7 @@ function fillWeekJump() {
 function logEntryHtml(e) {
   const s = e.sessionId ? state.sessions.get(e.sessionId) : null;
   return `<div class="card log-entry">
-    <div class="head"><strong>${esc(e.date)}${e.sessionId ? ' · ' + esc(e.sessionId) : ''}</strong>
+    <div class="head"><strong>${esc(fmtDate(parseDate(e.date)))}${e.sessionId ? ' · ' + esc(e.sessionId) : ''}</strong>
     ${e.feel ? `<span class="badge plain">felt ${e.feel}/5</span>` : ''}</div>
     ${s ? `<div>${esc(s.name)}</div>` : ''}
     ${e.group ? `<div class="muted">${esc(e.group)}</div>` : ''}
@@ -891,7 +938,11 @@ function renderAccount() {
       <div id="coach-invites"></div>`;
     renderCoachAccounts();
     renderCoachInvites();
-    const out = async () => { await apiPost('/api/logout'); state.user = null; await refreshUserData(); syncAuthUi(); };
+    const out = async () => {
+      try { await apiPost('/api/logout'); }
+      catch (err) { alert('Log out failed: ' + err.message); return; }
+      state.user = null; await refreshUserData(); syncAuthUi(); showView('home');
+    };
     $('#chip-logout').addEventListener('click', out);
     $('#acct-logout').addEventListener('click', out);
   } else {
@@ -904,10 +955,11 @@ function renderAccount() {
         <label>Password <input type="password" id="li-pass" required autocomplete="current-password"></label>
         <button class="btn primary" type="submit">Log in</button>
         <p class="error" id="li-err"></p>
+        <p class="muted">Forgot your password? There is no self-service reset yet — athletes, ask your coach; coaches, ask the app owner.</p>
       </form>
       <form id="register-form" class="card">
         <h2>Create an account</h2>
-        <p class="muted">Free. You only need an account to save a practice log and cross-training swaps — everything else is open.</p>
+        <p class="muted">Free. Athletes: use your school email — your account is how your coach links you for the daily check-in, and it holds your practice log and cross-training swaps. Coach accounts unlock the coach tools.</p>
         <label>Email <input type="email" id="rg-email" required autocomplete="email"></label>
         <label>Password (8+ characters) <input type="password" id="rg-pass" required autocomplete="new-password" minlength="8"></label>
         <button class="btn primary" type="submit">Create account</button>
@@ -917,14 +969,14 @@ function renderAccount() {
       e.preventDefault();
       try {
         state.user = await apiPost('/api/login', { email: $('#li-email').value, password: $('#li-pass').value });
-        await refreshUserData(); syncAuthUi(); showView('log');
+        await refreshUserData(); syncAuthUi(); showView(state.user.role === 'coach' ? 'coachhub' : 'home');
       } catch (err) { $('#li-err').textContent = err.message; }
     });
     $('#register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
         state.user = await apiPost('/api/register', { email: $('#rg-email').value, password: $('#rg-pass').value });
-        await refreshUserData(); syncAuthUi(); showView('log');
+        await refreshUserData(); syncAuthUi(); showView(state.user.role === 'coach' ? 'coachhub' : 'home');
       } catch (err) { $('#rg-err').textContent = err.message; }
     });
   }
@@ -950,7 +1002,7 @@ const CHECKIN_FLAG_LABELS = { 'low-sleep': 'Low sleep', 'high-soreness': 'Very s
 function isAthleteUser() { return !!(state.user && state.user.role === 'athlete'); }
 function checkinLine(c) {
   return `Slept ${c.sleep}h · Soreness ${c.soreness}/5 · Energy ${c.energy}/5`
-    + (c.hurts && c.painText ? ` · Hurts: ${c.painText}` : '');
+    + (c.hurts && c.painText ? ` · Hurts: ${esc(c.painText)}` : '');
 }
 
 async function renderCheckin() {
@@ -964,8 +1016,9 @@ async function renderCheckin() {
   try {
     const [today, mine] = await Promise.all([api('/api/checkin/today'), api('/api/checkin/mine')]);
     state.checkinToday = today; state.checkinMine = mine;
-  } catch (_) {
-    if (slot) slot.innerHTML = '';
+  } catch (err) {
+    if (slot) slot.innerHTML = `<div class="card checkin-card"><h2>Daily Check-In</h2><p class="error">Could not load your check-in: ${esc(err.message)}</p><button class="btn secondary" id="ci-retry" type="button">Retry</button></div>`;
+    const rb = slot && slot.querySelector('#ci-retry'); if (rb) rb.addEventListener('click', renderCheckin);
     if (hist) hist.innerHTML = '';
     return;
   }
@@ -989,39 +1042,59 @@ async function renderCheckin() {
         <div class="ci-label">Sleep last night</div>
         <div class="ci-stepper">
           <button type="button" class="tap-btn" id="ci-sleep-minus" aria-label="Less sleep">−</button>
-          <span class="ci-sleep-val" id="ci-sleep-val">${c ? c.sleep : 8} hrs</span>
+          <span class="ci-sleep-val" id="ci-sleep-val">${c ? c.sleep + ' hrs' : '— hrs'}</span>
           <button type="button" class="tap-btn" id="ci-sleep-plus" aria-label="More sleep">+</button>
         </div>
         <div class="ci-label">How sore are you? <span class="muted">(1 = fresh, 5 = very sore)</span></div>
-        <div class="ci-taps">${tapRow('soreness', c ? c.soreness : 3)}</div>
+        <div class="ci-taps">${tapRow('soreness', c ? c.soreness : null)}</div>
         <div class="ci-label">Energy today <span class="muted">(1 = drained, 5 = full)</span></div>
-        <div class="ci-taps">${tapRow('energy', c ? c.energy : 3)}</div>
+        <div class="ci-taps">${tapRow('energy', c ? c.energy : null)}</div>
         <label class="check-line ci-hurts"><input type="checkbox" id="ci-hurts" ${c && c.hurts ? 'checked' : ''}> Something hurts</label>
         <div id="ci-pain-wrap" ${c && c.hurts ? '' : 'hidden'}>
           <label>What hurts, and where? <input type="text" id="ci-pain" maxlength="240" value="${esc(c ? c.painText : '')}" placeholder="e.g. Right hamstring feels tight"></label>
         </div>
         <label>Anything else? (optional) <input type="text" id="ci-note" maxlength="500" value="${esc(c ? c.note : '')}" placeholder="Short note for your coach"></label>
+        ${c ? '' : '<p class="muted" id="ci-hint">Tap each answer to fill it in — nothing is pre-filled, so what saves is really yours.</p>'}
         <button class="btn primary ci-save" id="ci-save" type="button">${c ? 'Update check-in' : 'Save check-in'}</button>
         ${state.ciMsg ? `<p class="muted">${esc(state.ciMsg)}</p>` : ''}
       </div>`;
-      let sleep = c ? c.sleep : 8;
-      const picked = { soreness: c ? c.soreness : 3, energy: c ? c.energy : 3 };
+      /* A brand-new check-in starts EMPTY (sleep null, nothing picked):
+         the old defaults (8h / 3 / 3) let an athlete save measured-looking
+         data without answering, which feeds the coach's flags. Editing
+         today's saved check-in still starts from its real values. */
+      let sleep = c ? c.sleep : null;
+      const picked = { soreness: c ? c.soreness : null, energy: c ? c.energy : null };
+      const saveBtn = $('#ci-save');
+      const updateSave = () => {
+        const ready = sleep != null && picked.soreness != null && picked.energy != null;
+        saveBtn.disabled = !ready;
+        saveBtn.style.opacity = ready ? '' : '.55';
+      };
       const setSleep = (v) => {
         sleep = Math.min(13, Math.max(3, Math.round(v * 2) / 2));
         $('#ci-sleep-val').textContent = sleep + ' hrs';
+        $('#ci-sleep-minus').disabled = sleep <= 3;
+        $('#ci-sleep-plus').disabled = sleep >= 13;
+        updateSave();
       };
-      $('#ci-sleep-minus').addEventListener('click', () => setSleep(sleep - 0.5));
-      $('#ci-sleep-plus').addEventListener('click', () => setSleep(sleep + 0.5));
+      $('#ci-sleep-minus').addEventListener('click', () => setSleep((sleep == null ? 8 : sleep) - 0.5));
+      $('#ci-sleep-plus').addEventListener('click', () => setSleep((sleep == null ? 8 : sleep) + 0.5));
       slot.querySelectorAll('[data-ci]').forEach(b => b.addEventListener('click', () => {
         picked[b.dataset.ci] = parseInt(b.dataset.val, 10);
         slot.querySelectorAll(`[data-ci="${b.dataset.ci}"]`).forEach(x => x.classList.toggle('on', x === b));
+        updateSave();
       }));
-      $('#ci-hurts').addEventListener('change', (e) => { $('#ci-pain-wrap').hidden = !e.target.checked; });
-      $('#ci-save').addEventListener('click', async () => {
+      $('#ci-hurts').addEventListener('change', (e) => {
+        $('#ci-pain-wrap').hidden = !e.target.checked;
+        if (!e.target.checked) $('#ci-pain').value = '';
+      });
+      updateSave();
+      saveBtn.addEventListener('click', async () => {
+        if (sleep == null || picked.soreness == null || picked.energy == null) return;
         try {
           await apiPost('/api/checkin', {
             sleep, soreness: picked.soreness, energy: picked.energy,
-            hurts: $('#ci-hurts').checked, painText: $('#ci-pain').value, note: $('#ci-note').value,
+            hurts: $('#ci-hurts').checked, painText: $('#ci-hurts').checked ? $('#ci-pain').value : '', note: $('#ci-note').value,
           });
           state.ciMsg = 'Saved — your coaches can see it. ✓';
           await renderCheckin();
@@ -1059,7 +1132,7 @@ function checkinReportHtml(ci) {
     : '';
   const pts = ci.dailyTrend.filter(d => d.avgSleep != null).map(d => ({ week: d.date, value: d.avgSleep }));
   const trend = pts.length
-    ? lineChart([{ points: pts, color: '#cc0033' }], 'week', true)
+    ? lineChart([{ points: pts, color: '#cc0033' }], { name: 'Avg sleep', unit: 'hrs', better: 'higher' }, true)
     : '';
   return `<h3>Daily check-ins</h3>
     <p class="muted">${ci.totalCheckins} check-in${ci.totalCheckins === 1 ? '' : 's'} logged so far.</p>
@@ -1081,12 +1154,16 @@ async function renderWellness() {
   const flagBadges = (flags) => flags.length
     ? flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ')
     : '<span class="badge low">OK</span>';
-  const rowsHtml = today.rows.length ? today.rows.map(rw => `
+  const triage = (rw) => rw.flags.length ? 0 : (rw.checkedIn ? 2 : 1);
+  const sortedRows = today.rows.slice().sort((a, b) => triage(a) - triage(b));
+  const rowsHtml = sortedRows.length ? sortedRows.map(rw => `
     <div class="roster-row wellness-row ${rw.flags.length ? 'flagged' : ''}">
       <span><strong>${esc(rw.profile.name)}</strong>${rw.profile.groupName ? ` <span class="muted">· ${esc(rw.profile.groupName)}</span>` : ''}</span>
       ${rw.checkedIn
         ? `<span class="muted">Slept ${rw.checkin.sleep}h · Sore ${rw.checkin.soreness}/5 · Energy ${rw.checkin.energy}/5${rw.checkin.hurts && rw.checkin.painText ? ` · <strong>Hurts:</strong> ${esc(rw.checkin.painText)}` : ''}</span><span>${flagBadges(rw.flags)}</span>`
-        : '<span class="muted">No check-in yet</span><span><span class="badge plain">MISSING</span></span>'}
+        : (rw.profile.linkedEmail
+          ? '<span class="muted">No check-in yet</span><span><span class="badge plain">MISSING</span></span>'
+          : '<span class="muted">No account linked — they cannot check in yet</span><span><span class="badge high">NOT LINKED</span></span>')}
     </div>`).join('') : '<p class="muted">No athletes on the roster yet. Add them in Roster &amp; Groups and link their accounts so they can check in.</p>';
   const sparkFor = (a) => {
     const vals = a.days.map(d => d.sleep);
@@ -1102,7 +1179,7 @@ async function renderWellness() {
     </div>`).join('') : '<p class="muted">Nothing to trend yet.</p>';
   const teamSleepPts = trends.team.filter(d => d.avgSleep != null).map(d => ({ week: d.date, value: d.avgSleep }));
   const teamTrendHtml = teamSleepPts.length
-    ? lineChart([{ points: teamSleepPts, color: '#cc0033' }], 'week', true)
+    ? lineChart([{ points: teamSleepPts, color: '#cc0033' }], { name: 'Avg sleep', unit: 'hrs', better: 'higher' }, true)
     : '<p class="muted">No check-ins yet — the team trend appears once athletes start checking in.</p>';
   el.innerHTML = `
     <div class="stats-row">
@@ -1171,7 +1248,10 @@ function eventBadges(pr) {
   return (pr.events || []).map(e => `<span class="badge plain">${esc(e)}</span>`).join(' ');
 }
 function gateHtml(el, what) {
-  el.innerHTML = `<div class="card"><strong>Coaches only.</strong><p class="muted">${what} This system is run by the coach — athletes do not log in or enter data. <button class="btn secondary" data-goto="account" type="button">Go to account</button></p></div>`;
+  const who = !state.user
+    ? 'Log in with a coach account to use it. Athletes: your side of the app is the daily check-in on Today and your log.'
+    : 'You are signed in as an athlete — this area is coach-only. Your side of the app is the daily check-in on Today and your log.';
+  el.innerHTML = `<div class="card"><strong>Coaches only.</strong><p class="muted">${what} ${who} <button class="btn secondary" data-goto="account" type="button">Go to account</button></p></div>`;
   const b = el.querySelector('[data-goto]');
   if (b) b.addEventListener('click', () => showView('account'));
 }
@@ -1620,9 +1700,10 @@ async function renderGroups() {
     if (!byGroup.has(key)) byGroup.set(key, []);
     byGroup.get(key).push(pr);
   }
-  const groupSections = [...state.groups.map(g => g.id), '__none'].filter(k => byGroup.has(k)).map(k => {
+  const groupSections = [...state.groups.map(g => g.id), '__none'].filter(k => k === '__none' ? byGroup.has(k) : true).map(k => {
     const gname = k === '__none' ? 'No group' : (state.groups.find(g => g.id === k) || {}).name;
-    return `<h3>${esc(gname || '')}</h3>` + byGroup.get(k).map(pr => `
+    const members = byGroup.get(k) || [];
+    return `<h3>${esc(gname || '')}</h3>` + (members.length ? '' : '<p class="muted">No athletes in this group yet.</p>') + members.map(pr => `
       <div class="card roster-card">
         <div class="roster-row">
           <span><strong>${esc(pr.name)}</strong> ${pr.topAthlete ? '<span class="badge star">★ TOP</span>' : ''} ${eventBadges(pr)}</span>
@@ -1631,6 +1712,7 @@ async function renderGroups() {
             <button class="btn secondary" data-archive="${pr.id}" type="button">Archive</button>
           </span>
         </div>
+        <p class="muted">${pr.linkedEmail ? `🔗 Linked: ${esc(pr.linkedEmail)} — this athlete can check in` : '⚠ Not linked — open Edit profile below to link this athlete\'s account for the daily check-in'}</p>
         <label>Group <select data-move="${pr.id}">${groupOpts(pr.groupId)}</select></label>
         <details>
           <summary>Edit profile</summary>
@@ -1694,7 +1776,7 @@ async function renderGroups() {
       <p class="muted">One athlete per line: <code>Last, First | Group | events (comma list) | Top (optional: yes)</code><br>
       Example: <code>Doe, John | 100/200 | sprinter, hurdler | yes</code><br>
       A simple CSV with a <code>name,group,events,top</code> header also works. Groups are created as needed; duplicate names in the same group are skipped and reported.</p>
-      <label>Roster lines <textarea id="import-text" rows="6" placeholder="Doe, John | 100/200 | sprinter | yes"></textarea></label>
+      <label>Roster lines <textarea id="import-text" rows="6" placeholder="Doe, John | 100/200 | sprinter | yes">${esc(state.importText || '')}</textarea></label>
       <button class="btn primary" id="import-btn" type="button">Import roster</button>
       <div id="import-report">${state.importReport ? importReportHtml(state.importReport) : ''}</div>
     </div>
@@ -1702,7 +1784,16 @@ async function renderGroups() {
   $('#pf-group').addEventListener('change', (e) => { state.pfGroup = e.target.value; renderGroups(); });
   $('#pf-event').addEventListener('change', (e) => { state.pfEvent = e.target.value; renderGroups(); });
   $('#pf-top').addEventListener('change', (e) => { state.pfTop = e.target.checked; renderGroups(); });
-  $('#pf-q').addEventListener('input', (e) => { state.pfQ = e.target.value; clearTimeout(state._pfT); state._pfT = setTimeout(renderGroups, 250); });
+  $('#pf-q').addEventListener('input', (e) => {
+    state.pfQ = e.target.value;
+    const q = e.target.value.trim().toLowerCase();
+    const main = $('#groups-main');
+    if (!main) return;
+    main.querySelectorAll('.roster-card').forEach(card => {
+      const nameEl = card.querySelector('.roster-row strong');
+      card.style.display = !q || (nameEl && nameEl.textContent.toLowerCase().includes(q)) ? '' : 'none';
+    });
+  });
   el.querySelectorAll('[data-move]').forEach(sel => sel.addEventListener('change', async () => {
     try { await apiPut('/api/profiles/' + encodeURIComponent(sel.dataset.move), { groupId: sel.value || null }); renderGroups(); }
     catch (err) { alert(err.message); renderGroups(); }
@@ -1773,9 +1864,11 @@ async function renderGroups() {
   });
   $('#import-btn').addEventListener('click', async () => {
     try {
-      const data = await apiPost('/api/profiles/import', { text: $('#import-text').value });
+      state.importText = $('#import-text').value;
+      const data = await apiPost('/api/profiles/import', { text: state.importText });
       state.importReport = data.report;
-      renderGroups();
+      await renderGroups();
+      state.importReport = null;
     } catch (err) { alert(err.message); }
   });
   renderArchived();
@@ -1815,6 +1908,7 @@ async function renderCoach() {
     if (!blk.group) {
       return `<div class="card"><h3>No group</h3>
         ${blk.members.length ? blk.members.map(m => `<div class="roster-row"><span>${esc(m.profile.name)}</span><span class="muted">assign a group in Groups</span></div>`).join('') : '<p class="muted">Everyone is in a group.</p>'}
+        <p><button class="btn secondary" id="coach-goto-groups" type="button">Open Roster &amp; Groups</button></p>
       </div>`;
     }
     const a = blk.assignment;
@@ -1824,13 +1918,14 @@ async function renderCoach() {
         ${a.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : '<span class="badge plain">FROM THE PLAN</span>'}</p>
       ${a.note ? `<p><strong>Your note:</strong> ${esc(a.note)}</p>` : ''}
       ${a.warmup ? `<div class="warmup">Warm-up: ${esc(a.warmup)}</div>` : ''}
+      ${a.sessionId && state.sessions.get(a.sessionId) ? runTodayButtonHtml({ sessionId: a.sessionId, groupName: blk.group.name }) : ''}
       <details>
         <summary>Change today's workout for this group</summary>
         <label>Workout <select id="ov-${blk.group.id}">${sessionOpts(a.sessionId)}</select></label>
         <label>Note (optional) <input type="text" id="ovn-${blk.group.id}" value="${esc(a.note || '')}" placeholder="e.g. Keep it at 90% today"></label>
         <div class="filter-row">
           <button class="btn primary" data-override="${blk.group.id}" type="button" style="width:auto">Save override</button>
-          <button class="btn secondary" data-clear-override="${blk.group.id}" type="button" style="width:auto">Back to the plan</button>
+          <button class="btn secondary" data-clear-override="${blk.group.id}" type="button" style="width:auto">Clear override (back to the plan)</button>
         </div>
       </details>
       <h4>Who got it done</h4>
@@ -1854,11 +1949,17 @@ async function renderCoach() {
     </div>
     <div class="card">
       <label>Date <input type="date" id="feed-date" value="${esc(state.feedDate)}"></label>
+      ${state.feedDate !== todayStr() ? '<button class="btn secondary" id="feed-today" type="button" style="width:auto">Back to today</button>' : ''}
       <p class="muted">Each group gets the season plan's workout by default. Override it when the day calls for something else, then check off who completed it — marks and feel land on the athlete's record.</p>
     </div>
     ${feed.groups.map(groupCard).join('')}
     ${groupCard(feed.unassigned)}`;
   $('#coach-open-tv').addEventListener('click', () => showView('tv'));
+  wireRunTodayButtons(el);
+  const ggBtn = $('#coach-goto-groups');
+  if (ggBtn) ggBtn.addEventListener('click', () => showView('groups'));
+  const ftBtn = $('#feed-today');
+  if (ftBtn) ftBtn.addEventListener('click', () => { state.feedDate = todayStr(); renderCoach(); });
   $('#feed-date').addEventListener('change', (e) => { state.feedDate = e.target.value; renderCoach(); });
   el.querySelectorAll('[data-override]').forEach(b => b.addEventListener('click', async () => {
     const gid = b.dataset.override;
@@ -1873,6 +1974,7 @@ async function renderCoach() {
   }));
   el.querySelectorAll('[data-clear-override]').forEach(b => b.addEventListener('click', async () => {
     try {
+      if (!confirm('Clear this override and go back to the season plan for this group?')) return;
       await apiPost('/api/assignments/override', { groupId: b.dataset.clearOverride, date: state.feedDate, sessionId: null });
       renderCoach();
     } catch (err) { alert(err.message); }
@@ -2005,7 +2107,7 @@ async function renderTesting() {
       <h2>Ranked — ${esc(day.title)}</h2>
       ${dayTests.map(t => {
         const rows = dayResults.filter(r => r.testKey === t.key).slice()
-          .sort((a, b) => (b.display || 0) - (a.display || 0));
+          .sort((a, b) => t.better === 'lower' ? (a.display || 0) - (b.display || 0) : (b.display || 0) - (a.display || 0));
         return `<h3>${esc(t.name)} ${demoHtml(t.key, t.name)}</h3>
         ${rows.length ? `<div class="table-wrap"><table class="ranked">
           <thead><tr><th>#</th><th>Athlete</th><th>Result</th>${t.kind === 'lift' ? '<th>Est. 1RM</th>' : ''}</tr></thead>
@@ -2017,7 +2119,7 @@ async function renderTesting() {
     </div>
     <div class="card">
       <h2>Athlete history</h2>
-      <label>Athlete <select id="hist-athlete">${profileOptions(state.rapidAthleteId, true)}</select></label>
+      <label>Athlete <select id="hist-athlete">${profileOptions(state.histAthleteId, true)}</select></label>
       <div id="hist-zone"></div>
     </div>` : ''}`;
   $('#testday-form').addEventListener('submit', async (e) => {
@@ -2131,6 +2233,7 @@ async function renderTesting() {
       errEl.textContent = 'Nothing to save — the grid matches what is already stored.';
       return;
     }
+    if (clear.length && !confirm(`Save ${entries.length} result${entries.length === 1 ? '' : 's'} and CLEAR ${clear.length} saved result${clear.length === 1 ? '' : 's'}? Cleared results are deleted.`)) return;
     try {
       const res = await fetch('/api/results/bulk', {
         method: 'POST', credentials: 'same-origin',
@@ -2175,6 +2278,7 @@ async function renderTesting() {
     } catch (err) { zone.innerHTML = `<p class="error">${esc(err.message)}</p>`; }
   };
   const ha = $('#hist-athlete');
+  if (ha) ha.addEventListener('change', () => { state.histAthleteId = ha.value || null; });
   if (ha) { ha.addEventListener('change', renderHist); renderHist(); }
 }
 
@@ -2296,6 +2400,7 @@ async function renderHealth() {
           ${Object.keys(STATUS_LABELS).map(s => `<option value="${s}" ${c.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
         </select></label>
         <label>Pain now <select id="cp-${c.id}">
+          <option value="" ${c.pain == null ? 'selected' : ''}>— not recorded —</option>
           ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${c.pain === n ? 'selected' : ''}>${n}/10</option>`).join('')}
         </select></label>
       </div>
@@ -2315,7 +2420,7 @@ async function renderHealth() {
       </div>
       <div class="filter-row">
         <label>Feels like <select id="hc-feeling">${Object.keys(FEELING_LABELS).map(f => `<option value="${f}">${FEELING_LABELS[f]}</option>`).join('')}</select></label>
-        <label>Pain (1-10) <select id="hc-pain">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${n === 5 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label>Pain (1-10) <select id="hc-pain"><option value="" selected>— pick —</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}">${n}</option>`).join('')}</select></label>
       </div>
       <div class="filter-row">
         <label>When it started <input type="date" id="hc-started" value="${todayStr()}"></label>
@@ -2353,7 +2458,7 @@ async function renderHealth() {
     try {
       await apiPut('/api/concerns/' + encodeURIComponent(id), {
         status: $('#cs-' + CSS.escape(id)).value,
-        pain: parseInt($('#cp-' + CSS.escape(id)).value, 10),
+        pain: $('#cp-' + CSS.escape(id)).value === '' ? undefined : parseInt($('#cp-' + CSS.escape(id)).value, 10),
         coachNote: $('#cn-' + CSS.escape(id)).value,
       });
       renderHealth();
@@ -2634,6 +2739,7 @@ function wireRunTodayButtons(root) {
 const runner = {
   open: false, plan: null, steps: [], idx: 0,
   startedAt: 0, endsAt: 0, remaining: 0, paused: false, tickId: null, audioCtx: null,
+  wakeLock: null,
 };
 function repsLabel(reps) {
   const r = String(reps || '').trim();
@@ -2676,10 +2782,25 @@ function openRunner(plan) {
   document.body.classList.add('runner-mode');
   $('#runner-workout').textContent = plan.title;
   document.addEventListener('keydown', runnerKey);
+  /* Keep the screen awake through rests (best effort; unsupported
+     browsers just skip it). */
+  try {
+    if (navigator.wakeLock) {
+      navigator.wakeLock.request('screen').then(l => { runner.wakeLock = l; }).catch(() => {});
+    }
+  } catch (_) {}
   renderRunnerStep();
+}
+function requestCloseRunner() {
+  /* Exiting mid-workout used to discard the run with one stray tap. */
+  if (runner.open && runner.idx > 0 && runner.idx < runner.steps.length) {
+    if (!confirm('End this workout run? Your place in the workout will be lost.')) return;
+  }
+  closeRunner();
 }
 function closeRunner() {
   runnerStopTick();
+  if (runner.wakeLock) { try { runner.wakeLock.release(); } catch (_) {} runner.wakeLock = null; }
   runner.open = false;
   const ov = $('#runner-overlay');
   if (ov) ov.hidden = true;
@@ -2691,7 +2812,7 @@ function runnerStopTick() {
 }
 function runnerKey(e) {
   if (!runner.open) return;
-  if (e.key === 'Escape') { closeRunner(); return; }
+  if (e.key === 'Escape') { requestCloseRunner(); return; }
   if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); runnerAdvance(); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); runnerBack(); }
   else if (e.key === 'p' || e.key === 'P') { runnerTogglePause(); }
@@ -2835,7 +2956,7 @@ function renderRunnerStep() {
 }
 (function wireRunner() {
   const exit = $('#runner-exit');
-  if (exit) exit.addEventListener('click', closeRunner);
+  if (exit) exit.addEventListener('click', requestCloseRunner);
 })();
 
 /* ---------------- custom workouts (coach) ---------------- */
@@ -3057,6 +3178,14 @@ $('#week-today').addEventListener('click', () => { state.week = currentWeekNum()
 $('#log-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = $('#log-form-msg');
+  const hasContent = ['#log-session', '#log-group', '#log-happened', '#log-marks', '#log-notes']
+    .some(sel => { const f = $(sel); return f && f.value.trim(); });
+  if (!hasContent) {
+    msg.textContent = 'Add something first — a workout, what happened, or a note.';
+    msg.classList.add('error');
+    return;
+  }
+  msg.classList.remove('error');
   try {
     const feelVal = $('#log-feel').value;
     const data = await apiPost('/api/logs', {
@@ -3070,12 +3199,14 @@ $('#log-form').addEventListener('submit', async (e) => {
     });
     state.logs.unshift(data.entry);
     state.logs.sort((a, b) => (a.date < b.date ? 1 : -1));
+    msg.classList.remove('error');
     msg.textContent = 'Saved.';
     e.target.reset();
     $('#log-date').value = todayStr();
     renderLog(); renderHome();
-  } catch (err) { msg.textContent = err.message; }
+  } catch (err) { msg.classList.add('error'); msg.textContent = err.message; }
 });
+$('#log-form').addEventListener('input', () => { const m = $('#log-form-msg'); if (m) m.textContent = ''; });
 
 /* ================================================================
    REPORTS + MEET RESULTS — coach analytics. Reports turns the data
@@ -3155,7 +3286,7 @@ async function renderReports() {
     : (trendTest && trendTest.points.length
       ? lineChart(
         [{ label: trendTest.name + ' — team median', points: trendTest.points.map(p => ({ week: p.date, value: p.median })) }],
-        { name: trendTest.name, unit: trendTest.unit, better: 'higher' })
+        { name: trendTest.name, unit: trendTest.unit, better: trendTest.better || 'higher' })
       + `<div class="table-wrap"><table class="ranked"><thead><tr><th>Date</th><th>Test day</th><th>Team median</th><th>Athletes</th></tr></thead><tbody>${trendTest.points.map(p => `<tr><td>${esc(p.date)}</td><td>${esc(p.title)}</td><td><strong>${fmtNum(p.median)} ${esc(trendTest.unit)}</strong></td><td>${p.count}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="muted">No results for this test yet.</p>');
   if (!state.reportGroup || !comp.groups.some(g => g.group.id === state.reportGroup)) {
@@ -3257,7 +3388,7 @@ async function renderReportCard() {
   const testingCharts = data.testing.filter(t => t.series.length >= 2).map(t =>
     `<h4>${esc(t.name)} — progression</h4>` + lineChart(
       [{ label: t.name, points: t.series.map(r => ({ week: r.date, value: r.display })) }],
-      { name: t.name, unit: t.unit, better: 'higher' }, true)).join('');
+      { name: t.name, unit: t.unit, better: t.better || 'higher' }, true)).join('');
   const weeklyRows = data.weekly.map(w => `<tr><td>${esc(w.metric.name)}</td><td>${w.best !== null && w.best !== undefined ? fmtNum(w.best) + ' ' + esc(w.metric.unit) : '—'}</td><td>${fmtNum(w.latest)} ${esc(w.metric.unit)}</td><td>${deltaHtml(w.metric, w)}</td></tr>`).join('');
   const meetRows = data.meetPrs.map(m => `<tr><td>${esc(m.name)}</td><td><strong>${esc(m.mark)}</strong></td><td>${esc(m.date)}</td><td>${esc(m.meet)}</td></tr>`).join('');
   const goalRows = (data.goals || []).map(g => `<tr><td>${esc(g.eventName)}</td><td><strong>${esc(g.targetText)}</strong></td><td>${g.current ? esc(g.current.mark) : '—'}</td><td>${g.progressPct === null ? 'No marks yet' : g.progressPct + '%' + (g.achieved ? ' ★ Goal hit' : '')}</td><td>${esc(goalGapText(g) || '')}</td></tr>`).join('');
@@ -3317,6 +3448,7 @@ async function renderDigest() {
     data = await api('/api/digest' + (state.digestWeek ? '?week=' + encodeURIComponent(state.digestWeek) : ''));
   } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   state.digestWeek = data.week;
+  if (!state.digestLatest) state.digestLatest = data.week;
   const ci = data.checkins;
   const ciHtml = ci.recorded
     ? `<div class="hero-stats">
@@ -3367,7 +3499,8 @@ async function renderDigest() {
       <div class="digest-nav">
         <button type="button" class="btn" id="digest-prev">← Prev week</button>
         <h2>Week of ${digestRangeLabel(data.week, data.weekEnd)}</h2>
-        <button type="button" class="btn" id="digest-next">Next week →</button>
+        <button type="button" class="btn" id="digest-next" ${state.digestLatest && data.week >= state.digestLatest ? 'disabled' : ''}>Next week →</button>
+        ${state.digestLatest && data.week < state.digestLatest ? '<button type="button" class="btn secondary" id="digest-latest">Latest week</button>' : ''}
       </div>
     </div>
     <div class="card">
@@ -3395,13 +3528,17 @@ async function renderDigest() {
   const stepWeek = (delta) => {
     const d = parseDate(data.week);
     d.setDate(d.getDate() + delta);
-    state.digestWeek = dateStrOf(d);
+    const next = dateStrOf(d);
+    if (state.digestLatest && next > state.digestLatest) return;
+    state.digestWeek = next;
     renderDigest();
   };
   const pv = $('#digest-prev');
   if (pv) pv.addEventListener('click', () => stepWeek(-7));
   const nx = $('#digest-next');
   if (nx) nx.addEventListener('click', () => stepWeek(7));
+  const lt = $('#digest-latest');
+  if (lt) lt.addEventListener('click', () => { state.digestWeek = null; renderDigest(); });
 }
 async function renderMeets() {
   const el = $('#meets-main');
@@ -3750,13 +3887,17 @@ async function renderRecords() {
     state.recEvents = events;
   } catch (err) { main.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   if (!events.some(ev => ev.key === state.recEvent)) state.recEvent = events.length ? events[0].key : '100m';
+  if (!state.recEventPicked) {
+    const firstWith = board.find(b => b.entries.length);
+    if (firstWith) state.recEvent = firstWith.event;
+  }
   const sel = board.find(b => b.event === state.recEvent);
   const anyMarks = board.some(b => b.entries.length);
   main.innerHTML = `
     <div class="chip-row" role="group" aria-label="Pick an event">
       ${events.map(ev => {
         const n = (board.find(b => b.event === ev.key) || { entries: [] }).entries.length;
-        return `<button type="button" class="chip${ev.key === state.recEvent ? ' active' : ''}" data-rec-event="${ev.key}">${esc(ev.name)}${n ? ` (${n})` : ''}</button>`;
+        return `<button type="button" class="chip${ev.key === state.recEvent ? ' active' : ''}" data-rec-event="${ev.key}">${esc(ev.name)} (${n})</button>`;
       }).join('')}
     </div>
     <div class="card">
@@ -3769,6 +3910,7 @@ async function renderRecords() {
     </div>`;
   main.querySelectorAll('[data-rec-event]').forEach(b => b.addEventListener('click', () => {
     state.recEvent = b.dataset.recEvent;
+    state.recEventPicked = true;
     renderRecords();
   }));
 
@@ -3862,10 +4004,11 @@ async function renderRecords() {
   });
   const cancel = $('#rf-cancel');
   if (cancel) cancel.addEventListener('click', () => { state.recEditId = null; renderRecords(); });
-  manage.querySelectorAll('[data-rec-edit]').forEach(b => b.addEventListener('click', () => {
+  manage.querySelectorAll('[data-rec-edit]').forEach(b => b.addEventListener('click', async () => {
     state.recEditId = b.dataset.recEdit;
-    renderRecords();
-    window.scrollTo(0, 0);
+    await renderRecords();
+    const form = $('#record-form');
+    if (form) form.scrollIntoView({ block: 'start' });
   }));
   manage.querySelectorAll('[data-rec-del]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('Delete this record?')) return;
@@ -4048,6 +4191,7 @@ const TV_MIN_SCALE = 0.62;             /* smallest type scale before scrolling *
 const TV_SCALES = [1, 0.92, 0.84, 0.76, 0.68, TV_MIN_SCALE];
 let tvRotateTimer = null;
 let tvRefreshTimer = null;
+let tvClockTimer = null;
 let tvScrollTimer = null;
 let tvScrollHold = 0;
 let tvWired = false;
@@ -4168,7 +4312,14 @@ function tvGroupUnits() {
   if (t.groups && t.groups.length) {
     for (const g of t.groups) {
       const a = g.assignment || {};
-      if (!a.sessionId) continue;
+      if (!a.sessionId) {
+        units.push({
+          name: g.group.name, label: g.group.name + ' · Rest day', rest: true,
+          source: a.source, sessionId: null, sessionName: '',
+          sessions: [], planText: a.planText || '', cardId: 'rest', warmup: null,
+        });
+        continue;
+      }
       const own = state.sessions.get(a.sessionId);
       const sessions = a.source === 'override'
         ? (own ? [own] : [])
@@ -4209,6 +4360,20 @@ function tvWodHeaderHtml() {
    'sess' pages for the same group rather than shrink the type
    past the readable floor. */
 function tvPageHtml(unit, mode) {
+  if (unit.rest) {
+    const next = tvNextTrainingDay();
+    const nextLine = next
+      ? `Next up: ${next.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} \u2014 ${esc(next.names)}`
+      : 'The next training day will appear here once it is on the plan.';
+    return `<div class="tv-fit">
+    ${tvWodHeaderHtml()}
+    <div class="tv-page-group">${esc(unit.name)}</div>
+    <div class="tv-empty">
+      <p class="tv-empty-big">Rest day</p>
+      <p class="tv-empty-sub">No workout for this group today. ${nextLine}</p>
+    </div>
+  </div>`;
+  }
   const pick = unit.source === 'override' ? ' <span class="tv-pick">Coach\u2019s pick</span>' : '';
   const planLine = unit.source !== 'override' && unit.planText
     ? `<div class="tv-plan-line">On the plan: ${esc(unit.planText)}</div>` : '';
@@ -4302,8 +4467,11 @@ async function renderTvBoard() {
   try {
     const today = await api('/api/coach/today');
     state.tvData = { today };
+    state.tvLastOk = new Date();
+    state.tvStale = false;
   } catch (_) {
-    /* A failed refresh keeps the last good board on screen. */
+    /* A failed refresh keeps the last good board on screen — and says so. */
+    state.tvStale = true;
     if (!state.tvData) {
       el.innerHTML = `<div class="tv-empty">
         <p class="tv-empty-big">The board could not load.</p>
@@ -4336,6 +4504,16 @@ function drawTvBoard() {
   tvWireControls();
   drawTvPanels();
   tvUpdateClock();
+  const upd = $('#tv-updated');
+  if (upd) {
+    if (state.tvStale) {
+      upd.textContent = `⚠ Connection lost — showing the board from ${state.tvLastOk ? state.tvLastOk.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'earlier'}`;
+      upd.classList.add('stale');
+    } else if (state.tvLastOk) {
+      upd.textContent = 'Updated ' + state.tvLastOk.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      upd.classList.remove('stale');
+    }
+  }
 }
 function drawTvPanels() {
   const pages = $$('#tv-main .tv-page');
@@ -4432,10 +4610,13 @@ function tvStartTimers() {
     tvScrollTimer = setInterval(tvScrollTick, TV_SCROLL_MS);
   }
   tvRefreshTimer = setInterval(() => { renderTvBoard(); }, TV_REFRESH_MS);
+  /* The clock keeps time even when reduced motion stops the rotation. */
+  tvClockTimer = setInterval(tvUpdateClock, 30000);
 }
 function tvStopTimers() {
   if (tvRotateTimer) { clearInterval(tvRotateTimer); tvRotateTimer = null; }
   if (tvRefreshTimer) { clearInterval(tvRefreshTimer); tvRefreshTimer = null; }
+  if (tvClockTimer) { clearInterval(tvClockTimer); tvClockTimer = null; }
   if (tvScrollTimer) { clearInterval(tvScrollTimer); tvScrollTimer = null; }
 }
 
@@ -4462,10 +4643,8 @@ function tvStopTimers() {
   try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
   try { state.wuOverrides = (await api('/api/warmup-cards')).cards || {}; } catch (_) { state.wuOverrides = {}; }
   await refreshUserData();
-  renderAccount();
-  renderLog();
+  /* syncAuthUi (not the individual renders) is what un-hides the Coach
+     tabs for a coach whose session survived a reload. */
+  syncAuthUi();
   renderLibrary();
-  renderSeason();
-  renderHome();
-  renderWarmupCards();
 })();

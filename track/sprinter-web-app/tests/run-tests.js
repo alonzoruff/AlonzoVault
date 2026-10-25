@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v23',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v23"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v24',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v24"), swJs.text.slice(0, 80));
 
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('first register is 201', r.status === 201, r.status);
@@ -1788,6 +1788,58 @@ async function main() {
   check('TV board render path stays free of the Today Run buttons',
     !tvCode.includes('data-run-today') && !tvCode.includes('todayRunTargets') &&
     !tvCode.includes('run-today-btn') && !tvCode.includes('featuredRunSessionId'));
+
+  /* ---------------- QA + polish pass (Oct 24) ----------------
+     Regression guards for the audit fixes: undefined scarlet token,
+     coach tabs lost on reload, pre-answered check-in defaults,
+     direction-blind ranked tables, silent coach-panel failures. */
+  check('qa: --scarlet token is defined (selected check-in buttons were white-on-white)',
+    stylesCss.text.includes('--scarlet: var(--red)'));
+  check('qa: boot restores the session through syncAuthUi so coach tabs survive a reload',
+    appJs.text.includes('syncAuthUi (not the individual renders)'));
+  check('qa: coach views re-render when entered, not only at login',
+    appJs.text.includes("if (name === 'wellness') renderWellness();") &&
+    appJs.text.includes("if (name === 'groups') renderGroups();") &&
+    appJs.text.includes("if (name === 'coach') renderCoach();"));
+  check('qa: a new check-in starts unanswered and Save stays disabled until it is not',
+    appJs.text.includes('soreness: c ? c.soreness : null') &&
+    appJs.text.includes('energy: c ? c.energy : null') &&
+    appJs.text.includes('saveBtn.disabled = !ready'));
+  check('qa: pain text is only sent while Something hurts is checked',
+    appJs.text.includes("painText: $('#ci-hurts').checked ? $('#ci-pain').value : ''"));
+  check('qa: check-in load failure shows an error with retry instead of a silent blank',
+    appJs.text.includes('ci-retry'));
+  check('qa: coach Today summary failure shows an error with retry instead of vanishing',
+    appJs.text.includes('ct-retry'));
+  check('qa: ranked testing tables sort by the test direction (fastest first for timed tests)',
+    appJs.text.includes("t.better === 'lower' ? (a.display || 0) - (b.display || 0)"));
+  check('qa: testing history picker keeps its own athlete state',
+    appJs.text.includes('histAthleteId'));
+  check('qa: sleep trend charts receive a real metric object, not the string week',
+    appJs.text.includes("{ name: 'Avg sleep', unit: 'hrs', better: 'higher' }") &&
+    !appJs.text.includes("], 'week', true)"));
+  check('qa: a concern with no pain score offers a not-recorded option (never a silent 1/10)',
+    appJs.text.includes('— not recorded —') && appJs.text.includes("value === '' ? undefined"));
+  check('qa: wellness view triages flagged first and badges unlinked athletes',
+    appJs.text.includes('NOT LINKED') && appJs.text.includes('const triage'));
+  check('qa: roster cards show account-link status without opening Edit profile',
+    appJs.text.includes('🔗 Linked:') && appJs.text.includes('Not linked — open Edit profile'));
+  check('qa: checklist group cards carry the shared Run button',
+    appJs.text.includes('runTodayButtonHtml({ sessionId: a.sessionId, groupName: blk.group.name })'));
+  check('qa: library detail remembers its origin and filters can be cleared in one tap',
+    appJs.text.includes('DETAIL_FROM_LABELS') && appJs.text.includes('lib-clear') &&
+    pageHtml.text.includes('id="lib-filters"'));
+  check('qa: testing grid confirms before clearing saved results',
+    appJs.text.includes('CLEAR ${clear.length} saved result'));
+  check('qa: digest week navigation is bounded at the latest week',
+    appJs.text.includes('digestLatest'));
+  check('qa: TV board stamps freshness, flags a stale board, and rests groups on their own page',
+    pageHtml.text.includes('id="tv-updated"') && appJs.text.includes('tvStale') &&
+    appJs.text.includes("label: g.group.name + ' · Rest day'"));
+  check('qa: runner confirms before discarding a run in progress and holds a wake lock',
+    appJs.text.includes('requestCloseRunner') && appJs.text.includes('wakeLock'));
+  check('qa: records board opens on the first event with marks until one is picked',
+    appJs.text.includes('recEventPicked') && appJs.text.includes('firstWith'));
 
   /* ---------------- athlete accounts + daily wellness check-in ----------------
      The first athlete-entered surface: a coach links an email to a

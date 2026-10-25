@@ -99,7 +99,7 @@
     </div>
     <div id="checkin-slot"></div>
     <div id="goals-slot"></div>
-    <div id="home-content"><p class="muted">Loading…</p></div>
+    <div id="home-content" aria-busy="true"><div class="skel skel-card"></div><div class="skel skel-card"></div><div class="skel skel-card"></div></div>
   </section>
 
   <!-- TRAIN (hub) -->
@@ -162,7 +162,7 @@
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
     <p class="view-sub muted">Find a workout by type, distance, or day. Tap any workout to see the full session — reps, rest, and coaching cues.</p>
-    <div class="filters card">
+    <div class="filters card" id="lib-filters">
       <input id="lib-search" type="search" placeholder="Search by name or code (try “fly” or MAX-01)">
       <div class="filter-row">
         <select id="lib-quality"><option value="">All types</option></select>
@@ -729,6 +729,7 @@
         <div class="tv-brand">ST. JOHN'S COLLEGE HIGH SCHOOL <span>CADETS TRACK &amp; FIELD — WEIGHT ROOM</span></div>
         <div class="tv-top-right">
           <div class="tv-clock" id="tv-clock"></div>
+          <div class="tv-updated" id="tv-updated"></div>
           <button class="btn tv-exit" id="tv-exit" type="button">Exit TV board</button>
         </div>
       </div>

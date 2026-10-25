@@ -12,9 +12,23 @@
   --low: #1e7a34;
   --low-bg: #e9f7ec;
   --radius: 14px;
+  --radius-sm: 10px;
+  --scarlet: var(--red);          /* alias: single brand red, one place to change */
+  --red-on-dark: #ff7086;         /* scarlet legible on dark HUD surfaces */
+  --red-soft-on-dark: #ffb3c2;    /* secondary scarlet for dark-surface labels */
+  --hud-bg: #101216;
+  --hud-line: #2c313a;
+  --hud-text-dim: #c9ccd1;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
+  --card-pad: 16px;
+  --card-gap: 14px;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+* { -webkit-tap-highlight-color: rgba(204, 0, 51, .12); }
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -25,16 +39,17 @@ body {
 .topbar {
   position: sticky; top: 0; z-index: 20;
   background: var(--card); border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 0 var(--line), 0 6px 16px -12px rgba(20, 22, 26, .25);
 }
 .topbar-inner {
-  max-width: 880px; margin: 0 auto; padding: 10px 16px 0;
+  max-width: 880px; margin: 0 auto; padding: 10px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
 }
 .brand-block { min-width: 0; }
 .site-logo { height: 38px; max-width: 62vw; width: auto; display: block; }
 .footer-logo { height: 26px; margin-bottom: 6px; }
 .identity { font-size: 12.5px; font-weight: 700; color: var(--red-dark); letter-spacing: .01em; margin-top: 3px; }
-.app-name { font-size: 12px; color: var(--gray); font-weight: 600; }
+.app-name { font-size: 12px; color: var(--muted); font-weight: 600; }
 .account-chip { font-size: 13px; color: var(--muted); text-align: right; }
 .account-chip button { font-size: 13px; }
 /* Primary navigation: five destinations — Today, Train, Learn,
@@ -51,13 +66,27 @@ body {
   padding: 8px 14px; border-radius: 999px; font-size: 14px; white-space: nowrap; cursor: pointer;
 }
 .tab[hidden] { display: none !important; }
+
+/* Press & hover feedback: every tappable surface answers the finger.
+   Colour/border transitions are cheap; the press is a 2% settle.
+   Full-width bottom tab bar gets a tint instead of a scale. */
+.tab, .btn, .session-row, .menu-item, .chip, .seg-btn, .tap-btn, .tv-dot {
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .1s ease;
+}
+@media (hover: hover) {
+  .session-row:hover, .menu-item:hover { border-color: var(--gray); }
+  .btn:hover { border-color: var(--gray); }
+}
+.tab:active, .btn:active, .session-row:active, .menu-item:active,
+.chip:active, .seg-btn:active, .tap-btn:active { transform: scale(.98); }
+.tabbar .tab:active { transform: none; background: #fdf0f3; }
 .tab.active { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
 .tab-icon { display: inline-flex; flex: none; }
 .tab-icon svg { width: 19px; height: 19px; display: block; }
 .tabbar { display: none; }
-@media (max-width: 759px) {
+@media (max-width: 900px) {
   .topbar .tabs { display: none; }
-  body { padding-bottom: 78px; } /* clearance so the tab bar never covers content */
+  body { padding-bottom: calc(78px + env(safe-area-inset-bottom)); } /* clearance so the tab bar never covers content */
   .tabbar {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
     background: var(--card); border-top: 1px solid var(--line);
@@ -77,20 +106,23 @@ body {
     height: 3px; border-radius: 0 0 3px 3px; background: var(--red);
   }
 }
-main { max-width: 880px; margin: 0 auto; padding: 16px; padding-bottom: 40px; }
+main { max-width: 880px; margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); }
 .view { display: none; }
 .view.active { display: block; }
-h1 { font-size: 24px; margin: 6px 0 12px; }
-h2 { font-size: 18px; margin: 4px 0 10px; }
+h1 { font-size: 24px; margin: 6px 0 12px; line-height: 1.25; }
+h2 { font-size: 19px; margin: 4px 0 10px; line-height: 1.25; }
+h3 { font-size: 16.5px; margin: 10px 0 6px; line-height: 1.25; }
 .muted { color: var(--muted); font-size: 14px; }
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px 16px; margin: 0 0 14px;
+  padding: 14px var(--card-pad); margin: 0 0 var(--card-gap);
 }
 .btn {
   border: 1px solid var(--line); background: #fff; color: var(--ink);
   padding: 9px 16px; border-radius: 10px; font-size: 15px; cursor: pointer;
+  min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
 }
+a.btn, button.btn { vertical-align: middle; }
 .btn.primary { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; width: 100%; }
 .btn.secondary { background: #fff; }
 a.btn { display: inline-block; text-decoration: none; }
@@ -178,7 +210,7 @@ details.card summary { cursor: pointer; }
   background: linear-gradient(180deg, #262b31 0%, #17191c 72%);
   box-shadow: inset 0 -3px 0 var(--red);
 }
-.runner {
+.runner { will-change: translate, opacity;
   position: absolute; left: 50%; bottom: 24px;
   height: 86px; width: auto; max-width: 60vw;
   transform: translateX(-50%);
@@ -219,6 +251,11 @@ details.card summary { cursor: pointer; }
 .arm-far { animation: armFar 12s linear infinite; }
 .fore-near { animation: foreNear 12s linear infinite; }
 .fore-far { animation: foreFar 12s linear infinite; }
+@supports not (translate: 1px) {
+  /* Older school-iPad Safari: no standalone translate property, so the
+     runner cannot travel; park it in a natural drive position. */
+  .runner { left: 42%; }
+}
 .runner-shadow { transform-box: fill-box; transform-origin: center; animation: shadowMove 12s linear infinite; }
 .streaks { animation: streakGate 12s linear infinite; }
 .streak { stroke: var(--gray); stroke-width: 3; stroke-linecap: round; opacity: 0; animation: streakMove 1.2s linear infinite; }
@@ -1475,13 +1512,30 @@ details.card summary { cursor: pointer; }
   text-transform: uppercase; color: var(--muted);
 }
 
+/* Loading skeletons: reserve the shape of the content so views do not
+   jump when data lands (cold starts on a flaky track-side connection).
+   No shimmer by default; the pulse only runs when motion is welcome. */
+.skel { background: #e9e9ec; border-radius: var(--radius); margin: 0 0 14px; }
+.skel-card { height: 112px; }
+.skel-row { height: 64px; border-radius: var(--radius-sm); }
+.skel-line { height: 14px; border-radius: 7px; margin: 0 0 10px; }
+@media (prefers-reduced-motion: no-preference) {
+  .skel, .skel-line { animation: skelPulse 1.4s ease-in-out infinite alternate; }
+  @keyframes skelPulse { from { opacity: .65; } to { opacity: 1; } }
+}
+#home-content { min-height: 420px; }
+#lib-list, #vid-grid { min-height: 320px; }
+
 /* Micro-motion: cards rise in, views cross over, HARD badges breathe */
 @keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes badgePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
-.card, .session-row, .menu-item { animation: riseIn .45s ease both; }
-.view.active { animation: viewIn .3s ease both; }
-.badge.high { animation: badgePulse 2.2s ease-in-out infinite; }
+.view.active .card { animation: riseIn .35s ease both; }
+.view.active { animation: viewIn .35s ease both; }
+/* HARD is signalled statically: a pulsing badge on every row of a long
+   list is constant repaint and visual noise on school iPads. */
+.badge.high { box-shadow: inset 0 0 0 1px var(--high); }
+#view-home .badge.high { animation: badgePulse 2.2s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -1489,8 +1543,8 @@ details.card summary { cursor: pointer; }
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
-  /* Calm static scene: base figure is a mid-stride upright pose */
-  .blocks { display: none; }
+  /* Calm static scene: the base figure is the block-start pose, so the
+     blocks stay visible and the runner sits in them. */
   .streaks { opacity: 0; }
 }
 
@@ -1501,7 +1555,7 @@ details.card summary { cursor: pointer; }
 .badge.done { background: #e2f2e4; color: #1d5c2a; border: 1px solid #9ed0a6; }
 .delta { font-weight: 700; font-size: 13px; }
 .delta.good { color: #1d7a33; }
-.delta.bad { color: var(--red); }
+.delta.bad { color: var(--red-dark); }
 .delta.flat { color: var(--muted); }
 .roster-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -1510,8 +1564,8 @@ details.card summary { cursor: pointer; }
 .roster-row:last-child { border-bottom: none; }
 .roster-actions { display: inline-flex; gap: 6px; }
 .roster-card details { margin-top: 8px; }
-.check-line { display: flex; align-items: center; gap: 8px; font-weight: 500; }
-.check-line input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--red); }
+.check-line { display: flex; align-items: center; gap: 8px; font-weight: 500; min-height: 44px; padding: 6px 0; }
+.check-line input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--red); flex: none; }
 .check-inputs { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .check-inputs input[type="text"], .check-inputs input[type="number"] { width: 130px; }
 .check-inputs select { width: auto; }
@@ -1528,7 +1582,7 @@ table.matrix td:not(:first-child) { text-align: center; }
 .rapid-test:first-of-type { border-top: none; }
 svg.chart { width: 100%; height: auto; display: block; }
 .chart-grid { stroke: #e3e5e8; stroke-width: 1; }
-.chart-axis { font-size: 9px; fill: var(--gray); }
+.chart-axis { font-size: 10px; fill: var(--muted); }
 .chart-best { font-size: 9.5px; font-weight: 800; }
 .legend .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; }
 .concern-card.flagged { border: 2px solid var(--red); background: #fff7f8; }
@@ -1668,7 +1722,7 @@ body.tv-mode #view-tv.active {
   flex: none; display: flex; justify-content: space-between; align-items: center; gap: 16px;
   padding: 16px 32px; border-bottom: 4px solid var(--red);
 }
-.tv-brand { font-size: 20px; font-weight: 800; letter-spacing: .02em; color: #fff; }
+.tv-brand { font-size: clamp(20px, 1.6vw, 28px); font-weight: 800; letter-spacing: .02em; color: #fff; }
 .tv-brand span { color: var(--gray); font-weight: 600; }
 .tv-top-right { display: flex; align-items: center; gap: 18px; }
 .tv-clock { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -1680,7 +1734,7 @@ body.tv-mode #view-tv.active {
 .tv-main { flex: 1; position: relative; min-height: 0; }
 .tv-loading { font-size: 26px; color: var(--gray); padding: 40px 44px; }
 .tv-panel { position: absolute; inset: 0; padding: 30px 44px; overflow-y: auto; display: none; }
-.tv-panel.active { display: block; }
+.tv-panel.active { display: block; animation: viewIn .45s ease both; }
 .tv-panel.tv-measuring { display: block !important; visibility: hidden; }
 .tv-fit { --tv-scale: 1; }
 .tv-wod-kicker {
@@ -1710,16 +1764,18 @@ body.tv-mode #view-tv.active {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
   gap: calc(10px * var(--tv-scale, 1)) calc(28px * var(--tv-scale, 1)); margin: calc(16px * var(--tv-scale, 1)) 0 0;
 }
-.tv-spec dt { font-size: calc(15px * var(--tv-scale, 1)); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--gray); }
+.tv-spec dt { font-size: calc(max(15px, 15px * var(--tv-scale, 1))); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--gray); }
 .tv-spec dd { margin: 2px 0 0; font-size: calc(max(24px, 1.9vw) * var(--tv-scale, 1)); font-weight: 700; color: #f2f3f5; line-height: 1.3; }
 .tv-cues { margin-top: calc(16px * var(--tv-scale, 1)); }
-.tv-cues-label { font-size: calc(15px * var(--tv-scale, 1)); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--gray); }
+.tv-cues-label { font-size: calc(max(15px, 15px * var(--tv-scale, 1))); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--gray); }
 .tv-cues p { margin: 4px 0 0; font-size: calc(max(24px, 1.9vw) * var(--tv-scale, 1)); line-height: 1.4; }
-.tv-session-source { font-size: calc(17px * var(--tv-scale, 1)); color: var(--gray); margin: calc(12px * var(--tv-scale, 1)) 0 0; }
+.tv-session-source { font-size: calc(max(18px, 17px * var(--tv-scale, 1))); color: var(--gray); margin: calc(12px * var(--tv-scale, 1)) 0 0; }
 .tv-code { color: #ff7086; font-weight: 800; }
 .tv-empty { padding: 7vh 0; text-align: center; }
 .tv-empty-big { font-size: max(38px, 3.4vw); font-weight: 800; color: #fff; margin: 0; }
 .tv-empty-sub { font-size: max(23px, 1.8vw); color: var(--gray); max-width: 920px; margin: 16px auto 0; }
+body.tv-mode .tv-bottom { opacity: .3; transition: opacity .3s ease; }
+body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1; }
 .tv-bottom {
   flex: none; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
@@ -1792,7 +1848,8 @@ body.tv-mode #view-tv.active {
 .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
 .chip {
   border: 1px solid var(--line); background: #fff; color: var(--ink);
-  padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; white-space: nowrap;
+  /* 40px floor: chips live in dense filter rows; 44 would crowd them out */
+  padding: 6px 12px; min-height: 40px; border-radius: 999px; font-size: 13px; cursor: pointer; white-space: nowrap;
 }
 .chip.active { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
 .vid-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
@@ -1860,7 +1917,7 @@ body.tv-mode #view-tv.active {
 }
 .seg::-webkit-scrollbar { display: none; }
 .seg-btn {
-  flex: none; min-height: 40px; padding: 8px 14px;
+  flex: none; min-height: 44px; padding: 8px 14px;
   border: 1px solid var(--line); border-radius: 999px;
   background: #fff; color: var(--ink);
   font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer;
@@ -1886,7 +1943,7 @@ body.tv-mode #view-tv.active {
 .grid-table input.grid-r { width: 62px; margin-left: 4px; }
 .grid-table td.cell-error { background: #fdf0f3; }
 .grid-table td.cell-error input { border-color: var(--red); }
-.grid-err-list { color: var(--red); margin: 4px 0; padding-left: 20px; }
+.grid-err-list { color: var(--red-dark); margin: 4px 0; padding-left: 20px; }
 .report-card .rc-head h3 { margin: 0 0 2px; font-size: 20px; }
 .report-card h4 { margin: 14px 0 6px; }
 .rc-line { margin: 8px 0; }
@@ -1920,14 +1977,14 @@ body.runner-mode { overflow: hidden; }
   background: #2a2d33; overflow: hidden;
 }
 .runner-progress-bar { height: 100%; background: var(--red); transition: width .3s ease; }
-.runner-step-count { color: var(--gray); font-size: 16px; margin: 0; }
+.runner-step-count { color: var(--hud-text-dim); font-size: 16px; margin: 0; }
 .runner-where { color: #ffb3c2; font-size: clamp(17px, 3.4vw, 24px); font-weight: 600; margin: 6px 0 0; }
 .runner-ex-name {
   font-size: clamp(44px, 10vw, 96px); line-height: 1.05; margin: 4px 0 0; font-weight: 800;
 }
-.runner-ex-reps { font-size: clamp(34px, 7.5vw, 68px); color: var(--red); font-weight: 800; margin: 0; }
+.runner-ex-reps { font-size: clamp(34px, 7.5vw, 68px); color: var(--red-on-dark); font-weight: 800; margin: 0; }
 .runner-rest-label {
-  font-size: clamp(40px, 9vw, 80px); letter-spacing: .18em; margin: 4px 0 0; font-weight: 800; color: var(--gray);
+  font-size: clamp(40px, 9vw, 80px); letter-spacing: .18em; margin: 4px 0 0; font-weight: 800; color: var(--hud-text-dim);
 }
 .runner-count {
   font-size: clamp(84px, 22vw, 190px); line-height: 1; font-weight: 800; margin: 0;
@@ -1986,7 +2043,8 @@ body.runner-mode { overflow: hidden; }
 }
 .tap-btn.on { background: var(--scarlet); border-color: var(--scarlet); color: #fff; }
 .ci-hurts { font-size: 17px; font-weight: 700; margin-top: 16px; }
-.ci-hurts input { width: 22px; height: 22px; }
+.ci-hurts { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.ci-hurts input { width: 26px; height: 26px; flex: none; }
 .ci-save { width: 100%; min-height: 52px; font-size: 18px; margin-top: 14px; }
 .wellness-row.flagged { background: #fdeef1; border-left: 4px solid var(--scarlet); border-radius: 8px; }
 
@@ -2003,3 +2061,11 @@ body.runner-mode { overflow: hidden; }
   .goal-bar { border: 1px solid #999; }
   .goal-bar-fill { background: #999 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Focus stays visible on the dark HUD surfaces (TV + runner), where the
+   light-surface scarlet outline is too dim. */
+body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var(--red-on-dark); }
+
+/* TV freshness stamp (added in the QA pass): quiet when fresh, loud when stale */
+.tv-updated{font-size:13px;color:var(--hud-text-dim);text-align:right;min-height:16px}
+.tv-updated.stale{color:var(--red-soft-on-dark);font-weight:700}
