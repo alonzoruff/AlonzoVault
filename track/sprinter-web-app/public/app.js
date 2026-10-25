@@ -356,7 +356,7 @@ function sessionDetailHtml(s) {
   return `<div class="card">
     <button class="btn secondary" id="detail-back" type="button">← Back to list</button>
     <button class="btn primary" id="detail-run" type="button">Run this workout</button>
-    <h2><span class="code-link">${esc(s.id)}</span> · ${esc(s.name)}</h2>
+    <div class="split-head"><h2>${esc(s.name)}</h2><span class="split-code num">${esc(s.id)}</span></div>
     <p>${badge(s.cns_demand)} <span class="badge plain">${esc(labelQuality(s.quality))}</span> <span class="badge plain">${esc(labelPhase(s.phase))}</span></p>
     <dl class="detail-grid">
       ${row('Reps', s.reps)}
@@ -462,7 +462,7 @@ function renderHome() {
     const runSid = isCoachUser() ? null : featuredRunSessionId(info);
     const runSession = runSid ? state.sessions.get(runSid) : null;
     todayHtml = `
-    <h2>Today — ${DAY_NAMES[todayKey]}, ${fmtDate(info.date)}</h2>
+    <div class="split-head"><h2>Today — ${DAY_NAMES[todayKey]}</h2><span class="split-date num">${fmtDate(info.date)}</span></div>
     ${LANE_DIVIDER}
     ${dayCardHtml(wk, todayKey, info, { highlight: true })}
     ${runSession ? runTodayButtonHtml({ sessionId: runSession.id, groupName: null }) : ''}
@@ -588,7 +588,7 @@ async function renderCoachToday() {
   const w = data.wellness || { checkedIn: 0, total: 0, flagged: [] };
   const wellHtml = w.total
     ? `<p>Wellness: <strong>${w.checkedIn}/${w.total} checked in</strong>${w.flagged.length ? ` · ${w.flagged.length} flagged` : ''}</p>`
-      + w.flagged.map(f => `<div class="roster-row"><span>🚩 <strong>${esc(f.name)}</strong></span><span class="muted">${f.flags.map(fl => esc(CHECKIN_FLAG_LABELS[fl] || fl)).join(' · ')}</span></div>`).join('')
+      + w.flagged.map(f => `<div class="roster-row flagged"><span>🚩 <strong>${esc(f.name)}</strong></span><span class="muted">${f.flags.map(fl => esc(CHECKIN_FLAG_LABELS[fl] || fl)).join(' · ')}</span></div>`).join('')
     : '<p class="muted">No roster yet — check-ins appear here once athletes are linked.</p>';
   el.innerHTML = `<div class="card">
     <h2>Coach summary</h2>
@@ -658,7 +658,7 @@ function dayCardHtml(weekRow, dayKey, info, opts) {
 
   return `<div class="card day-card ${cls}" ${opts.highlight ? 'style="outline:2px solid var(--red)"' : ''}>
     <div class="day-head"><span class="day-name">${DAY_NAMES[dayKey]}${opts.highlight ? ' · today' : ''}</span>
-    <span class="muted">${fmtDate(info.date)}</span> ${badgeHtml}</div>
+    <span class="day-date">${fmtDate(info.date)}</span> ${badgeHtml}</div>
     <p class="plan">${swapSession && opts.swappable ? '<s>' + planHtml + '</s>' : planHtml}</p>
     ${warmHtml}${swapHtml}
   </div>`;
@@ -1188,7 +1188,7 @@ async function renderWellness() {
     <div class="roster-row wellness-row ${rw.flags.length ? 'flagged' : ''}">
       <span><strong>${esc(rw.profile.name)}</strong>${rw.profile.groupName ? ` <span class="muted">· ${esc(rw.profile.groupName)}</span>` : ''}</span>
       ${rw.checkedIn
-        ? `<span class="muted">Slept ${rw.checkin.sleep}h · Sore ${rw.checkin.soreness}/5 · Energy ${rw.checkin.energy}/5${rw.checkin.hurts && rw.checkin.painText ? ` · <strong>Hurts:</strong> ${esc(rw.checkin.painText)}` : ''}</span><span>${flagBadges(rw.flags)}</span>`
+        ? `<span class="muted num">Slept ${rw.checkin.sleep}h · Sore ${rw.checkin.soreness}/5 · Energy ${rw.checkin.energy}/5${rw.checkin.hurts && rw.checkin.painText ? ` · <strong>Hurts:</strong> ${esc(rw.checkin.painText)}` : ''}</span><span>${flagBadges(rw.flags)}</span>`
         : (rw.profile.linkedEmail
           ? '<span class="muted">No check-in yet</span><span><span class="badge plain">MISSING</span></span>'
           : '<span class="muted">No account linked — they cannot check in yet</span><span><span class="badge high">NOT LINKED</span></span>')}
@@ -2107,7 +2107,7 @@ async function renderTesting() {
           <thead><tr><th>#</th><th>Athlete</th><th>Result</th>${t.kind === 'lift' ? '<th>Est. 1RM</th>' : ''}</tr></thead>
           <tbody>${rows.map((r, i) => {
             const pr = state.profiles.find(x => x.id === r.profileId);
-            return `<tr><td>${i + 1}</td><td>${esc(pr ? pr.name : '?')}</td><td>${resultRawText(r, t)}</td>${t.kind === 'lift' ? `<td><strong>${fmtNum(r.display)} lb</strong></td>` : ''}</tr>`;
+            return `<tr><td>${i + 1}</td><td>${esc(pr ? pr.name : '?')}</td><td class="num">${resultRawText(r, t)}</td>${t.kind === 'lift' ? `<td class="num"><strong>${fmtNum(r.display)} lb</strong></td>` : ''}</tr>`;
           }).join('')}</tbody></table></div>` : '<p class="muted">No results yet.</p>'}`;
       }).join('');
   const refreshRankedInPlace = () => {
@@ -2878,8 +2878,8 @@ function featuredRunSessionId(info) {
    openRunner path as a session's own "Run this workout" button. */
 function runTodayButtonHtml(target) {
   const label = target.groupName
-    ? `▶ Run — ${esc(target.groupName)} · ${esc(target.sessionId)}`
-    : `▶ Run today's workout · ${esc(target.sessionId)}`;
+    ? `▶ Run — ${esc(target.groupName)} · <span class="run-code">${esc(target.sessionId)}</span>`
+    : `▶ Run today's workout — <span class="run-code">${esc(target.sessionId)}</span>`;
   return `<button class="btn primary run-today-btn" type="button" data-run-today="${esc(target.sessionId)}">${label}</button>`;
 }
 function wireRunTodayButtons(root) {
@@ -3543,13 +3543,13 @@ async function renderReportCard() {
   const compLine = data.completions.percent !== null
     ? `<strong>${data.completions.count}</strong> of <strong>${data.completions.denominator}</strong> assigned session days completed (<strong>${data.completions.percent}%</strong>) since they joined the roster`
     : `<strong>${data.completions.total}</strong> sessions marked complete — no assigned-day window to compare against yet`;
-  const testingRows = data.testing.map(t => `<tr><td>${esc(t.name)}</td><td><strong>${fmtNum(t.best)} ${esc(t.unit)}</strong></td><td>${fmtNum(t.latest)} ${esc(t.unit)}</td><td>${esc(t.latestDate || '')}</td></tr>`).join('');
+  const testingRows = data.testing.map(t => `<tr><td>${esc(t.name)}</td><td class="num"><strong>${fmtNum(t.best)} ${esc(t.unit)}</strong></td><td class="num">${fmtNum(t.latest)} ${esc(t.unit)}</td><td class="num">${esc(t.latestDate || '')}</td></tr>`).join('');
   const testingCharts = data.testing.filter(t => t.series.length >= 2).map(t =>
     `<h4>${esc(t.name)} — progression</h4>` + lineChart(
       [{ label: t.name, points: t.series.map(r => ({ week: r.date, value: r.display })) }],
       { name: t.name, unit: t.unit, better: t.better || 'higher' }, true)).join('');
   const weeklyRows = data.weekly.map(w => `<tr><td>${esc(w.metric.name)}</td><td>${w.best !== null && w.best !== undefined ? fmtNum(w.best) + ' ' + esc(w.metric.unit) : '—'}</td><td>${fmtNum(w.latest)} ${esc(w.metric.unit)}</td><td>${deltaHtml(w.metric, w)}</td></tr>`).join('');
-  const meetRows = data.meetPrs.map(m => `<tr><td>${esc(m.name)}</td><td><strong>${esc(m.mark)}</strong></td><td>${esc(m.date)}</td><td>${esc(m.meet)}</td></tr>`).join('');
+  const meetRows = data.meetPrs.map(m => `<tr><td>${esc(m.name)}</td><td class="num"><strong>${esc(m.mark)}</strong></td><td class="num">${esc(m.date)}</td><td>${esc(m.meet)}</td></tr>`).join('');
   const goalRows = (data.goals || []).map(g => `<tr><td>${esc(g.eventName)}</td><td><strong>${esc(g.targetText)}</strong></td><td>${g.current ? esc(g.current.mark) : '—'}</td><td>${g.progressPct === null ? 'No marks yet' : g.progressPct + '%' + (g.achieved ? ' ★ Goal hit' : '')}</td><td>${esc(goalGapText(g) || '')}</td></tr>`).join('');
   zone.innerHTML = `
     <div class="report-card" id="report-card-print">
@@ -3742,7 +3742,7 @@ async function renderMeets() {
       <h2>Team PR board</h2>
       ${board.length ? `<div class="table-wrap"><table class="ranked">
         <thead><tr><th>Event</th><th>Athlete</th><th>PR</th><th>Meet</th><th>Date</th></tr></thead>
-        <tbody>${board.map(b => `<tr><td>${esc(b.name)}</td><td>${esc(b.athleteName)}</td><td><strong>${esc(b.mark)}</strong></td><td>${esc(b.meet)}</td><td>${esc(b.date)}</td></tr>`).join('')}</tbody></table></div>`
+        <tbody>${board.map(b => `<tr><td>${esc(b.name)}</td><td>${esc(b.athleteName)}</td><td class="num"><strong>${esc(b.mark)}</strong></td><td>${esc(b.meet)}</td><td class="num">${esc(b.date)}</td></tr>`).join('')}</tbody></table></div>`
         : '<p class="muted">No meet results yet — the board fills in as results are entered.</p>'}
     </div>
     <div class="card">
@@ -4097,9 +4097,10 @@ async function renderRecords() {
     </div>
     <div class="card">
       <h2>${esc(sel ? sel.name : '')} — Top 10</h2>
+      ${sel && sel.entries.length ? `<div class="record-hero"><span class="big-num">${esc(sel.entries[0].mark)}</span><span class="muted">School record — ${esc(sel.entries[0].name)}${sel.entries[0].year ? ' · ' + esc(sel.entries[0].year) : ''}${sel.entries[0].meet ? ' · ' + esc(sel.entries[0].meet) : ''}</span></div>` : ''}
       ${sel && sel.entries.length ? `<div class="table-wrap"><table class="ranked">
         <thead><tr><th>#</th><th>Athlete</th><th>Mark</th><th>Year</th><th>Meet</th></tr></thead>
-        <tbody>${sel.entries.map(r => `<tr><td>${r.rank}</td><td><strong>${esc(r.name)}</strong></td><td><strong>${esc(r.mark)}</strong></td><td>${r.year ? esc(r.year) : '—'}</td><td>${esc(r.meet || '—')}</td></tr>`).join('')}</tbody></table></div>`
+        <tbody>${sel.entries.map(r => `<tr><td>${r.rank}</td><td><strong>${esc(r.name)}</strong></td><td class="num"><strong>${esc(r.mark)}</strong></td><td>${r.year ? esc(r.year) : '—'}</td><td>${esc(r.meet || '—')}</td></tr>`).join('')}</tbody></table></div>`
         : `<p class="muted">No records yet${sel ? ' for the ' + esc(sel.name) : ''} — the board fills in as real marks are added.</p>`}
       ${anyMarks ? '' : '<p class="muted">The board starts empty on purpose: every mark here is real St. John\'s history, added by a coach.</p>'}
     </div>`;

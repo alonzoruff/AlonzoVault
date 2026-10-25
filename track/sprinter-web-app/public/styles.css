@@ -22,6 +22,14 @@
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
   --card-pad: 16px;
   --card-gap: 14px;
+  /* Design language (DESIGN.md): Archivo is the jersey voice,
+     JetBrains Mono carries every performance number. Named fonts
+     lead the stacks with strong system fallbacks — no webfont is
+     ever fetched, so the offline PWA makes zero network requests
+     for type and renders identically with no connection. */
+  --font-display: "Archivo", "Archivo Expanded", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -31,10 +39,10 @@ html { -webkit-text-size-adjust: 100%; }
 }
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--ink);
-  line-height: 1.45;
+  line-height: 1.55;
 }
 .topbar {
   position: sticky; top: 0; z-index: 20;
@@ -110,9 +118,35 @@ main { max-width: 880px; margin: 0 auto; padding: 16px max(16px, env(safe-area-i
 .view { display: none; }
 .view.active { display: block; }
 h1 { font-size: 24px; margin: 6px 0 12px; line-height: 1.25; }
+/* Display voice: uppercase, track-tight, weight does the shouting.
+   h3 keeps its case — it often carries athlete names. */
+h1, h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; text-transform: uppercase; }
 h2 { font-size: 19px; margin: 4px 0 10px; line-height: 1.25; }
-h3 { font-size: 16.5px; margin: 10px 0 6px; line-height: 1.25; }
+h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; font-size: 16.5px; margin: 10px 0 6px; line-height: 1.25; }
 .muted { color: var(--muted); font-size: 14px; }
+/* Performance numerals: mono, tabular — a 10.87 is a split time
+   and must look like one. .big-num is the scoreboard treatment. */
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.big-num {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-weight: 800; font-size: clamp(2.2rem, 7vw, 3.5rem); line-height: 1; letter-spacing: -0.01em;
+}
+/* Split identity headers: title left, oversized mono date/code
+   right. Identity breaks the grid; data never does. */
+.split-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.split-head .split-date, .split-head .split-code {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-weight: 800; font-size: clamp(1.35rem, 5vw, 2rem); color: var(--ink); white-space: nowrap;
+}
+/* Everywhere a performance number is typed or read in place —
+   entry grids, mark inputs, session codes, stat readouts — the
+   mono voice applies, so columns of marks align to the hundredth. */
+input.grid-in, input.grid-r, .rapid-test input, .check-inputs input,
+input[data-md-mark], .tap-btn, .ci-sleep-val, .stat-num,
+.session-row .code, .code-link, .day-date {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.day-card .day-head .day-date { font-size: 17px; font-weight: 700; color: var(--ink); }
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px var(--card-pad); margin: 0 0 var(--card-gap);
@@ -129,7 +163,18 @@ a.btn { display: inline-block; text-decoration: none; }
 .btn.danger { color: var(--high); border-color: #f0c4c0; }
 /* Today screen Run button(s): full width of the card (via
    .btn.primary), tall enough to hit across a weight room. */
-.btn.run-today-btn { min-height: 56px; font-size: 17px; font-weight: 700; margin: 0 0 10px; }
+/* The signature Run button: a full-width scarlet slab, 64px,
+   uppercase display type, the session code in mono, Scarlet Deep
+   as the gradient floor, and a spring press (transform only). */
+.btn.run-today-btn {
+  min-height: 64px; font-size: 19px; font-weight: 800; margin: 0 0 10px;
+  font-family: var(--font-display); text-transform: uppercase; letter-spacing: -0.01em;
+  background: linear-gradient(180deg, var(--red) 0%, var(--red-dark) 100%);
+  border-color: var(--red-dark); color: #fff;
+  transition: transform .18s cubic-bezier(.34, 1.56, .64, 1), background-color .15s ease, border-color .15s ease;
+}
+.btn.run-today-btn:active { transform: translateY(1px) scale(.99); }
+.run-code { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: 0; }
 button.back { margin-bottom: 10px; }
 input[type="search"], input[type="text"], input[type="email"], input[type="password"],
 input[type="date"], select, textarea {
@@ -1475,14 +1520,16 @@ details.card summary { cursor: pointer; }
 }
 }
 
-/* Animated dashed lane stripe under section headers */
+/* Lane rule: a 1px hairline with a 24px scarlet segment at its
+   left edge, like a lane number marking. (On HUD surfaces the TV
+   rules below carry the same idea in --hud-line.) */
 .lane-divider {
-  height: 4px; border-radius: 2px; overflow: hidden;
-  margin: -4px 0 14px; background: rgba(138,147,159,.18);
+  height: auto; border-top: 1px solid var(--line); border-radius: 0;
+  overflow: visible; margin: -2px 0 14px; background: none; position: relative;
 }
 .lane-divider .lane-strip {
-  background-image: repeating-linear-gradient(90deg, var(--red) 0 34px, transparent 34px 56px);
-  opacity: .55; animation-duration: 3s;
+  display: block; width: 24px; height: 3px; margin-top: -2px;
+  background: var(--red); opacity: 1; animation: none; border-radius: 0;
 }
 
 /* Weekly digest */
@@ -1585,7 +1632,7 @@ svg.chart { width: 100%; height: auto; display: block; }
 .chart-axis { font-size: 10px; fill: var(--muted); }
 .chart-best { font-size: 9.5px; font-weight: 800; }
 .legend .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; }
-.concern-card.flagged { border: 2px solid var(--red); background: #fff7f8; }
+.concern-card.flagged { border: 2px solid var(--high); background: var(--high-bg); }
 .demo-zone { display: inline-flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .demo-zone .btn { width: auto; padding: 4px 12px; font-size: 13.5px; }
 
@@ -1743,7 +1790,17 @@ body.tv-mode #view-tv.active {
 }
 .tv-date { font-size: calc(max(44px, 3.8vw) * var(--tv-scale, 1)); font-weight: 800; line-height: 1.1; color: #fff; }
 .tv-weekline { font-size: calc(max(26px, 2vw) * var(--tv-scale, 1)); color: var(--gray); font-weight: 700; margin: 10px 0 26px; }
-.tv-page-group { font-size: calc(max(40px, 3.4vw) * var(--tv-scale, 1)); font-weight: 800; color: #fff; line-height: 1.15; }
+/* Group name as a jersey banner: uppercase display type with a
+   scarlet lane segment under it, on the charcoal HUD surface. */
+.tv-page-group {
+  font-family: var(--font-display); text-transform: uppercase; letter-spacing: -0.01em;
+  font-size: calc(max(40px, 3.4vw) * var(--tv-scale, 1)); font-weight: 800; color: #fff; line-height: 1.15;
+}
+.tv-page-group::after {
+  content: ''; display: block;
+  width: calc(72px * var(--tv-scale, 1)); height: calc(5px * var(--tv-scale, 1));
+  background: var(--red); margin-top: calc(10px * var(--tv-scale, 1));
+}
 .tv-pick {
   display: inline-block; vertical-align: middle; background: var(--red); color: #fff;
   font-size: calc(19px * var(--tv-scale, 1)); font-weight: 800; letter-spacing: .04em;
@@ -1955,6 +2012,27 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .row-saved { animation: rowSavedFlash 1.8s ease-out; border-radius: 8px; }
 .row-errored { outline: 2px solid var(--red); outline-offset: 2px; border-radius: 8px; }
 .row-err { display: block; margin-top: 4px; }
+
+/* Design language motion: lists cascade at ~40ms per card when a
+   view mounts — transform/opacity only, spring-feel curve, and
+   fully off under reduced motion. In-place row saves never
+   re-create these cards, so entry is never interrupted by it. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes cascadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  .view > .card { animation: cascadeIn .3s cubic-bezier(.25, .9, .3, 1.12) both; }
+  .view > .card:nth-of-type(2) { animation-delay: 40ms; }
+  .view > .card:nth-of-type(3) { animation-delay: 80ms; }
+  .view > .card:nth-of-type(4) { animation-delay: 120ms; }
+  .view > .card:nth-of-type(5) { animation-delay: 160ms; }
+  .view > .card:nth-of-type(6) { animation-delay: 200ms; }
+  .view > .card:nth-of-type(n+7) { animation-delay: 240ms; }
+}
+/* School-record hero: the top mark gets the scoreboard treatment. */
+.record-hero { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 2px 0 10px; }
+.record-hero .big-num { color: var(--ink); }
 .report-card .rc-head h3 { margin: 0 0 2px; font-size: 20px; }
 .report-card h4 { margin: 14px 0 6px; }
 .rc-line { margin: 8px 0; }
@@ -2052,12 +2130,17 @@ body.runner-mode { overflow: hidden; }
   border: 2px solid var(--gray); border-radius: 12px;
   background: #fff; font-size: 18px; font-weight: 700; cursor: pointer;
 }
-.tap-btn.on { background: var(--scarlet); border-color: var(--scarlet); color: #fff; }
+/* Check-in selected state: scarlet fill, white text, full weight —
+   a selection must read from arm's length. */
+.tap-btn.on { background: var(--scarlet); border-color: var(--scarlet); color: #fff; font-weight: 800; }
 .ci-hurts { font-size: 17px; font-weight: 700; margin-top: 16px; }
 .ci-hurts { display: flex; align-items: center; gap: 10px; min-height: 48px; }
 .ci-hurts input { width: 26px; height: 26px; flex: none; }
 .ci-save { width: 100%; min-height: 52px; font-size: 18px; margin-top: 14px; }
-.wellness-row.flagged { background: #fdeef1; border-left: 4px solid var(--scarlet); border-radius: 8px; }
+/* Flagged rows: a 3px High Load left border — unmissable at a
+   glance across a weight room, in the functional data red. */
+.wellness-row.flagged { background: var(--high-bg); border-left: 3px solid var(--high); border-radius: 8px; }
+.roster-row.flagged { background: var(--high-bg); border-left: 3px solid var(--high); border-radius: 8px; }
 
 /* GOALS (coach manager + athlete card + report card) */
 .goal-row { padding: 12px 0; border-bottom: 1px solid #e5e7eb; }

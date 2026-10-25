@@ -229,8 +229,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v26',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v26"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v27',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v27"), swJs.text.slice(0, 80));
 
   /* ---- In-place row updates regression guards ----
      Each save handler segment is sliced out of the served app.js.
@@ -1833,8 +1833,52 @@ async function main() {
     appJs.text.includes('▶ Run today\'s workout') && appJs.text.includes('▶ Run — ') &&
     appJs.text.includes('todayRunTargets(data.groups)'));
   const stylesCss = await apiText(null, '/styles.css');
-  check('today-run button style is served and at least 56px tall',
-    stylesCss.status === 200 && /\.run-today-btn\s*\{[^}]*min-height:\s*56px/.test(stylesCss.text));
+  check('today-run button style is served and at least 64px tall (DESIGN.md signature slab)',
+    stylesCss.status === 200 && /\.run-today-btn\s*\{[^}]*min-height:\s*64px/.test(stylesCss.text));
+
+  /* ---------------- Design language (DESIGN.md, Phase 2) ----------------
+     Presentation contracts only: font stacks with no webfont fetch,
+     mono performance numerals, lane-rule dividers, split headers,
+     the record scoreboard hero, TV jersey banner, flagged rows. */
+  check('design: Archivo + JetBrains Mono lead the font stacks, palette hexes unchanged',
+    stylesCss.text.includes('--font-display: "Archivo"') &&
+    stylesCss.text.includes('--font-mono: "JetBrains Mono"') &&
+    stylesCss.text.includes('--red: #CC0033') &&
+    !stylesCss.text.includes('@font-face') && !stylesCss.text.includes('fonts.googleapis'));
+  check('design: run button label carries the session code in a mono run-code span',
+    appJs.text.includes('class="run-code"') &&
+    /\.run-code\s*\{[^}]*font-family:\s*var\(--font-mono\)/.test(stylesCss.text));
+  check('design: run button has Scarlet Deep gradient depth + spring press',
+    /\.run-today-btn\s*\{[^}]*linear-gradient\(180deg, var\(--red\) 0%, var\(--red-dark\) 100%\)/.test(stylesCss.text) &&
+    stylesCss.text.includes('.run-today-btn:active { transform: translateY(1px)'));
+  check('design: lane rule is a 1px hairline with a 24px scarlet segment',
+    /\.lane-divider\s*\{[^}]*border-top:\s*1px solid var\(--line\)/.test(stylesCss.text) &&
+    /\.lane-divider \.lane-strip\s*\{[^}]*width:\s*24px/.test(stylesCss.text));
+  check('design: Today + session detail use split heads with oversized mono right side',
+    appJs.text.includes('class="split-head"><h2>Today — ') && appJs.text.includes('class="split-date num"') &&
+    appJs.text.includes('class="split-code num"') &&
+    /\.split-head \.split-date[^{]*\{[^}]*var\(--font-mono\)/.test(stylesCss.text));
+  check('design: mark/result cells render in mono (records, PR board, ranked, report card)',
+    appJs.text.includes('<td class="num"><strong>${esc(r.mark)}</strong></td>') &&
+    appJs.text.includes('<td class="num"><strong>${esc(b.mark)}</strong></td>') &&
+    appJs.text.includes('<td class="num">${resultRawText(r, t)}</td>') &&
+    appJs.text.includes('<td class="num"><strong>${esc(m.mark)}</strong></td>'));
+  check('design: school record top mark gets the oversized scoreboard hero',
+    appJs.text.includes('class="record-hero"') && appJs.text.includes('class="big-num"') &&
+    /\.big-num\s*\{[^}]*clamp\(2\.2rem, 7vw, 3\.5rem\)/.test(stylesCss.text));
+  check('design: TV group name is a jersey banner (uppercase display + scarlet segment)',
+    /\.tv-page-group\s*\{[^}]*text-transform:\s*uppercase/.test(stylesCss.text) &&
+    stylesCss.text.includes('.tv-page-group::after'));
+  check('design: flagged rows carry the 3px High Load left border',
+    /\.wellness-row\.flagged\s*\{[^}]*border-left:\s*3px solid var\(--high\)/.test(stylesCss.text) &&
+    /\.roster-row\.flagged\s*\{[^}]*border-left:\s*3px solid var\(--high\)/.test(stylesCss.text) &&
+    appJs.text.includes('class="roster-row flagged"'));
+  check('design: check-in selected state stays scarlet/white at full weight',
+    /\.tap-btn\.on\s*\{[^}]*background:\s*var\(--scarlet\)[^}]*font-weight:\s*800/.test(stylesCss.text));
+  check('design: list cascade is transform/opacity only and reduced-motion safe',
+    stylesCss.text.includes('@keyframes cascadeIn') &&
+    stylesCss.text.includes('prefers-reduced-motion: no-preference') &&
+    stylesCss.text.includes('animation-delay: 40ms'));
   check('TV board render path stays free of the Today Run buttons',
     !tvCode.includes('data-run-today') && !tvCode.includes('todayRunTargets') &&
     !tvCode.includes('run-today-btn') && !tvCode.includes('featuredRunSessionId'));

@@ -1,7 +1,7 @@
 /* Simple service worker: cache the app shell so the app opens fast and
    works on a flaky track-side connection. API calls always go to the
    network (your log data is never served from cache). */
-const CACHE = 'sprinter-app-v26';
+const CACHE = 'sprinter-app-v27';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/assets/sjc-logo-header.svg'];
 
 self.addEventListener('install', (event) => {
