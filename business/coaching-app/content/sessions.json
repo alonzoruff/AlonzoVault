@@ -1,0 +1,1522 @@
+[
+ {
+  "id": "ACC-01",
+  "name": "Block starts and short drives",
+  "quality": "acceleration",
+  "phase": "base",
+  "level": "all",
+  "reps": "6-8",
+  "rep_distance_m": 30,
+  "intensity_pct": 98,
+  "rest": "full (walk back + 2-3 min)",
+  "total_volume_m": 210,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Aggressive push out of the blocks; stay low through the drive; strike under the hip",
+  "source": "AJ 100/200 plan, Phase 1 (Mon)"
+ },
+ {
+  "id": "ACC-02",
+  "name": "Hill repeats 60-100m",
+  "quality": "acceleration",
+  "phase": "base",
+  "level": "all",
+  "reps": "6-8",
+  "rep_distance_m": 80,
+  "intensity_pct": 93,
+  "rest": "walk back",
+  "total_volume_m": 560,
+  "surface": "hill",
+  "footwear": "trainers",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Lean from the ankles into the hill; powerful arm drive; full push through the ground",
+  "source": "AJ 100/200 plan, Phase 1 (Thu)"
+ },
+ {
+  "id": "ACC-03",
+  "name": "Block starts to 30-40m",
+  "quality": "acceleration",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "5-6",
+  "rep_distance_m": 40,
+  "intensity_pct": 98,
+  "rest": "full (3-5 min)",
+  "total_volume_m": 210,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Own the first three steps; gradual rise, no standing up at 10m; relaxed shoulders",
+  "source": "AJ 100/200 plan, Phase 2 (Thu)"
+ },
+ {
+  "id": "ACC-04",
+  "name": "Sled or harness pulls + free sprints",
+  "quality": "acceleration",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "2 x 20-40m resisted + 2 x 30-50m free",
+  "rep_distance_m": 40,
+  "intensity_pct": 90,
+  "rest": "3-6 min",
+  "total_volume_m": 220,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "sled, harness",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Resisted reps should look like sprinting, not marching; free reps right after feel the contrast",
+  "source": "AJ 100/200 plan, Phase 2 (Thu)"
+ },
+ {
+  "id": "MAX-01",
+  "name": "Fly runs (20m build + fly zone)",
+  "quality": "max_velocity",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "4-6",
+  "rep_distance_m": 30,
+  "intensity_pct": 98,
+  "rest": "6-8 min",
+  "total_volume_m": 150,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "cones",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Tall and relaxed in the fly zone; fast turnover without reaching; front-side mechanics",
+  "source": "AJ 100/200 plan, Phase 2 (Mon)"
+ },
+ {
+  "id": "MAX-02",
+  "name": "Ins-and-outs 30-30-30",
+  "quality": "max_velocity",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "3-4",
+  "rep_distance_m": 90,
+  "intensity_pct": 95,
+  "rest": "6-8 min",
+  "total_volume_m": 315,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "cones",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Blast-float-blast: float means hold speed with less effort, not slow down; re-attack the last 30",
+  "source": "AJ 100/200 plan, Phase 2 (Mon)"
+ },
+ {
+  "id": "MAX-03",
+  "name": "Light fly runs or block starts",
+  "quality": "max_velocity",
+  "phase": "championship",
+  "level": "all",
+  "reps": "3-4",
+  "rep_distance_m": 30,
+  "intensity_pct": 95,
+  "rest": "full",
+  "total_volume_m": 105,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks, cones",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Sharp, not exhausting; stop while it still feels fast; nothing to failure this phase",
+  "source": "AJ 100/200 plan, Phase 4 (Mon)"
+ },
+ {
+  "id": "SE-01",
+  "name": "Short speed endurance 120-150m",
+  "quality": "speed_endurance",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "3-4",
+  "rep_distance_m": 150,
+  "intensity_pct": 93,
+  "rest": "6-8 min",
+  "total_volume_m": 525,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Fast but controlled off the turn; hold form as fatigue builds; finish tall",
+  "source": "AJ 100/200 plan, Phase 2 (Fri)"
+ },
+ {
+  "id": "SE-02",
+  "name": "Split runs 120m + 80m",
+  "quality": "speed_endurance",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "2 sets",
+  "rep_distance_m": 200,
+  "intensity_pct": 93,
+  "rest": "60-90 sec inside set, 8 min between sets",
+  "total_volume_m": 400,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Second rep starts tired on purpose; re-accelerate instead of surviving",
+  "source": "AJ 100/200 plan, Phase 2 (Fri)"
+ },
+ {
+  "id": "SE-03",
+  "name": "Speed endurance fast 150m",
+  "quality": "speed_endurance",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "2-3",
+  "rep_distance_m": 150,
+  "intensity_pct": 98,
+  "rest": "10-12 min",
+  "total_volume_m": 375,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Race effort with discipline; the last 50m is a form test, not a grit test",
+  "source": "AJ 100/200 plan, Phase 3 (Thu)"
+ },
+ {
+  "id": "SE-04",
+  "name": "200m + 120m at race effort",
+  "quality": "speed_endurance",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "1 x 200m + 1 x 120m",
+  "rep_distance_m": 200,
+  "intensity_pct": 98,
+  "rest": "full (12+ min)",
+  "total_volume_m": 320,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Run the 200 like a final; the 120 after it teaches finishing under fatigue",
+  "source": "AJ 100/200 plan, Phase 3 (Thu)"
+ },
+ {
+  "id": "SE-05",
+  "name": "Light speed endurance 120m",
+  "quality": "speed_endurance",
+  "phase": "championship",
+  "level": "all",
+  "reps": "2",
+  "rep_distance_m": 120,
+  "intensity_pct": 90,
+  "rest": "full",
+  "total_volume_m": 240,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Smooth 90 percent; if it is not smooth, strides only today",
+  "source": "AJ 100/200 plan, Phase 4 (Wed)"
+ },
+ {
+  "id": "SE-06",
+  "name": "100m accelerations to 90%",
+  "quality": "speed_endurance",
+  "phase": "pre_competitive",
+  "level": "all",
+  "reps": "4-6",
+  "rep_distance_m": 100,
+  "intensity_pct": 90,
+  "rest": "1-2 min",
+  "total_volume_m": 500,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Build through the rep; top speed without strain; low end of the speed endurance ladder",
+  "source": "AJ 100/200 plan, Phase 2 ladder"
+ },
+ {
+  "id": "SPE-01",
+  "name": "300m build-ups (200m runners)",
+  "quality": "special_endurance",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "5-6",
+  "rep_distance_m": 300,
+  "intensity_pct": 85,
+  "rest": "walk/jog recovery",
+  "total_volume_m": 1650,
+  "surface": "track",
+  "footwear": "either",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Build the rep in thirds; last 100 is controlled aggression; early-phase only for 200m group",
+  "source": "AJ 100/200 plan, Phase 2 ladder"
+ },
+ {
+  "id": "SPE-02",
+  "name": "8 x 200m fast and relaxed",
+  "quality": "special_endurance",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "8",
+  "rep_distance_m": 200,
+  "intensity_pct": 85,
+  "rest": "100m walk / 100m jog",
+  "total_volume_m": 1600,
+  "surface": "track",
+  "footwear": "either",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Fast and relaxed is the whole point; if form goes, the rep is over",
+  "source": "AJ 100/200 plan, Phase 2 ladder"
+ },
+ {
+  "id": "TEM-01",
+  "name": "Extensive tempo 100s",
+  "quality": "tempo",
+  "phase": "base",
+  "level": "all",
+  "reps": "8-10",
+  "rep_distance_m": 100,
+  "intensity_pct": 70,
+  "rest": "30-45 sec",
+  "total_volume_m": 900,
+  "surface": "grass",
+  "footwear": "trainers",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 24,
+  "coaching_cues": "Relaxed rhythm; nasal breathing early reps; this builds the base that protects speed days",
+  "source": "AJ 100/200 plan, Phase 1 (Tue)"
+ },
+ {
+  "id": "TEM-02",
+  "name": "Tempo 100s + low plyos",
+  "quality": "tempo",
+  "phase": "base",
+  "level": "all",
+  "reps": "6-8",
+  "rep_distance_m": 100,
+  "intensity_pct": 70,
+  "rest": "30-45 sec",
+  "total_volume_m": 700,
+  "surface": "grass",
+  "footwear": "trainers",
+  "equipment": "hurdles (walkovers)",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 24,
+  "coaching_cues": "Tempo first, plyos after while warm; keep plyo contacts low and springy",
+  "source": "AJ 100/200 plan, Phase 1 (Fri)"
+ },
+ {
+  "id": "TEM-03",
+  "name": "Fartlek up to 30 min",
+  "quality": "tempo",
+  "phase": "base",
+  "level": "all",
+  "reps": "1 session (1-1-2-2-2-2-1-1 surges)",
+  "rep_distance_m": 0,
+  "intensity_pct": 75,
+  "rest": "1 min jog between surges",
+  "total_volume_m": 0,
+  "surface": "any",
+  "footwear": "trainers",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 24,
+  "coaching_cues": "Surges are strong strides, not sprints; keep the jog honest between them",
+  "source": "AJ 100/200 plan, Phase 1 sample workouts"
+ },
+ {
+  "id": "TEM-04",
+  "name": "400m fartlek reps",
+  "quality": "tempo",
+  "phase": "base",
+  "level": "all",
+  "reps": "6-12",
+  "rep_distance_m": 400,
+  "intensity_pct": 75,
+  "rest": "continuous (walk/jog built in)",
+  "total_volume_m": 3200,
+  "surface": "track",
+  "footwear": "trainers",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 24,
+  "coaching_cues": "Each 400 mixes walk, jog, stride, and a sprint 100; smooth transitions, no hero reps",
+  "source": "AJ 100/200 plan, Phase 1 sample workouts"
+ },
+ {
+  "id": "RM-01",
+  "name": "100m race modeling: blocks to 60m",
+  "quality": "race_modeling",
+  "phase": "competitive",
+  "level": "intermediate",
+  "reps": "4",
+  "rep_distance_m": 60,
+  "intensity_pct": 98,
+  "rest": "full (5-8 min)",
+  "total_volume_m": 240,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Drive 0-30, transition 30-60; rehearse the race in segments, then trust it",
+  "source": "AJ 100/200 plan, Phase 3 (Mon)"
+ },
+ {
+  "id": "RM-02",
+  "name": "200m curve modeling: blocks to 80-120m",
+  "quality": "race_modeling",
+  "phase": "competitive",
+  "level": "intermediate",
+  "reps": "3-4",
+  "rep_distance_m": 100,
+  "intensity_pct": 95,
+  "rest": "full (6-10 min)",
+  "total_volume_m": 350,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Attack the curve with lean; lane discipline is a skill, practice it; float, do not force",
+  "source": "AJ 100/200 plan, Phase 3 (Mon)"
+ },
+ {
+  "id": "RM-03",
+  "name": "Broken runs (200 / jog / 200)",
+  "quality": "race_modeling",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "2-3 broken sets",
+  "rep_distance_m": 400,
+  "intensity_pct": 95,
+  "rest": "jog across the field between segments",
+  "total_volume_m": 1000,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Second fast segment starts on tired legs like a real final; variants: 300+jog+100, 100+jog+300",
+  "source": "AJ 100/200 plan, Phase 3 note"
+ },
+ {
+  "id": "RM-04",
+  "name": "150m race simulations",
+  "quality": "race_modeling",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "3-4",
+  "rep_distance_m": 150,
+  "intensity_pct": 95,
+  "rest": "full (8-10 min)",
+  "total_volume_m": 525,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "100m push, 50m power; this is the 200m race in miniature",
+  "source": "AJ 100/200 plan, Phase 3 note"
+ },
+ {
+  "id": "RM-05",
+  "name": "Pre-meet primer: light starts and strides",
+  "quality": "race_modeling",
+  "phase": "any",
+  "level": "all",
+  "reps": "3 x 20m starts + strides",
+  "rep_distance_m": 20,
+  "intensity_pct": 90,
+  "rest": "full",
+  "total_volume_m": 60,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Touch speed, do not train it; leave the track feeling fast; mobility after",
+  "source": "AJ 100/200 plan, Phase 3/4 (Fri)"
+ },
+ {
+  "id": "STR-01",
+  "name": "Base weights + circuit",
+  "quality": "strength",
+  "phase": "base",
+  "level": "all",
+  "reps": "3-4 x 10-12 (weights) + full-body circuit",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "circuit pace",
+  "total_volume_m": 0,
+  "surface": "any",
+  "footwear": "trainers",
+  "equipment": "weights, mini-bands",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 24,
+  "coaching_cues": "Moderate loads, clean reps; core and mini-band work in the circuit; build capacity, not soreness",
+  "source": "AJ 100/200 plan, Phase 1 (Mon/Tue)"
+ },
+ {
+  "id": "STR-02",
+  "name": "Heavy weights (speed phase)",
+  "quality": "strength",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "3-4 x 6-8",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "2-3 min",
+  "total_volume_m": 0,
+  "surface": "any",
+  "footwear": "trainers",
+  "equipment": "weights",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Heavier but never grinding; bar speed matters; pair with easy tempo for recovery",
+  "source": "AJ 100/200 plan, Phase 2 (Tue)"
+ },
+ {
+  "id": "PLY-01",
+  "name": "Low-impact plyos",
+  "quality": "plyometric",
+  "phase": "base",
+  "level": "all",
+  "reps": "pogos, box step-ups, hurdle walkovers",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "walk back",
+  "total_volume_m": 0,
+  "surface": "any",
+  "footwear": "trainers",
+  "equipment": "box, hurdles",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 24,
+  "coaching_cues": "Quiet landings; spring off the ground, do not sink into it; low contacts in base phase",
+  "source": "AJ 100/200 plan, Phase 1 (Fri)"
+ },
+ {
+  "id": "PLY-02",
+  "name": "High-impact plyos (power day)",
+  "quality": "plyometric",
+  "phase": "pre_competitive",
+  "level": "advanced",
+  "reps": "session set with acceleration day",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "full between sets",
+  "total_volume_m": 0,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "hurdles, box",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Only when fresh; quality contacts over quantity; pair with the acceleration day, never the day before speed",
+  "source": "AJ 100/200 plan, Phase 2 (Thu)"
+ },
+ {
+  "id": "REC-01",
+  "name": "Active recovery day",
+  "quality": "recovery",
+  "phase": "any",
+  "level": "all",
+  "reps": "easy jog 15-20 min + foam roll + static stretch",
+  "rep_distance_m": 0,
+  "intensity_pct": 40,
+  "rest": "n/a",
+  "total_volume_m": 0,
+  "surface": "any",
+  "footwear": "trainers",
+  "equipment": "foam roller",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Leave better than you arrived; this day is what makes the high days possible",
+  "source": "AJ 100/200 plan, Phase 1 (Wed/Sun)"
+ },
+ {
+  "id": "QTR-01",
+  "name": "Lactate tolerance ladder (short rest): 3 x 3 x 300m",
+  "quality": "special_endurance",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "3 sets x 3",
+  "rep_distance_m": 300,
+  "intensity_pct": 92,
+  "rest": "30-45 sec between reps, 6 min between sets",
+  "total_volume_m": 2700,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Short rest keeps lactate elevated on purpose; hold form as it builds; advanced seniors only - scale to 2 sets for younger athletes",
+  "source": "Dunham USTFCCCA 2015 symposium (peak lactate tolerance, short rest)"
+ },
+ {
+  "id": "QTR-02",
+  "name": "Lactate peak reps (long rest): 2 x 300m",
+  "quality": "special_endurance",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "2",
+  "rep_distance_m": 300,
+  "intensity_pct": 97,
+  "rest": "full (15-20 min)",
+  "total_volume_m": 600,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Full recovery so each rep spikes to peak speed; just below top speed, not survival running; variants from the same menu: 2 x 400m or 2 x 200m",
+  "source": "Dunham USTFCCCA 2015 symposium (peak lactate tolerance, long rest)"
+ },
+ {
+  "id": "QTR-03",
+  "name": "High-volume 100s at 400m pace",
+  "quality": "speed_endurance",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "10-15",
+  "rep_distance_m": 100,
+  "intensity_pct": 92,
+  "rest": "near-full (2-3 min)",
+  "total_volume_m": 1250,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Every rep at goal 400m pace, none faster; rhythm and relaxation are the session; stop if pace falls off",
+  "source": "Dunham USTFCCCA 2015 symposium (improving top 400m speed)"
+ },
+ {
+  "id": "QTR-04",
+  "name": "Tempo endurance 200s (400m group)",
+  "quality": "tempo",
+  "phase": "base",
+  "level": "all",
+  "reps": "6-8",
+  "rep_distance_m": 200,
+  "intensity_pct": 75,
+  "rest": "2-3 min (100m walk / 100m jog)",
+  "total_volume_m": 1400,
+  "surface": "grass",
+  "footwear": "trainers",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 24,
+  "coaching_cues": "Fast and relaxed, never strained; this is the aerobic bank deposit that pays for the last 100m of the 400",
+  "source": "400m extension - Hart model extensive tempo"
+ },
+ {
+  "id": "QTR-05",
+  "name": "Over-distance special endurance: 2 x 600m",
+  "quality": "special_endurance",
+  "phase": "pre_competitive",
+  "level": "advanced",
+  "reps": "2",
+  "rep_distance_m": 600,
+  "intensity_pct": 88,
+  "rest": "15 min",
+  "total_volume_m": 1200,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Run it like a long 400: controlled first 400, then hold; over-distance makes 400 feel short",
+  "source": "400m extension - over-distance work (Hart-style program)"
+ },
+ {
+  "id": "QTR-06",
+  "name": "Special endurance 500s",
+  "quality": "special_endurance",
+  "phase": "pre_competitive",
+  "level": "advanced",
+  "reps": "2",
+  "rep_distance_m": 500,
+  "intensity_pct": 90,
+  "rest": "12-15 min",
+  "total_volume_m": 1000,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "The Dunham-framework original the 100/200 plan cut: distribute effort, no sprinting the first 200; finish mechanics matter most",
+  "source": "Dunham 400m framework (500m speed endurance in AJ plan source material)"
+ },
+ {
+  "id": "QTR-07",
+  "name": "Split run 480 (3 x 160m)",
+  "quality": "special_endurance",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "2 sets of 3 x 160m",
+  "rep_distance_m": 160,
+  "intensity_pct": 96,
+  "rest": "30 sec between segments, 10-12 min between sets",
+  "total_volume_m": 960,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Each 160 faster than 400m race pace (set from best 200m); 30 sec barely recovers half the phosphocreatine - that is the point; once per 10-day cycle, never within 2 days of a meet",
+  "source": "Split-run 400m research (see DUNHAM_400M_FRAMEWORK.md)"
+ },
+ {
+  "id": "QTR-08",
+  "name": "Split run 320 (2 x 160m)",
+  "quality": "special_endurance",
+  "phase": "pre_competitive",
+  "level": "intermediate",
+  "reps": "2 sets of 2 x 160m",
+  "rep_distance_m": 160,
+  "intensity_pct": 96,
+  "rest": "30 sec between segments, 8-10 min between sets",
+  "total_volume_m": 640,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "The entry dose of split runs before the 480 version; segments above 400m race pace; teach athletes to re-accelerate on tired legs",
+  "source": "Split-run 400m research (see DUNHAM_400M_FRAMEWORK.md)"
+ },
+ {
+  "id": "QTR-09",
+  "name": "Event run: 350m",
+  "quality": "race_modeling",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "2",
+  "rep_distance_m": 350,
+  "intensity_pct": 96,
+  "rest": "full (15-20 min)",
+  "total_volume_m": 700,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "Race the first 300 exactly on the 400m model, then practise the finish; the last 50m is rehearsed, not endured",
+  "source": "400m extension - event run (standard 400m race modeling)"
+ },
+ {
+  "id": "QTR-10",
+  "name": "Broken 400: 300 fast + jog 100 + 100 fast",
+  "quality": "race_modeling",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "2 broken sets",
+  "rep_distance_m": 400,
+  "intensity_pct": 95,
+  "rest": "jog 100m between segments, full between sets",
+  "total_volume_m": 800,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "The closing 100 starts on tired legs like a real final; from the broken-run family in the AJ plan, extended to the full 400",
+  "source": "AJ 100/200 plan, Phase 3 note (broken runs, 400m variant)"
+ },
+ {
+  "id": "QTR-11",
+  "name": "Differential 200s (first-200 pacing)",
+  "quality": "race_modeling",
+  "phase": "competitive",
+  "level": "intermediate",
+  "reps": "3",
+  "rep_distance_m": 200,
+  "intensity_pct": 93,
+  "rest": "full (8-10 min)",
+  "total_volume_m": 600,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "blocks",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "Hit the target, not the max: first 200 of the 400 should be best open 200 plus about 1 sec (elite) to 2 sec (developing); teaches distribution, the skill the whole race hangs on",
+  "source": "Hart 400m model (200m differential, 1996 clinic notes)"
+ },
+ {
+  "id": "QTR-12",
+  "name": "400m-pace 300s (speed endurance, full recovery)",
+  "quality": "speed_endurance",
+  "phase": "competitive",
+  "level": "advanced",
+  "reps": "2-3",
+  "rep_distance_m": 300,
+  "intensity_pct": 95,
+  "rest": "12-15 min",
+  "total_volume_m": 750,
+  "surface": "track",
+  "footwear": "spikes",
+  "equipment": "none",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 72,
+  "coaching_cues": "300m at goal 400m rhythm through 300; if the last 50 falls apart twice, the session is over; quality over completion",
+  "source": "400m extension - bridges AJ SE-03 distance up to 400m pace work"
+ },
+ {
+  "id": "WUP-01",
+  "name": "Standard sprint warm-up (full routine, 20-25 min)",
+  "quality": "warm_up",
+  "phase": "any",
+  "level": "all",
+  "reps": "1 full routine",
+  "rep_distance_m": 0,
+  "intensity_pct": 80,
+  "rest": "continuous flow",
+  "total_volume_m": 0,
+  "surface": "track",
+  "footwear": "trainers, then spikes",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Part A: jog 800m + progressive strides and skipping series. Part B: dynamic series - leg swings, knee hugs, quad pulls, lunges with twist, inchworms, A-skips, B-skips, high knees, butt kicks, straight-leg bounds, karaoke, hip circles, ankle dribbles. Part C: 2-3 build-ups to session speed. Every session starts the same way.",
+  "source": "AJ 100/200 plan warm-up protocol (Parts A-C); drills DRL-01 to DRL-16"
+ },
+ {
+  "id": "WUP-02",
+  "name": "Short pre-meet warm-up (12-15 min)",
+  "quality": "warm_up",
+  "phase": "any",
+  "level": "all",
+  "reps": "1 short routine",
+  "rep_distance_m": 0,
+  "intensity_pct": 85,
+  "rest": "continuous flow",
+  "total_volume_m": 0,
+  "surface": "track",
+  "footwear": "trainers, then spikes",
+  "equipment": "blocks (final 5 min)",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Jog 400m, skipping series, pick 6 dynamic drills (leg swings, knee hugs, A-skips, B-skips, high knees, ankle dribbles), 2 progressive strides, 1-2 block starts. Finish 10 min before race time; stay moving and warm.",
+  "source": "Trimmed from AJ warm-up protocol for meet days"
+ },
+ {
+  "id": "WUP-03",
+  "name": "Tempo-day warm-up (short, 10 min)",
+  "quality": "warm_up",
+  "phase": "any",
+  "level": "all",
+  "reps": "1 short routine",
+  "rep_distance_m": 0,
+  "intensity_pct": 70,
+  "rest": "continuous flow",
+  "total_volume_m": 0,
+  "surface": "grass or track",
+  "footwear": "trainers",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Jog 400-800m easy, leg swings, knee hugs, quad pulls, ankle dribbles, 2 relaxed strides. Low days stay low - the warm-up should never become a workout.",
+  "source": "Trimmed from AJ warm-up protocol for low days"
+ },
+ {
+  "id": "XT-01",
+  "name": "Pool running (aqua jog intervals)",
+  "quality": "cross_training",
+  "phase": "any",
+  "level": "all",
+  "reps": "8-10 x 2 min",
+  "rep_distance_m": 0,
+  "intensity_pct": 75,
+  "rest": "1 min easy between reps",
+  "total_volume_m": 0,
+  "surface": "pool (deep water, flotation belt)",
+  "footwear": "none",
+  "equipment": "aqua belt",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Upright sprint posture in the water, quick turnover, drive the arms. Zero impact - the go-to swap when legs are beat up or a sprinter cannot run.",
+  "source": "Cross-training library (added Oct 23, 2026)"
+ },
+ {
+  "id": "XT-02",
+  "name": "Bike tempo intervals",
+  "quality": "cross_training",
+  "phase": "any",
+  "level": "all",
+  "reps": "6-8 x 3 min",
+  "rep_distance_m": 0,
+  "intensity_pct": 75,
+  "rest": "2 min easy spin",
+  "total_volume_m": 0,
+  "surface": "stationary bike",
+  "footwear": "trainers",
+  "equipment": "bike",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Steady tempo effort, high cadence, relaxed shoulders. Builds the same aerobic base as tempo runs with no pounding.",
+  "source": "Cross-training library (added Oct 23, 2026)"
+ },
+ {
+  "id": "XT-03",
+  "name": "Cross-train circuit rotation",
+  "quality": "cross_training",
+  "phase": "any",
+  "level": "all",
+  "reps": "3 rounds x 8 min",
+  "rep_distance_m": 0,
+  "intensity_pct": 70,
+  "rest": "2 min between rounds",
+  "total_volume_m": 0,
+  "surface": "weight room / cardio area",
+  "footwear": "trainers",
+  "equipment": "bike, rower, elliptical",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Rotate bike, rower, elliptical each round. Nasal breathing, conversational effort. A full low day without a single foot strike.",
+  "source": "Cross-training library (added Oct 23, 2026)"
+ },
+ {
+  "id": "XT-04",
+  "name": "Mobility, core and mini-band day",
+  "quality": "cross_training",
+  "phase": "any",
+  "level": "all",
+  "reps": "30-40 min circuit",
+  "rep_distance_m": 0,
+  "intensity_pct": 60,
+  "rest": "as needed",
+  "total_volume_m": 0,
+  "surface": "weight room / mat",
+  "footwear": "trainers",
+  "equipment": "mini bands, foam roller, mat",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Hip mobility flow, mini-band walks and drills, core circuit, foam roll and stretch (static work belongs here, after training). The repair day - use it the day after the hardest session of the week.",
+  "source": "Cross-training library (added Oct 23, 2026)"
+ },
+ {
+  "id": "XT-05",
+  "name": "Easy swim flush",
+  "quality": "cross_training",
+  "phase": "any",
+  "level": "all",
+  "reps": "20-30 min continuous",
+  "rep_distance_m": 0,
+  "intensity_pct": 60,
+  "rest": "none",
+  "total_volume_m": 0,
+  "surface": "pool",
+  "footwear": "none",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Easy laps, any stroke, never breathless. Flushes the legs and resets the nervous system after race weekends.",
+  "source": "Cross-training library (added Oct 23, 2026)"
+ },
+ {
+  "id": "IG-01",
+  "name": "Pro Athlete Pre-Lift Warm-Up (5 Movements)",
+  "quality": "warm_up",
+  "phase": "any",
+  "level": "all",
+  "reps": "5 movements in sequence (no sets or reps stated)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Daily maintenance and mobility done before the dynamic warm-up; rotated every 3-4 weeks",
+  "source": "Instagram \u2014 @joeybergles (saved post)",
+  "source_url": "https://www.instagram.com/reel/DXp-6_yPm6Q/",
+  "source_username": "joeybergles",
+  "structure": [
+   {
+    "block": "Warm-up sequence",
+    "lines": [
+     "Butterfly PAILs/RAILs",
+     "ELDOA L5-S1",
+     "Acupuncture Mat Standing",
+     "Prone Shoulder Abduction with Internal Rotation",
+     "Psoas Fascial Stretch"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Butterfly PAILs/RAILs",
+      "reps": ""
+     },
+     {
+      "name": "ELDOA L5-S1",
+      "reps": ""
+     },
+     {
+      "name": "Acupuncture Mat Standing",
+      "reps": ""
+     },
+     {
+      "name": "Prone Shoulder Abduction with Internal Rotation",
+      "reps": ""
+     },
+     {
+      "name": "Psoas Fascial Stretch",
+      "reps": ""
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-02",
+  "name": "High Day: Max Velocity, Plyos and Fly 10s (Week 5 Day 3)",
+  "quality": "max_velocity",
+  "phase": "any",
+  "level": "all",
+  "reps": "Max velocity sprints (stop at 10% velocity decrement), plyometrics, S-curve runs, fly 10s (20 yd build-in), lower body lift (contents not specified in the post)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "track",
+  "footwear": "",
+  "equipment": "",
+  "cns_demand": "high",
+  "min_hours_before_next_high": 48,
+  "coaching_cues": "High CNS day built around max velocity work with a 10 percent velocity-decrement cutoff, plyometrics, curved runs and a lower body lift",
+  "source": "Instagram \u2014 @mattgebert1 (saved post)",
+  "source_url": "https://www.instagram.com/reel/DGl7ZBQy-5d/",
+  "source_username": "mattgebert1",
+  "structure": [
+   {
+    "block": "Session in order",
+    "lines": [
+     "Max Velocity Sprints (stop at 10% velocity decrement)",
+     "Plyometrics",
+     "S-Curve Runs",
+     "Fly 10 (20 yd build-in)",
+     "Lower Body Lift (contents not specified in the post)"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Max Velocity Sprints",
+      "reps": "stop at 10% velocity decrement"
+     },
+     {
+      "name": "Plyometrics",
+      "reps": ""
+     },
+     {
+      "name": "S-Curve Runs",
+      "reps": ""
+     },
+     {
+      "name": "Fly 10",
+      "reps": "20 yd build-in"
+     },
+     {
+      "name": "Lower Body Lift",
+      "reps": "contents not specified in the post"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-03",
+  "name": "5 Contrast Training Variations for Power",
+  "quality": "plyometric",
+  "phase": "any",
+  "level": "all",
+  "reps": "5 variations, 2 movements each (sets and reps not stated)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Complex/contrast training: pair a heavy or loaded strength movement with a matched explosive jump or throw",
+  "source": "Instagram \u2014 @overtimeathletes (saved post)",
+  "source_url": "https://www.instagram.com/p/C8ov2UyuOE_/",
+  "source_username": "overtimeathletes",
+  "structure": [
+   {
+    "block": "Variation 1",
+    "lines": [
+     "Trap Bar Jump",
+     "Max Effort Approach Box Jump"
+    ]
+   },
+   {
+    "block": "Variation 2",
+    "lines": [
+     "Split Stance Romanian Deadlift",
+     "Standing Triple Jump"
+    ]
+   },
+   {
+    "block": "Variation 3",
+    "lines": [
+     "Close Grip Press",
+     "Kneeling Medicine Ball Broad Toss"
+    ]
+   },
+   {
+    "block": "Variation 4",
+    "lines": [
+     "Dumbbell Step-Up",
+     "Sprinter Step-Up Launch"
+    ]
+   },
+   {
+    "block": "Variation 5",
+    "lines": [
+     "Trap Bar Jump",
+     "Hurdle Jumps"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Trap Bar Jump",
+      "reps": ""
+     },
+     {
+      "name": "Max Effort Approach Box Jump",
+      "reps": ""
+     }
+    ]
+   },
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Split Stance Romanian Deadlift",
+      "reps": ""
+     },
+     {
+      "name": "Standing Triple Jump",
+      "reps": ""
+     }
+    ]
+   },
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Close Grip Press",
+      "reps": ""
+     },
+     {
+      "name": "Kneeling Medicine Ball Broad Toss",
+      "reps": ""
+     }
+    ]
+   },
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Dumbbell Step-Up",
+      "reps": ""
+     },
+     {
+      "name": "Sprinter Step-Up Launch",
+      "reps": ""
+     }
+    ]
+   },
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Trap Bar Jump",
+      "reps": ""
+     },
+     {
+      "name": "Hurdle Jumps",
+      "reps": ""
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-04",
+  "name": "Power Potentiation Pairing: Pin Squat Partial + Broad Jumps",
+  "quality": "strength",
+  "phase": "any",
+  "level": "all",
+  "reps": "A1 pin front squat partial + A2 consecutive broad jumps, 3 hops in a row (sets and reps not stated)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Post-activation potentiation: a heavy partial squat paired with consecutive broad jumps",
+  "source": "Instagram \u2014 @joeybergles (saved post)",
+  "source_url": "https://www.instagram.com/reel/C8avo4UMwl7/",
+  "source_username": "joeybergles",
+  "structure": [
+   {
+    "block": "Pairing",
+    "lines": [
+     "A1: Pin Front Squat Partial",
+     "A2: Consecutive Broad Jumps (3 hops in a row)"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Pin Front Squat Partial",
+      "reps": "A1"
+     },
+     {
+      "name": "Consecutive Broad Jumps",
+      "reps": "3 hops in a row"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-05",
+  "name": "Quick First Step Routine, Part 1",
+  "quality": "acceleration",
+  "phase": "any",
+  "level": "all",
+  "reps": "6 movements in the order shown (sets and reps not stated)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "bands, barbell, hurdles, medicine ball",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "First-step quickness: unilateral power, cleans, step-up speed, hurdle plyos and a slam finisher, in the order shown",
+  "source": "Instagram \u2014 @basedfasho (saved post)",
+  "source_url": "https://www.instagram.com/reel/DDfXe00RHPc/",
+  "source_username": "basedfasho",
+  "structure": [
+   {
+    "block": "Sequence",
+    "lines": [
+     "Banded Explosive Lunge",
+     "Single-Leg Clean",
+     "Barbell Step-Up",
+     "Banded Quick Step-Up",
+     "Hurdle Hops",
+     "Medicine Ball Slam"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Banded Explosive Lunge",
+      "reps": ""
+     },
+     {
+      "name": "Single-Leg Clean",
+      "reps": ""
+     },
+     {
+      "name": "Barbell Step-Up",
+      "reps": ""
+     },
+     {
+      "name": "Banded Quick Step-Up",
+      "reps": ""
+     },
+     {
+      "name": "Hurdle Hops",
+      "reps": ""
+     },
+     {
+      "name": "Medicine Ball Slam",
+      "reps": ""
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-06",
+  "name": "10-Minute Hip Mobility Routine",
+  "quality": "recovery",
+  "phase": "any",
+  "level": "all",
+  "reps": "Rotating hip crossovers 10/side, couch stretch 1 min/leg, lacrosse ball rollout 1 min/foot, T-spine rotations 10/side, figure-4 stretch 1 min/leg",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "Not stated in the post",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "lacrosse ball",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Daily hip mobility for athletes with tight hips; about 10 minutes",
+  "source": "Instagram \u2014 @apexmandan (saved post)",
+  "source_url": "https://www.instagram.com/reel/C5y8PHBuhrb/",
+  "source_username": "apexmandan",
+  "structure": [
+   {
+    "block": "Routine",
+    "lines": [
+     "Rotating Hip Crossovers \u2014 10 per side",
+     "Couch Stretch \u2014 1 min per leg",
+     "Lacrosse Ball Rollout \u2014 1 min per foot",
+     "T-Spine Rotations \u2014 10 per side",
+     "Figure-4 Stretch \u2014 1 min per leg"
+    ]
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 1,
+    "restBetweenRounds": 0,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Rotating Hip Crossovers",
+      "reps": "10 per side"
+     },
+     {
+      "name": "Couch Stretch",
+      "reps": "1 min per leg"
+     },
+     {
+      "name": "Lacrosse Ball Rollout",
+      "reps": "1 min per foot"
+     },
+     {
+      "name": "T-Spine Rotations",
+      "reps": "10 per side"
+     },
+     {
+      "name": "Figure-4 Stretch",
+      "reps": "1 min per leg"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-07",
+  "name": "Tricep Blast (Cable Workout)",
+  "quality": "strength",
+  "phase": "any",
+  "level": "all",
+  "reps": "Rope pushdown 4 \u00d7 10, kickback 3 \u00d7 15/arm, pushdown 4 \u00d7 10, single-arm pull 4 \u00d7 12/arm, reverse single-arm pull 4 \u00d7 12/arm",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "40 sec",
+  "total_volume_m": 0,
+  "surface": "",
+  "footwear": "",
+  "equipment": "cable machine",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Triceps hypertrophy with constant cable tension; squeeze at lockout",
+  "source": "Instagram \u2014 @marvinachi (saved post)",
+  "source_url": "https://www.instagram.com/p/CSHZ54GrYcc/",
+  "source_username": "marvinachi",
+  "structure": [
+   {
+    "block": "Main work",
+    "lines": [
+     "Cable Rope Pushdown \u2014 4 \u00d7 10 (2 sec pause)",
+     "Cable Kickback \u2014 3 \u00d7 15 per arm",
+     "Cable Pushdown \u2014 4 \u00d7 10 (2 sec pause)",
+     "Single-Arm Cable Pull \u2014 4 \u00d7 12 per arm",
+     "Reverse Single-Arm Cable Pull \u2014 4 \u00d7 12 per arm (superset with the single-arm pull, no rest between)"
+    ],
+    "meta": "rest 40 sec"
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 4,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Cable Rope Pushdown",
+      "reps": "10 \u00b7 2 sec pause"
+     }
+    ]
+   },
+   {
+    "rounds": 3,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Cable Kickback",
+      "reps": "15 per arm"
+     }
+    ]
+   },
+   {
+    "rounds": 4,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Cable Pushdown",
+      "reps": "10 \u00b7 2 sec pause"
+     }
+    ]
+   },
+   {
+    "rounds": 4,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Single-Arm Cable Pull",
+      "reps": "12 per arm"
+     }
+    ]
+   },
+   {
+    "rounds": 4,
+    "restBetweenRounds": 40,
+    "restAfterBlock": 40,
+    "exercises": [
+     {
+      "name": "Reverse Single-Arm Cable Pull",
+      "reps": "12 per arm \u00b7 superset with the single-arm pull, no rest between"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "IG-08",
+  "name": "Home Abs Workout (No Equipment)",
+  "quality": "cross_training",
+  "phase": "any",
+  "level": "all",
+  "reps": "4 rounds \u00d7 15 reps per exercise (5 exercises)",
+  "rep_distance_m": 0,
+  "intensity_pct": 0,
+  "rest": "60 sec between exercises, 2 min between rounds",
+  "total_volume_m": 0,
+  "surface": "any",
+  "footwear": "",
+  "equipment": "none",
+  "cns_demand": "low",
+  "min_hours_before_next_high": 0,
+  "coaching_cues": "Bodyweight core circuit for home training",
+  "source": "Instagram \u2014 @ryanspiteri (saved post)",
+  "source_url": "https://www.instagram.com/p/B96rvQFgH29/",
+  "source_username": "ryanspiteri",
+  "structure": [
+   {
+    "block": "Circuit",
+    "lines": [
+     "Side Bridge \u2014 15 reps each",
+     "Leg Pull-In \u2014 15 reps each",
+     "Plank \u2014 15 reps each",
+     "Ankle Touches \u2014 15 reps each",
+     "V-Ups \u2014 15 reps each"
+    ],
+    "meta": "4 rounds \u00b7 15 reps per exercise \u00b7 60 sec between exercises \u00b7 2 min between rounds"
+   }
+  ],
+  "blocks": [
+   {
+    "rounds": 4,
+    "restBetweenRounds": 120,
+    "restAfterBlock": 0,
+    "exercises": [
+     {
+      "name": "Side Bridge",
+      "reps": "15"
+     },
+     {
+      "name": "Leg Pull-In",
+      "reps": "15"
+     },
+     {
+      "name": "Plank",
+      "reps": "15"
+     },
+     {
+      "name": "Ankle Touches",
+      "reps": "15"
+     },
+     {
+      "name": "V-Ups",
+      "reps": "15"
+     }
+    ]
+   }
+  ]
+ }
+]

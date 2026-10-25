@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>__BRAND_NAME__ — __BRAND_TAGLINE__</title>
+<meta name="description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is invite-only during the founding pilot.">
+<meta name="theme-color" content="#0d0d0f">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/assets/rp-logo.svg" type="image/svg+xml">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="__BRAND_SHORT__">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-block">
+      <img class="site-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
+      <div class="identity">__BRAND_NAME__</div>
+      <div class="app-name">__BRAND_TAGLINE__</div>
+    </div>
+    <div id="account-chip" class="account-chip"></div>
+  </div>
+  <nav class="tabs primary-nav" id="main-tabs" aria-label="Main">
+    <button type="button" data-view="home" class="tab active"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="tab-label">Today</span></button>
+    <button type="button" data-view="train" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L9.8 22l8.7-11.5H12L13 2z"/></svg></span><span class="tab-label">Train</span></button>
+    <button type="button" data-view="learn" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7.3 4.2 4 4.2v14c3.3 0 6 .6 8 2.3 2-1.7 4.7-2.3 8-2.3v-14c-3.3 0-6 .6-8 2.3z"/><path d="M12 6.5v14"/></svg></span><span class="tab-label">Learn</span></button>
+    <button type="button" data-view="log" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.5 11h5M9.5 15h3.5"/></svg></span><span class="tab-label">My Log</span></button>
+    <button type="button" data-view="account" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c1.4-3.8 4.2-5.4 7.5-5.4s6.1 1.6 7.5 5.4"/></svg></span><span class="tab-label">Account</span></button>
+    <button type="button" data-view="coachhub" class="tab coach-tab" hidden><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.3 13.2l2 2 3.6-3.8"/></svg></span><span class="tab-label">Coach</span></button>
+  </nav>
+</header>
+
+<main id="app">
+  <!-- LANDING (the logged-out home: AJ's own membership, invite-only pilot) -->
+  <section id="view-landing" class="view active">
+    <div class="landing-hero">
+      <img class="landing-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
+      <h1>__BRAND_NAME__</h1>
+      <p class="landing-promise">Speed &amp; strength coaching for sprinters and power athletes — your program, your coach's demo videos, and your progress, all in one app.</p>
+      <button class="btn primary landing-signin" type="button" data-goto="account">Member sign in</button>
+      <p class="muted landing-pilot-note">Founding pilot — membership is invite-only while we launch.</p>
+    </div>
+
+    <div class="card landing-card">
+      <h2>What members get</h2>
+      <ul class="landing-list">
+        <li><strong>A program built for you</strong> — your training week in the app, set by your coach and adjusted as you progress. Not a generic PDF.</li>
+        <li><strong>Coach demo videos</strong> — every movement shown by your coach, so you always know exactly how it should look.</li>
+        <li><strong>Testing &amp; progress tracking</strong> — sprint times, jumps, and lifts, measured and charted against your own history.</li>
+        <li><strong>Weekly check-ins</strong> — sleep, soreness, and energy in under 20 seconds, reviewed by your coach before your next session.</li>
+        <li><strong>Form checks</strong> — send a video of a sprint or a lift and get coaching back on your technique.</li>
+      </ul>
+    </div>
+
+    <div class="card landing-card">
+      <h2>How it works</h2>
+      <ol class="landing-list">
+        <li><strong>Get invited.</strong> Membership opens by invitation during the founding pilot — your coach invites your email, you create your account, you're in.</li>
+        <li><strong>Get your program.</strong> Your coach builds your training week in the app, matched to your sport, your season, and your equipment.</li>
+        <li><strong>Train and check in.</strong> Follow the workouts, watch the demos, log your check-in — your coach reviews, tests, and adjusts as the numbers move.</li>
+      </ol>
+    </div>
+
+    <div class="card landing-card">
+      <h2>Membership</h2>
+      <div class="landing-tiers">
+        <div class="landing-tier">
+          <h3>Membership</h3>
+          <p class="landing-price">$99<span>/mo</span></p>
+          <ul class="landing-list">
+            <li>Your program in the app, updated by your coach</li>
+            <li>Full coach demo video library</li>
+            <li>Testing &amp; progress tracking</li>
+            <li>Weekly check-in review</li>
+            <li>One form check per week</li>
+          </ul>
+        </div>
+        <div class="landing-tier">
+          <h3>Membership + Coaching</h3>
+          <p class="landing-price">$149<span>/mo</span></p>
+          <ul class="landing-list">
+            <li>Everything in Membership</li>
+            <li>A monthly 30-minute video call with your coach</li>
+            <li>Priority form checks (48-hour turnaround)</li>
+          </ul>
+        </div>
+      </div>
+      <p class="muted">Founding pilot members start at <strong>$49/mo</strong>, locked for six months — pilot membership is invite-only while we launch.</p>
+    </div>
+
+    <div class="card landing-card">
+      <h2>About the coach</h2>
+      <p><strong>Alonzo “AJ” Ruffin</strong> is a Maryland/DC-area sprint coach. His coaching runs on a simple system: train fast on high days, recover on low days, measure everything — the same high-low structure, testing framework, and workout library that power this app.</p>
+      <p class="muted">Connected with <a href="https://accelerateyourgame.com" target="_blank" rel="noopener">Accelerate Your Game</a> — speed &amp; conditioning in Maryland.</p>
+    </div>
+  </section>
+
+  <!-- TODAY -->
+  <section id="view-home" class="view">
+    <div class="hero" aria-hidden="true">
+      <div class="blocks">
+        <svg viewBox="0 0 58 34" focusable="false" aria-hidden="true">
+          <rect x="40" y="4" width="3" height="26" fill="#ffffff" opacity=".8"/>
+          <rect x="2" y="29" width="34" height="3" rx="1.5" fill="#555b64"/>
+          <polygon points="9,29 17,29 15,17 8,19" fill="#c9ccd4"/>
+          <polygon points="8,19 15,17 16,20 9,22" fill="#d7dade"/>
+          <polygon points="20,29 28,29 25,16 18,18" fill="#c9ccd4"/>
+          <polygon points="18,18 25,16 26,19 19,21" fill="#d7dade"/>
+        </svg>
+      </div>
+      <svg class="runner" viewBox="0 0 120 96" focusable="false" aria-hidden="true">
+        <ellipse class="runner-shadow" cx="57" cy="90" rx="27" ry="3.2" fill="#000000"/>
+        <g class="streaks">
+          <line class="streak s1" x1="4" y1="30" x2="30" y2="30"/>
+          <line class="streak s2" x1="2" y1="44" x2="24" y2="44"/>
+          <line class="streak s3" x1="6" y1="58" x2="28" y2="58"/>
+        </g>
+        <g class="athlete">
+          <g class="arm arm-far o-shoulder">
+            <line x1="71" y1="33" x2="59" y2="45" stroke="#9aa1a8" stroke-width="5.5" stroke-linecap="round"/>
+            <g class="fore fore-far o-elbow-n">
+              <line x1="59" y1="45" x2="71" y2="51" stroke="#9aa1a8" stroke-width="4.5" stroke-linecap="round"/>
+            </g>
+          </g>
+          <g class="leg leg-far o-hip">
+            <line x1="55" y1="52" x2="64" y2="66" stroke="#9aa1a8" stroke-width="7" stroke-linecap="round"/>
+            <g class="shin shin-far o-knee-n">
+              <line x1="64" y1="66" x2="58" y2="86" stroke="#9aa1a8" stroke-width="5.5" stroke-linecap="round"/>
+              <line x1="58" y1="86" x2="66" y2="88" stroke="#c9ccd4" stroke-width="4.5" stroke-linecap="round" opacity="0.75"/>
+            </g>
+          </g>
+          <line x1="55" y1="52" x2="71" y2="33" stroke="#c9ccd4" stroke-width="10" stroke-linecap="round"/>
+          <rect x="59.5" y="37" width="7" height="10" rx="1.2" fill="#ffffff" opacity="0.92" transform="rotate(40 63 42)"/>
+          <circle cx="55" cy="52" r="6" fill="#dfe2e7"/>
+          <g class="head">
+            <circle cx="78" cy="25" r="6.2" fill="#dfe2e7"/>
+            <line x1="72.6" y1="21.6" x2="83.4" y2="22.6" stroke="#c9ccd4" stroke-width="2.6" stroke-linecap="round"/>
+          </g>
+          <g class="leg leg-near o-hip">
+            <line x1="55" y1="52" x2="64" y2="66" stroke="#dfe2e7" stroke-width="7.5" stroke-linecap="round"/>
+            <g class="shin shin-near o-knee-n">
+              <line x1="64" y1="66" x2="58" y2="86" stroke="#dfe2e7" stroke-width="6" stroke-linecap="round"/>
+              <line x1="58" y1="86" x2="66" y2="88" stroke="#c9ccd4" stroke-width="5" stroke-linecap="round"/>
+            </g>
+          </g>
+          <g class="arm arm-near o-shoulder">
+            <line x1="71" y1="33" x2="59" y2="45" stroke="#dfe2e7" stroke-width="6" stroke-linecap="round"/>
+            <g class="fore fore-near o-elbow-n">
+              <line x1="59" y1="45" x2="71" y2="51" stroke="#dfe2e7" stroke-width="5" stroke-linecap="round"/>
+            </g>
+          </g>
+        </g>
+      </svg>
+      <div class="hero-lanes">
+        <div class="lane-line"><div class="lane-strip ls-a"></div></div>
+        <div class="lane-line"><div class="lane-strip ls-b"></div></div>
+        <div class="lane-line"><div class="lane-strip ls-c"></div></div>
+      </div>
+    </div>
+    <div id="checkin-slot"></div>
+    <div id="goals-slot"></div>
+    <div id="announce-slot"></div>
+    <div id="home-content" aria-busy="true"><div class="skel skel-card"></div><div class="skel skel-card"></div><div class="skel skel-card"></div></div>
+  </section>
+
+  <!-- TRAIN (hub) -->
+  <section id="view-train" class="view">
+    <h1>Train</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Everything you train with, in one place — the workouts, the plan for the season, and your warm-ups.</p>
+    <div class="menu-list">
+      <button type="button" class="menu-item" data-view="library">Workouts <span>Find a workout by type, distance, or day</span></button>
+      <button type="button" class="menu-item" data-view="season">Season Plan <span>The week-by-week plan for the whole season</span></button>
+      <button type="button" class="menu-item" data-view="cards">Warm-Up Cards <span>The three printed cards: light day, speed day, circuit day</span></button>
+      <button type="button" class="menu-item" data-view="records">Club Records <span>The all-time top 10 in every event</span></button>
+      <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked</span></button>
+      <button type="button" class="menu-item" data-view="drills">Warm-Up Drills <span>The 16 standard drills, Parts A &amp; B</span></button>
+      <button type="button" class="menu-item" data-view="qtr">400m Training <span>The full 400m framework and the QTR sessions</span></button>
+    </div>
+  </section>
+
+  <!-- LEARN (hub) -->
+  <section id="view-learn" class="view">
+    <h1>Learn</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Watch how it is done, look up any word, and fuel the work.</p>
+    <div class="menu-list">
+      <button type="button" class="menu-item" data-view="videos">Videos <span>Watch a demo of any drill or lift</span></button>
+      <button type="button" class="menu-item" data-view="definitions">Definitions <span>Every term in plain language, with the coaching cue</span></button>
+      <button type="button" class="menu-item" data-view="exercises">Exercise Library <span>Movements saved from Instagram, with cues and sources</span></button>
+      <button type="button" class="menu-item" data-view="nutrition">Nutrition <span>What to eat and when — practice days and meet days</span></button>
+      <button type="button" class="menu-item" data-view="education">Coach Education <span>Clinics and courses for coaches</span></button>
+      <button type="button" class="menu-item" data-view="guide">How to use this app <span>The whole system in plain words</span></button>
+    </div>
+  </section>
+
+  <!-- COACH (hub, coaches only) -->
+  <section id="view-coachhub" class="view">
+    <h1>Coach</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Coach tools only — members never see this section. Everything for running the program lives here.</p>
+    <div class="menu-list">
+      <button type="button" class="menu-item" data-view="coach">Today's Checklist <span>Each group's workout for the day, with check-offs</span></button>
+      <button type="button" class="menu-item" data-view="tv">TV Board <span>The weight-room display: the full Workout of the Day, one page per group</span></button>
+      <button type="button" class="menu-item" data-view="custom">Custom Workouts <span>Build your own blocks, rounds, and rests — then run it step by step</span></button>
+      <button type="button" class="menu-item" data-view="programs">Programs <span>Reusable week-by-week training templates — build once, apply to any group</span></button>
+      <button type="button" class="menu-item" data-view="calendar">Team Calendar <span>The whole month at a glance: every group's sessions, meets, and test days</span></button>
+      <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
+      <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, attention flags, and the full picture — wellness, testing, meets, attendance, health, goals, and private coach notes</span></button>
+      <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book — present, late, excused, absent — and every athlete's record</span></button>
+      <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
+      <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
+      <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked — the same board the athletes see</span></button>
+      <button type="button" class="menu-item" data-view="meets">Meet Results <span>Race and field marks, PRs, and the team PR board</span></button>
+      <button type="button" class="menu-item" data-view="meetday">Meet Day <span>Run the meet: entries by event, a live checklist, and fast results with PR flags</span></button>
+      <button type="button" class="menu-item" data-view="goals">Goals <span>Season target marks for every athlete, with progress from their real results</span></button>
+      <button type="button" class="menu-item" data-view="records">Club Records <span>Manage the all-time top 10 board</span></button>
+      <button type="button" class="menu-item" data-view="reports">Reports <span>Team trends, completion and load charts, and athlete report cards</span></button>
+      <button type="button" class="menu-item" data-view="digest">Weekly Digest <span>Last week at a glance — check-ins, training, PRs, health — and the week coming</span></button>
+      <button type="button" class="menu-item" data-view="wellness">Daily Wellness <span>Who checked in today — sleep, soreness, and energy, with flags</span></button>
+      <button type="button" class="menu-item" data-view="announce">Announcements <span>One-way posts to the whole team or a single group — athletes read them on Today</span></button>
+      <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
+      <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
+      <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
+      <button type="button" class="menu-item" data-view="devices">Devices <span>ForceDecks, NordBord, and T-APEX: import each device's results file and they land in every athlete's testing history, labeled by device</span></button>
+      <button type="button" class="menu-item" data-view="coverage">Demo Coverage <span>The filming map: every drill and test marked — your video, a placeholder, or still to film</span></button>
+      <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access — under Account</span></button>
+    </div>
+  </section>
+
+  <!-- LIBRARY -->
+  <section id="view-library" class="view">
+    <h1>Workouts</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Find a workout by type, distance, or day. Tap any workout to see the full session — reps, rest, and coaching cues.</p>
+    <div class="filters card" id="lib-filters">
+      <input id="lib-search" type="search" placeholder="Search by name or code (try “fly” or MAX-01)">
+      <div class="filter-row">
+        <select id="lib-quality"><option value="">All types</option></select>
+        <select id="lib-phase"><option value="">All phases</option></select>
+        <select id="lib-cns">
+          <option value="">Hard + easy days</option>
+          <option value="high">Hard days (high CNS)</option>
+          <option value="low">Easy days (low CNS)</option>
+        </select>
+      </div>
+      <p id="lib-count" class="muted"></p>
+    </div>
+    <div id="lib-list"></div>
+    <div id="lib-detail"></div>
+  </section>
+
+  <!-- SEASON -->
+  <section id="view-season" class="view">
+    <h1>Season Plan</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">See what every week of the season looks like, day by day. 29 weeks. Mini peak <strong>Sat Feb 20, 2027</strong> (indoor championships) · Major peak <strong>Sat May 15, 2027</strong> (outdoor championships).</p>
+    <div class="card">
+      <label for="week-jump">Jump to week</label>
+      <div class="filter-row">
+        <select id="week-jump"></select>
+        <button id="week-today" class="btn secondary" type="button">Current week</button>
+      </div>
+    </div>
+    <div id="season-week"></div>
+    <details class="card doc">
+      <summary><strong>About this plan</strong> — where it comes from, the rules, the tapers</summary>
+      <div id="season-doc"></div>
+    </details>
+  </section>
+
+  <!-- LOG -->
+  <section id="view-log" class="view">
+    <h1>My Log</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Your private practice log. Save what you actually ran, so you can look back at it — only you can see it.</p>
+    <div id="checkin-history"></div>
+    <div id="log-gate"></div>
+    <div id="log-main" hidden>
+      <form id="log-form" class="card">
+        <h2>Add an entry</h2>
+        <label>Date <input type="date" id="log-date" required></label>
+        <label>Workout <select id="log-session"></select></label>
+        <label>Athlete / group <input type="text" id="log-group" placeholder="e.g. Varsity sprint group"></label>
+        <label>What actually happened <textarea id="log-happened" rows="3" placeholder="What really ran, any changes from the plan"></textarea></label>
+        <label>Times / marks <input type="text" id="log-marks" placeholder="e.g. Best fly 10m: 1.02"></label>
+        <label>How it felt
+          <select id="log-feel">
+            <option value="">—</option>
+            <option value="1">1 — rough</option>
+            <option value="2">2</option>
+            <option value="3">3 — solid</option>
+            <option value="4">4</option>
+            <option value="5">5 — great</option>
+          </select>
+        </label>
+        <label>Notes <textarea id="log-notes" rows="2"></textarea></label>
+        <button class="btn primary" type="submit">Save entry</button>
+        <p id="log-form-msg" class="muted"></p>
+      </form>
+      <div id="log-list"></div>
+    </div>
+  </section>
+
+  <!-- WARM-UP CARDS -->
+  <section id="view-cards" class="view">
+    <h1>Warm-Up Cards</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The warm-up for today, on three cards. Print any card on its own — one Letter page, single-sided — straight from here.</p>
+
+    <article class="wu-card wu-light" id="wu-card-1">
+      <header class="wu-head">
+        <div class="wu-brand">ST. JOHN'S COLLEGE HIGH SCHOOL <span>// CADETS TRACK &amp; FIELD</span></div>
+        <div class="wu-title-row">
+          <div>
+            <div class="wu-num">01</div>
+            <h2>LIGHT<br>WARM-UP</h2>
+            <div class="wu-sub">Recovery / Tempo Day</div>
+          </div>
+          <div class="wu-time"><strong>10 min</strong><span>TOTAL TIME</span></div>
+        </div>
+        <p class="wu-use">Use on: Tempo days, recovery days, cross-training days, and the day after a hard day. If the work is low, the warm-up stays low.</p>
+        <div class="wu-tags"><span>TRAINERS ONLY</span><span>GRASS OR TRACK</span><span>NO SPIKES</span><span>NO PLYOS</span></div>
+        <p class="wu-goal"><strong>GOAL</strong> Get blood moving and joints loose. You should finish warm and relaxed, never breathing hard. This warm-up should never become a workout.</p>
+      </header>
+      <section class="wu-sec">
+        <h3><span class="wu-step">1</span> RAISE <em>3 min — easy and conversational</em></h3>
+        <ul class="wu-list">
+          <li><strong>Jog</strong> — 400-800m easy — relaxed shoulders, easy breathing</li>
+          <li><strong>Skipping</strong> — 2 x 20m — regular skip and arm-swing skip only, keep it light</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">2</span> MOBILITY <em>5 min — walk the line, no rushing</em></h3>
+        <ul class="wu-list">
+          <li><strong>Forward leg swings</strong> — 10 per leg — tall posture, no trunk swing</li>
+          <li><strong>Lateral leg swings</strong> — 10 per leg — hips stay square while the leg opens and closes</li>
+          <li><strong>Walking knee hugs</strong> — 15-20m — rise onto the toe of the stance leg</li>
+          <li><strong>Walking quad pulls</strong> — 15-20m — heel to glute, reach tall with the opposite arm</li>
+          <li><strong>Hip circles</strong> — 5 each direction, per leg — knee at 90 degrees, big controlled circle</li>
+          <li><strong>Karaoke</strong> — 20m each direction, easy — opens the hips, stay light on your feet</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">3</span> WAKE UP <em>2 min — smooth, not fast</em></h3>
+        <ul class="wu-list">
+          <li><strong>Ankle dribbles</strong> — 20m — short quick steps on the balls of the feet</li>
+          <li><strong>Relaxed strides</strong> — 2 x 60m at about 70% — finish each stride slightly faster, stay relaxed</li>
+        </ul>
+      </section>
+      <section class="wu-sec wu-finish">
+        <h3>FINISH CHECK <em>Before you start the day's work</em></h3>
+        <ul class="wu-list">
+          <li><strong>Breathing easy</strong> — you can talk in full sentences</li>
+          <li><strong>Hips and ankles loose</strong> — no stiffness left from yesterday</li>
+          <li><strong>Warm, not tired</strong> — if not, walk one more easy lap and repeat leg swings</li>
+        </ul>
+      </section>
+      <p class="wu-rule"><strong>Do not add:</strong> No plyos, no extra strides, no sprint drills at speed. Save that work for a hard day — that is the whole point of a light day.</p>
+      <p class="wu-coach"><strong>COACH RULE:</strong> If you are breathing hard, you went too hard. Low days stay low — that is what makes the next hard day possible.</p>
+      <footer class="wu-foot">Card 1 of 3 — Based on WUP-03 Tempo-Day Warm-Up (10 min) and drills DRL-01 to DRL-16. Print single-sided, laminate, keep with the tempo-day gear.</footer>
+      <button class="btn primary wu-print" type="button" data-print-card="wu-card-1">Print this card</button>
+    </article>
+
+    <article class="wu-card wu-speed" id="wu-card-2">
+      <header class="wu-head">
+        <div class="wu-brand">ST. JOHN'S COLLEGE HIGH SCHOOL <span>// CADETS TRACK &amp; FIELD</span></div>
+        <div class="wu-title-row">
+          <div>
+            <div class="wu-num">02</div>
+            <h2>SPEED DAY<br>WARM-UP</h2>
+            <div class="wu-sub">Acceleration / Max Velocity / Speed Endurance</div>
+          </div>
+          <div class="wu-time"><strong>20-25 min</strong><span>TOTAL TIME</span></div>
+        </div>
+        <p class="wu-use">Use on: Every high day — block work, fly runs, max velocity, and speed endurance. Full routine, every time. Speed is never done cold.</p>
+        <div class="wu-tags"><span>TRAINERS, THEN SPIKES</span><span>TRACK</span><span>PLYOS INCLUDED</span><span>BLOCKS IN PART 4</span></div>
+        <p class="wu-goal"><strong>GOAL</strong> Prime the body for 95% and above: warm, loose, springy, and sharp — without getting tired in the warm-up.</p>
+      </header>
+      <section class="wu-sec">
+        <h3><span class="wu-step">1</span> RAISE — PART A <em>Jog and skipping series</em></h3>
+        <ul class="wu-list">
+          <li><strong>Jog + progressive strides</strong> — 800m + 4 x 60m — finish each stride slightly faster, last near 80%</li>
+          <li><strong>Skipping series</strong> — 4 x 20m — regular, arm swing, for height, for distance</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">2</span> DYNAMIC + SPRINT DRILLS — PART B <em>15-20m each / drills 20m x 2</em></h3>
+        <ul class="wu-list wu-cols">
+          <li><strong>Leg swings</strong> — fwd + lateral, 10/leg</li>
+          <li><strong>A-skips</strong> — toe up, paw under hip</li>
+          <li><strong>Knee hugs / Quad pulls</strong> — 15-20m</li>
+          <li><strong>B-skips</strong> — extend, then paw down</li>
+          <li><strong>Lunges with twist</strong> — 15-20m</li>
+          <li><strong>High knees</strong> — tall, fast contact</li>
+          <li><strong>Inchworms</strong> — 15-20m</li>
+          <li><strong>Butt kicks</strong> — heels to glutes, knees down</li>
+          <li><strong>Hip circles</strong> — 5/dir/leg</li>
+          <li><strong>Straight-leg bounds</strong> — strike under hips</li>
+          <li><strong>Karaoke</strong> — 20m each way</li>
+          <li><strong>Ankle dribbles</strong> — 20m, quick and short</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">3</span> PLYO PRIMER <em>Quality only — full recovery, low contacts</em></h3>
+        <ul class="wu-list">
+          <li><strong>Pogo hops</strong> — 2 x 10 — quiet, springy, stiff ankles; spring off the ground, do not sink</li>
+          <li><strong>Countermovement jumps</strong> — 2 x 3 — explode up, stick the landing</li>
+          <li><strong>Alternating bounds</strong> — 2 x 20m — powerful push, do not reach</li>
+          <li><strong>Single-leg hops</strong> — 1-2 x 10m per leg — speed days only, and only when fresh</li>
+        </ul>
+        <p class="wu-stop"><strong>Stop rule:</strong> If landings get loud or heavy, the plyo primer is done. Quality contacts over quantity, always.</p>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">4</span> BUILD — PART C <em>Spikes on</em></h3>
+        <ul class="wu-list">
+          <li><strong>Build-ups</strong> — 2-3 x 60-80m to session speed — tall, relaxed, strike under the hip</li>
+          <li><strong>Block starts</strong> — 1-2 on acceleration days — own the first three steps, gradual rise</li>
+        </ul>
+      </section>
+      <p class="wu-coach"><strong>FORM CHECK:</strong> Tall with a slight whole-body lean. Toe up. Arms cheek to pocket, opposite arm and leg together. If times are 3% off standard or form breaks down, the high session ends.</p>
+      <footer class="wu-foot">Card 2 of 3 — Based on WUP-01 Standard Sprint Warm-Up (Parts A/B/C) with PLY-01 / PLY-02 plyo primer and drills DRL-01 to DRL-16. Print single-sided, laminate, keep at the start line.</footer>
+      <button class="btn primary wu-print" type="button" data-print-card="wu-card-2">Print this card</button>
+    </article>
+
+    <article class="wu-card wu-circuit" id="wu-card-3">
+      <header class="wu-head">
+        <div class="wu-brand">ST. JOHN'S COLLEGE HIGH SCHOOL <span>// CADETS TRACK &amp; FIELD</span></div>
+        <div class="wu-title-row">
+          <div>
+            <div class="wu-num">03</div>
+            <h2>CIRCUIT DAY<br>WARM-UP</h2>
+            <div class="wu-sub">Strength Circuit / Weights / Cross-Training Circuit</div>
+          </div>
+          <div class="wu-time"><strong>12-15 min</strong><span>TOTAL TIME</span></div>
+        </div>
+        <p class="wu-use">Use on: Circuit and weight-room days, and cross-training circuit days. Built to flow straight into Round 1 — no standing around between the warm-up and the work.</p>
+        <div class="wu-tags"><span>TRAINERS</span><span>TRACK OR WEIGHT ROOM</span><span>MINI-BANDS READY</span><span>MATS OUT</span></div>
+        <p class="wu-goal"><strong>GOAL</strong> Raise temperature, open the hips, and switch on glutes and core, so the first circuit round is already clean.</p>
+      </header>
+      <section class="wu-sec">
+        <h3><span class="wu-step">1</span> RAISE <em>3 min — keep moving</em></h3>
+        <ul class="wu-list">
+          <li><strong>Jog</strong> — 400m easy — or 2 min easy bike / rower if you are already in the weight room</li>
+          <li><strong>Skipping + Karaoke</strong> — 2 x 20m / 20m each way — light, quick feet</li>
+          <li><strong>Inchworms</strong> — 15-20m — legs straight to load the hamstrings</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">2</span> MOBILITY <em>4 min</em></h3>
+        <ul class="wu-list">
+          <li><strong>Leg swings</strong> — forward + lateral, 10 per leg — tall posture, hips square</li>
+          <li><strong>Walking knee hugs</strong> — 15-20m — rise onto the toe of the stance leg</li>
+          <li><strong>Walking quad pulls</strong> — 15-20m — heel to glute, reach tall with the opposite arm</li>
+          <li><strong>Walking lunges with twist</strong> — 15-20m — front knee tracks over the ankle, rotate over the front leg</li>
+          <li><strong>Hip circles</strong> — 5 each direction, per leg — knee at 90 degrees, big controlled circle</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">3</span> ACTIVATION CIRCUIT <em>2 rounds — 30 sec rest between rounds</em></h3>
+        <ul class="wu-list">
+          <li><strong>Bodyweight squats</strong> — x 10 — knees track over toes, chest tall</li>
+          <li><strong>Walking lunges</strong> — 10m — front knee over ankle, torso tall</li>
+          <li><strong>Glute bridges</strong> — x 10 — squeeze at the top, ribs down</li>
+          <li><strong>Mini-band lateral walks</strong> — 10m each way — hips level, feet straight, band stays tight</li>
+          <li><strong>Dead bugs</strong> — x 6 per side — low back stays down, move slow</li>
+          <li><strong>Ankle dribbles</strong> — 20m — short quick steps on the balls of the feet</li>
+        </ul>
+      </section>
+      <section class="wu-sec">
+        <h3><span class="wu-step">4</span> READY</h3>
+        <ul class="wu-list">
+          <li><strong>Easy strides or spin</strong> — 2 x 60m relaxed, or 1 min easy bike / rower — conversational effort, then go straight into Round 1</li>
+        </ul>
+      </section>
+      <p class="wu-coach"><strong>COACH RULE:</strong> Moderate loads, clean reps. Build capacity, not soreness. If form breaks in the activation circuit, fix it there — do not carry it into loaded work.</p>
+      <footer class="wu-foot">Card 3 of 3 — Based on WUP-01 drills with STR-01 circuit and XT-03 / XT-04 activation work, drills DRL-01 to DRL-16. Print single-sided, laminate, keep in the weight room.</footer>
+      <button class="btn primary wu-print" type="button" data-print-card="wu-card-3">Print this card</button>
+    </article>
+  </section>
+
+  <!-- NUTRITION -->
+  <section id="view-nutrition" class="view">
+    <h1>Nutrition</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">What to eat and when — on practice days, meet days, and lifting days.</p>
+    <p class="muted">Fueling education for sprinters — principles, plates, and timing. No diet plans and no calorie counting: eat to match the work, protein at every meal, and never train on empty. Ranges below are general education guidelines for hard-training athletes, in the coach's words.</p>
+
+    <article class="nu-card nu-scarlet">
+      <h2>1 · Daily Fueling for Sprinters</h2>
+      <p class="nu-sub">The everyday plate — and how it changes with the training day.</p>
+      <ul class="nu-list">
+        <li><strong>Fuel matches the day.</strong> On hard and speed days, build a carb-forward plate — roughly half the plate from foods like rice, pasta, potatoes, bread, and fruit. Speed work burns through stored fuel fast, and the tank has to be full before you ask for top speed. On light and recovery days, keep the same protein and color and ease the starch portion back a little.</li>
+        <li><strong>Protein at every meal.</strong> A palm-sized portion — eggs, chicken, beef, fish, Greek yogurt, milk, beans. Hard-training sprinters generally land around <strong>1.4–2.0 grams of protein per kilo of body weight across the whole day</strong>, spread over breakfast, lunch, dinner, and a snack — not one giant serving at night.</li>
+        <li><strong>Carbs follow the workload.</strong> As a general guide, hard training days run about <strong>5–6 grams of carbohydrate per kilo of body weight</strong> for the day; lighter days need somewhat less. If afternoon practices feel flat week after week, the first suspect is not enough carbs earlier in the day.</li>
+        <li><strong>Color at lunch and dinner.</strong> A fruit or a vegetable at both meals, every day. It is the simplest habit that covers the most ground.</li>
+        <li><strong>Breakfast is non-negotiable.</strong> Carbs plus protein before school — oatmeal and milk, eggs and toast, a smoothie. Skipping breakfast means starting the day on empty and trying to fuel practice from lunch alone.</li>
+        <li><strong>Snacks have a job.</strong> Pair a carb with a protein: banana and milk, a peanut butter sandwich, trail mix and yogurt. A snack is a bridge to the next meal, not a meal replacement.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-gold">
+      <h2>2 · Before Practice / Before a Meet</h2>
+      <p class="nu-sub">The timing ladder — the closer to go-time, the smaller and simpler the food.</p>
+      <ul class="nu-list">
+        <li><strong>3–4 hours out: a full meal.</strong> Carb-based with moderate protein, and go easy on fat and fiber so it has time to digest — pasta with a light sauce, rice and chicken, a sandwich and fruit.</li>
+        <li><strong>1–2 hours out: a carb snack.</strong> A bagel, pretzels, fruit, applesauce, or a sports drink. Familiar and easy on the stomach.</li>
+        <li><strong>30–60 minutes out: small fast carbs only.</strong> A few gummies or chews, juice, half a banana. Just enough to top off — nothing heavy sitting in the stomach at the start line.</li>
+        <li><strong>Keep fat and fiber low right before.</strong> Heavy, greasy, or high-fiber food digests slowly and is the classic cause of a sloshy, heavy warm-up.</li>
+        <li><strong>Nothing new on meet day.</strong> If a food has not been tested before a hard practice, it does not debut at a meet.</li>
+        <li><strong>Skip the energy drinks.</strong> They are not fuel, and the crash lands mid-meet.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-green">
+      <h2>3 · Recovery Fueling</h2>
+      <p class="nu-sub">What happens after the session decides how ready you are for the next one.</p>
+      <ul class="nu-list">
+        <li><strong>Protein + carbs together, within about 60 minutes</strong> after a hard session. That pairing is the whole point: carbs refill the tank while protein starts the repair work.</li>
+        <li><strong>Carbs first priority after hard days.</strong> The fuel you burned (glycogen) restocks fastest in the first hours after training. Skipping carbs after a hard day is borrowing from tomorrow's practice.</li>
+        <li><strong>A real protein dose at each meal.</strong> A palm-sized serving, roughly 20–40 grams of protein, at breakfast, lunch, the post-practice meal, and dinner. Total daily protein matters more than any single shake moment.</li>
+        <li><strong>Chocolate milk is the classic for a reason</strong> — carbs, protein, and fluid in one bottle. Also strong: a turkey sandwich and fruit, a smoothie, pasta with meat sauce, eggs and toast.</li>
+        <li><strong>Two meals after a hard day.</strong> The post-practice bite is a bridge. Dinner still happens when you get home.</li>
+        <li><strong>Sleep is the other half of recovery.</strong> Fueling works with sleep, never instead of it.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-steel">
+      <h2>4 · Hydration</h2>
+      <p class="nu-sub">Start hydrated, sip through the work, replace what you lost.</p>
+      <ul class="nu-list">
+        <li><strong>Daily baseline:</strong> water all day. Bring a bottle, refill it at school, and sip between classes — do not try to catch up at 2:45.</li>
+        <li><strong>The urine-color rule:</strong> aim for pale yellow, like lemonade. Dark yellow, like apple juice, means drink more — starting now, not at practice.</li>
+        <li><strong>Before practice:</strong> drink with your pre-practice meal or snack, then a few big gulps again right before warm-up.</li>
+        <li><strong>During practice:</strong> sip regularly instead of waiting for thirst — in the heat, roughly a cup every 15–20 minutes.</li>
+        <li><strong>After practice:</strong> replace what you sweated out. If you step on a scale and you are down a pound, drink roughly 2–3 cups of fluid for that pound. The goal is to finish sessions within about 2% of your starting body weight.</li>
+        <li><strong>Hot or long days: add electrolytes.</strong> On 90-minute-plus sessions or very hot days, a sports drink — or water plus salty food — replaces the salt that plain water cannot.</li>
+        <li><strong>Know the warning signs:</strong> headache, dizziness, dark urine, cramps that will not release, nausea, or fatigue that feels wrong for the workout. Tell a coach. Dizziness is never something to push through.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-scarlet">
+      <h2>5 · Meet Day Timeline</h2>
+      <p class="nu-sub">A race-day run-through, wake-up to the ride home.</p>
+      <ul class="nu-list">
+        <li><strong>Wake-up meal (3–4 hours before your first race when the schedule allows):</strong> a familiar, carb-based breakfast with some protein — eggs and toast with fruit, oatmeal and milk. The meal shrinks as the start gets closer, exactly like the practice ladder.</li>
+        <li><strong>Pack for the bus.</strong> Meets run long and concession stands are a gamble: bagels, pretzels, bananas, granola bars, a sports drink — food you already trust.</li>
+        <li><strong>Between races: small carb bites.</strong> A few bites and sips after each race keeps the tank steady. Save a bigger meal for after your last event, or for a break of two hours or more.</li>
+        <li><strong>Food finishes before the warm-up.</strong> Your last real bite should be done about 30–60 minutes before your warm-up starts; after that, only tiny fast carbs.</li>
+        <li><strong>After your last race:</strong> a recovery meal within the hour — protein plus carbs — then a full dinner at home.</li>
+        <li><strong>The meet-day rule:</strong> nothing new. New food, new drinks, and new routines all get tested at practice first.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-slate">
+      <h2>6 · Weight Room Day Fueling</h2>
+      <p class="nu-sub">Strength and testing days — fueling for the build.</p>
+      <ul class="nu-list">
+        <li><strong>Protein emphasis.</strong> Strength days are when protein does its building work: a palm-sized portion at every meal, all day, not just after lifting.</li>
+        <li><strong>Pre-lift snack, 1–2 hours out:</strong> carbs plus a little protein — a peanut butter sandwich, yogurt and granola, milk and a banana. Never lift on empty.</li>
+        <li><strong>Testing days are max-effort days.</strong> Eat a real breakfast and a real lunch. Personal records do not happen on fumes; if it has been hours since lunch, take a small carb bite before you test.</li>
+        <li><strong>Post-lift, within the hour:</strong> protein + carbs together — chocolate milk, a sandwich, a smoothie — then dinner as usual. That is the recovery window that turns today's lifting into next month's strength.</li>
+        <li><strong>Hydration counts indoors too.</strong> Bottle nearby, sips between sets on long sessions.</li>
+      </ul>
+    </article>
+
+    <article class="nu-card nu-note">
+      <h2>Supplements — the honest version</h2>
+      <ul class="nu-list">
+        <li><strong>Food first, always.</strong> No supplement fixes skipped meals, low carbs on hard days, or short sleep — and those three move performance more than anything in a tub.</li>
+        <li><strong>We do not push supplements for high school athletes.</strong> Products are not regulated like food, labels can be wrong, and a contaminated product can cost an athlete their eligibility.</li>
+        <li><strong>The evidence conversation belongs at home.</strong> Sports-science texts do review ergogenic aids with real evidence behind them in adult athletes — but that is a family-and-doctor conversation, not a weight-room one, and school rules govern everything.</li>
+        <li><strong>The proven stack is boring:</strong> breakfast, carbs around training, protein at meals, water, and sleep.</li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- VIDEOS -->
+  <section id="view-videos" class="view">
+    <h1>Videos</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Watch a demo of any drill or lift before you try it.</p>
+    <p class="muted">The demo library — every video picked and checked by hand. Tap a card to play it right here.</p>
+    <div class="filters card">
+      <input id="vid-search" type="search" placeholder="Search videos (try “squat”, “wickets”, “hip”)">
+      <div class="chip-row" id="vid-chips"></div>
+      <p id="vid-count" class="muted"></p>
+    </div>
+    <div id="vid-grid" class="vid-grid"></div>
+  </section>
+
+  <!-- DEFINITIONS -->
+  <section id="view-definitions" class="view">
+    <h1>Definitions</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Look up any word the coach uses — defined in plain language, with the coaching cue where there is one.</p>
+    <p class="muted">Every exercise, every type of running, and every program term in this app — defined in plain language, with the coaching cue where there is one.</p>
+    <div class="filters card">
+      <input id="def-search" type="search" placeholder="Search definitions (try “tempo”, “A-skips”, “taper”)">
+      <div class="chip-row" id="def-chips"></div>
+      <p id="def-count" class="muted"></p>
+    </div>
+    <div id="def-list" class="def-list"></div>
+  </section>
+
+  <!-- EXERCISE LIBRARY -->
+  <section id="view-exercises" class="view">
+    <h1>Exercise Library</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Movements mined from the training posts saved on Instagram — what each one trains, the gear it needs, and the coaching cues.</p>
+    <p class="muted">Every movement links back to the post it came from, so you can watch the original.</p>
+    <div class="filters card">
+      <input id="ex-search" type="search" placeholder="Search movements (try “nordic”, “hip flexor”, “partner”)">
+      <div class="chip-row" id="ex-chips"></div>
+      <div class="chip-row" id="ex-eq-chips"></div>
+      <div class="chip-row" id="ex-tag-chips"></div>
+      <p id="ex-count" class="muted"></p>
+      <button type="button" class="btn secondary" id="ex-clear" hidden>Clear filters</button>
+    </div>
+    <div id="ex-list" class="def-list"></div>
+  </section>
+
+  <!-- COACH EDUCATION -->
+  <section id="view-education" class="view">
+    <h1>Coach Education</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Clinics and courses for coaches — local, national, and online.</p>
+    <p class="muted">Trainings and courses for sprint and strength coaches — local to the DC metro, national events worth the trip, and online options you can do from anywhere. Researched and linked to each provider's own page.</p>
+    <div class="filters card">
+      <input id="edu-search" type="search" placeholder="Search trainings (try “ALTIS”, “USATF”, “strength”)">
+      <div class="chip-row" id="edu-chips"></div>
+      <div class="filter-row">
+        <select id="edu-focus">
+          <option value="">All focus areas</option>
+          <option value="Sprints">Sprints</option>
+          <option value="Strength &amp; Performance">Strength &amp; Performance</option>
+          <option value="Both">Both</option>
+        </select>
+      </div>
+      <p id="edu-count" class="muted"></p>
+    </div>
+    <div id="edu-list" class="edu-list"></div>
+  </section>
+
+  <!-- TESTING -->
+  <section id="view-testing" class="view">
+    <h1>Testing</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record test days and results — lifts, jumps, and pull-ups — and see ranked tables and personal bests. Coaches only.</p>
+    <div id="testing-main"></div>
+  </section>
+
+  <!-- TOP ATHLETES -->
+  <section id="view-top" class="view">
+    <h1>Top Athletes</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Weekly numbers for your starred athletes. Enter them each week and watch the graphs move. Coaches only.</p>
+    <div id="top-main"></div>
+  </section>
+
+  <!-- HEALTH -->
+  <section id="view-health" class="view">
+    <h1>Aches &amp; Pains</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record what an athlete reports to you, and track it until it clears.</p>
+    <p class="muted">Your private notebook: record what an athlete reports to you — an ache, a pain, something tight — and track it until it clears. Athletes never see this; it is coach-only.</p>
+    <div id="health-main"></div>
+  </section>
+
+  <!-- GROUPS (coach) -->
+  <section id="view-groups" class="view">
+    <h1>Roster &amp; Groups</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Every athlete on the roster, their training group, and their events. Add athletes here, one at a time or in bulk. Coaches only.</p>
+    <div id="groups-main"></div>
+  </section>
+
+  <!-- COACH -->
+  <section id="view-coach" class="view">
+    <h1>Today's Checklist</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Each group's workout for the day. Change the plan when you need to, and check off who finished. Coaches only.</p>
+    <div id="coach-main"></div>
+  </section>
+
+  <!-- INVENTORY (coach) -->
+  <section id="view-inventory" class="view">
+    <h1>Equipment Inventory</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">What gear the program owns, how much of it, and where it lives.</p>
+    <p class="muted">The program's gear, counted by you: what you have, how many, what shape it is in, and where it lives. Coach-only — athletes never see this.</p>
+    <div id="inventory-main"></div>
+  </section>
+
+  <!-- MEET RESULTS (coach) -->
+  <section id="view-meets" class="view">
+    <h1>Meet Results</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record what your athletes run, jump, and throw at meets — PRs and the team board build themselves. Coaches only.</p>
+    <div id="meets-main"></div>
+  </section>
+
+  <!-- MEET DAY (coach) -->
+  <section id="view-meetday" class="view">
+    <h1>Meet Day</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One screen to run a meet: entries by event, a checklist that fills itself in as results land, and fast results entry with PRs flagged on the spot. Results saved here land in Meet Results. Coaches only.</p>
+    <div id="meetday-main"></div>
+  </section>
+
+  <!-- GOALS (coach) -->
+  <section id="view-goals" class="view">
+    <h1>Goals</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One target mark per athlete per event. Progress is figured from their real meet results — the first mark they record is the baseline, their PR is where they stand. Coaches only.</p>
+    <div id="goals-main"></div>
+  </section>
+
+  <!-- REPORTS (coach) -->
+  <section id="view-reports" class="view">
+    <h1>Reports</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The program in charts: strength trends, who is completing the work, planned load, and health — plus a printable report card for every athlete.</p>
+    <div id="reports-main"></div>
+  </section>
+
+  <!-- WEEKLY DIGEST (coach) -->
+  <section id="view-digest" class="view">
+    <h1>Weekly Digest</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One week of the program, assembled for you: who checked in, who trained, what got faster, what needs attention — and the week coming.</p>
+    <div id="digest-main"></div>
+  </section>
+
+  <!-- ANNOUNCEMENTS (coach) -->
+  <section id="view-announce" class="view">
+    <h1>Announcements</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One-way posts from the coaching staff — to the whole team, or to a single group. Athletes read them on their Today page. No replies, no read receipts. Coaches only.</p>
+    <div id="announce-main"></div>
+  </section>
+
+  <!-- WELLNESS (coach) -->
+  <section id="view-wellness" class="view">
+    <h1>Daily Wellness</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The daily check-in: how every athlete slept, how sore they are, and their energy — flagged before practice starts. Coaches only.</p>
+    <div id="wellness-main"></div>
+  </section>
+
+  <!-- ATTENDANCE (coach) -->
+  <section id="view-attendance" class="view">
+    <h1>Attendance</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The daily roll-book: who is here, who is late, who is excused, and who is absent. Every tap saves on its own. Coaches only — athletes never see this.</p>
+    <div id="attendance-main"></div>
+  </section>
+
+  <!-- AMS (coach) -->
+  <section id="view-ams" class="view">
+    <h1>AMS</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The member-management home: the whole roster with status and attention flags, and one page per member — wellness, testing, meet results, attendance, health, goals, and private coach notes. Coaches only.</p>
+    <div id="ams-main"></div>
+  </section>
+
+  <!-- CLUB RECORDS -->
+  <section id="view-records" class="view">
+    <h1>Club Records</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The all-time top 10, event by event — the marks every member is chasing.</p>
+    <div id="records-main"></div>
+    <div id="records-manage"></div>
+  </section>
+
+  <!-- LEADERBOARD -->
+  <section id="view-leaderboard" class="view">
+    <h1>Leaderboard</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The team's best numbers, ranked — the top 5 in every test and meet event, from the marks already on record.</p>
+    <div id="leaderboard-main"></div>
+  </section>
+
+  <!-- DRILLS -->
+  <section id="view-drills" class="view">
+    <button class="btn secondary back" data-goto="train">← Train</button>
+    <h1>Warm-Up Drills</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The 16 standard drills — how each one goes, and a demo for most of them.</p>
+    <p class="muted">The standard warm-up series. Part A warms up, Part B mobilizes and drills sprint mechanics.</p>
+    <div id="drill-list"></div>
+  </section>
+
+  <!-- 400M TRAINING -->
+  <section id="view-qtr" class="view">
+    <button class="btn secondary back" data-goto="train">← Train</button>
+    <h1>400m Training</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The full 400m framework and the QTR sessions.</p>
+    <p class="muted">The long work the 100/200 plan leaves out: 500s and 600s, lactate days, split runs, and practicing the 400 race itself. Sessions are the QTR rows in the workout library.</p>
+    <div id="qtr-list"></div>
+    <div class="card doc" id="qtr-doc"></div>
+  </section>
+
+  <!-- GUIDE -->
+  <section id="view-guide" class="view">
+    <button class="btn secondary back" data-goto="learn">← Learn</button>
+    <h1>How to use this app</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The whole system in plain words — hard days, easy days, and how the plan fits together.</p>
+    <div class="card doc" id="guide-doc"></div>
+  </section>
+
+  <!-- ACCOUNT -->
+  <section id="view-account" class="view">
+    <h1>Account</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Members sign in here. New memberships are invite-only during the founding pilot. Coaches manage accounts, coach invites, and member invites here.</p>
+    <p class="muted" id="menu-account-note">Log in or create an account</p>
+    <div id="account-main"></div>
+  </section>
+
+  <!-- TV BOARD (coach-only weight-room display) -->
+  <section id="view-tv" class="view">
+    <div class="tv-shell">
+      <div class="tv-top">
+        <div class="tv-brand">__BRAND_NAME__ <span>__BRAND_TAGLINE__ — TRAINING BOARD</span></div>
+        <div class="tv-top-right">
+          <div class="tv-clock" id="tv-clock"></div>
+          <div class="tv-updated" id="tv-updated"></div>
+          <button class="btn tv-exit" id="tv-exit" type="button">Exit TV board</button>
+        </div>
+      </div>
+      <div id="tv-main" class="tv-main"><p class="tv-loading">Loading the board…</p></div>
+      <div class="tv-bottom">
+        <button class="btn tv-ctl" id="tv-prev" type="button">← Prev</button>
+        <div class="tv-dots" id="tv-dots"></div>
+        <button class="btn tv-ctl" id="tv-pause" type="button">Pause</button>
+        <button class="btn tv-ctl" id="tv-next" type="button">Next →</button>
+        <button class="btn tv-ctl" id="tv-full" type="button">Full screen</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CUSTOM WORKOUTS (coach) -->
+  <section id="view-custom" class="view">
+    <h1>Custom Workouts</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Workouts you build yourself: blocks of exercises, rounds, and rests. Hit Run it and the screen walks the room through every step — big enough to read across the weight room. Coaches only.</p>
+    <div id="custom-main"></div>
+  </section>
+
+  <!-- PROGRAMS (coach) -->
+  <section id="view-programs" class="view">
+    <h1>Programs</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Training templates you build once and reuse: lay out the weeks, then apply a program to a group (or all of them) from any start date. Applying writes coach overrides — the season plan itself never changes. Coaches only.</p>
+    <div id="programs-main"></div>
+  </section>
+
+  <!-- TEAM CALENDAR (coach) -->
+  <section id="view-calendar" class="view">
+    <h1>Team Calendar</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The whole team on one month: every group's sessions exactly as Today and the checklist resolve them, with meet and test days marked. Coaches only.</p>
+    <div id="calendar-main"></div>
+  </section>
+
+  <!-- DATA: BACKUP / RESTORE / SPREADSHEETS (coach) -->
+  <section id="view-data" class="view">
+    <h1>Data</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The whole team dataset, in and out: one backup file for safekeeping, restores that merge instead of wiping, and spreadsheets for everything else. Coaches only.</p>
+    <div id="data-main"></div>
+  </section>
+
+  <!-- DEVICES: FORCEDECKS / NORDBORD / T-APEX / VALD API (coach) -->
+  <section id="view-devices" class="view">
+    <h1>Devices</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The testing hardware: import a ForceDecks or NordBord results file from VALD Hub, key in a T-APEX session by hand, and every number lands in the athlete's testing history, labeled by device. Coaches only.</p>
+    <div id="devices-main"></div>
+  </section>
+
+  <!-- DEMO COVERAGE: WHOSE VIDEO IS ON EVERY MOVEMENT (coach) -->
+  <section id="view-coverage" class="view">
+    <h1>Demo Coverage</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The filming map for a coach video on every movement: each drill and test the demo system covers, marked by whose video is attached — yours, a placeholder, or none yet. Watch, add, or swap any demo right from its row. Coaches only.</p>
+    <div id="coverage-main"></div>
+  </section>
+</main>
+
+<!-- RUNNER MODE (full-screen workout walk-through overlay) -->
+<div id="runner-overlay" class="runner-overlay" hidden>
+  <div class="runner-top">
+    <div class="runner-workout" id="runner-workout"></div>
+    <button class="btn runner-exit" id="runner-exit" type="button">Exit</button>
+  </div>
+  <div class="runner-main" id="runner-main"></div>
+</div>
+
+<nav class="tabbar primary-nav" id="tab-bar" aria-label="Main">
+  <button type="button" data-view="home" class="tab active"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="tab-label">Today</span></button>
+  <button type="button" data-view="train" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L9.8 22l8.7-11.5H12L13 2z"/></svg></span><span class="tab-label">Train</span></button>
+  <button type="button" data-view="learn" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7.3 4.2 4 4.2v14c3.3 0 6 .6 8 2.3 2-1.7 4.7-2.3 8-2.3v-14c-3.3 0-6 .6-8 2.3z"/><path d="M12 6.5v14"/></svg></span><span class="tab-label">Learn</span></button>
+  <button type="button" data-view="log" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.5 11h5M9.5 15h3.5"/></svg></span><span class="tab-label">My Log</span></button>
+  <button type="button" data-view="account" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c1.4-3.8 4.2-5.4 7.5-5.4s6.1 1.6 7.5 5.4"/></svg></span><span class="tab-label">Account</span></button>
+  <button type="button" data-view="coachhub" class="tab coach-tab" hidden><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.3 13.2l2 2 3.6-3.8"/></svg></span><span class="tab-label">Coach</span></button>
+</nav>
+
+<div id="media-modal" class="media-modal" hidden>
+  <div class="media-box card">
+    <div class="media-head">
+      <strong id="media-title">Demo</strong>
+      <button class="btn secondary" id="media-close" type="button" style="padding:2px 12px">Close</button>
+    </div>
+    <div id="media-player"></div>
+    <div id="media-edit"></div>
+  </div>
+</div>
+
+<footer class="footer muted">
+  <img class="site-logo footer-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
+  <div>__BRAND_NAME__ · __BRAND_TAGLINE__</div>
+  <div>Founding pilot — membership is invite-only while we launch.</div>
+  <div>Your log entries and swaps are private to your account.</div>
+  <div class="app-version" data-app-version="__APP_VERSION__">__BRAND_NAME__ · App __APP_VERSION__</div>
+</footer>
+
+<script src="/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  }
+</script>
+</body>
+</html>

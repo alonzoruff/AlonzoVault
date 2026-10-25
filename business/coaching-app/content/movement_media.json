@@ -1,0 +1,152 @@
+{
+ "DRL-01": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=IeZS646X44M",
+  "title": "How to Run Strides (short accelerations)",
+  "source": "Strength Running"
+ },
+ "DRL-02": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=WpypmqTmIeA",
+  "title": "Drill of the Month: Skip Progressions",
+  "source": "ADAPT"
+ },
+ "DRL-03": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=EBmvMaPc1kg",
+  "title": "DYNAMIC WARM UP Forward and Lateral Leg Swings",
+  "source": "Special Olympics"
+ },
+ "DRL-04": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=6aw8CAH_65Y",
+  "title": "Side Leg Swings Exercise Tutorial",
+  "source": "Runna"
+ },
+ "DRL-05": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=j26P9ZQvGlw",
+  "title": "High Knee Hugs Exercise Tutorial",
+  "source": "Runna"
+ },
+ "DRL-06": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=JA8niAQHJ-g",
+  "title": "DYNAMIC WARM UP Walking Quadriceps Stretch updated",
+  "source": "Special Olympics"
+ },
+ "DRL-07": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=7yrkGWJHSP0",
+  "title": "Walking Lunge with a Twist Exercise Tutorial",
+  "source": "Runna"
+ },
+ "DRL-08": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=VSp0z7Mp5IU",
+  "title": "How to Do an Inchworm",
+  "source": "Howcast"
+ },
+ "DRL-09": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=X0J1m-R6CKk",
+  "title": "A-Skip Exercise Tutorial",
+  "source": "Runna"
+ },
+ "DRL-10": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=nlKiHSy6ubA",
+  "title": "B-Skip Exercise Tutorial",
+  "source": "Runna"
+ },
+ "DRL-11": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=h-lqIgLaEFA",
+  "title": "High Knee Drill Exercise Tutorial",
+  "source": "Runna"
+ },
+ "DRL-12": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=qZYdRF8WLP0",
+  "title": "Heel Kick Drill Exercise Tutorial",
+  "source": "Runna"
+ },
+ "DRL-13": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=NWL6Oo8VheA",
+  "title": "Sprint Drills \u2013 Straight Leg Bound",
+  "source": "Trackwired"
+ },
+ "DRL-14": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=R3__Q_SulyM",
+  "title": "How To Do The CARIOCA EXERCISE | Exercise Demonstration Video and Guide",
+  "source": "LiveLeanTV"
+ },
+ "DRL-15": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=JYqLwajOGjI",
+  "title": "Hip Circles Exercise Tutorial",
+  "source": "Runna"
+ },
+ "DRL-16": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=fPzTm57KOKk",
+  "title": "The Secret Sprint Drill To Boost Your Speed Instantly!",
+  "source": "Coach DuWayne Campbell"
+ },
+ "DRL-17": {
+  "type": "upload",
+  "url": "https://res.cloudinary.com/l8qblw99/video/upload/v1792951016/aj-90-90-floating-words-v1.mp4",
+  "title": "90/90 Hip Switches — Coach AJ",
+  "source": "Coach AJ"
+ },
+ "back-squat": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=BUIu720DQH4",
+  "title": "Master Your Squat: High Bar vs Low Bar Technique Explained",
+  "source": "Squat University"
+ },
+ "hang-clean": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=bwUbuJNvHxg",
+  "title": "How to Hang Clean | Build Strength and Power",
+  "source": "Garage Gang Gyms"
+ },
+ "power-clean": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=Qvztq85tAjo",
+  "title": "Why Everyone Should Power Clean for Football",
+  "source": "Garage Strength"
+ },
+ "bench-press": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=t3f2L7NRRUY",
+  "title": "Gym Shorts: Learn How to Bench Press, Quickly",
+  "source": "Barbell Logic"
+ },
+ "trap-bar-deadlift": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=FYx76NSijfU",
+  "title": "Trap Bar Deadlift",
+  "source": "OPEX Fitness"
+ },
+ "vertical-jump": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=85EtdsmFCoY",
+  "title": "Vertec Jump Test",
+  "source": "Science for Sport"
+ },
+ "broad-jump": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=-lb0SpGmnjg",
+  "title": "Trainer Tip: The Broad Jump",
+  "source": "Parisi School"
+ },
+ "pull-ups": {
+  "type": "youtube",
+  "url": "https://www.youtube.com/watch?v=U6kJQ3CTGis",
+  "title": "The Pull Up",
+  "source": "Barbell Logic"
+ }
+}

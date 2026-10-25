@@ -1,0 +1,15 @@
+{
+  "name": "ruffin-performance-app",
+  "version": "1.0.0",
+  "description": "Ruffin Performance: speed & strength coaching membership app \u2014 member programs, coach demo videos, testing and progress tracking, weekly check-ins. Invite-only founding pilot.",
+  "main": "server.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
