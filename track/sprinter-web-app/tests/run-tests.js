@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v41',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v41"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v42',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v42"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -904,7 +904,7 @@ async function main() {
       resolved);
   }
   check('ankle dribbles embed URL is correct', media['DRL-16'] && media['DRL-16'].embedUrl === 'https://www.youtube.com/embed/fPzTm57KOKk', media['DRL-16']);
-  check('base media is marked source=base', media['squat'] && media['squat'].source === 'base', media['squat']);
+  check('base media is marked source=base', media['back-squat'] && media['back-squat'].source === 'base', media['back-squat']);
   r = await api(coach, 'PUT', '/api/media/custom-move-1', { url: 'https://www.youtube.com/watch?v=X0J1m-R6CKk' });
   check('coach media set is 200', r.status === 200, r.status);
   r = await api(coach, 'GET', '/api/media');
@@ -1031,8 +1031,18 @@ async function main() {
     !!covRow('DRL-01') && covRow('DRL-01').status === 'placeholder', covRow('DRL-01'));
   check('the base uploaded demo (DRL-17) classifies as yours',
     !!covRow('DRL-17') && covRow('DRL-17').status === 'yours', covRow('DRL-17'));
+  check('back squat and bench press base demos attach to their battery keys (placeholder)',
+    !!covRow('back-squat') && covRow('back-squat').status === 'placeholder' &&
+    !!covRow('bench-press') && covRow('bench-press').status === 'placeholder',
+    [covRow('back-squat'), covRow('bench-press')]);
+  check('coverage shape: 1 yours, 24 placeholders, and only demo-less tests are none',
+    cov.summary.yours === 1 && cov.summary.placeholder === 24 &&
+    cov.rows.filter(x => x.status === 'none')
+      .every(x => covTests.some(t => t.key === x.id && t.custom)), cov.summary);
+  const covCustomTest = covTests.find(t => t.custom);
   check('a test with no demo classifies as none',
-    !!covRow('back-squat') && covRow('back-squat').status === 'none', covRow('back-squat'));
+    !!covCustomTest && !!covRow(covCustomTest.key) && covRow(covCustomTest.key).status === 'none',
+    covCustomTest && covRow(covCustomTest.key));
   /* An upload override flips placeholder -> yours, live. */
   r = await api(coach, 'PUT', '/api/media/DRL-02', { url: CDN_OK, type: 'upload' });
   check('coverage setup: upload override on DRL-02 saves', r.status === 200, r.status);
@@ -1055,19 +1065,23 @@ async function main() {
   r = await api(coach, 'PUT', '/api/media/DRL-04', { url: 'https://www.youtube.com/watch?v=6aw8CAH_65Y' });
   check('coverage setup: DRL-04 restored', r.status === 200, r.status);
   /* A YouTube override on a none test flips none -> placeholder,
-     and removing it (no base entry) returns the test to none. */
-  r = await api(coach, 'PUT', '/api/media/back-squat', { url: 'https://www.youtube.com/watch?v=BUIu720DQH4' });
-  check('coverage setup: YouTube override on back-squat saves', r.status === 200, r.status);
+     and removing it (no base entry) returns the test to none.
+     (Back squat and bench press now carry base demos under their
+     battery keys, so this cycle runs on the custom test, which has
+     no base entry.) */
+  const noneKey = covCustomTest.key;
+  r = await api(coach, 'PUT', '/api/media/' + noneKey, { url: 'https://www.youtube.com/watch?v=BUIu720DQH4' });
+  check('coverage setup: YouTube override on a demo-less test saves', r.status === 200, r.status);
   r = await api(coach, 'GET', '/api/demo-coverage');
   check('a YouTube override flips none to placeholder',
-    ((r.json.rows || []).find(x => x.id === 'back-squat') || {}).status === 'placeholder',
-    (r.json.rows || []).find(x => x.id === 'back-squat'));
-  r = await api(coach, 'DELETE', '/api/media/back-squat');
-  check('coverage setup: back-squat override removed', r.status === 200, r.status);
+    ((r.json.rows || []).find(x => x.id === noneKey) || {}).status === 'placeholder',
+    (r.json.rows || []).find(x => x.id === noneKey));
+  r = await api(coach, 'DELETE', '/api/media/' + noneKey);
+  check('coverage setup: demo-less test override removed', r.status === 200, r.status);
   r = await api(coach, 'GET', '/api/demo-coverage');
   check('removing the override returns the test to none',
-    ((r.json.rows || []).find(x => x.id === 'back-squat') || {}).status === 'none',
-    (r.json.rows || []).find(x => x.id === 'back-squat'));
+    ((r.json.rows || []).find(x => x.id === noneKey) || {}).status === 'none',
+    (r.json.rows || []).find(x => x.id === noneKey));
   /* Served wiring: view, nav, endpoint, and the TV slice stays clean. */
   check('served page has the coverage view',
     pageHtml.text.includes('id="view-coverage"') && pageHtml.text.includes('id="coverage-main"'));
@@ -2303,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v41'") &&
-    swJs.text.includes("sprinter-app-v41"));
+    appJs.text.includes("const APP_VERSION = 'v42'") &&
+    swJs.text.includes("sprinter-app-v42"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v41"') &&
-    pageHtml.text.includes('Cadets Sprint · App v41') &&
+    pageHtml.text.includes('data-app-version="v42"') &&
+    pageHtml.text.includes('Cadets Sprint · App v42') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
