@@ -89,6 +89,7 @@ let db = {
   coachInvitesSeeded: [],
   athleteLinks: {},
   checkins: {},
+  attendance: {},
 };
 
 function migrate() {
@@ -160,6 +161,12 @@ function migrate() {
   // Daily check-ins: { profileId: { 'YYYY-MM-DD': checkin } }.
   db.checkins = (db.checkins && typeof db.checkins === 'object' && !Array.isArray(db.checkins))
     ? db.checkins : {};
+  // Attendance roll-book: { 'YYYY-MM-DD': { profileId: { status,
+  // updatedAt, updatedBy } } } — one coach-entered mark per athlete
+  // per day, status one of present / late / excused / absent. Its own
+  // record: never an alias for a completion, never athlete-facing.
+  db.attendance = (db.attendance && typeof db.attendance === 'object' && !Array.isArray(db.attendance))
+    ? db.attendance : {};
   // Athlete goals: one flat list of { id, profileId, event,
   // targetText, targetValue, createdAt, updatedAt } — coach-set
   // target marks, one ACTIVE goal per athlete per event (setting a
@@ -2239,6 +2246,134 @@ async function handleApi(req, res, url) {
       healthFlags: boardOnly ? [] : healthFlags,
       wellness: boardOnly ? null : wellnessTodaySummary(),
     });
+  }
+
+  /* ---------- attendance (coach roll-book) ----------
+     One mark per athlete per day — present, late, excused, absent —
+     entered by the coach only. Attendance is its own record: it
+     never touches assignments or completions, and it never reaches
+     an athlete-facing payload (these endpoints live below the coach
+     gate, and the TV board never reads them). Dates are unbounded
+     beyond sane parsing: past days can be fixed up, future days can
+     be pre-marked. */
+  const ATTENDANCE_STATUSES = ['present', 'late', 'excused', 'absent'];
+  function attendanceCountsFor(date, memberIds) {
+    const marks = db.attendance[date] || {};
+    const counts = { present: 0, late: 0, excused: 0, absent: 0, unmarked: 0 };
+    for (const id of memberIds) {
+      const rec = marks[id];
+      if (rec && ATTENDANCE_STATUSES.includes(rec.status)) counts[rec.status]++;
+      else counts.unmarked++;
+    }
+    return counts;
+  }
+  if (p === '/api/attendance' && req.method === 'GET') {
+    const date = clean(q.get('date') || todayStr(), 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const marks = db.attendance[date] || {};
+    const blockFor = (g) => {
+      const members = db.profiles.filter(pr => !pr.archived && (g ? pr.groupId === g.id : !pr.groupId));
+      return {
+        group: g ? { id: g.id, name: g.name } : null,
+        members: members.map(pr => ({
+          profile: publicProfile(pr),
+          attendance: marks[pr.id]
+            ? { status: marks[pr.id].status, updatedAt: marks[pr.id].updatedAt, updatedBy: marks[pr.id].updatedBy }
+            : null,
+        })),
+      };
+    };
+    const active = db.profiles.filter(pr => !pr.archived);
+    return sendJson(res, 200, {
+      date,
+      counts: attendanceCountsFor(date, active.map(pr => pr.id)),
+      groups: db.groups.map(blockFor),
+      unassigned: blockFor(null),
+    });
+  }
+
+  const attRoute = p.match(/^\/api\/attendance\/([^/]+)\/([^/]+)$/);
+  if (attRoute && req.method === 'POST' && attRoute[2] === 'mark-all-present') {
+    const date = attRoute[1];
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    db.attendance[date] = db.attendance[date] || {};
+    let marked = 0, skipped = 0;
+    for (const pr of db.profiles) {
+      if (pr.archived) continue;
+      if (db.attendance[date][pr.id]) { skipped++; continue; }
+      db.attendance[date][pr.id] = { status: 'present', updatedAt: new Date().toISOString(), updatedBy: user.id };
+      marked++;
+    }
+    saveDb();
+    return sendJson(res, 200, { ok: true, date, marked, skipped });
+  }
+  if (attRoute && req.method === 'PUT') {
+    const date = attRoute[1];
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const prof = profileById(decodeURIComponent(attRoute[2]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const body = await readBody(req);
+    if (body.status === null || body.status === undefined) {
+      if (db.attendance[date]) {
+        delete db.attendance[date][prof.id];
+        if (!Object.keys(db.attendance[date]).length) delete db.attendance[date];
+      }
+      saveDb();
+      return sendJson(res, 200, { ok: true, cleared: true, date, profileId: prof.id });
+    }
+    const status = clean(body.status, 20);
+    if (!ATTENDANCE_STATUSES.includes(status)) {
+      return sendJson(res, 400, { error: 'Status must be present, late, excused, or absent — or null to clear.' });
+    }
+    db.attendance[date] = db.attendance[date] || {};
+    const rec = { status, updatedAt: new Date().toISOString(), updatedBy: user.id };
+    db.attendance[date][prof.id] = rec;
+    saveDb();
+    return sendJson(res, 200, { ok: true, date, profileId: prof.id, attendance: rec });
+  }
+
+  /* Per-athlete attendance over trailing windows: the last 30 days
+     and season-to-date by default (the season opens on the plan's
+     first week), plus an exact custom window when ?from&to are
+     given — the shape the future AMS layer reuses. Attended counts
+     present + late; the percentage runs over marked days only, so
+     unmarked days never count against an athlete (null when an
+     athlete has no marks in the window at all). */
+  if (p === '/api/attendance/summary' && req.method === 'GET') {
+    const today = todayStr();
+    const seasonStart = (CONTENT.weeks && CONTENT.weeks.length && CONTENT.weeks[0].start)
+      || addDaysStr(today, -29);
+    const windows = {
+      last30: { from: addDaysStr(today, -29), to: today },
+      season: { from: seasonStart, to: today },
+    };
+    const customFrom = clean(q.get('from') || '', 10);
+    const customTo = clean(q.get('to') || '', 10);
+    if (customFrom || customTo) {
+      if (!parseDateStr(customFrom) || !parseDateStr(customTo) || customFrom > customTo) {
+        return sendJson(res, 400, { error: 'A custom window needs from and to as YYYY-MM-DD, from on or before to.' });
+      }
+      windows.custom = { from: customFrom, to: customTo };
+    }
+    const countsFor = (profileId, win) => {
+      const counts = { marked: 0, present: 0, late: 0, excused: 0, absent: 0, attended: 0, percent: null };
+      for (const date of Object.keys(db.attendance)) {
+        if (date < win.from || date > win.to) continue;
+        const rec = db.attendance[date][profileId];
+        if (!rec || !ATTENDANCE_STATUSES.includes(rec.status)) continue;
+        counts.marked++;
+        counts[rec.status]++;
+      }
+      counts.attended = counts.present + counts.late;
+      counts.percent = counts.marked ? Math.round((counts.attended / counts.marked) * 1000) / 10 : null;
+      return counts;
+    };
+    const athletes = db.profiles.filter(pr => !pr.archived).map(pr => {
+      const row = { profile: publicProfile(pr) };
+      for (const key of Object.keys(windows)) row[key] = countsFor(pr.id, windows[key]);
+      return row;
+    });
+    return sendJson(res, 200, { today, windows, athletes });
   }
 
   /* ---------- CSV exports (coach-only downloads) ---------- */

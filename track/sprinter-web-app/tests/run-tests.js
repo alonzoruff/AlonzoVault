@@ -336,8 +336,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v30',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v30"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v31',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v31"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2019,16 +2019,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v30'") &&
-    swJs.text.includes("sprinter-app-v30"));
+    appJs.text.includes("const APP_VERSION = 'v31'") &&
+    swJs.text.includes("sprinter-app-v31"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v30"') &&
-    pageHtml.text.includes('Cadets Sprint · App v30') &&
+    pageHtml.text.includes('data-app-version="v31"') &&
+    pageHtml.text.includes('Cadets Sprint · App v31') &&
     appJs.text.includes('appVersionHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
@@ -2605,6 +2605,163 @@ async function main() {
       appJs.text.includes("goals: 'coachhub'"));
   }
 
+  /* ---------------- attendance (coach roll-book) ----------------
+     Coach-only daily marks — present / late / excused / absent —
+     in their own store: never a completion alias, never visible
+     to athletes, never on the TV board. Fixtures are a dedicated
+     squad; day counts on a guaranteed-untouched future date are
+     exact for the marked statuses. */
+  check('attendance view is in the served page',
+    pageHtml.text.includes('id="view-attendance"') && pageHtml.text.includes('id="attendance-main"') &&
+    pageHtml.text.includes('data-view="attendance"'));
+  check('attendance wiring is in the served JS',
+    appJs.text.includes("['attendance', 'Attendance']") && appJs.text.includes("attendance: 'coachhub'") &&
+    appJs.text.includes("if (name === 'attendance') renderAttendance();") &&
+    appJs.text.includes('/api/attendance'));
+  const attTvStart = appJs.text.indexOf('TV BOARD');
+  const attTvEnd = appJs.text.indexOf('/* ---------------- boot', attTvStart);
+  const attTvCode = attTvStart >= 0 && attTvEnd > attTvStart ? appJs.text.slice(attTvStart, attTvEnd) : '';
+  check('TV board render path never references attendance',
+    attTvCode.length > 500 && !attTvCode.toLowerCase().includes('attendance'), attTvCode.length);
+  const attSeg = seg('const wireAttRow', 'const attRowHtml');
+  check('attendance: status taps save in place (no full renderAttendance in the row handler)',
+    attSeg.includes("apiPut('/api/attendance/'") && attSeg.includes('flashSaved(row)') &&
+    attSeg.includes('showRowError(row') && !attSeg.includes('renderAttendance('), attSeg.slice(0, 120));
+
+  r = await api(coach, 'POST', '/api/groups', { name: 'Attendance Squad' });
+  const gAtt = r.json.group.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Att', lastName: 'Anna', groupId: gAtt, events: ['sprinter'] });
+  const annaA = r.json.profile.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Att', lastName: 'Boris', groupId: gAtt, events: ['sprinter'] });
+  const borisA = r.json.profile.id;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Att', lastName: 'Cleo' });
+  const cleoA = r.json.profile.id;
+
+  /* Auth gates: attendance is coach-only data. */
+  r = await api(null, 'GET', '/api/attendance?date=2026-10-26');
+  check('attendance day without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/attendance?date=2026-10-26');
+  check('attendance day for an athlete is 403', r.status === 403, r.status);
+  r = await api(null, 'PUT', '/api/attendance/2026-10-26/' + annaA, { status: 'present' });
+  check('attendance mark without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'PUT', '/api/attendance/2026-10-26/' + annaA, { status: 'present' });
+  check('attendance mark for an athlete is 403', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/attendance/2026-10-26/mark-all-present', {});
+  check('mark-all-present for an athlete is 403', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/attendance/summary');
+  check('attendance summary without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/attendance/summary');
+  check('attendance summary for an athlete is 403', r.status === 403, r.status);
+
+  /* A fresh (future) day: everyone unmarked, roster composed by group. */
+  const ATT_DAY = '2050-01-03';
+  const attMember = (resp, pid) => {
+    for (const blk of resp.groups.concat([resp.unassigned])) {
+      const m = (blk.members || []).find(x => x.profile.id === pid);
+      if (m) return m;
+    }
+    return null;
+  };
+  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
+  check('attendance: a fresh future day loads (pre-planning is allowed)',
+    r.status === 200 && r.json.date === ATT_DAY, r.status);
+  check('attendance: fresh day counts are all unmarked',
+    r.json.counts.present === 0 && r.json.counts.late === 0 && r.json.counts.excused === 0 &&
+    r.json.counts.absent === 0 && r.json.counts.unmarked > 0, r.json.counts);
+  const attSquad = r.json.groups.find(g => g.group && g.group.id === gAtt);
+  check('attendance: grouped athletes sit under their group, ungrouped under no-group',
+    !!attSquad && attSquad.members.length === 2 &&
+    attMember(r.json, annaA).attendance === null && attMember(r.json, borisA).attendance === null &&
+    !!attMember(r.json, cleoA) && r.json.unassigned.members.some(m => m.profile.id === cleoA), r.json.groups.length);
+
+  /* Mark / change / clear round-trip. */
+  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + annaA, { status: 'present' });
+  check('attendance: marking present saves with who/when',
+    r.status === 200 && r.json.attendance.status === 'present' &&
+    typeof r.json.attendance.updatedBy === 'string' && !!r.json.attendance.updatedAt, r.json);
+  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
+  check('attendance: the saved mark reads back, counts move',
+    attMember(r.json, annaA).attendance.status === 'present' && r.json.counts.present === 1 &&
+    r.json.counts.late === 0, r.json.counts);
+  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + annaA, { status: 'late' });
+  check('attendance: a mark can be changed', r.status === 200 && r.json.attendance.status === 'late', r.json);
+  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
+  check('attendance: the change reads back in counts',
+    r.json.counts.present === 0 && r.json.counts.late === 1, r.json.counts);
+  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + annaA, { status: null });
+  check('attendance: null status clears the mark', r.status === 200 && r.json.cleared === true, r.json);
+  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
+  check('attendance: the cleared athlete is unmarked again',
+    attMember(r.json, annaA).attendance === null && r.json.counts.late === 0, r.json.counts);
+
+  /* Validation. */
+  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + annaA, { status: 'sleepy' });
+  check('attendance: an unknown status is 400', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/no-such-profile', { status: 'present' });
+  check('attendance: an unknown athlete is 404', r.status === 404, r.status);
+  r = await api(coach, 'PUT', '/api/attendance/2050-13-40/' + annaA, { status: 'present' });
+  check('attendance: an impossible date is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/attendance?date=not-a-date');
+  check('attendance: a malformed day fetch is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/attendance?date=2050-02-30');
+  check('attendance: Feb 30 is 400, not rolled over', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/attendance/2050-13-40/mark-all-present', {});
+  check('attendance: mark-all on an impossible date is 400', r.status === 400, r.status);
+
+  /* Mark all present fills only the unmarked; existing marks stand. */
+  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + borisA, { status: 'excused' });
+  check('attendance fixtures: Boris is excused first', r.status === 200, r.status);
+  r = await api(coach, 'POST', '/api/attendance/' + ATT_DAY + '/mark-all-present', {});
+  check('attendance: mark-all-present skips already-marked athletes',
+    r.status === 200 && r.json.skipped === 1 && r.json.marked >= 2, r.json);
+  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
+  check('attendance: mark-all filled Anna + Cleo, Boris stays excused',
+    attMember(r.json, annaA).attendance.status === 'present' &&
+    attMember(r.json, cleoA).attendance.status === 'present' &&
+    attMember(r.json, borisA).attendance.status === 'excused' &&
+    r.json.counts.excused === 1, r.json.counts);
+
+  /* Summary math: an exact custom window (late counts as attended). */
+  for (const [d, s] of [['2026-03-02', 'present'], ['2026-03-03', 'late'], ['2026-03-04', 'excused'], ['2026-03-05', 'absent']]) {
+    r = await api(coach, 'PUT', '/api/attendance/' + d + '/' + cleoA, { status: s });
+  }
+  check('attendance fixtures: Cleo has one of each status in March 2026', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/attendance/summary?from=2026-03-01&to=2026-03-31');
+  const cleoSum = (r.json.athletes || []).find(a => a.profile.id === cleoA);
+  check('attendance summary: custom window counts are exact',
+    r.status === 200 && !!cleoSum && cleoSum.custom.marked === 4 && cleoSum.custom.present === 1 &&
+    cleoSum.custom.late === 1 && cleoSum.custom.excused === 1 && cleoSum.custom.absent === 1, cleoSum);
+  check('attendance summary: late counts as attended (2 of 4 = 50%)',
+    !!cleoSum && cleoSum.custom.attended === 2 && cleoSum.custom.percent === 50, cleoSum && cleoSum.custom);
+  check('attendance summary: default windows are last30 + season ending today',
+    !!r.json.windows && !!r.json.windows.last30 && !!r.json.windows.season &&
+    r.json.windows.last30.to === r.json.today && r.json.windows.season.to === r.json.today, r.json.windows);
+  r = await api(coach, 'GET', '/api/attendance/summary?from=2026-03-31&to=2026-03-01');
+  check('attendance summary: a backwards custom window is 400', r.status === 400, r.status);
+  r = await api(coach, 'GET', '/api/attendance/summary?from=banana&to=2026-03-01');
+  check('attendance summary: a malformed custom window is 400', r.status === 400, r.status);
+
+  /* Last-30-days window edges: today counts, 30 days ago does not. */
+  const attPad2 = (n) => String(n).padStart(2, '0');
+  const dstrOf = (d) => d.getFullYear() + '-' + attPad2(d.getMonth() + 1) + '-' + attPad2(d.getDate());
+  const attNow = new Date();
+  const todayS2 = dstrOf(attNow);
+  const oldS = dstrOf(new Date(attNow.getFullYear(), attNow.getMonth(), attNow.getDate() - 30));
+  await api(coach, 'PUT', '/api/attendance/' + todayS2 + '/' + annaA, { status: 'present' });
+  await api(coach, 'PUT', '/api/attendance/' + oldS + '/' + annaA, { status: 'absent' });
+  r = await api(coach, 'GET', '/api/attendance/summary');
+  const annaSum = (r.json.athletes || []).find(a => a.profile.id === annaA);
+  check('attendance summary: last30 includes today and excludes 30 days ago',
+    !!annaSum && annaSum.last30.marked === 1 && annaSum.last30.present === 1 &&
+    annaSum.last30.absent === 0 && annaSum.last30.percent === 100, annaSum && annaSum.last30);
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Att', lastName: 'Dana' });
+  const danaA = r.json.profile.id;
+  r = await api(coach, 'GET', '/api/attendance/summary');
+  const danaSum = (r.json.athletes || []).find(a => a.profile.id === danaA);
+  check('attendance summary: an athlete with no marks gets zeros and a null percent',
+    !!danaSum && danaSum.last30.marked === 0 && danaSum.last30.percent === null &&
+    danaSum.season.marked === 0 && danaSum.season.percent === null, danaSum);
+
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id };
 }
 
@@ -3023,6 +3180,7 @@ async function waitForServer(tries = 60) {
         fs.rmSync(D_DIR, { recursive: true, force: true });
       }
     }
+
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {

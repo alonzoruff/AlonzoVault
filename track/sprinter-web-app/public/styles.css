@@ -1902,6 +1902,10 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .edu-link { margin: 12px 0 0; }
 @media (max-width: 520px) { .edu-list { grid-template-columns: 1fr; } }
 
+/* ---- Attendance (coach roll-book): status segmented control ---- */
+.att-row .att-name { flex: 1 1 150px; }
+.att-seg { padding: 0; overflow: visible; }
+
 /* ---- Inventory (coach): summary strip + item cards ---- */
 .hero-stat.inv-flag { border-color: var(--red); background: #fdf0f3; }
 .hero-stat.inv-flag .stat-num { color: var(--red); }

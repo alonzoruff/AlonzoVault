@@ -102,8 +102,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v30';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v30';
+const APP_VERSION = 'v31';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v31';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -290,12 +290,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -330,6 +330,7 @@ function showView(name) {
   if (name === 'health') renderHealth();
   if (name === 'inventory') renderInventory();
   if (name === 'wellness') renderWellness();
+  if (name === 'attendance') renderAttendance();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
   if (name === 'digest') renderDigest();
@@ -1317,6 +1318,114 @@ async function renderWellness() {
       <h3>Team average sleep by day</h3>
       ${teamTrendHtml}
     </div>`;
+}
+
+/* ---------------- attendance (coach roll-book) ----------------
+   One mark per athlete per day: present, late, excused, absent.
+   Tapping a status saves just that athlete, in place (the Phase 1
+   pattern — the row and the day counts repaint only after the
+   server confirms); tapping the active status again clears the
+   mark back to unmarked. The per-athlete record below runs over
+   marked days only, so a day nobody took roll never counts
+   against anyone. */
+const ATT_STATUS_LIST = [['present', 'Present'], ['late', 'Late'], ['excused', 'Excused'], ['absent', 'Absent']];
+async function renderAttendance() {
+  const el = $('#attendance-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The daily attendance roll-book lives here.'); return; }
+  if (!state.attendanceDate) state.attendanceDate = todayStr();
+  const date = state.attendanceDate;
+  let data, summary;
+  try {
+    [data, summary] = await Promise.all([
+      api('/api/attendance?date=' + encodeURIComponent(date)),
+      api('/api/attendance/summary'),
+    ]);
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const marks = new Map();
+  const blocks = data.groups.concat(data.unassigned && data.unassigned.members.length ? [data.unassigned] : []);
+  for (const blk of blocks) for (const m of blk.members) {
+    marks.set(m.profile.id, m.attendance ? m.attendance.status : null);
+  }
+  const countsHtml = () => {
+    const c = { present: 0, late: 0, excused: 0, absent: 0, unmarked: 0 };
+    for (const s of marks.values()) { if (s) c[s]++; else c.unmarked++; }
+    return [['Present', c.present], ['Late', c.late], ['Excused', c.excused], ['Absent', c.absent], ['Unmarked', c.unmarked]]
+      .map(([label, n]) => `<div class="hero-stat"><span class="stat-num">${n}</span><span class="stat-label">${label}</span></div>`).join('');
+  };
+  const paintCounts = () => { const s = $('#att-counts'); if (s) s.innerHTML = countsHtml(); };
+  const paintAttRow = (row, status) => {
+    row.querySelectorAll('[data-att-status]').forEach(b =>
+      b.classList.toggle('active', b.dataset.attStatus === status));
+  };
+  const wireAttRow = (row) => {
+    row.querySelectorAll('[data-att-status]').forEach(btn => btn.addEventListener('click', async () => {
+      const pid = btn.dataset.attPid;
+      const tapped = btn.dataset.attStatus;
+      const next = marks.get(pid) === tapped ? null : tapped;
+      clearRowError(row);
+      try {
+        await apiPut('/api/attendance/' + encodeURIComponent(date) + '/' + encodeURIComponent(pid), { status: next });
+        marks.set(pid, next);
+        paintAttRow(row, next);
+        paintCounts();
+        flashSaved(row);
+      } catch (err) { showRowError(row, err.message); }
+    }));
+  };
+  const attRowHtml = (m) => `
+    <div class="roster-row att-row" data-att-row="${m.profile.id}">
+      <span class="att-name"><strong>${esc(m.profile.name)}</strong>${m.profile.topAthlete ? ' <span class="badge star">★</span>' : ''}</span>
+      <span class="seg att-seg" role="group" aria-label="Attendance for ${esc(m.profile.name)}">${ATT_STATUS_LIST.map(([s, label]) =>
+        `<button type="button" class="seg-btn${marks.get(m.profile.id) === s ? ' active' : ''}" data-att-status="${s}" data-att-pid="${m.profile.id}">${label}</button>`).join('')}</span>
+    </div>`;
+  const blockHtml = (blk) => `
+    <div class="card">
+      <h3>${blk.group ? esc(blk.group.name) : 'No group'}</h3>
+      ${blk.members.length ? blk.members.map(attRowHtml).join('') : '<p class="muted">No athletes here yet.</p>'}
+    </div>`;
+  const sumTable = (title, key) => {
+    const rows = summary.athletes.map(a => {
+      const w = a[key];
+      return `<tr><td>${esc(a.profile.name)}</td><td>${w.marked}</td><td>${w.present}</td><td>${w.late}</td><td>${w.excused}</td><td>${w.absent}</td><td>${w.percent == null ? '—' : w.percent + '%'}</td></tr>`;
+    }).join('');
+    return `<h3>${esc(title)}</h3>
+      <div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Athlete</th><th>Marked</th><th>Present</th><th>Late</th><th>Excused</th><th>Absent</th><th>Attended</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7">No athletes on the roster yet.</td></tr>'}</tbody>
+      </table></div>`;
+  };
+  el.innerHTML = `
+    <div class="card">
+      <label>Date <input type="date" id="att-date" value="${esc(date)}"></label>
+      ${date !== todayStr() ? '<button class="btn secondary" id="att-today" type="button" style="width:auto">Back to today</button>' : ''}
+      <p class="muted">Roll for ${esc(fmtDate(parseDate(date)))}. Tap a status to save it; tap the same status again to clear the mark. Past days can be fixed up here, and future days can be pre-marked.</p>
+      <div class="hero-stats" id="att-counts">${countsHtml()}</div>
+      <p><button class="btn primary" id="att-all-present" type="button" style="width:auto">Mark all present</button>
+      <span class="muted">Fills in everyone still unmarked — anyone already late, excused, or absent keeps their mark.</span></p>
+    </div>
+    ${blocks.map(blockHtml).join('')}
+    <div class="card">
+      <h2>Attendance record</h2>
+      <p class="muted">Attended counts present plus late. The percentage runs over marked days only — unmarked days never count against an athlete.</p>
+      ${sumTable('Last 30 days', 'last30')}
+      ${sumTable('Season to date', 'season')}
+    </div>`;
+  $('#att-date').addEventListener('change', (e) => { state.attendanceDate = e.target.value; renderAttendance(); });
+  const attTodayBtn = $('#att-today');
+  if (attTodayBtn) attTodayBtn.addEventListener('click', () => { state.attendanceDate = todayStr(); renderAttendance(); });
+  el.querySelectorAll('[data-att-row]').forEach(wireAttRow);
+  $('#att-all-present').addEventListener('click', async () => {
+    const btn = $('#att-all-present');
+    btn.disabled = true;
+    try {
+      await apiPost('/api/attendance/' + encodeURIComponent(date) + '/mark-all-present', {});
+      for (const [pid, s] of marks) if (!s) marks.set(pid, 'present');
+      el.querySelectorAll('[data-att-row]').forEach(row => paintAttRow(row, marks.get(row.dataset.attRow)));
+      paintCounts();
+    } catch (err) { alert(err.message); }
+    btn.disabled = false;
+  });
 }
 
 /* ================================================================
