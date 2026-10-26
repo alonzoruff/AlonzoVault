@@ -59,6 +59,10 @@ const state = {
   reportTest: null,
   reportGroup: null,
   reportAthleteId: null,
+  reportTrendWeeks: 8,
+  reportTrendGroup: 'all',
+  reportCmpTest: null,
+  reportCmpAFrom: null, reportCmpATo: null, reportCmpBFrom: null, reportCmpBTo: null,
   digestWeek: null,
   digestLatest: null,
   meetEvents: [],
@@ -99,6 +103,11 @@ const state = {
   calMonth: null,
   calData: null,
   calDay: null,
+  wrGroupId: '',
+  wrWorkoutId: '',
+  wrCols: 'auto',
+  wrData: null,
+  wrUpdatedAt: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -314,12 +323,12 @@ const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -337,15 +346,83 @@ function renderSubnav(name, area) {
     nav.scrollLeft += actBtn.getBoundingClientRect().left - nav.getBoundingClientRect().left - 24;
   }
 }
+/* ---------------- dropdown header navigation ----------------
+   The header's primary wayfinding: Train, Learn and Coach are
+   dropdown groups whose menus list the same views the hub pages
+   carry, built from GROUP_SUBNAV so there is one source of truth;
+   Today, My Log and Account are direct buttons. On narrow screens
+   the bar collapses behind the Menu button, which opens a sheet
+   with every group expanded. Menus close on selection, on an
+   outside click, and on Escape. */
+const NAV_GROUP_LABELS = { train: 'Train', learn: 'Learn', coachhub: 'Coach' };
+function navMenuItemsHtml(area) {
+  return `<button type="button" class="nav-item nav-overview" data-view="${area}">${NAV_GROUP_LABELS[area]} overview</button>` +
+    GROUP_SUBNAV[area].map(([v, label]) =>
+      `<button type="button" class="nav-item" data-view="${v}">${label}</button>`).join('');
+}
+function buildMainNav() {
+  $$('.nav-menu').forEach(menu => { menu.innerHTML = navMenuItemsHtml(menu.dataset.menu); });
+  const sheet = $('#nav-sheet');
+  if (!sheet) return;
+  const section = (area) => `
+    <div class="sheet-section${area === 'coachhub' ? ' coach-tab' : ''}"${area === 'coachhub' ? ' hidden' : ''}>
+      <div class="sheet-label">${NAV_GROUP_LABELS[area]}</div>
+      ${navMenuItemsHtml(area)}
+    </div>`;
+  sheet.innerHTML = `
+    <button type="button" class="nav-item sheet-top" data-view="home">Today</button>
+    ${section('train')}
+    ${section('learn')}
+    <button type="button" class="nav-item sheet-top" data-view="log">My Log</button>
+    ${section('coachhub')}
+    <button type="button" class="nav-item sheet-top" data-view="account">Account</button>`;
+}
+function closeNavMenus() {
+  $$('.nav-group.open').forEach(g => {
+    g.classList.remove('open');
+    const b = g.querySelector('.nav-group-btn');
+    if (b) b.setAttribute('aria-expanded', 'false');
+  });
+  const sheet = $('#nav-sheet');
+  if (sheet && !sheet.hidden) sheet.hidden = true;
+  const toggle = $('#nav-toggle');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+buildMainNav();
+$$('.nav-group-btn').forEach(btn => btn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const group = btn.closest('.nav-group');
+  const wasOpen = !!(group && group.classList.contains('open'));
+  closeNavMenus();
+  if (group && !wasOpen) { group.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+}));
+const navToggleBtn = $('#nav-toggle');
+if (navToggleBtn) navToggleBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const sheet = $('#nav-sheet');
+  const willOpen = !!(sheet && sheet.hidden);
+  closeNavMenus();
+  if (willOpen) { sheet.hidden = false; navToggleBtn.setAttribute('aria-expanded', 'true'); }
+});
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-view]')) { closeNavMenus(); return; }
+  if (!e.target.closest('.mainnav') && !e.target.closest('.nav-sheet') && !e.target.closest('#nav-toggle')) closeNavMenus();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNavMenus(); });
+
 function showView(name) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const area = VIEW_AREA[name] || 'home';
   $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
+  $$('.nav-group-btn').forEach(b => b.classList.toggle('active', b.dataset.area === area));
+  $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  closeNavMenus();
   renderSubnav(name, area);
   /* The TV board takes over the whole screen: body.tv-mode hides
      the app chrome (CSS), and its timers run only while it shows. */
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
+  if (name === 'weightroom') enterWeightRoom(); else exitWeightRoom();
   if (name === 'home' || name === 'log') { renderCheckin(); renderMemberLogs(); }
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
@@ -404,8 +481,9 @@ function badge(cns) {
 }
 function sessionRow(s) {
   return `<button class="session-row" data-session="${esc(s.id)}">
-    <span class="code">${esc(s.id)}</span> · <span class="name">${esc(s.name)}</span> ${badge(s.cns_demand)}
-    <div class="meta">${esc(labelQuality(s.quality))} · ${esc(labelPhase(s.phase))} · ${s.total_volume_m ? esc(s.total_volume_m) + ' m total' : 'no running volume'}</div>
+    ${thumbHtml(s.id)}
+    <span class="row-main"><span class="code">${esc(s.id)}</span> · <span class="name">${esc(s.name)}</span> ${badge(s.cns_demand)}
+    <span class="meta">${esc(labelQuality(s.quality))} · ${esc(labelPhase(s.phase))} · ${s.total_volume_m ? esc(s.total_volume_m) + ' m total' : 'no running volume'}</span></span>
   </button>`;
 }
 function labelQuality(q) {
@@ -571,7 +649,6 @@ function renderHome() {
 
   $('#home-content').removeAttribute('aria-busy');
   $('#home-content').innerHTML = `
-    <h1>Today</h1>
     ${LANE_DIVIDER}
     <p>${statusLine}</p>
     ${isCoachUser() ? '<div id="coach-today"></div>' : ''}
@@ -596,6 +673,7 @@ function renderHome() {
     ${daysHtml}
     <button class="btn" id="home-open-season" type="button">Open the full season plan</button>
     ${state.user ? '<h2>Your latest log entries</h2>' + LANE_DIVIDER + '<div id="home-logs"></div>' : '<div class="card"><strong>Keep a practice log.</strong><p class="muted">Create a free account to save what your group actually ran, and to save cross-training swaps. <button class="btn secondary" data-goto="account" type="button">Go to account</button></p></div>'}
+    ${state.user && !isCoachUser() ? '<div id="home-loads"></div>' : ''}
   `;
   const runHomeSearch = () => {
     state.libQuery = $('#home-search').value;
@@ -622,8 +700,30 @@ function renderHome() {
   const gotoBtn = $('#home-content [data-goto]');
   if (gotoBtn) gotoBtn.addEventListener('click', () => showView(gotoBtn.dataset.goto));
   if (state.user) renderHomeLogs();
+  if (state.user && !isCoachUser()) renderHomeLoads();
   if (isCoachUser()) renderCoachToday();
   renderAnnouncePanel();
+}
+
+/* The member's own lifting loads: for every custom workout with
+   % of max steps, the weight computed from THEIR best max — the
+   one athlete-facing window onto coach-built workouts, fed by
+   /api/my/loads, which only ever computes the caller's numbers.
+   Renders nothing when the account is unlinked or no workout
+   carries a % step yet. */
+async function renderHomeLoads() {
+  const el = $('#home-loads');
+  if (!el) return;
+  let data;
+  try { data = await api('/api/my/loads'); } catch (_) { el.innerHTML = ''; return; }
+  if (!data.linked || !data.workouts || !data.workouts.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<h2>Your lifting loads</h2>' + LANE_DIVIDER + data.workouts.map(w => `
+    <div class="card">
+      <h3>${esc(w.title)}</h3>
+      ${w.steps.map(s => `<p class="cw-block-line"><strong>${esc(s.name)}</strong> — ${s.sets} × ${s.reps} @ ${s.weight !== null
+        ? `<strong>${s.weight} lb</strong> <span class="muted">(${s.percent}% of ${s.max} est. max)</span>`
+        : '<span class="muted">No max on file — ask coach</span>'}</p>`).join('')}
+    </div>`).join('');
 }
 
 /* Coach summary panel on Today: today's assignments + completion
@@ -790,11 +890,14 @@ function renderDrills() {
   $('#drill-list').innerHTML = Object.keys(byCat).map(cat => `
     <h2>${esc(catName[cat] || cat)}</h2>
     ${LANE_DIVIDER}
-    ${byCat[cat].map(d => `<div class="card">
+    ${byCat[cat].map(d => `<div class="card drill-card">
+      ${thumbHtml(d.id, 'thumb-lg')}
+      <div class="drill-main">
       <strong>${esc(d.id.replace('DRL-', 'Drill '))} · ${esc(d.name)}</strong>
       <div class="muted">${esc(d.distance_or_reps)}</div>
       <p style="margin-bottom:0">${esc(d.coaching_cue)}</p>
       ${demoHtml(d.id, d.name)}
+      </div>
     </div>`).join('')}
   `).join('');
 }
@@ -2099,6 +2202,30 @@ async function loadMedia() {
     if (covView && covView.classList.contains('active')) renderCoverage();
   } catch (_) { /* media is optional */ }
 }
+/* Thumbnail for a movement's demo, when one exists: a YouTube demo
+   shows the video's own poster frame, an uploaded demo shows a
+   still Cloudinary derives from the video itself, and a GIF demo
+   is its own thumbnail. No demo, no thumbnail — the row stays
+   clean text. Self-contained on purpose: the suite extracts this
+   function and exercises it directly. */
+/* THUMB-BEGIN */
+function thumbUrlFor(m) {
+  if (!m || !m.url) return '';
+  if (m.type === 'upload') {
+    const u = String(m.url);
+    const still = u.replace(/\.(mp4|mov|webm|m4v)(\?.*)?$/i, '.jpg$2');
+    return still !== u ? still : '';
+  }
+  if (m.type === 'gif') return String(m.url);
+  const match = String(m.url).match(/(?:[?&]v=|youtu\.be\/|\/(?:embed|shorts|live)\/)([A-Za-z0-9_-]{11})/);
+  return match ? 'https://i.ytimg.com/vi/' + match[1] + '/hqdefault.jpg' : '';
+}
+/* THUMB-END */
+function thumbHtml(id, cls) {
+  const url = thumbUrlFor(state.media[id]);
+  if (!url) return '';
+  return `<span class="row-thumb ${cls || ''}" aria-hidden="true"><img loading="lazy" src="${esc(url)}" alt=""></span>`;
+}
 function demoHtml(id, title) {
   if (!isCoachUser()) return '';
   const m = state.media[id];
@@ -3034,7 +3161,7 @@ async function renderTesting() {
   const renderRankedHtml = () => dayTests.map(t => {
         const rows = dayResults.filter(r => r.testKey === t.key).slice()
           .sort((a, b) => t.better === 'lower' ? (a.display || 0) - (b.display || 0) : (b.display || 0) - (a.display || 0));
-        return `<h3>${esc(t.name)} ${demoHtml(t.key, t.name)}</h3>
+        return `<h3><span class="row-lead">${thumbHtml(t.key, 'thumb-sm')}<span>${esc(t.name)}</span></span> ${demoHtml(t.key, t.name)}</h3>
         ${rows.length ? `<div class="table-wrap"><table class="ranked">
           <thead><tr><th>#</th><th>Athlete</th><th>Result</th>${t.kind === 'lift' ? '<th>Est. 1RM</th>' : ''}</tr></thead>
           <tbody>${rows.map((r, i) => {
@@ -3180,7 +3307,7 @@ async function renderTesting() {
         const out = await apiPost('/api/results', body);
         applyResultInPlace(p2, test, out.result);
         block.innerHTML = `
-          <div class="roster-row"><strong>${esc(test.name)}</strong> ${demoHtml(test.key, test.name)}</div>
+          <div class="roster-row"><span class="row-lead">${thumbHtml(test.key, 'thumb-sm')}<strong>${esc(test.name)}</strong></span> ${demoHtml(test.key, test.name)}</div>
           ${testInputs(test, resultFor(p2, key), p2)}`;
         wireRapidBlock(block);
         flashSaved(block);
@@ -3202,7 +3329,7 @@ async function renderTesting() {
     const pr = state.profiles.find(x => x.id === pid);
     zone.innerHTML = `<h3>${esc(pr ? pr.name : '')}</h3>` + dayTests.map(t => `
       <div class="rapid-test" data-rapid-block="${pid}:${t.key}">
-        <div class="roster-row"><strong>${esc(t.name)}</strong> ${demoHtml(t.key, t.name)}</div>
+        <div class="roster-row"><span class="row-lead">${thumbHtml(t.key, 'thumb-sm')}<strong>${esc(t.name)}</strong></span> ${demoHtml(t.key, t.name)}</div>
         ${testInputs(t, resultFor(pid, t.key), pid)}
       </div>`).join('');
     zone.querySelectorAll('[data-rapid-block]').forEach(wireRapidBlock);
@@ -3684,9 +3811,13 @@ async function renderInventory() {
 /* Runner mode — pure step-building. No DOM in this section: the
    test suite loads it directly to verify the step sequences.
    A runner plan is { title, blocks: [{ rounds, restBetweenRounds,
-   restAfterBlock, exercises: [{ name, reps }] }] } — exactly the
-   shape of a coach-built custom workout, and the shape library
-   sessions are mapped into by sessionToRunnerPlan below.
+   restAfterBlock, exercises: [{ name, reps, load? }] }] } — exactly
+   the shape of a coach-built custom workout, and the shape library
+   sessions are mapped into by sessionToRunnerPlan below. A custom
+   workout's % of max prescription rides along on the step as
+   `load` ({ testKey, percent, sets, reps }), untouched, so the
+   runner display can name the prescription; library exercises
+   never carry one.
    buildRunnerSteps flattens a plan into the walk: every exercise
    of every round, a rest step after each round (the block's
    rest-between-rounds) and after each block except the last (the
@@ -3702,7 +3833,7 @@ function buildRunnerSteps(plan) {
       exercises.forEach((ex, ei) => {
         steps.push({
           type: 'exercise', block: bi, blocks: blocks.length,
-          round, rounds, exIndex: ei, name: ex.name, reps: ex.reps,
+          round, rounds, exIndex: ei, name: ex.name, reps: ex.reps, load: ex.load || null,
         });
       });
       if (round < rounds && block.restBetweenRounds > 0) {
@@ -4024,6 +4155,18 @@ function runnerNextExercise(fromIdx) {
    test battery — the movements the media map is keyed by. What the
    runner shows is the movement's current demo, uploaded videos
    included, through the same player as everywhere else. */
+/* Display name for a lift test key (a % prescription's target).
+   The loaded test battery wins; the five preloaded lifts are the
+   fallback so the runner can name a prescription even when the
+   Testing view was never opened this session. */
+const LIFT_NAME_FALLBACK = {
+  'back-squat': 'Back Squat', 'trap-bar-deadlift': 'Trap Bar Deadlift',
+  'bench-press': 'Bench Press', 'hang-clean': 'Hang Clean', 'power-clean': 'Power Clean',
+};
+function liftNameForKey(key) {
+  const t = (state.tests || []).find(x => x.key === key);
+  return t ? t.name : (LIFT_NAME_FALLBACK[key] || key);
+}
 function demoForRunnerExercise(name) {
   const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const target = norm(name);
@@ -4084,16 +4227,26 @@ function renderRunnerStep() {
     else if (nxtEx) nextText = 'Next: ' + esc(nxtEx.name) + ' × ' + esc(repsLabel(nxtEx.reps));
     else nextText = '';
     const demo = demoForRunnerExercise(step.name);
+    const loadHtml = step.load ? `
+      <p class="runner-load">${esc(step.name)} — ${step.load.percent}% of ${esc(liftNameForKey(step.load.testKey))} max</p>
+      ${runner.plan && runner.plan.workoutId ? '<button class="btn secondary" id="runner-loadchart" type="button">Load chart — every member\'s weight</button>' : ''}` : '';
     main.innerHTML = head + `
       <p class="runner-where">Block ${step.block + 1} of ${step.blocks} · Round ${step.round} of ${step.rounds}</p>
       <h2 class="runner-ex-name">${esc(step.name)}</h2>
       <p class="runner-ex-reps">× ${esc(repsLabel(step.reps))}</p>
+      ${loadHtml}
       <p class="runner-next">${nextText}</p>
       ${demo ? `<div class="runner-demo"><button class="btn secondary" id="runner-demo-btn" type="button">▶ Watch demo</button><div id="runner-demo-slot"></div></div>` : ''}
       <div class="runner-controls">
         <button class="btn runner-btn secondary" id="runner-back" type="button" ${runner.idx === 0 ? 'disabled' : ''}>← Back</button>
         <button class="btn runner-btn primary" id="runner-advance" type="button">Done — next →</button>
       </div>`;
+    const chartBtn = $('#runner-loadchart');
+    if (chartBtn) chartBtn.addEventListener('click', () => {
+      const wid = runner.plan && runner.plan.workoutId;
+      closeRunner();
+      if (wid) { state.cwOpenChart = wid; showView('custom'); }
+    });
     const demoBtn = $('#runner-demo-btn');
     if (demoBtn) demoBtn.addEventListener('click', () => {
       $('#runner-demo-slot').innerHTML = mediaPlayerHtml(demo);
@@ -4154,12 +4307,93 @@ function cwScrapeForm() {
     rounds: cwNum(blockEl.querySelector('.cw-rounds').value),
     restBetweenRounds: cwNum(blockEl.querySelector('.cw-rest-round').value),
     restAfterBlock: cwNum(blockEl.querySelector('.cw-rest-block').value),
-    exercises: Array.from(blockEl.querySelectorAll('.cw-ex-row')).map(row => ({
-      name: row.querySelector('.cw-ex-name').value,
-      reps: row.querySelector('.cw-ex-reps').value,
-    })),
+    exercises: Array.from(blockEl.querySelectorAll('.cw-ex-row')).map(row => {
+      const ex = {
+        name: row.querySelector('.cw-ex-name').value,
+        reps: row.querySelector('.cw-ex-reps').value,
+      };
+      const mode = row.querySelector('.cw-ex-mode');
+      if (mode && mode.value === 'pct') {
+        const pctRaw = row.querySelector('.cw-ex-pct').value;
+        ex.load = {
+          testKey: row.querySelector('.cw-ex-test').value,
+          percent: pctRaw === '' ? '' : Number(pctRaw),
+          sets: cwNum(row.querySelector('.cw-ex-sets').value),
+          reps: cwNum(row.querySelector('.cw-ex-lreps').value),
+        };
+      }
+      return ex;
+    }),
   }));
 }
+/* The lifts a % prescription can target, as <option>s: the loaded
+   battery's lift-kind tests, or the five preloaded lifts when the
+   battery has not loaded. */
+function cwLiftOptions(selectedKey) {
+  const lifts = (state.tests || []).filter(t => t.kind === 'lift');
+  const list = lifts.length
+    ? lifts.map(t => ({ key: t.key, name: t.name }))
+    : Object.entries(LIFT_NAME_FALLBACK).map(([key, name]) => ({ key, name }));
+  return list.map(t =>
+    `<option value="${esc(t.key)}" ${t.key === selectedKey ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+}
+/* The %-prescribed steps of a workout draft/stored workout, for
+   deciding whether the Load chart button belongs on its card. */
+function cwHasPctSteps(w) {
+  return (w.blocks || []).some(b => (b.exercises || []).some(e => e.load));
+}
+function loadCellText(cell, percent) {
+  if (!cell) return '—';
+  return `<strong>${cell.weight} lb</strong> <span class="muted">(${percent}% of ${cell.max} est. max)</span>`;
+}
+/* The coach load chart for one custom workout: one row per athlete,
+   one column per %-prescribed exercise, each cell the athlete's
+   own working weight with the max it came from. Fetched fresh from
+   the server (the only place roster-wide loads exist); the group
+   picker re-fetches for the picked group. */
+async function renderCwLoadChart(workoutId, groupId) {
+  const slot = document.getElementById('cw-chart-' + workoutId);
+  if (!slot) return;
+  if (!state.groups || !state.groups.length) await refreshProfiles();
+  slot.innerHTML = '<p class="muted">Loading the load chart…</p>';
+  let data;
+  try {
+    data = await api('/api/custom-workouts/' + encodeURIComponent(workoutId) + '/load-chart'
+      + (groupId ? '?groupId=' + encodeURIComponent(groupId) : ''));
+  } catch (err) {
+    slot.innerHTML = '<p class="error">Could not load the load chart: ' + esc(err.message) + '</p>';
+    return;
+  }
+  if (!data.columns.length) {
+    slot.innerHTML = '<p class="muted">No % of max exercises in this workout yet — switch an exercise\'s Load to "% of max" in the editor and the chart fills in.</p>';
+    return;
+  }
+  const groupOptions = ['<option value="">All roster</option>']
+    .concat((state.groups || []).map(g =>
+      `<option value="${esc(g.id)}" ${g.id === data.groupId ? 'selected' : ''}>${esc(g.name)}</option>`)).join('');
+  const head = data.columns.map(c =>
+    `<th>${esc(c.name)}<br><span class="muted">${c.percent}% of ${esc(c.testName)} · ${c.sets} × ${c.reps}</span></th>`).join('');
+  const body = data.rows.map(row => `
+    <tr><td><strong>${esc(row.name)}</strong>${row.groupName ? `<br><span class="muted">${esc(row.groupName)}</span>` : ''}</td>
+    ${row.cells.map((cell, i) => `<td>${loadCellText(cell, data.columns[i].percent)}</td>`).join('')}</tr>`).join('');
+  const needs = data.needsMax.length
+    ? `<p class="cw-needs-max"><strong>Needs a max test:</strong> ${data.needsMax.map(n =>
+        esc(n.name) + ' (' + n.lifts.map(esc).join(', ') + ')').join(' · ')}</p>`
+    : '';
+  slot.innerHTML = `
+    <div class="filter-row">
+      <label>Group <select class="cw-chart-group">${groupOptions}</select></label>
+    </div>
+    ${data.rows.length
+      ? `<div class="cw-chart-scroll"><table class="cw-chart-table">
+           <thead><tr><th>Athlete</th>${head}</tr></thead><tbody>${body}</tbody>
+         </table></div>`
+      : '<p class="muted">No athletes in this group yet.</p>'}
+    ${needs}`;
+  const sel = slot.querySelector('.cw-chart-group');
+  if (sel) sel.addEventListener('change', () => renderCwLoadChart(workoutId, sel.value || null));
+}
+
 async function renderCustomWorkouts() {
   const el = $('#custom-main');
   if (!el) return;
@@ -4171,6 +4405,11 @@ async function renderCustomWorkouts() {
   } catch (err) {
     el.innerHTML = '<p class="error">Could not load custom workouts: ' + esc(err.message) + '</p>';
     return;
+  }
+  /* The % of max editor names its lifts from the test battery;
+     load it once if this session has not been to Testing yet. */
+  if (!state.tests) {
+    try { const t = await api('/api/tests'); state.tests = t.tests || []; } catch (_) { /* the editor falls back to the preloaded lifts */ }
   }
   const workouts = state.cwWorkouts;
   const editing = state.cwEditId && state.cwEditId !== 'new'
@@ -4185,19 +4424,21 @@ async function renderCustomWorkouts() {
     const steps = buildRunnerSteps(w);
     const exSteps = steps.filter(s => s.type === 'exercise').length;
     const summaries = w.blocks.map((b, i) =>
-      `<p class="cw-block-line"><strong>Block ${i + 1}</strong> — ${b.exercises.map(e => esc(e.name) + ' × ' + esc(e.reps)).join(', ')} · ${b.rounds} rounds · rest ${b.restBetweenRounds}s between rounds, ${b.restAfterBlock}s after</p>`).join('');
+      `<p class="cw-block-line"><strong>Block ${i + 1}</strong> — ${b.exercises.map(e => esc(e.name) + ' × ' + esc(e.reps) + (e.load ? ' @ ' + e.load.percent + '% of max' : '')).join(', ')} · ${b.rounds} rounds · rest ${b.restBetweenRounds}s between rounds, ${b.restAfterBlock}s after</p>`).join('');
     return `
     <div class="card cw-card">
       <div class="roster-row">
         <span><strong>${esc(w.title)}</strong></span>
         <span class="roster-actions">
           <button class="btn primary" data-cw-run="${w.id}" type="button">Run it</button>
+          ${cwHasPctSteps(w) ? `<button class="btn secondary" data-cw-chart="${w.id}" type="button">Load chart</button>` : ''}
           <button class="btn secondary" data-cw-edit="${w.id}" type="button">Edit</button>
           <button class="btn danger" data-cw-del="${w.id}" type="button">Delete</button>
         </span>
       </div>
       <p class="muted">${w.blocks.length} blocks · ${exSteps} exercise steps in runner mode</p>
       ${summaries}
+      <div class="cw-chart-slot" id="cw-chart-${w.id}"></div>
     </div>`;
   };
   let formHtml = '';
@@ -4215,10 +4456,22 @@ async function renderCustomWorkouts() {
           <label>Rest after block (sec) <input type="number" class="cw-rest-block" min="0" max="600" value="${b.restAfterBlock}"></label>
         </div>
         ${b.exercises.map((e, j) => `
-        <div class="cw-ex-row filter-row">
-          <label>Exercise <input type="text" class="cw-ex-name" value="${esc(e.name)}" placeholder="e.g. Hang Clean"></label>
-          <label>Reps <input type="text" class="cw-ex-reps" value="${esc(e.reps)}" placeholder="3, max, 5 each…"></label>
-          <button class="btn danger" data-cw-delex="${i}:${j}" type="button">Remove</button>
+        <div class="cw-ex-row">
+          <div class="filter-row">
+            <label>Exercise <input type="text" class="cw-ex-name" value="${esc(e.name)}" placeholder="e.g. Hang Clean"></label>
+            <label>Load <select class="cw-ex-mode">
+              <option value="" ${e.load ? '' : 'selected'}>Reps (free text)</option>
+              <option value="pct" ${e.load ? 'selected' : ''}>% of max</option>
+            </select></label>
+            <label class="cw-reps-wrap" ${e.load ? 'hidden' : ''}>Reps <input type="text" class="cw-ex-reps" value="${esc(e.reps)}" placeholder="3, max, 5 each…"></label>
+            <button class="btn danger" data-cw-delex="${i}:${j}" type="button">Remove</button>
+          </div>
+          <div class="filter-row cw-load-fields" ${e.load ? '' : 'hidden'}>
+            <label>Lift <select class="cw-ex-test">${cwLiftOptions(e.load ? e.load.testKey : 'back-squat')}</select></label>
+            <label>% of max <input type="number" class="cw-ex-pct" min="30" max="110" step="any" value="${e.load ? e.load.percent : 80}"></label>
+            <label>Sets <input type="number" class="cw-ex-sets" min="1" max="10" value="${e.load ? e.load.sets : 4}"></label>
+            <label>Reps per set <input type="number" class="cw-ex-lreps" min="1" max="30" value="${e.load ? e.load.reps : 5}"></label>
+          </div>
         </div>`).join('')}
         <button class="btn secondary" data-cw-addex="${i}" type="button">+ Add exercise</button>
       </div>`;
@@ -4241,7 +4494,7 @@ async function renderCustomWorkouts() {
     ${formHtml}`;
   el.querySelectorAll('[data-cw-run]').forEach(b => b.addEventListener('click', () => {
     const w = state.cwWorkouts.find(x => x.id === b.dataset.cwRun);
-    if (w) openRunner({ title: w.title, blocks: w.blocks });
+    if (w) openRunner({ title: w.title, blocks: w.blocks, workoutId: w.id });
   }));
   el.querySelectorAll('[data-cw-edit]').forEach(b => b.addEventListener('click', () => {
     state.cwEditId = b.dataset.cwEdit;
@@ -4257,6 +4510,16 @@ async function renderCustomWorkouts() {
       renderCustomWorkouts();
     } catch (err) { alert(err.message); }
   }));
+  el.querySelectorAll('[data-cw-chart]').forEach(b => b.addEventListener('click', () => {
+    const slot = document.getElementById('cw-chart-' + b.dataset.cwChart);
+    if (slot && slot.innerHTML.trim()) { slot.innerHTML = ''; return; }
+    renderCwLoadChart(b.dataset.cwChart, null);
+  }));
+  if (state.cwOpenChart) {
+    const wid = state.cwOpenChart;
+    state.cwOpenChart = null;
+    if (workouts.some(w => w.id === wid)) renderCwLoadChart(wid, null);
+  }
   const newBtn = $('#cw-new');
   if (newBtn) newBtn.addEventListener('click', () => {
     state.cwEditId = 'new';
@@ -4287,6 +4550,18 @@ async function renderCustomWorkouts() {
     const [bi, ei] = b.dataset.cwDelex.split(':').map(n => parseInt(n, 10));
     state.cwDraft.blocks[bi].exercises.splice(ei, 1);
     renderCustomWorkouts();
+  }));
+  /* Load mode per exercise row: free-text reps or a % of max
+     prescription. Toggling swaps which fields show, in place —
+     no re-render, so nothing typed is lost. */
+  el.querySelectorAll('.cw-ex-mode').forEach(sel => sel.addEventListener('change', () => {
+    const row = sel.closest('.cw-ex-row');
+    if (!row) return;
+    const pct = sel.value === 'pct';
+    const repsWrap = row.querySelector('.cw-reps-wrap');
+    const loadFields = row.querySelector('.cw-load-fields');
+    if (repsWrap) repsWrap.hidden = pct;
+    if (loadFields) loadFields.hidden = !pct;
   }));
   $('#cw-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -4842,13 +5117,23 @@ async function renderReports() {
   if (!el) return;
   if (!isCoachUser()) { gateHtml(el, 'Reports and athlete report cards live here.'); return; }
   await refreshProfiles();
-  let trend, comp, load, health;
+  let trend, comp, load, health, assessment;
   try {
-    [trend, comp, load, health] = await Promise.all([
+    [trend, comp, load, health, assessment] = await Promise.all([
       api('/api/reports/team-trend'), api('/api/reports/completions'),
       api('/api/reports/load'), api('/api/reports/health'),
+      api('/api/reports/assessment'),
     ]);
   } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  if (state.reportTrendGroup !== 'all' && !comp.groups.some(g => g.group.id === state.reportTrendGroup)) {
+    state.reportTrendGroup = 'all';
+  }
+  let compTrend = null, compTrendErr = '';
+  try {
+    compTrend = await api('/api/reports/completion-trend?weeks=' + state.reportTrendWeeks
+      + (state.reportTrendGroup !== 'all'
+        ? '&groupId=' + encodeURIComponent(state.reportTrendGroup) : ''));
+  } catch (err) { compTrendErr = err.message; }
   const testsWithData = trend.tests.filter(t => t.points.length);
   if (!state.reportTest || !trend.tests.some(t => t.testKey === state.reportTest)) {
     state.reportTest = (testsWithData[0] || {}).testKey || null;
@@ -4883,6 +5168,68 @@ async function renderReports() {
   } else {
     compHtml = '<p class="muted">Pick a group to see its completion chart.</p>';
   }
+  /* Completion trend: the by-group math above, aggregated into a
+     percentage per week over the last N weeks. */
+  let trendWeeksHtml;
+  if (compTrendErr) {
+    trendWeeksHtml = `<p class="error">${esc(compTrendErr)}</p>`;
+  } else if (!compTrend || !compTrend.weeks.length) {
+    trendWeeksHtml = '<p class="muted">No season weeks in this window yet.</p>';
+  } else {
+    trendWeeksHtml = barChart(
+      compTrend.weeks.map(w => ({ label: 'W' + w.week })),
+      [{ name: 'Completion %', cls: 'bar-a', values: compTrend.weeks.map(w => w.percent || 0) }], false)
+      + `<div class="table-wrap"><table class="ranked"><thead><tr><th>Week</th><th>Completion</th><th>Assigned days</th><th>Days covered</th></tr></thead><tbody>${compTrend.weeks.map(w => `<tr><td>W${w.week} · ${esc(w.monday)}</td><td>${w.percent === null ? '—' : `<strong>${w.percent}%</strong> — ${w.completions} of ${w.possible}`}</td><td>${w.assigned}</td><td>${w.completedDays}</td></tr>`).join('')}</tbody></table></div>`
+      + '<p class="muted">The denominator is assigned session days × athletes in scope — the report card\'s per-athlete math, summed. Future weeks in the window show the plan only.</p>';
+  }
+  /* Period comparison: defaults split the season at its midpoint —
+     first half vs second half through today — all editable. */
+  const dstr = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  if (load.weeks.length) {
+    const midWeek = load.weeks[Math.floor(load.weeks.length / 2)];
+    if (!state.reportCmpAFrom) state.reportCmpAFrom = load.weeks[0].start;
+    if (!state.reportCmpATo) { const d = parseDate(midWeek.start); d.setDate(d.getDate() - 1); state.reportCmpATo = dstr(d); }
+    if (!state.reportCmpBFrom) state.reportCmpBFrom = midWeek.start;
+    if (!state.reportCmpBTo) state.reportCmpBTo = dstr(new Date());
+  }
+  if (!state.reportCmpTest || !trend.tests.some(t => t.testKey === state.reportCmpTest)) {
+    state.reportCmpTest = ((testsWithData[0] || trend.tests[0] || {}).testKey) || null;
+  }
+  let cmpHtml;
+  if (!trend.tests.length) {
+    cmpHtml = '<p class="muted">No tests in the battery yet.</p>';
+  } else if (!state.reportCmpTest) {
+    cmpHtml = '<p class="muted">Pick a test to compare two periods.</p>';
+  } else {
+    let cmp = null, cmpErr = '';
+    try {
+      cmp = await api('/api/reports/compare?testKey=' + encodeURIComponent(state.reportCmpTest)
+        + (state.reportCmpAFrom ? '&aFrom=' + state.reportCmpAFrom : '')
+        + (state.reportCmpATo ? '&aTo=' + state.reportCmpATo : '')
+        + (state.reportCmpBFrom ? '&bFrom=' + state.reportCmpBFrom : '')
+        + (state.reportCmpBTo ? '&bTo=' + state.reportCmpBTo : ''));
+    } catch (err) { cmpErr = err.message; }
+    if (cmpErr) {
+      cmpHtml = `<p class="error">${esc(cmpErr)}</p>`;
+    } else {
+      const u = cmp.test.unit;
+      const mark = (v) => v === null ? '—' : `<strong>${fmtNum(v)} ${esc(u)}</strong>`;
+      const change = (row) => {
+        if (row.delta === null) return '—';
+        if (row.delta === 0) return 'No change';
+        return `${row.delta > 0 ? '+' : ''}${fmtNum(row.delta)} ${esc(u)} — ${row.improved ? 'improved' : 'declined'}`;
+      };
+      const s = cmp.summary;
+      cmpHtml = `<div class="table-wrap"><table class="ranked"><thead><tr><th>Athlete</th><th>Group</th><th>Best — period A</th><th>Best — period B</th><th>Change</th></tr></thead><tbody>${cmp.rows.map(row => `<tr><td>${esc(row.name)}</td><td>${esc(row.groupName || '—')}</td><td>${mark(row.bestA)}</td><td>${mark(row.bestB)}</td><td>${change(row)}</td></tr>`).join('')}</tbody></table></div>`
+        + `<p class="muted">Period A average: <strong>${s.avgA === null ? '—' : fmtNum(s.avgA) + ' ' + esc(u)}</strong> (${s.athletesWithA} athlete${s.athletesWithA === 1 ? '' : 's'}) · Period B average: <strong>${s.avgB === null ? '—' : fmtNum(s.avgB) + ' ' + esc(u)}</strong> (${s.athletesWithB} athlete${s.athletesWithB === 1 ? '' : 's'}) · <strong>${s.improved}</strong> improved, <strong>${s.declined}</strong> declined, <strong>${s.unchanged}</strong> unchanged.</p>`;
+    }
+  }
+  /* Team assessment by quality: best marks matrix + average row. */
+  const assessmentHtml = !assessment.qualities.length
+    ? '<p class="muted">No tests are tagged to a quality yet.</p>'
+    : assessment.qualities.map(q => `
+      <h3>${esc(q.label)}</h3>
+      <div class="table-wrap"><table class="ranked"><thead><tr><th>Athlete</th>${q.tests.map(t => `<th>${esc(t.name)} (${esc(t.unit)})</th>`).join('')}</tr></thead><tbody>${q.rows.map(row => `<tr><td>${esc(row.name)}${row.groupName ? ` <span class="muted">· ${esc(row.groupName)}</span>` : ''}</td>${q.tests.map(t => `<td>${row.marks[t.key] === null ? '—' : `<strong>${fmtNum(row.marks[t.key])}</strong>`}</td>`).join('')}</tr>`).join('')}</tbody><tfoot><tr><td><strong>Team average</strong></td>${q.tests.map(t => `<td>${q.averages[t.key] === null ? '—' : `<strong>${fmtNum(q.averages[t.key])}</strong> <span class="muted">(n=${q.counts[t.key]})</span>`}</td>`).join('')}</tr></tfoot></table></div>`).join('');
   const loadSeries = [
     { name: 'High-CNS days', cls: 'bar-a', values: load.weeks.map(w => w.high) },
     { name: 'Low-CNS days', cls: 'bar-b', values: load.weeks.map(w => w.low) },
@@ -4918,6 +5265,28 @@ async function renderReports() {
       <div id="report-comp">${compHtml}</div>
     </div>
     <div class="card">
+      <h2>Completion trend</h2>
+      <p class="muted">Completion percentage week by week — the share of assigned athlete-sessions the coach marked complete, from the same weekly counts as the chart above.</p>
+      <label>Last <select id="report-trend-weeks">${[4, 8, 12].map(n => `<option value="${n}" ${state.reportTrendWeeks === n ? 'selected' : ''}>${n} weeks</option>`).join('')}</select></label>
+      <label>Scope <select id="report-trend-group"><option value="all" ${state.reportTrendGroup === 'all' ? 'selected' : ''}>Whole team</option>${comp.groups.map(g => `<option value="${g.group.id}" ${state.reportTrendGroup === g.group.id ? 'selected' : ''}>${esc(g.group.name)}</option>`).join('')}</select></label>
+      <div id="report-trend-weeks-zone">${trendWeeksHtml}</div>
+    </div>
+    <div class="card">
+      <h2>Period comparison</h2>
+      <p class="muted">One test, two date ranges: every athlete's best mark in each period and the change, judged by the test's own direction (lower is better for timed tests).</p>
+      <label>Test <select id="report-cmp-test">${trend.tests.map(t => `<option value="${t.testKey}" ${state.reportCmpTest === t.testKey ? 'selected' : ''}>${esc(t.name)}${t.points.length ? '' : ' (no results yet)'}</option>`).join('')}</select></label>
+      <label>Period A from <input type="date" id="report-cmp-afrom" value="${esc(state.reportCmpAFrom || '')}"></label>
+      <label>to <input type="date" id="report-cmp-ato" value="${esc(state.reportCmpATo || '')}"></label>
+      <label>Period B from <input type="date" id="report-cmp-bfrom" value="${esc(state.reportCmpBFrom || '')}"></label>
+      <label>to <input type="date" id="report-cmp-bto" value="${esc(state.reportCmpBTo || '')}"></label>
+      <div id="report-cmp">${cmpHtml}</div>
+    </div>
+    <div class="card">
+      <h2>Team assessment by quality</h2>
+      <p class="muted">Best marks grouped by what they measure — speed (timed tests), power (jumps), strength (lifts) — with the team average under each test. A test with no results yet still shows, so the gaps are visible.</p>
+      <div id="report-assessment">${assessmentHtml}</div>
+    </div>
+    <div class="card">
       <h2>Planned load</h2>
       <p class="muted">High-CNS vs low-CNS days per week, straight from the season plan.</p>
       <div id="report-load">${loadHtml}</div>
@@ -4936,6 +5305,20 @@ async function renderReports() {
   if (rt) rt.addEventListener('change', () => { state.reportTest = rt.value; renderReports(); });
   const rg = $('#report-group');
   if (rg) rg.addEventListener('change', () => { state.reportGroup = rg.value; renderReports(); });
+  const rtw = $('#report-trend-weeks');
+  if (rtw) rtw.addEventListener('change', () => { state.reportTrendWeeks = parseInt(rtw.value, 10) || 8; renderReports(); });
+  const rtg = $('#report-trend-group');
+  if (rtg) rtg.addEventListener('change', () => { state.reportTrendGroup = rtg.value; renderReports(); });
+  const rct = $('#report-cmp-test');
+  if (rct) rct.addEventListener('change', () => { state.reportCmpTest = rct.value; renderReports(); });
+  const bindCmpDate = (id, key) => {
+    const inp = $(id);
+    if (inp) inp.addEventListener('change', () => { state[key] = inp.value || null; renderReports(); });
+  };
+  bindCmpDate('#report-cmp-afrom', 'reportCmpAFrom');
+  bindCmpDate('#report-cmp-ato', 'reportCmpATo');
+  bindCmpDate('#report-cmp-bfrom', 'reportCmpBFrom');
+  bindCmpDate('#report-cmp-bto', 'reportCmpBTo');
   const ra = $('#report-athlete');
   if (ra) {
     ra.addEventListener('change', () => { state.reportAthleteId = ra.value || null; renderReportCard(); });
@@ -5925,7 +6308,7 @@ async function renderCoverage() {
       `<button type="button" class="chip ${state.coverageFilter === v ? 'active' : ''}" data-covfilter="${v}">${label} (${counts[v]})</button>`).join('')}
     </div>
     <div id="coverage-list">${shown.length ? shown.map(r => `
-      <div class="roster-row"><strong>${esc(r.name)}</strong> <span class="badge plain">${esc(r.kind)}</span> ${coverageBadge(r.status)} ${demoHtml(r.id, r.name)}</div>`).join('')
+      <div class="roster-row"><span class="row-lead">${thumbHtml(r.id, 'thumb-sm')}<strong>${esc(r.name)}</strong></span> <span class="badge plain">${esc(r.kind)}</span> ${coverageBadge(r.status)} ${demoHtml(r.id, r.name)}</div>`).join('')
       : '<p class="muted">Nothing in this bucket yet.</p>'}
     </div>`;
   main.querySelectorAll('[data-covfilter]').forEach(b => b.addEventListener('click', () => {
@@ -5966,6 +6349,9 @@ async function renderData() {
       <p>
         <a class="btn secondary" href="/api/export/meet-results.csv">Meet results</a>
         <a class="btn secondary" href="/api/export/roster.csv">Roster</a>
+      </p>
+      <p>
+        <a class="btn secondary" href="/api/export/completions.csv">Session completions (raw)</a>
       </p>
     </div>`;
   const fileInput = $('#data-file');
@@ -6325,6 +6711,223 @@ async function renderAnnouncements() {
       renderAnnouncePanel();
     } catch (err) { $('#ann-err').textContent = err.message; }
   });
+}
+
+/* ================================================================
+   WEIGHT ROOM — the multi-athlete floor view. Coach-only. One
+   panel per athlete, big enough to read across the room: today's
+   session resolved server-side exactly like the checklist
+   (resolveAssignment), or one custom workout the coach puts on
+   every panel — with each athlete's own % of max load computed
+   server-side per panel. The coach walks each panel with Prev /
+   Next (position persists in db.floorProgress via
+   /api/weight-room/progress) and marks the session done through
+   the same POST /api/completions the checklist uses — there is
+   no second completion store. Nothing here is athlete-entered,
+   and no wellness, health, or notes data is ever fetched.
+   ================================================================ */
+const WR_REFRESH_MS = 60 * 1000;   /* re-resolve while the floor view is open */
+let wrRefreshTimer = null;
+
+function enterWeightRoom() {
+  renderWeightRoom();
+  if (wrRefreshTimer) clearInterval(wrRefreshTimer);
+  wrRefreshTimer = setInterval(() => { renderWeightRoom(); }, WR_REFRESH_MS);
+}
+function exitWeightRoom() {
+  if (wrRefreshTimer) { clearInterval(wrRefreshTimer); wrRefreshTimer = null; }
+}
+
+/* The step walk a panel shows, built with the runner's own core:
+   a custom workout walks as itself; a library session walks via
+   sessionToRunnerPlan, the same mapping the runner uses. */
+function wrStepsFor(panel, floorWorkout) {
+  if (floorWorkout) return buildRunnerSteps(floorWorkout);
+  const a = panel.assignment;
+  if (!a || !a.sessionId) return [];
+  const s = state.sessions.get(a.sessionId);
+  return s ? buildRunnerSteps(sessionToRunnerPlan(s)) : [];
+}
+function wrWorkoutKey(panel, floorWorkout) {
+  if (floorWorkout) return 'cw:' + floorWorkout.id;
+  const a = panel.assignment;
+  return a && a.sessionId ? 'session:' + a.sessionId : null;
+}
+/* A runner step's % prescription, matched to the panel's own
+   server-computed load (loadsForProfile's collapsed shape). */
+function wrLoadFor(panel, step) {
+  if (!step || !step.load || !Array.isArray(panel.loads)) return null;
+  const L = step.load;
+  return panel.loads.find(x => x.name === step.name && x.testKey === L.testKey &&
+    x.percent === L.percent && x.sets === L.sets && x.reps === L.reps) || null;
+}
+function wrStepLine(panel, step) {
+  if (step.type === 'rest') return `<span class="muted">Rest ${esc(step.seconds)}s</span>`;
+  const load = wrLoadFor(panel, step);
+  let loadHtml = '';
+  if (step.load) {
+    loadHtml = load && load.weight !== null && load.weight !== undefined
+      ? ' — ' + loadCellText({ weight: load.weight, max: load.max }, step.load.percent)
+      : ' — <span class="muted">No max on file</span>';
+  }
+  return `<strong>${esc(step.name)}</strong>${step.reps ? ` <span class="muted">× ${esc(step.reps)}</span>` : ''}${loadHtml}`;
+}
+
+async function renderWeightRoom() {
+  const el = $('#weightroom-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The weight room floor view lives here.'); return; }
+  const date = todayStr();
+  const params = new URLSearchParams({ date });
+  if (state.wrGroupId) params.set('groupId', state.wrGroupId);
+  if (state.wrWorkoutId) params.set('workoutId', state.wrWorkoutId);
+  let data, workouts;
+  try {
+    [data, workouts] = await Promise.all([
+      api('/api/weight-room?' + params.toString()),
+      api('/api/custom-workouts'),
+    ]);
+  } catch (err) {
+    el.innerHTML = `<div class="card"><p class="error">Could not load the weight room: ${esc(err.message)}</p><button class="btn secondary" id="wr-retry" type="button">Retry</button></div>`;
+    const rb = $('#wr-retry'); if (rb) rb.addEventListener('click', renderWeightRoom);
+    return;
+  }
+  state.wrData = data;
+  state.wrUpdatedAt = new Date();
+  state.cwWorkouts = workouts.workouts || [];
+  const floorWorkout = state.wrWorkoutId
+    ? state.cwWorkouts.find(w => w.id === state.wrWorkoutId) || null : null;
+  if (state.wrWorkoutId && !floorWorkout) state.wrWorkoutId = '';
+
+  const groupOpts = ['<option value="">All groups</option>'].concat(
+    (data.groups || []).map(g =>
+      `<option value="${esc(g.id)}" ${g.id === state.wrGroupId ? 'selected' : ''}>${esc(g.name)}</option>`)).join('');
+  const workoutOpts = ['<option value="">Today\'s assignment</option>'].concat(
+    state.cwWorkouts.map(w =>
+      `<option value="${esc(w.id)}" ${w.id === state.wrWorkoutId ? 'selected' : ''}>${esc(w.title)}</option>`)).join('');
+  const colsOpts = [['auto', 'Auto'], ['2', '2 across'], ['3', '3 across']].map(([v, label]) =>
+    `<option value="${v}" ${v === state.wrCols ? 'selected' : ''}>${label}</option>`).join('');
+
+  el.innerHTML = `
+    <div class="card wr-setup">
+      <div class="filter-row">
+        <label>Group <select id="wr-group">${groupOpts}</select></label>
+        <label>On the floor <select id="wr-workout">${workoutOpts}</select></label>
+        <label>Panels <select id="wr-cols">${colsOpts}</select></label>
+        <button class="btn secondary" id="wr-refresh" type="button">Refresh</button>
+      </div>
+      <p class="muted" style="margin-bottom:0">${esc(fmtDate(parseDate(data.date)))} · ${data.panels.length} member${data.panels.length === 1 ? '' : 's'} on the floor · updated ${state.wrUpdatedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · re-checks itself every minute while open</p>
+    </div>
+    ${data.panels.length
+      ? `<div class="wr-grid" data-cols="${esc(state.wrCols)}">${data.panels.map(p => wrPanelHtml(p, floorWorkout)).join('')}</div>`
+      : '<div class="card"><p class="muted">No members in this group yet — add them in Roster &amp; Groups.</p></div>'}`;
+  $('#wr-group').addEventListener('change', (e) => { state.wrGroupId = e.target.value; renderWeightRoom(); });
+  $('#wr-workout').addEventListener('change', (e) => { state.wrWorkoutId = e.target.value; renderWeightRoom(); });
+  $('#wr-cols').addEventListener('change', (e) => { state.wrCols = e.target.value; renderWeightRoom(); });
+  $('#wr-refresh').addEventListener('click', renderWeightRoom);
+  el.querySelectorAll('[data-wr-panel]').forEach(panelEl => wrWirePanel(panelEl, data, floorWorkout));
+}
+
+function wrPanelHtml(panel, floorWorkout) {
+  const pr = panel.profile;
+  const key = wrWorkoutKey(panel, floorWorkout);
+  const steps = wrStepsFor(panel, floorWorkout);
+  const prog = key && panel.progress ? panel.progress[key] : null;
+  const cur = prog ? Math.min(prog.step, steps.length) : 0;
+  const a = panel.assignment;
+  /* What this panel is running: the floor workout when one is
+     picked, else the athlete's own resolved assignment. */
+  let titleHtml, stepsWorkout = !!floorWorkout;
+  if (floorWorkout) {
+    titleHtml = `<strong>${esc(floorWorkout.title)}</strong> <span class="badge plain">CUSTOM WORKOUT</span>`;
+  } else if (a && a.sessionId) {
+    const others = (a.codes || []).filter(c => c.id !== a.sessionId);
+    titleHtml = `<strong>${esc(a.sessionId)} · ${esc(a.sessionName)}</strong>
+      ${a.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : '<span class="badge plain">FROM THE PLAN</span>'}
+      ${others.length ? `<br><span class="muted">Also today: ${others.map(c => esc(c.id)).join(', ')}</span>` : ''}`;
+  } else {
+    titleHtml = '';
+    stepsWorkout = false;
+  }
+  const statusChip = panel.completed
+    ? '<span class="badge low">COMPLETED ✓</span>'
+    : steps.length
+      ? `<span class="badge plain">STEP ${Math.min(cur + 1, steps.length)} OF ${steps.length}</span>`
+      : '';
+  const stepsHtml = steps.length ? `
+    <ol class="wr-steps">
+      ${steps.map((s, i) => `<li class="wr-step${i === cur && !panel.completed ? ' current' : ''}${panel.completed || i < cur ? ' done' : ''}">${wrStepLine(panel, s)}</li>`).join('')}
+    </ol>` : '';
+  const controls = panel.completed
+    ? `<div class="filter-row"><button class="btn secondary" data-wr-undo="${esc(pr.id)}" type="button">Undo completion</button></div>`
+    : stepsWorkout && steps.length
+      ? `<div class="filter-row">
+           <button class="btn secondary" data-wr-prev="${esc(pr.id)}" type="button" ${cur === 0 ? 'disabled' : ''}>← Prev</button>
+           <button class="btn secondary" data-wr-next="${esc(pr.id)}" type="button" ${cur >= steps.length ? 'disabled' : ''}>Next →</button>
+           <button class="btn primary" data-wr-complete="${esc(pr.id)}" type="button">Complete session</button>
+         </div>`
+      : '';
+  const emptyHtml = !floorWorkout && !(a && a.sessionId)
+    ? `<p class="muted">${a && a.isOff ? 'Off day in the plan — no session today.' : 'No session assigned today.'}</p>
+       <p><button class="btn secondary" data-wr-checklist="${esc(pr.id)}" type="button">Open Today's Checklist to assign</button></p>`
+    : '';
+  return `
+  <div class="card wr-panel" data-wr-panel="${esc(pr.id)}">
+    <div class="roster-row">
+      <span><strong>${esc(pr.name)}</strong>${pr.groupName ? ` <span class="muted">· ${esc(pr.groupName)}</span>` : ''}</span>
+      ${statusChip}
+    </div>
+    ${titleHtml ? `<p class="wr-title">${titleHtml}</p>` : ''}
+    ${!floorWorkout && a && a.note ? `<p class="muted">Note: ${esc(a.note)}</p>` : ''}
+    ${emptyHtml}
+    ${stepsHtml}
+    ${controls}
+    <p class="error" data-wr-err hidden></p>
+  </div>`;
+}
+
+function wrWirePanel(panelEl, data, floorWorkout) {
+  const pid = panelEl.dataset.wrPanel;
+  const panel = (data.panels || []).find(p => p.profile.id === pid);
+  if (!panel) return;
+  const errEl = panelEl.querySelector('[data-wr-err]');
+  const fail = (err) => { if (errEl) { errEl.textContent = err.message; errEl.hidden = false; } };
+  const key = wrWorkoutKey(panel, floorWorkout);
+  const steps = wrStepsFor(panel, floorWorkout);
+  const prog = key && panel.progress ? panel.progress[key] : null;
+  const cur = prog ? Math.min(prog.step, steps.length) : 0;
+  const move = async (nextStep) => {
+    try {
+      await apiPost('/api/weight-room/progress', {
+        profileId: pid, date: data.date, workoutKey: key, step: nextStep, total: steps.length,
+      });
+      renderWeightRoom();
+    } catch (err) { fail(err); }
+  };
+  const prevBtn = panelEl.querySelector('[data-wr-prev]');
+  if (prevBtn) prevBtn.addEventListener('click', () => move(Math.max(0, cur - 1)));
+  const nextBtn = panelEl.querySelector('[data-wr-next]');
+  if (nextBtn) nextBtn.addEventListener('click', () => move(Math.min(steps.length, cur + 1)));
+  const doneBtn = panelEl.querySelector('[data-wr-complete]');
+  if (doneBtn) doneBtn.addEventListener('click', async () => {
+    try {
+      /* The checklist's own write: the completion record it has
+         always used, with the floor workout named in marks when
+         the panel was running one. */
+      const marks = floorWorkout ? 'Weight room · ' + floorWorkout.title : '';
+      await apiPost('/api/completions', { profileId: pid, date: data.date, marks });
+      renderWeightRoom();
+    } catch (err) { fail(err); }
+  });
+  const undoBtn = panelEl.querySelector('[data-wr-undo]');
+  if (undoBtn) undoBtn.addEventListener('click', async () => {
+    try {
+      await apiPost('/api/completions', { profileId: pid, date: data.date, completed: false });
+      renderWeightRoom();
+    } catch (err) { fail(err); }
+  });
+  const listBtn = panelEl.querySelector('[data-wr-checklist]');
+  if (listBtn) listBtn.addEventListener('click', () => { state.feedDate = data.date; showView('coach'); });
 }
 
 /* ================================================================

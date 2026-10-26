@@ -88,8 +88,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v3',
-  cache: 'ruffin-performance-v3',
+  version: 'v4',
+  cache: 'ruffin-performance-v4',
 };
 
 /* ------------------------------------------------------------------ */
@@ -138,6 +138,7 @@ let db = {
   coachNotes: {},
   announcements: [],
   memberLogs: [],
+  floorProgress: {},
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -246,6 +247,15 @@ function migrate() {
   // the read endpoint filters per caller, so a group post never
   // reaches an athlete outside that group.
   db.announcements = Array.isArray(db.announcements) ? db.announcements : [];
+  // Weight Room floor progress: { 'profileId|date|workoutKey':
+  // { step, total, by, at } } — where one member's panel walk
+  // stands for one workout on one day. workoutKey is 'session:<code>'
+  // for the day's resolved library session or 'cw:<id>' for a
+  // custom workout the coach put on the floor. Coach-entered only;
+  // it tracks position in the step walk, never completion (that is
+  // db.completions, written through the checklist's endpoint).
+  db.floorProgress = (db.floorProgress && typeof db.floorProgress === 'object' && !Array.isArray(db.floorProgress))
+    ? db.floorProgress : {};
   // Coach-built training programs (reusable week-grid templates) and
   // their applications onto the team calendar. An application carries
   // an exact snapshot of every override it wrote, so removing it
@@ -1366,15 +1376,47 @@ function validateCustomWorkout(body) {
     const exercises = [];
     for (let j = 0; j < b.exercises.length; j++) {
       const e = b.exercises[j] && typeof b.exercises[j] === 'object' ? b.exercises[j] : {};
+      const at = where + ', exercise ' + (j + 1);
       const name = typeof e.name === 'string' ? e.name.trim() : '';
       if (!name || name.length > 60) {
-        return { error: where + ', exercise ' + (j + 1) + ': a name of 1 to 60 characters is required.' };
+        return { error: at + ': a name of 1 to 60 characters is required.' };
       }
-      const reps = typeof e.reps === 'string' ? e.reps.trim() : '';
-      if (!reps || reps.length > 24) {
-        return { error: where + ', exercise ' + (j + 1) + ': reps of 1 to 24 characters are required (try "3", "max", or "5 each").' };
+      /* An exercise carries free-text reps OR a % of max load
+         prescription — never both. With a prescription the reps
+         text is derived from its sets × reps, so every surface
+         that only knows the text shape still reads sensibly. */
+      let load = null;
+      if (e.load !== undefined && e.load !== null) {
+        const l = typeof e.load === 'object' ? e.load : {};
+        if (!liftTestKeys().includes(l.testKey)) {
+          return { error: at + ': a % load must name one of the lift tests (Back Squat, Trap Bar Deadlift, Bench Press, Hang Clean, Power Clean).' };
+        }
+        const pct = num(l.percent);
+        if (pct === null || pct < 30 || pct > 110) {
+          return { error: at + ': the % of max must be a number from 30 to 110.' };
+        }
+        const sets = num(l.sets);
+        if (sets === null || !Number.isInteger(sets) || sets < 1 || sets > 10) {
+          return { error: at + ': sets for a % load must be a whole number from 1 to 10.' };
+        }
+        const loadReps = num(l.reps);
+        if (loadReps === null || !Number.isInteger(loadReps) || loadReps < 1 || loadReps > 30) {
+          return { error: at + ': reps per set for a % load must be a whole number from 1 to 30.' };
+        }
+        load = { testKey: l.testKey, percent: pct, sets, reps: loadReps };
       }
-      exercises.push({ name, reps });
+      let reps;
+      if (load) {
+        reps = load.sets + ' × ' + load.reps;
+      } else {
+        reps = typeof e.reps === 'string' ? e.reps.trim() : '';
+        if (!reps || reps.length > 24) {
+          return { error: at + ': reps of 1 to 24 characters are required (try "3", "max", or "5 each").' };
+        }
+      }
+      const ex = { name, reps };
+      if (load) ex.load = load;
+      exercises.push(ex);
     }
     blocks.push({ rounds, restBetweenRounds, restAfterBlock, exercises });
   }
@@ -1555,6 +1597,25 @@ function resolveAssignment(groupId, dateString) {
 }
 function completionFor(profileId, dateString) {
   return db.completions[profileId + '|' + dateString] || null;
+}
+/* One athlete's Weight Room floor progress for a day, as a map of
+   workoutKey -> { step, total, by, at }. Keys are written only by
+   the weight-room progress endpoint; anything malformed in the
+   store is skipped rather than served. */
+function floorProgressFor(profileId, dateString) {
+  const prefix = profileId + '|' + dateString + '|';
+  const out = {};
+  for (const k of Object.keys(db.floorProgress)) {
+    if (!k.startsWith(prefix)) continue;
+    const rec = db.floorProgress[k];
+    if (rec && Number.isInteger(rec.step) && rec.step >= 0) {
+      out[k.slice(prefix.length)] = {
+        step: rec.step, total: Number.isInteger(rec.total) ? rec.total : null,
+        by: rec.by || null, at: rec.at || null,
+      };
+    }
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1904,6 +1965,137 @@ function testingHistoryFor(profileId) {
       latestDate: series.length ? series[series.length - 1].date : null,
     };
   }).filter(t => t.series.length);
+}
+
+/* ------------------------------------------------------------------ */
+/* Percentage loading (% of a tested max)                              */
+/* ------------------------------------------------------------------ */
+/* The tests a % prescription can point at: every lift-kind test in
+   the battery (the five preloaded lifts, plus any custom lift test
+   a coach adds later). */
+function liftTestKeys() {
+  return allTests().filter(t => t.kind === 'lift').map(t => t.key);
+}
+/* An athlete's max for a lift = the best of their testing history,
+   read out of testingHistoryFor — the same "best" the report card,
+   the AMS profile and the leaderboard all show. Each stored
+   result's display value already carries the canonical precedence
+   (displayValue: the Epley estimate when reps were logged, the
+   tested weight itself when they were not), so a max computed
+   here can never disagree with a max shown anywhere else. */
+function bestMaxFor(profileId, testKey) {
+  const h = testingHistoryFor(profileId).find(t => t.testKey === testKey);
+  return h ? h.best : null;
+}
+/* Working weight for a % prescription: max × percent / 100, rounded
+   to the nearest 5 lb — the plates a weight room actually loads.
+   Null when there is no max to work from. */
+function prescribedWeight(maxLb, percent) {
+  if (maxLb === null || maxLb === undefined || !(percent > 0)) return null;
+  return Math.round((maxLb * percent / 100) / 5) * 5;
+}
+/* The %-prescribed exercises of a custom workout, in workout
+   order, exact duplicates collapsed (the same lift prescribed the
+   same way in two blocks is one column of the load chart, not
+   two). Free-text exercises never appear here. */
+function pctStepsOf(workout) {
+  const out = [];
+  const seen = new Set();
+  for (const b of (workout && workout.blocks) || []) {
+    for (const e of b.exercises || []) {
+      if (!e.load) continue;
+      const key = [e.name, e.load.testKey, e.load.percent, e.load.sets, e.load.reps].join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const t = findTest(e.load.testKey);
+      out.push({
+        name: e.name, testKey: e.load.testKey, testName: t ? t.name : e.load.testKey,
+        percent: e.load.percent, sets: e.load.sets, reps: e.load.reps,
+      });
+    }
+  }
+  return out;
+}
+/* One athlete's computed loads for a workout's % steps: their own
+   max and working weight per step, nulls where no max is on file.
+   This is the ONLY load computation an athlete-facing payload may
+   carry — it is built for exactly one profile, so a teammate's
+   numbers cannot ride along by construction. */
+function loadsForProfile(workout, profileId) {
+  return pctStepsOf(workout).map(s => {
+    const max = bestMaxFor(profileId, s.testKey);
+    return Object.assign({}, s, { max, weight: prescribedWeight(max, s.percent) });
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Reports: shared per-group weekly completion math                    */
+/* ------------------------------------------------------------------ */
+/* Per group per season week: assigned = the days that week whose
+   resolved assignment has a session (plan or coach override);
+   completions = the coach-marked completion records for the group
+   that week, with completedDays = the distinct days they cover.
+   This is the ONE computation behind both the Completions-by-group
+   report and the completion Trend report — the trend aggregates
+   these exact numbers, it never recounts. */
+function completionsByGroup() {
+  const today = todayStr();
+  return db.groups.map(g => {
+    const daySets = new Map();
+    const weeks = CONTENT.weeks.map(w => {
+      let assigned = 0;
+      for (let i = 0; i < 7; i++) {
+        const ds = addDaysStr(w.start, i);
+        if (!ds) continue;
+        const a = resolveAssignment(g.id, ds);
+        if (a && a.sessionId) assigned++;
+      }
+      daySets.set(w.start, new Set());
+      return {
+        week: w.week, monday: w.start, assigned,
+        completedDays: 0, completions: 0, upcoming: w.start > today,
+      };
+    });
+    const byMonday = new Map(weeks.map(x => [x.monday, x]));
+    for (const c of Object.values(db.completions)) {
+      if (c.groupId !== g.id) continue;
+      const mon = mondayOf(c.date);
+      const wk = mon ? byMonday.get(mon) : null;
+      if (!wk) continue; // outside the season weeks — not charted
+      wk.completions++;
+      daySets.get(wk.monday).add(c.date);
+    }
+    for (const wk of weeks) wk.completedDays = daySets.get(wk.monday).size;
+    return { group: { id: g.id, name: g.name }, weeks };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Reports: performance qualities for the team assessment              */
+/* ------------------------------------------------------------------ */
+/* Speed = timed tests, power = jumps, strength = lifts. The built-in
+   battery carries no timed test, so Speed appears only when a coach
+   adds a timed (seconds) custom test; the jump keys are named
+   outright. Custom tests are tagged only where the meaning is
+   unambiguous: kind 'lift' is strength, a seconds unit is a timed
+   test (speed). Pull-ups (kind 'reps') and any other custom test
+   stay untagged and appear in no quality until a coach-facing
+   tagging control exists. */
+const TEST_QUALITY = {
+  'back-squat': 'strength', 'trap-bar-deadlift': 'strength',
+  'bench-press': 'strength', 'hang-clean': 'strength', 'power-clean': 'strength',
+  'vertical-jump': 'power', 'broad-jump': 'power',
+};
+const QUALITY_ORDER = [
+  { key: 'speed', label: 'Speed' },
+  { key: 'power', label: 'Power' },
+  { key: 'strength', label: 'Strength' },
+];
+function qualityForTest(t) {
+  if (TEST_QUALITY[t.key]) return TEST_QUALITY[t.key];
+  if (t.kind === 'lift') return 'strength';
+  if (t.unit === 'sec') return 'speed';
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -2434,7 +2626,7 @@ const BACKUP_ARRAY_KEYS = {
 const BACKUP_OBJECT_KEYS = [
   'overrides', 'completions', 'testResults', 'weekly', 'concerns',
   'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
-  'attendance', 'coachNotes',
+  'attendance', 'coachNotes', 'floorProgress',
 ];
 function buildBackupData() {
   return {
@@ -2454,6 +2646,7 @@ function buildBackupData() {
     customWorkoutsSeeded: db.customWorkoutsSeeded === true,
     programs: db.programs, programApplications: db.programApplications,
     announcements: db.announcements, memberLogs: db.memberLogs,
+    floorProgress: db.floorProgress,
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -3103,6 +3296,29 @@ async function handleApi(req, res, url) {
       linked: true, profileId: prof.id,
       athleteName: prof.firstName + ' ' + prof.lastName,
       goals: goalsForProfile(prof.id),
+    });
+  }
+
+  /* ---------- athlete lifting loads (own numbers only) ----------
+     Custom workouts stay coach-only to read, but a % prescription
+     is meaningless if the athlete cannot see their own number.
+     This is the one window: for each custom workout that carries
+     % steps, the caller's OWN computed loads — and nothing else.
+     The profile comes from the caller's own binding (never the
+     request) and loadsForProfile computes for that one profile,
+     so another athlete's load is unreachable by construction. */
+  if (p === '/api/my/loads' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    if (!prof) return sendJson(res, 200, { linked: false, workouts: [] });
+    const workouts = [];
+    for (const w of db.customWorkouts) {
+      const steps = loadsForProfile(w, prof.id);
+      if (steps.length) workouts.push({ id: w.id, title: w.title, steps });
+    }
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      workouts,
     });
   }
 
@@ -4260,6 +4476,29 @@ async function handleApi(req, res, url) {
     return sendCsv(res, 'club-records.csv', rows);
   }
 
+  if (p === '/api/export/completions.csv' && req.method === 'GET') {
+    // Raw session completions: one row per record in the store,
+    // exactly as marked (session code as stored, its library title
+    // alongside, marks/feel/notes verbatim).
+    const rows = [['Date', 'Athlete', 'Group', 'Session', 'Session Title', 'Marks', 'Feel', 'Notes']];
+    const entries = [];
+    for (const c of Object.values(db.completions)) {
+      const prof = profileById(c.profileId);
+      const pub = prof ? publicProfile(prof) : null;
+      const grp = c.groupId ? groupById(c.groupId) : null;
+      const sess = c.sessionId ? SESSION_BY_ID.get(c.sessionId) : null;
+      entries.push({
+        date: c.date, name: pub ? pub.name : c.profileId,
+        row: [c.date, pub ? pub.name : c.profileId, grp ? grp.name : '',
+          c.sessionId || '', sess ? sess.name : '', c.marks || '',
+          c.feel === null || c.feel === undefined ? '' : String(c.feel), c.notes || ''],
+      });
+    }
+    entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.name.localeCompare(b.name)));
+    for (const e of entries) rows.push(e.row);
+    return sendCsv(res, 'session-completions.csv', rows);
+  }
+
   /* ---------- CSV exports (coach-only downloads) ---------- */
   if (p === '/api/export/testing.csv' && req.method === 'GET') {
     const rows = [['Test Day', 'Date', 'Athlete', 'Group', 'Test', 'Raw Entry', 'Est. 1RM (lb)']];
@@ -5302,40 +5541,182 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/reports/completions' && req.method === 'GET') {
-    // Per group per season week: assigned = days that week whose
-    // resolved assignment has a session (plan or coach override);
-    // completed = the coach-marked completions recorded for the group
-    // that week, with the distinct days they cover.
+    // The math lives in completionsByGroup (shared with the trend).
+    return sendJson(res, 200, { groups: completionsByGroup() });
+  }
+
+  if (p === '/api/reports/completion-trend' && req.method === 'GET') {
+    // Completion % per week over the last N season weeks, team-wide
+    // or for one group. The per-week inputs (assigned days, recorded
+    // completions, distinct days covered) come straight out of
+    // completionsByGroup — the same numbers the Completions-by-group
+    // report charts. The percentage follows the athlete report
+    // card's math, aggregated: numerator = completion records that
+    // week, denominator = assigned session days x the athletes in
+    // scope (current non-archived roster). possible 0 (a week with
+    // nothing scheduled, or a scope with no athletes) -> percent
+    // null, never a divide by zero. `through` (any date) ends the
+    // window at that date's week, for looking back mid-season.
+    let n = parseInt(q.get('weeks') || '8', 10);
+    if (![4, 8, 12].includes(n)) n = 8;
+    let through = null;
+    const throughRaw = q.get('through');
+    if (throughRaw) {
+      if (!parseDateStr(throughRaw)) return sendJson(res, 400, { error: 'through must be YYYY-MM-DD.' });
+      through = mondayOf(throughRaw);
+    }
+    const gid = q.get('groupId');
+    let scopeGroups = completionsByGroup();
+    let scope = { type: 'team' };
+    if (gid && gid !== 'all') {
+      const g = groupById(gid);
+      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      scopeGroups = scopeGroups.filter(x => x.group.id === gid);
+      scope = { type: 'group', group: { id: g.id, name: g.name } };
+    }
+    const allWeeks = CONTENT.weeks;
+    let eligible;
+    if (through) {
+      eligible = allWeeks.filter(w => w.start <= through);
+    } else {
+      const today = todayStr();
+      eligible = allWeeks.filter(w => w.start <= today);
+      if (!eligible.length) eligible = allWeeks.slice(0, n); // season not started: the opening weeks
+    }
+    const chosen = eligible.slice(-n);
+    const rosterCounts = new Map(db.groups.map(g => [
+      g.id, db.profiles.filter(pr => !pr.archived && pr.groupId === g.id).length,
+    ]));
     const today = todayStr();
-    const groups = db.groups.map(g => {
-      const daySets = new Map();
-      const weeks = CONTENT.weeks.map(w => {
-        let assigned = 0;
-        for (let i = 0; i < 7; i++) {
-          const ds = addDaysStr(w.start, i);
-          if (!ds) continue;
-          const a = resolveAssignment(g.id, ds);
-          if (a && a.sessionId) assigned++;
-        }
-        daySets.set(w.start, new Set());
-        return {
-          week: w.week, monday: w.start, assigned,
-          completedDays: 0, completions: 0, upcoming: w.start > today,
-        };
-      });
-      const byMonday = new Map(weeks.map(x => [x.monday, x]));
-      for (const c of Object.values(db.completions)) {
-        if (c.groupId !== g.id) continue;
-        const mon = mondayOf(c.date);
-        const wk = mon ? byMonday.get(mon) : null;
-        if (!wk) continue; // outside the season weeks — not charted
-        wk.completions++;
-        daySets.get(wk.monday).add(c.date);
+    const weeks = chosen.map(w => {
+      let assigned = 0, completions = 0, completedDays = 0, possible = 0, athletes = 0;
+      for (const grp of scopeGroups) {
+        const wk = grp.weeks.find(x => x.monday === w.start);
+        if (!wk) continue;
+        const size = rosterCounts.get(grp.group.id) || 0;
+        assigned += wk.assigned;
+        completions += wk.completions;
+        completedDays += wk.completedDays;
+        possible += wk.assigned * size;
+        athletes += size;
       }
-      for (const wk of weeks) wk.completedDays = daySets.get(wk.monday).size;
-      return { group: { id: g.id, name: g.name }, weeks };
+      return {
+        week: w.week, monday: w.start, end: w.end, upcoming: w.start > today,
+        assigned, athletes, possible, completions, completedDays,
+        percent: possible > 0 ? Math.round((completions / possible) * 100) : null,
+      };
     });
-    return sendJson(res, 200, { groups });
+    return sendJson(res, 200, { scope, weeks });
+  }
+
+  if (p === '/api/reports/compare' && req.method === 'GET') {
+    // Period comparison for ONE test: each athlete's best mark in
+    // period A vs period B, the signed delta, and whether it is an
+    // improvement under the test's own better-direction. Every value
+    // is a "best" out of testingHistoryFor — the display values the
+    // report card ranks by (Epley estimates for lifts included). A
+    // series entry only counts toward a period when its test-day
+    // date falls inside it; an undated entry counts only toward a
+    // fully open period. Bounds are optional (open-ended).
+    const test = findTest(q.get('testKey') || '');
+    if (!test) return sendJson(res, 404, { error: 'Unknown test.' });
+    const bound = (name) => {
+      const v = q.get(name);
+      if (v === null || v === '') return null;
+      return parseDateStr(v) ? v : undefined;
+    };
+    const aFrom = bound('aFrom'), aTo = bound('aTo'), bFrom = bound('bFrom'), bTo = bound('bTo');
+    if ([aFrom, aTo, bFrom, bTo].some(v => v === undefined)) {
+      return sendJson(res, 400, { error: 'Dates must be YYYY-MM-DD.' });
+    }
+    const better = test.better || 'higher';
+    const inPeriod = (date, from, to) => {
+      if (!date) return !from && !to;
+      return (!from || date >= from) && (!to || date <= to);
+    };
+    const bestIn = (series, from, to) => {
+      const vals = series
+        .filter(r => inPeriod(r.date, from, to))
+        .map(r => r.display)
+        .filter(d => d !== null && d !== undefined);
+      return vals.length ? (better === 'lower' ? Math.min : Math.max).apply(null, vals) : null;
+    };
+    const rows = db.profiles.filter(pr => !pr.archived).map(pr => {
+      const pub = publicProfile(pr);
+      const hist = testingHistoryFor(pr.id).find(t => t.testKey === test.key);
+      const series = hist ? hist.series : [];
+      const bestA = bestIn(series, aFrom, aTo);
+      const bestB = bestIn(series, bFrom, bTo);
+      const delta = bestA !== null && bestB !== null ? round2(bestB - bestA) : null;
+      const improved = delta === null || delta === 0 ? null
+        : (better === 'lower' ? delta < 0 : delta > 0);
+      return {
+        profileId: pr.id, name: pub.name, groupName: pub.groupName || '',
+        bestA, bestB, delta, improved,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    const avgOf = (vals) => vals.length ? round2(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+    const withA = rows.filter(r => r.bestA !== null);
+    const withB = rows.filter(r => r.bestB !== null);
+    const both = rows.filter(r => r.delta !== null);
+    return sendJson(res, 200, {
+      test: { key: test.key, name: test.name, unit: test.unit, kind: test.kind, better },
+      periodA: { from: aFrom, to: aTo }, periodB: { from: bFrom, to: bTo },
+      rows,
+      summary: {
+        athletesWithA: withA.length, athletesWithB: withB.length,
+        avgA: avgOf(withA.map(r => r.bestA)), avgB: avgOf(withB.map(r => r.bestB)),
+        improved: both.filter(r => r.improved === true).length,
+        declined: both.filter(r => r.improved === false).length,
+        unchanged: both.filter(r => r.improved === null).length,
+      },
+    });
+  }
+
+  if (p === '/api/reports/assessment' && req.method === 'GET') {
+    // Team assessment by performance quality: per quality, an
+    // athlete x test matrix of best marks (testingHistoryFor's best,
+    // the same number the report card shows) plus a team-average row
+    // over the athletes who have a mark. No ranks, no percentiles —
+    // the raw bests and the honest middle of the room.
+    const athletes = db.profiles.filter(pr => !pr.archived);
+    const bests = new Map();
+    for (const pr of athletes) {
+      const m = new Map();
+      for (const h of testingHistoryFor(pr.id)) m.set(h.testKey, h.best);
+      bests.set(pr.id, m);
+    }
+    const tests = allTests();
+    const qualities = QUALITY_ORDER.map(qd => {
+      const qTests = tests.filter(t => qualityForTest(t) === qd.key);
+      if (!qTests.length) return null;
+      const averages = {}, counts = {};
+      for (const t of qTests) {
+        const vals = athletes
+          .map(pr => bests.get(pr.id).get(t.key))
+          .filter(v => v !== null && v !== undefined);
+        counts[t.key] = vals.length;
+        averages[t.key] = vals.length ? round2(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+      }
+      return {
+        quality: qd.key, label: qd.label,
+        tests: qTests.map(t => ({
+          key: t.key, name: t.name, unit: t.unit, kind: t.kind,
+          better: t.better || 'higher', custom: !!t.custom,
+        })),
+        rows: athletes.map(pr => {
+          const pub = publicProfile(pr);
+          const marks = {};
+          for (const t of qTests) {
+            const v = bests.get(pr.id).get(t.key);
+            marks[t.key] = v === undefined ? null : v;
+          }
+          return { profileId: pr.id, name: pub.name, groupName: pub.groupName || '', marks };
+        }).sort((a, b) => a.name.localeCompare(b.name)),
+        averages, counts,
+      };
+    }).filter(Boolean);
+    return sendJson(res, 200, { qualities });
   }
 
   if (p === '/api/reports/load' && req.method === 'GET') {
@@ -5833,6 +6214,157 @@ async function handleApi(req, res, url) {
     db.customWorkouts = db.customWorkouts.filter(w => w.id !== id);
     saveDb();
     return sendJson(res, 200, { ok: true });
+  }
+
+  /* Coach load chart: for one custom workout, every athlete's
+     working weight for each %-prescribed exercise — the sheet the
+     coach reads off in the weight room. Coach-only (it lives below
+     the coach gate): it carries the whole roster's numbers, which
+     is exactly why athletes instead get /api/my/loads with only
+     their own. A cell is null when the athlete has no max on file
+     for that lift; those athletes are also named, per missing
+     lift, in needsMax so the coach knows who to test next. */
+  const cwLoadChartMatch = p.match(/^\/api\/custom-workouts\/([^/]+)\/load-chart$/);
+  if (cwLoadChartMatch && req.method === 'GET') {
+    const workout = db.customWorkouts.find(w => w.id === decodeURIComponent(cwLoadChartMatch[1]));
+    if (!workout) return sendJson(res, 404, { error: 'Custom workout not found.' });
+    let groupId = null;
+    const gRaw = q.get('groupId');
+    if (gRaw) {
+      const g = groupById(gRaw);
+      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      groupId = g.id;
+    }
+    const columns = pctStepsOf(workout);
+    const profs = db.profiles
+      .filter(pr => !pr.archived && (!groupId || pr.groupId === groupId))
+      .slice()
+      .sort((a, b) => (a.firstName + ' ' + a.lastName).localeCompare(b.firstName + ' ' + b.lastName));
+    const rows = [];
+    const needsMax = [];
+    for (const pr of profs) {
+      const name = pr.firstName + ' ' + pr.lastName;
+      const missing = [];
+      const cells = columns.map(col => {
+        const max = bestMaxFor(pr.id, col.testKey);
+        if (max === null) {
+          if (!missing.includes(col.testName)) missing.push(col.testName);
+          return null;
+        }
+        return { weight: prescribedWeight(max, col.percent), max };
+      });
+      const g = pr.groupId ? groupById(pr.groupId) : null;
+      rows.push({ profileId: pr.id, name, groupName: g ? g.name : null, cells });
+      if (missing.length) needsMax.push({ profileId: pr.id, name, lifts: missing });
+    }
+    return sendJson(res, 200, {
+      workout: { id: workout.id, title: workout.title },
+      groupId, columns, rows, needsMax,
+    });
+  }
+
+  /* ---------- weight room (multi-athlete floor view) ----------
+     One panel per athlete: today's session exactly as the rest of
+     the app resolves it (resolveAssignment — the same precedence
+     the checklist, Coach Today and the calendar use: coach override
+     over program application over season plan), the day's
+     completion record, and the panel's place in the step walk.
+     When the coach puts a custom workout on the floor (?workoutId=),
+     each panel also carries THAT athlete's own computed loads for
+     the workout's % steps (loadsForProfile — the same helper the
+     athlete's own loads window uses, here behind the coach gate).
+     Coach-only like everything below the gate; the payload is a
+     training surface only — no check-in, health, or notes data.
+     Step position writes go to db.floorProgress; marking a session
+     complete stays with POST /api/completions, unchanged. */
+  if (p === '/api/weight-room' && req.method === 'GET') {
+    const date = clean(q.get('date') || todayStr(), 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    let groupId = null;
+    const gRaw = q.get('groupId');
+    if (gRaw) {
+      const g = groupById(gRaw);
+      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      groupId = g.id;
+    }
+    let floorWorkout = null;
+    const wRaw = q.get('workoutId');
+    if (wRaw) {
+      floorWorkout = db.customWorkouts.find(w => w.id === wRaw) || null;
+      if (!floorWorkout) return sendJson(res, 404, { error: 'Custom workout not found.' });
+    }
+    const profs = db.profiles
+      .filter(pr => !pr.archived && (!groupId || pr.groupId === groupId))
+      .slice()
+      .sort((a, b) => (a.firstName + ' ' + a.lastName).localeCompare(b.firstName + ' ' + b.lastName));
+    const panels = profs.map(pr => {
+      let assignment = null;
+      if (pr.groupId) {
+        const a = resolveAssignment(pr.groupId, date);
+        assignment = {
+          sessionId: a.sessionId, sessionName: a.sessionName, source: a.source,
+          codes: (a.codes || []).map(code => {
+            const s = SESSION_BY_ID.get(code);
+            return { id: code, name: s ? s.name : code };
+          }),
+          note: a.note || '', planText: a.planText || '', isOff: !!a.isOff,
+        };
+      }
+      const c = completionFor(pr.id, date);
+      return {
+        profile: publicProfile(pr),
+        assignment,
+        completed: !!c,
+        completion: c ? { sessionId: c.sessionId, marks: c.marks, feel: c.feel } : null,
+        progress: floorProgressFor(pr.id, date),
+        loads: floorWorkout ? loadsForProfile(floorWorkout, pr.id) : null,
+      };
+    });
+    return sendJson(res, 200, {
+      date,
+      groups: db.groups.map(g => ({ id: g.id, name: g.name })),
+      workout: floorWorkout ? { id: floorWorkout.id, title: floorWorkout.title } : null,
+      panels,
+    });
+  }
+
+  if (p === '/api/weight-room/progress' && req.method === 'POST') {
+    const body = await readBody(req);
+    const prof = profileById(clean(body.profileId, 80));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const date = clean(body.date || todayStr(), 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const workoutKey = clean(body.workoutKey, 120);
+    const sep = workoutKey.indexOf(':');
+    const kind = sep > 0 ? workoutKey.slice(0, sep) : '';
+    const ref = sep > 0 ? workoutKey.slice(sep + 1) : '';
+    if (kind === 'cw') {
+      if (!db.customWorkouts.some(w => w.id === ref)) {
+        return sendJson(res, 404, { error: 'Custom workout not found.' });
+      }
+    } else if (kind === 'session') {
+      if (!SESSION_IDS.has(ref)) return sendJson(res, 400, { error: 'Unknown session code.' });
+    } else {
+      return sendJson(res, 400, { error: 'workoutKey must name a session code or a custom workout.' });
+    }
+    const key = prof.id + '|' + date + '|' + workoutKey;
+    if (body.step === null) {
+      delete db.floorProgress[key];
+      saveDb();
+      return sendJson(res, 200, { ok: true, cleared: true });
+    }
+    const step = body.step;
+    if (!Number.isInteger(step) || step < 0 || step > 999) {
+      return sendJson(res, 400, { error: 'Step must be a whole number from 0 up.' });
+    }
+    const total = Number.isInteger(body.total) && body.total > 0 ? body.total : null;
+    if (total !== null && step > total) {
+      return sendJson(res, 400, { error: 'Step cannot be past the end of the walk.' });
+    }
+    const rec = { step, total, by: user.id, at: new Date().toISOString() };
+    db.floorProgress[key] = rec;
+    saveDb();
+    return sendJson(res, 200, { ok: true, progress: { [workoutKey]: rec } });
   }
 
   /* ---------- programs (coach-built templates) + applications -----

@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v3 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v3"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v4 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v4"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,17 +2373,71 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v3'") &&
-    swJs.text.includes("ruffin-performance-v3"));
+    appJs.text.includes("const APP_VERSION = 'v4'") &&
+    swJs.text.includes("ruffin-performance-v4"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v3"') &&
-    pageHtml.text.includes('Ruffin Performance · App v3') &&
+    pageHtml.text.includes('data-app-version="v4"') &&
+    pageHtml.text.includes('Ruffin Performance · App v4') &&
     appJs.text.includes('appVersionHtml'));
+
+  /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
+     Presentation only. The header's dropdown groups and the phone
+     sheet are built from GROUP_SUBNAV (one source of truth), and
+     movement rows render a thumbnail only when a demo exists. */
+  check('header carries the dropdown groups (Train, Learn, Coach) with menu containers',
+    pageHtml.text.includes('class="mainnav primary-nav"') &&
+    pageHtml.text.includes('data-menu="train"') && pageHtml.text.includes('data-menu="learn"') &&
+    pageHtml.text.includes('data-menu="coachhub"') &&
+    pageHtml.text.includes('class="tab nav-group-btn" data-area="train"') &&
+    pageHtml.text.includes('class="tab nav-group-btn" data-area="learn"') &&
+    pageHtml.text.includes('class="tab nav-group-btn" data-area="coachhub"'));
+  check('header carries the narrow-screen Menu button and sheet',
+    pageHtml.text.includes('id="nav-toggle"') && pageHtml.text.includes('id="nav-sheet"'));
+  check('dropdown menus are built from GROUP_SUBNAV and close on Escape',
+    appJs.text.includes('function buildMainNav') && appJs.text.includes('navMenuItemsHtml') &&
+    appJs.text.includes('GROUP_SUBNAV[area]') && appJs.text.includes('function closeNavMenus') &&
+    appJs.text.includes("e.key === 'Escape'"));
+  check('dropdown menus contain the right views (drills under Train, AMS under Coach)',
+    appJs.text.includes("['drills', 'Warm-Up Drills']") &&
+    appJs.text.includes("['ams', 'AMS']") &&
+    appJs.text.includes('data-view="${area}"'));
+  check('cosmetic styles ship (dropdown menu, thumbnails, shadow tokens)',
+    stylesCss.text.includes('.nav-menu') && stylesCss.text.includes('.row-thumb') &&
+    stylesCss.text.includes('--shadow-card') && stylesCss.text.includes('--shadow-pop'));
+  check('Today band: the hero carries the view title caption',
+    pageHtml.text.includes('class="hero-caption"') && pageHtml.text.includes('<h1>Today</h1>'));
+  const thumbMatch = appJs.text.match(/\/\* THUMB-BEGIN \*\/([\s\S]*?)\/\* THUMB-END \*\//);
+  check('thumbnail core is extractable for behavior tests', !!thumbMatch);
+  if (thumbMatch) {
+    const thumbCore = new Function(thumbMatch[1] + '\nreturn { thumbUrlFor };')();
+    check('thumbnail: a YouTube demo yields its poster frame',
+      thumbCore.thumbUrlFor({ type: 'youtube', url: 'https://www.youtube.com/watch?v=abcdefghijk' }) ===
+        'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg');
+    check('thumbnail: a youtu.be demo yields its poster frame',
+      thumbCore.thumbUrlFor({ type: 'youtube', url: 'https://youtu.be/abcdefghijk' }) ===
+        'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg');
+    check('thumbnail: an uploaded demo yields the Cloudinary still (extension swap)',
+      thumbCore.thumbUrlFor({ type: 'upload', url: 'https://res.cloudinary.com/l8qblw99/video/upload/v1/demo.mp4' }) ===
+        'https://res.cloudinary.com/l8qblw99/video/upload/v1/demo.jpg');
+    check('thumbnail: a GIF demo is its own thumbnail',
+      thumbCore.thumbUrlFor({ type: 'gif', url: 'https://example.com/move.gif' }) === 'https://example.com/move.gif');
+    check('thumbnail: no demo (or no usable URL) yields no thumbnail',
+      thumbCore.thumbUrlFor(null) === '' &&
+      thumbCore.thumbUrlFor({ type: 'youtube', url: 'https://example.com/x' }) === '' &&
+      thumbCore.thumbUrlFor({ type: 'upload', url: 'https://example.com/noext' }) === '');
+  }
+  check('thumbnail renderer lazy-loads and stays out of the TV render path',
+    appJs.text.includes('function thumbHtml') && appJs.text.includes('loading="lazy"') &&
+    !tvCode.includes('thumbHtml'));
+  check('weight room shell: coach view section + menu entry ship in the bundle',
+    pageHtml.text.includes('id="view-weightroom"') && pageHtml.text.includes('data-view="weightroom"') &&
+    appJs.text.includes("['weightroom', 'Weight Room']") && appJs.text.includes('/api/weight-room') &&
+    stylesCss.text.includes('.wr-grid'));
   /* ---------------- Ruffin Performance: landing + brand + theme ----
      The logged-out home is the landing page for AJ's own membership.
      The brand lives in ONE config block server-side (BRAND) and is
@@ -2480,9 +2534,16 @@ async function main() {
     !stylesCss.text.includes('Floodlight') && !stylesCss.text.includes('.view > h1') &&
     !/\.tabbar \.tab\.active\s*\{[^}]*linear-gradient\(180deg, var\(--red\)/.test(stylesCss.text) &&
     !/\.menu-item\s*\{[^}]*var\(--hud-bg\)/.test(stylesCss.text));
-  check('runner animation + Phase 1 in-place guards untouched by the rollback',
+  check('hero runner: continuous 0.88s sprint cycle (phase-locked limb keyframes, no travel timeline)',
     stylesCss.text.includes('@keyframes athleteMove') &&
-    stylesCss.text.includes('athleteMove 12s') &&
+    stylesCss.text.includes('athleteMove .88s') &&
+    stylesCss.text.includes('@keyframes thighNear') && stylesCss.text.includes('@keyframes thighFar') &&
+    stylesCss.text.includes('@keyframes shinNear') && stylesCss.text.includes('@keyframes shinFar') &&
+    stylesCss.text.includes('@keyframes footNear') && stylesCss.text.includes('@keyframes footFar') &&
+    stylesCss.text.includes('@keyframes foreNear') && stylesCss.text.includes('@keyframes foreFar') &&
+    !stylesCss.text.includes('heroTravel') && !stylesCss.text.includes('heroFade') &&
+    pageHtml.text.includes('class="foot foot-near o-ankle-near"') &&
+    pageHtml.text.includes('class="foot foot-far o-ankle-far"') &&
     appJs.text.includes('function flashSaved('));
 
   /* ---------------- QA + polish pass (Oct 24) ----------------
@@ -5587,6 +5648,860 @@ async function waitForServer(tries = 60) {
         fs.rmSync(CO_DIR, { recursive: true, force: true });
       }
     }
+
+  /* ==================== v44: % of max loading ==================== */
+  /* Percentage prescriptions on custom-workout exercises, the
+     coach load chart, and the athlete's own-loads window. Own
+     isolated store with exact max fixtures: Esther's bests are all
+     Epley estimates, Tessa's are tested singles, Mia's estimate
+     (263) beats her tested mark (250) — the canonical precedence —
+     and Noah has no maxes at all. */
+  {
+    const PL_BASE = 'http://127.0.0.1:3222';
+    const plApi = async (cookie, method, p, body) => {
+      const headers = {};
+      if (cookie) headers.cookie = cookie;
+      let data;
+      if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+      const res = await fetch(PL_BASE + p, { method, headers, body: data });
+      let json = null;
+      try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+      let setCookie = [];
+      try { setCookie = res.headers.getSetCookie(); } catch (_) {
+        const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+      }
+      return { status: res.status, json, setCookie };
+    };
+    const plText = async (cookie, p) => {
+      const res = await fetch(PL_BASE + p, { headers: cookie ? { cookie } : {} });
+      return { status: res.status, text: await res.text() };
+    };
+    const PL_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-pctload-'));
+    let plLog = '';
+    const plChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, {
+        PORT: '3222', DATA_DIR: PL_DIR, SESSION_SECRET: 'pctload-secret',
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    plChild.stdout.on('data', d => { plLog += d; });
+    plChild.stderr.on('data', d => { plLog += d; });
+    const waitPl = async () => {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(PL_BASE + '/api/content');
+          if (res.status === 200) return true;
+        } catch (_) { /* not up yet */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    try {
+      check('pct-load server starts', await waitPl(), plLog);
+
+      /* Served wiring: builder mode, chart, runner jump, athlete card. */
+      const plJs = await plText(null, '/app.js');
+      check('pct wiring is in the served JS (builder mode, chart, runner, athlete card)',
+        plJs.status === 200 &&
+        plJs.text.includes('cw-ex-mode') && plJs.text.includes('% of max') &&
+        plJs.text.includes('renderCwLoadChart') && plJs.text.includes('/load-chart') &&
+        plJs.text.includes('runner-loadchart') && plJs.text.includes('renderHomeLoads') &&
+        plJs.text.includes('/api/my/loads') && plJs.text.includes('Your lifting loads') &&
+        plJs.text.includes('Needs a max test') && plJs.text.includes('No max on file — ask coach'),
+        plJs.status);
+      const plTvStart = plJs.text.indexOf('TV BOARD');
+      const plTvEnd = plJs.text.indexOf('/* ---------------- boot', plTvStart);
+      const plTvCode = plTvStart >= 0 && plTvEnd > plTvStart ? plJs.text.slice(plTvStart, plTvEnd) : '';
+      check('TV board render path stays free of loads and load charts',
+        plTvCode.length > 500 && !plTvCode.includes('load-chart') &&
+        !plTvCode.includes('/api/my/loads') && !plTvCode.includes('cw-chart') &&
+        !plTvCode.includes('Needs a max test'), plTvCode.length);
+
+      /* Accounts + roster. */
+      let pr = await plApi(null, 'POST', '/api/register', { email: 'plcoach@test.com', password: 'testpass123' });
+      check('pct store: first account is the coach', pr.status === 201 && pr.json.role === 'coach', pr.json);
+      const plCoach = cookieOf(pr);
+      /* RP adaptation: registration is invite-only — the coach invites
+         each member email first (SJC registers openly). */
+      for (const em of ['esther@test.com', 'mia@test.com', 'solo@test.com']) {
+        await plApi(plCoach, 'POST', '/api/client-invites', { email: em });
+      }
+      pr = await plApi(null, 'POST', '/api/register', { email: 'esther@test.com', password: 'testpass123' });
+      const plEsther = cookieOf(pr);
+      pr = await plApi(null, 'POST', '/api/register', { email: 'mia@test.com', password: 'testpass123' });
+      const plMia = cookieOf(pr);
+      pr = await plApi(null, 'POST', '/api/register', { email: 'solo@test.com', password: 'testpass123' });
+      const plSolo = cookieOf(pr);
+
+      pr = await plApi(plCoach, 'POST', '/api/groups', { name: 'PL Sprinters' });
+      const plGroupA = pr.json.group;
+      pr = await plApi(plCoach, 'POST', '/api/groups', { name: 'PL Distance' });
+      const plGroupB = pr.json.group;
+      const mkProfile = async (firstName, lastName, groupId) =>
+        (await plApi(plCoach, 'POST', '/api/profiles', { firstName, lastName, groupId, events: ['100m'] })).json.profile;
+      const estP = await mkProfile('Esther', 'Estimated', plGroupA.id);
+      const tesP = await mkProfile('Tessa', 'Tested', plGroupA.id);
+      const miaP = await mkProfile('Mia', 'Mixed', plGroupA.id);
+      const noaP = await mkProfile('Noah', 'Nomax', plGroupB.id);
+      check('pct fixtures: four profiles across two groups',
+        !!(estP && tesP && miaP && noaP && plGroupA && plGroupB),
+        [estP, tesP, miaP, noaP].map(x => x && x.id));
+
+      /* Maxes. Esther: estimates only (200x5 squat -> 233, 150x5
+         bench -> 175, 100x5 clean -> 117). Tessa: tested singles
+         (250 squat, 120 clean — no reps logged). Mia: a tested 250
+         squat on day one, then a 225x5 set on day two whose Epley
+         estimate (263) must win as her best. Noah: nothing. */
+      pr = await plApi(plCoach, 'POST', '/api/test-days', { date: '2026-10-20', title: 'PL Max Day', testKeys: ['back-squat', 'bench-press', 'hang-clean'] });
+      const plDay = pr.json.testDay;
+      pr = await plApi(plCoach, 'POST', '/api/results/bulk', {
+        testDayId: plDay.id,
+        entries: [
+          { profileId: estP.id, testKey: 'back-squat', weight: 200, reps: 5 },
+          { profileId: estP.id, testKey: 'bench-press', weight: 150, reps: 5 },
+          { profileId: estP.id, testKey: 'hang-clean', weight: 100, reps: 5 },
+          { profileId: tesP.id, testKey: 'back-squat', weight: 250 },
+          { profileId: tesP.id, testKey: 'hang-clean', weight: 120 },
+          { profileId: miaP.id, testKey: 'back-squat', weight: 250 },
+        ],
+      });
+      check('pct fixtures: day-one max results recorded', pr.status === 200, pr.json);
+      pr = await plApi(plCoach, 'POST', '/api/test-days', { date: '2026-10-21', title: 'PL Squat Reps', testKeys: ['back-squat'] });
+      const plDay2 = pr.json.testDay;
+      pr = await plApi(plCoach, 'POST', '/api/results/bulk', {
+        testDayId: plDay2.id,
+        entries: [{ profileId: miaP.id, testKey: 'back-squat', weight: 225, reps: 5 }],
+      });
+      check('pct fixtures: Mia\'s rep set recorded on day two', pr.status === 200, pr.json);
+
+      /* The workout: three % steps + one free-text step. */
+      const plWorkoutBody = {
+        title: 'PL Percent Day',
+        blocks: [{
+          rounds: 1, restBetweenRounds: 0, restAfterBlock: 0,
+          exercises: [
+            { name: 'Back Squat', load: { testKey: 'back-squat', percent: 80, sets: 4, reps: 5 } },
+            { name: 'Bench Press', load: { testKey: 'bench-press', percent: 85, sets: 3, reps: 5 } },
+            { name: 'Hang Clean', load: { testKey: 'hang-clean', percent: 75, sets: 3, reps: 3 } },
+            { name: 'Nordic Curl', reps: '3' },
+          ],
+        }],
+      };
+      pr = await plApi(plCoach, 'POST', '/api/custom-workouts', plWorkoutBody);
+      const plWorkout = pr.json && pr.json.workout;
+      check('a % prescription saves on a custom workout (201)',
+        pr.status === 201 && !!plWorkout, pr.json);
+      const plSquat = plWorkout && plWorkout.blocks[0].exercises[0];
+      check('the prescription round-trips with its shape intact',
+        !!plSquat && JSON.stringify(plSquat.load) === JSON.stringify({ testKey: 'back-squat', percent: 80, sets: 4, reps: 5 }), plSquat);
+      check('a % step derives its reps text from sets x reps',
+        !!plSquat && plSquat.reps === '4 × 5', plSquat);
+      const plNordic = plWorkout && plWorkout.blocks[0].exercises[3];
+      check('a free-text step beside % steps stays exactly as before',
+        !!plNordic && plNordic.reps === '3' && !('load' in plNordic), plNordic);
+
+      pr = await plApi(plCoach, 'GET', '/api/custom-workouts');
+      const plStored = (pr.json.workouts || []).find(w => w.id === plWorkout.id);
+      check('the prescription survives a fresh read (save/load round-trip)',
+        !!plStored && plStored.blocks[0].exercises[0].load.percent === 80 &&
+        plStored.blocks[0].exercises[1].load.testKey === 'bench-press',
+        plStored && plStored.blocks[0].exercises[0]);
+
+      /* Runner core carries the prescription through untouched. */
+      const plCoreMatch = plJs.text.match(/\/\* RUNNER-CORE-BEGIN \*\/([\s\S]*?)\/\* RUNNER-CORE-END \*\//);
+      const plCore = new Function((plCoreMatch ? plCoreMatch[1] : '') +
+        '\nreturn { buildRunnerSteps, sessionToRunnerPlan };')();
+      const plSteps = plCore.buildRunnerSteps(plWorkout);
+      const plRunSquat = plSteps.find(s => s.type === 'exercise' && s.name === 'Back Squat');
+      check('the runner step carries the % prescription',
+        !!plRunSquat && !!plRunSquat.load && plRunSquat.load.percent === 80 && plRunSquat.load.testKey === 'back-squat', plRunSquat);
+      const plRunNordic = plSteps.find(s => s.type === 'exercise' && s.name === 'Nordic Curl');
+      check('a free-text runner step carries no prescription',
+        !!plRunNordic && plRunNordic.load === null, plRunNordic);
+
+      /* Validation: one or the other, and inside the range. */
+      const badPct = (load) => plApi(plCoach, 'POST', '/api/custom-workouts', {
+        title: 'PL Bad', blocks: [{ rounds: 1, restBetweenRounds: 0, restAfterBlock: 0, exercises: [{ name: 'Back Squat', load }] }],
+      });
+      check('a % below 30 is refused', (await badPct({ testKey: 'back-squat', percent: 25, sets: 4, reps: 5 })).status === 400);
+      check('a % above 110 is refused', (await badPct({ testKey: 'back-squat', percent: 115, sets: 4, reps: 5 })).status === 400);
+      check('a % pointed at a non-lift test is refused', (await badPct({ testKey: 'vertical-jump', percent: 80, sets: 4, reps: 5 })).status === 400);
+      check('zero sets in a prescription is refused', (await badPct({ testKey: 'back-squat', percent: 80, sets: 0, reps: 5 })).status === 400);
+      pr = await badPct({ testKey: 'bench-press', percent: 82.5, sets: 3, reps: 8 });
+      check('a fractional % inside the range is accepted', pr.status === 201, pr.status);
+      await plApi(plCoach, 'DELETE', '/api/custom-workouts/' + pr.json.workout.id);
+
+      /* Edit round-trip: a changed percent persists. */
+      pr = await plApi(plCoach, 'POST', '/api/custom-workouts', {
+        title: 'PL Edit Me', blocks: [{ rounds: 1, restBetweenRounds: 0, restAfterBlock: 0,
+          exercises: [{ name: 'Bench Press', load: { testKey: 'bench-press', percent: 80, sets: 3, reps: 5 } }] }],
+      });
+      const plEditId = pr.json.workout.id;
+      pr = await plApi(plCoach, 'PUT', '/api/custom-workouts/' + plEditId, {
+        title: 'PL Edit Me', blocks: [{ rounds: 1, restBetweenRounds: 0, restAfterBlock: 0,
+          exercises: [{ name: 'Bench Press', load: { testKey: 'bench-press', percent: 85, sets: 3, reps: 5 } }] }],
+      });
+      check('editing a % prescription saves the new percent',
+        pr.status === 200 && pr.json.workout.blocks[0].exercises[0].load.percent === 85, pr.json);
+      await plApi(plCoach, 'DELETE', '/api/custom-workouts/' + plEditId);
+
+      /* The load chart (coach-only: it carries the whole roster). */
+      pr = await plApi(null, 'GET', '/api/custom-workouts/' + plWorkout.id + '/load-chart');
+      check('the load chart refuses anonymous callers', pr.status === 401, pr.status);
+      pr = await plApi(plEsther, 'GET', '/api/custom-workouts/' + plWorkout.id + '/load-chart');
+      check('the load chart refuses athletes', pr.status === 403, pr.status);
+      pr = await plApi(plCoach, 'GET', '/api/custom-workouts/nope/load-chart');
+      check('the load chart 404s for an unknown workout', pr.status === 404, pr.status);
+      pr = await plApi(plCoach, 'GET', '/api/custom-workouts/' + plWorkout.id + '/load-chart?groupId=bogus');
+      check('the load chart refuses an unknown group', pr.status === 400, pr.status);
+      pr = await plApi(plCoach, 'GET', '/api/custom-workouts/' + plWorkout.id + '/load-chart');
+      const chart = pr.json;
+      check('the chart has one column per % step and none for free text',
+        pr.status === 200 && chart.columns.length === 3 &&
+        chart.columns.map(c => c.testKey).join(',') === 'back-squat,bench-press,hang-clean', chart.columns);
+      check('the chart defaults to the whole roster', chart.rows.length === 4, chart.rows.length);
+      const rowOf = (name) => chart.rows.find(r => r.name === name) || { cells: [] };
+      const estRow = rowOf('Esther Estimated');
+      check('chart math: estimated max 233 at 80% loads 185 (nearest 5)',
+        !!estRow.cells[0] && estRow.cells[0].max === 233 && estRow.cells[0].weight === 185, estRow.cells);
+      check('chart math: estimated max 175 at 85% loads 150 (nearest 5)',
+        !!estRow.cells[1] && estRow.cells[1].max === 175 && estRow.cells[1].weight === 150, estRow.cells);
+      check('chart math: estimated max 117 at 75% loads 90 (nearest 5)',
+        !!estRow.cells[2] && estRow.cells[2].max === 117 && estRow.cells[2].weight === 90, estRow.cells);
+      const tesRow = rowOf('Tessa Tested');
+      check('chart math: a tested 250 at 80% loads exactly 200',
+        !!tesRow.cells[0] && tesRow.cells[0].max === 250 && tesRow.cells[0].weight === 200, tesRow.cells);
+      check('a missing max is an empty cell, not a zero',
+        tesRow.cells[1] === null && rowOf('Noah Nomax').cells.every(c => c === null), tesRow.cells);
+      const miaRow = rowOf('Mia Mixed');
+      check('precedence: an estimated best (263) beats a tested 250 as the max',
+        !!miaRow.cells[0] && miaRow.cells[0].max === 263 && miaRow.cells[0].weight === 210, miaRow.cells);
+      const needsOf = (name) => (chart.needsMax.find(n => n.name === name) || { lifts: [] }).lifts;
+      check('needs-a-max names exactly the lifts each athlete is missing',
+        JSON.stringify(needsOf('Mia Mixed')) === JSON.stringify(['Bench Press', 'Hang Clean']) &&
+        JSON.stringify(needsOf('Tessa Tested')) === JSON.stringify(['Bench Press']) &&
+        needsOf('Noah Nomax').length === 3 && needsOf('Esther Estimated').length === 0,
+        chart.needsMax);
+      pr = await plApi(plCoach, 'GET', '/api/custom-workouts/' + plWorkout.id + '/load-chart?groupId=' + plGroupB.id);
+      check('the group picker narrows the chart to that group',
+        pr.status === 200 && pr.json.rows.length === 1 && pr.json.rows[0].name === 'Noah Nomax', pr.json.rows);
+
+      /* Athlete surface: own loads only, never a teammate's. */
+      pr = await plApi(plCoach, 'PUT', '/api/profiles/' + estP.id + '/link', { email: 'esther@test.com' });
+      check('pct fixtures: Esther links her account', pr.status === 200, pr.json);
+      pr = await plApi(plCoach, 'PUT', '/api/profiles/' + miaP.id + '/link', { email: 'mia@test.com' });
+      check('pct fixtures: Mia links her account', pr.status === 200, pr.json);
+
+      pr = await plApi(null, 'GET', '/api/my/loads');
+      check('my loads refuses anonymous callers', pr.status === 401, pr.status);
+      pr = await plApi(plSolo, 'GET', '/api/my/loads');
+      check('an unlinked athlete gets an empty loads window',
+        pr.status === 200 && pr.json.linked === false && pr.json.workouts.length === 0, pr.json);
+      pr = await plApi(plCoach, 'GET', '/api/my/loads');
+      check('the coach account has no athlete loads window',
+        pr.status === 200 && pr.json.linked === false, pr.json);
+
+      const estLoadsTxt = await plText(plEsther, '/api/my/loads');
+      const estLoads = JSON.parse(estLoadsTxt.text);
+      const estMine = (estLoads.workouts || []).find(w => w.id === plWorkout.id);
+      check('the athlete sees the % workout with her % steps only',
+        estLoads.linked === true && !!estMine && estMine.steps.length === 3, estLoads.workouts);
+      const estSquat = estMine && estMine.steps.find(s => s.testKey === 'back-squat');
+      check('her own squat load comes from her max (185 at 80% of 233)',
+        !!estSquat && estSquat.max === 233 && estSquat.weight === 185, estSquat);
+      check('isolation: her payload carries no teammate max or load',
+        !estLoadsTxt.text.includes('"max":250') && !estLoadsTxt.text.includes('"max":263') &&
+        !estLoadsTxt.text.includes('"weight":200') && !estLoadsTxt.text.includes('"weight":210'),
+        estLoadsTxt.text.slice(0, 300));
+
+      pr = await plApi(plMia, 'GET', '/api/my/loads');
+      const miaMine = (pr.json.workouts || []).find(w => w.id === plWorkout.id);
+      const miaSquat = miaMine && miaMine.steps.find(s => s.testKey === 'back-squat');
+      const miaBench = miaMine && miaMine.steps.find(s => s.testKey === 'bench-press');
+      check('the athlete view uses the same precedence (263 estimate over 250 tested)',
+        !!miaSquat && miaSquat.max === 263 && miaSquat.weight === 210, miaSquat);
+      check('a missing max shows as no weight, ready for "ask coach"',
+        !!miaBench && miaBench.max === null && miaBench.weight === null, miaBench);
+
+      /* Export/import carries the prescription through untouched. */
+      const plBk = await plText(plCoach, '/api/export/backup');
+      const plEnv = JSON.parse(plBk.text);
+      const plExported = (plEnv.data.customWorkouts || []).find(w => w.id === plWorkout.id);
+      check('the backup export carries the % prescription',
+        !!plExported && plExported.blocks[0].exercises[0].load.percent === 80,
+        plExported && plExported.blocks[0].exercises[0]);
+      pr = await plApi(plCoach, 'DELETE', '/api/custom-workouts/' + plWorkout.id);
+      check('pct cleanup: the workout deletes before re-import', pr.status === 200, pr.status);
+      pr = await plApi(plCoach, 'POST', '/api/import/backup', {
+        app: 'ruffin-performance-app', kind: 'backup', version: 1,
+        data: { customWorkouts: [plExported] },
+      });
+      check('re-importing the workout is accepted', pr.status === 200 && pr.json.ok === true, pr.json);
+      pr = await plApi(plCoach, 'GET', '/api/custom-workouts');
+      const plBack = (pr.json.workouts || []).find(w => w.id === plWorkout.id);
+      check('the prescription survives export, delete, import unchanged',
+        !!plBack && JSON.stringify(plBack.blocks[0].exercises[0].load) ===
+          JSON.stringify({ testKey: 'back-squat', percent: 80, sets: 4, reps: 5 }),
+        plBack && plBack.blocks[0].exercises[0]);
+    } finally {
+      plChild.kill('SIGKILL');
+      fs.rmSync(PL_DIR, { recursive: true, force: true });
+    }
+  }
+
+  /* ==================== v46: Weight Room floor view ==================== */
+  /* One panel per athlete: the day's session resolved by the same
+     resolveAssignment the checklist uses (parity-checked against
+     /api/coach/feed), per-athlete % loads when a custom workout is
+     on the floor, step position in db.floorProgress, and completion
+     through the checklist's own POST /api/completions — no second
+     store. Own isolated store; dates pinned: D1 is plan Week 1
+     Monday (ACC-01 + STR-01), D0 is before the season (no plan). */
+  {
+    const WR_BASE = 'http://127.0.0.1:3223';
+    const wrApi = async (cookie, method, p, body) => {
+      const headers = {};
+      if (cookie) headers.cookie = cookie;
+      let data;
+      if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+      const res = await fetch(WR_BASE + p, { method, headers, body: data });
+      let json = null;
+      try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+      let setCookie = [];
+      try { setCookie = res.headers.getSetCookie(); } catch (_) {
+        const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+      }
+      return { status: res.status, json, setCookie };
+    };
+    const wrText = async (cookie, p) => {
+      const res = await fetch(WR_BASE + p, { headers: cookie ? { cookie } : {} });
+      return { status: res.status, text: await res.text() };
+    };
+    const WR_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-weightroom-'));
+    let wrLog = '';
+    const wrChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, {
+        PORT: '3223', DATA_DIR: WR_DIR, SESSION_SECRET: 'weightroom-secret',
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    wrChild.stdout.on('data', d => { wrLog += d; });
+    wrChild.stderr.on('data', d => { wrLog += d; });
+    const waitWr = async () => {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(WR_BASE + '/api/content');
+          if (res.status === 200) return true;
+        } catch (_) { /* not up yet */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    try {
+      check('weight-room server starts', await waitWr(), wrLog);
+      const D1 = '2026-10-26';   /* plan Week 1 Monday: ACC-01 + STR-01 */
+      const D0 = '2026-11-01';   /* plan Week 1 Sunday: "Sun off" — an off day */
+
+      /* Served wiring: view, nav entries, renderer, styles. */
+      const wrPage = await wrText(null, '/');
+      const wrJs = await wrText(null, '/app.js');
+      const wrCss = await wrText(null, '/styles.css');
+      check('served page has the weight room view and hub entry',
+        wrPage.text.includes('id="view-weightroom"') && wrPage.text.includes('id="weightroom-main"') &&
+        wrPage.text.includes('data-view="weightroom"'), wrPage.status);
+      check('weight room is wired in the served JS (nav, renderer, endpoints, timers)',
+        wrJs.text.includes("['weightroom', 'Weight Room']") && wrJs.text.includes("weightroom: 'coachhub'") &&
+        wrJs.text.includes('renderWeightRoom') && wrJs.text.includes('enterWeightRoom') &&
+        wrJs.text.includes('/api/weight-room') && wrJs.text.includes('/api/weight-room/progress') &&
+        wrJs.text.includes('No session assigned'), wrJs.status);
+      check('weight room grid styles are served',
+        wrCss.text.includes('.wr-grid') && wrCss.text.includes('.wr-step.current'), wrCss.status);
+      const wrTvStart = wrJs.text.indexOf('TV BOARD');
+      const wrTvEnd = wrJs.text.indexOf('/* ---------------- boot', wrTvStart);
+      const wrTvCode = wrTvStart >= 0 && wrTvEnd > wrTvStart ? wrJs.text.slice(wrTvStart, wrTvEnd) : '';
+      check('TV board render path stays free of the weight room',
+        wrTvCode.length > 500 && !wrTvCode.includes('/api/weight-room') &&
+        !wrTvCode.includes('floorProgress') && !wrTvCode.includes('renderWeightRoom'),
+        wrTvCode.length);
+
+      /* Accounts + roster. */
+      let wr = await wrApi(null, 'POST', '/api/register', { email: 'wrcoach@test.com', password: 'testpass123' });
+      check('weight-room store: first account is the coach', wr.status === 201 && wr.json.role === 'coach', wr.json);
+      const wrCoach = cookieOf(wr);
+      await wrApi(wrCoach, 'POST', '/api/client-invites', { email: 'wrathlete@test.com' });
+      wr = await wrApi(null, 'POST', '/api/register', { email: 'wrathlete@test.com', password: 'testpass123' });
+      const wrAthlete = cookieOf(wr);
+
+      wr = await wrApi(wrCoach, 'POST', '/api/groups', { name: 'WR Sprinters' });
+      const wrGroupA = wr.json.group;
+      wr = await wrApi(wrCoach, 'POST', '/api/groups', { name: 'WR Throwers' });
+      const wrGroupB = wr.json.group;
+      const wrMk = async (firstName, lastName, groupId) =>
+        (await wrApi(wrCoach, 'POST', '/api/profiles', { firstName, lastName, groupId, events: ['100m'] })).json.profile;
+      const avaP = await wrMk('Ava', 'Max', wrGroupA.id);
+      const benP = await wrMk('Ben', 'Nomax', wrGroupA.id);
+      const cidP = await wrMk('Cid', 'Solo', wrGroupB.id);
+      const deeP = await wrMk('Dee', 'Free', null);
+      const eveP = await wrMk('Eve', 'Old', wrGroupA.id);
+      wr = await wrApi(wrCoach, 'PUT', '/api/profiles/' + eveP.id, { archived: true });
+      check('weight-room fixtures: roster across two groups, one groupless, one archived',
+        !!(avaP && benP && cidP && deeP && eveP) && wr.status === 200,
+        [avaP, benP, cidP, deeP, eveP].map(x => x && x.id));
+
+      /* Ava's squat max: 200 x 5 -> Epley 233. Ben: nothing. */
+      wr = await wrApi(wrCoach, 'POST', '/api/test-days', { date: '2026-10-20', title: 'WR Max Day', testKeys: ['back-squat'] });
+      const wrDay = wr.json.testDay;
+      wr = await wrApi(wrCoach, 'POST', '/api/results/bulk', {
+        testDayId: wrDay.id,
+        entries: [{ profileId: avaP.id, testKey: 'back-squat', weight: 200, reps: 5 }],
+      });
+      check('weight-room fixtures: Ava\'s max recorded', wr.status === 200, wr.json);
+
+      /* The floor workout: one % step + one free-text step. */
+      wr = await wrApi(wrCoach, 'POST', '/api/custom-workouts', {
+        title: 'WR Floor Lift',
+        blocks: [{
+          rounds: 1, restBetweenRounds: 0, restAfterBlock: 0,
+          exercises: [
+            { name: 'Back Squat', load: { testKey: 'back-squat', percent: 80, sets: 4, reps: 5 } },
+            { name: 'Nordic Curl', reps: '3' },
+          ],
+        }],
+      });
+      const wrWorkout = wr.json && wr.json.workout;
+      check('weight-room fixtures: the floor workout saves', wr.status === 201 && !!wrWorkout, wr.json);
+
+      /* Auth gates. */
+      wr = await wrApi(null, 'GET', '/api/weight-room?date=' + D1);
+      check('weight room: logged-out read is 401', wr.status === 401, wr.status);
+      wr = await wrApi(wrAthlete, 'GET', '/api/weight-room?date=' + D1);
+      check('weight room: athlete read is 403', wr.status === 403, wr.status);
+      wr = await wrApi(wrAthlete, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'session:ACC-01', step: 1 });
+      check('weight room: athlete progress write is 403', wr.status === 403, wr.status);
+      wr = await wrApi(null, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'session:ACC-01', step: 1 });
+      check('weight room: logged-out progress write is 401', wr.status === 401, wr.status);
+
+      /* Panels + plan parity with the checklist feed. */
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const wrPanels = (wr.json && wr.json.panels) || [];
+      const panelOf = (id) => wrPanels.find(p => p.profile.id === id);
+      check('panels cover the active roster (archived athlete excluded)',
+        wr.status === 200 && wrPanels.length === 4 && !panelOf(eveP.id),
+        wrPanels.map(p => p.profile.name));
+      const feed = (await wrApi(wrCoach, 'GET', '/api/coach/feed?date=' + D1)).json;
+      const feedA = (feed.groups || []).find(g => g.group && g.group.id === wrGroupA.id);
+      check('plan parity: the panel assignment matches the checklist feed',
+        !!feedA && feedA.assignment.sessionId === 'ACC-01' &&
+        panelOf(avaP.id).assignment.sessionId === feedA.assignment.sessionId &&
+        panelOf(avaP.id).assignment.source === 'plan',
+        panelOf(avaP.id) && panelOf(avaP.id).assignment);
+      check('a multi-session plan day keeps its full code list with names',
+        JSON.stringify(panelOf(avaP.id).assignment.codes.map(c => c.id)) === JSON.stringify(['ACC-01', 'STR-01']) &&
+        panelOf(avaP.id).assignment.codes[0].name === 'Block starts and short drives',
+        panelOf(avaP.id).assignment.codes);
+      check('a groupless athlete gets a panel with no assignment',
+        !!panelOf(deeP.id) && panelOf(deeP.id).assignment === null, panelOf(deeP.id));
+
+      /* A coach override beats the plan — in the panels and the feed alike. */
+      wr = await wrApi(wrCoach, 'POST', '/api/assignments/override',
+        { groupId: wrGroupA.id, date: D1, sessionId: 'MAX-01', note: 'Floor test' });
+      check('weight-room setup: the group override saves', wr.status === 200, wr.json);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const wrPanels2 = (wr.json && wr.json.panels) || [];
+      const panel2Of = (id) => wrPanels2.find(p => p.profile.id === id);
+      const feed2 = (await wrApi(wrCoach, 'GET', '/api/coach/feed?date=' + D1)).json;
+      const feedA2 = (feed2.groups || []).find(g => g.group && g.group.id === wrGroupA.id);
+      check('override parity: panels and feed agree the override wins',
+        panel2Of(avaP.id).assignment.sessionId === 'MAX-01' &&
+        panel2Of(avaP.id).assignment.source === 'override' &&
+        feedA2.assignment.sessionId === 'MAX-01',
+        panel2Of(avaP.id).assignment);
+      check('the override reaches only its own group',
+        panel2Of(cidP.id).assignment.sessionId === 'ACC-01', panel2Of(cidP.id).assignment);
+
+      /* Empty state: a plan off day resolves no session. (Dates
+         outside the season clamp to the nearest week by design —
+         planDayFor, same as Home — so the off day is the honest
+         nothing-assigned case, alongside the groupless panel.) */
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D0);
+      const wrD0 = ((wr.json && wr.json.panels) || []).find(p => p.profile.id === avaP.id);
+      check('a day with nothing assigned resolves an empty panel (no fake content)',
+        !!wrD0 && !!wrD0.assignment && wrD0.assignment.sessionId === null &&
+        wrD0.assignment.isOff === true &&
+        wrD0.assignment.codes.length === 0 && wrD0.completed === false, wrD0);
+
+      /* Group filter. */
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&groupId=' + wrGroupB.id);
+      check('the group filter narrows the floor to that group',
+        wr.status === 200 && wr.json.panels.length === 1 && wr.json.panels[0].profile.id === cidP.id,
+        wr.json && wr.json.panels);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&groupId=bogus');
+      check('an unknown group is a 400', wr.status === 400, wr.status);
+
+      /* Custom workout on the floor: per-athlete loads. */
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&workoutId=' + wrWorkout.id);
+      const wrCw = ((wr.json && wr.json.panels) || []);
+      const cwOf = (id) => wrCw.find(p => p.profile.id === id);
+      const avaLoads = (cwOf(avaP.id) || {}).loads || [];
+      const benLoads = (cwOf(benP.id) || {}).loads || [];
+      check('the floor payload names the workout on the floor',
+        !!wr.json.workout && wr.json.workout.id === wrWorkout.id, wr.json.workout);
+      check('per-athlete % loads differ by athlete (Ava 185 from her 233 max)',
+        avaLoads.length === 1 && avaLoads[0].max === 233 && avaLoads[0].weight === 185, avaLoads);
+      check('an athlete with no max gets the step with null numbers',
+        benLoads.length === 1 && benLoads[0].max === null && benLoads[0].weight === null, benLoads);
+      check('loads ride along only in floor-workout mode',
+        panelOf(avaP.id).loads === null, panelOf(avaP.id).loads);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&workoutId=nope');
+      check('an unknown floor workout is a 404', wr.status === 404, wr.status);
+
+      /* Step progress: writes land in floorProgress and read back. */
+      const cwKey = 'cw:' + wrWorkout.id;
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: 2, total: 5 });
+      check('a progress write is accepted', wr.status === 200 && wr.json.ok === true, wr.json);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&workoutId=' + wrWorkout.id);
+      const avaProg = ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).progress || {};
+      check('the panel reads its step back', !!avaProg[cwKey] && avaProg[cwKey].step === 2, avaProg);
+      check('progress alone never marks the session complete',
+        ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).completed === false);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: 3, total: 5 });
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const avaProg2 = ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).progress || {};
+      check('advancing moves the stored step', !!avaProg2[cwKey] && avaProg2[cwKey].step === 3, avaProg2);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'session:MAX-01', step: 1, total: 4 });
+      check('a session-keyed step is accepted for the day\'s session', wr.status === 200, wr.json);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: -1 });
+      check('a negative step is a 400', wr.status === 400, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: 9, total: 5 });
+      check('a step past the end of the walk is a 400', wr.status === 400, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'bogus', step: 1 });
+      check('a malformed workoutKey is a 400', wr.status === 400, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'cw:nope', step: 1 });
+      check('an unknown custom workout key is a 404', wr.status === 404, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: 'nope', date: D1, workoutKey: cwKey, step: 1 });
+      check('an unknown profile is a 404', wr.status === 404, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: null });
+      check('a null step clears the panel position', wr.status === 200 && wr.json.cleared === true, wr.json);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const avaProg3 = ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).progress || {};
+      check('the cleared position is gone on the next read', !(cwKey in avaProg3), avaProg3);
+
+      /* Completion flows through the checklist's own endpoint. */
+      wr = await wrApi(wrCoach, 'POST', '/api/completions',
+        { profileId: avaP.id, date: D1, marks: 'Weight room · WR Floor Lift' });
+      check('the checklist completion write is accepted', wr.status === 200 && !!wr.json.completion, wr.json);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const avaDone = ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {});
+      check('the panel shows the completion the checklist wrote',
+        avaDone.completed === true && !!avaDone.completion &&
+        avaDone.completion.marks === 'Weight room · WR Floor Lift', avaDone);
+      const feed3 = (await wrApi(wrCoach, 'GET', '/api/coach/feed?date=' + D1)).json;
+      const feedA3 = (feed3.groups || []).find(g => g.group && g.group.id === wrGroupA.id);
+      const feedAva = (feedA3.members || []).find(m => m.profile.id === avaP.id);
+      check('the checklist sees the same single completion record',
+        !!feedAva && feedAva.completed === true, feedAva);
+      wr = await wrApi(wrCoach, 'POST', '/api/completions',
+        { profileId: avaP.id, date: D1, completed: false });
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      check('undoing through the same endpoint clears the panel',
+        ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).completed === false);
+
+      /* Floor progress rides the backup like every other collection. */
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: benP.id, date: D1, workoutKey: 'session:MAX-01', step: 1, total: 4 });
+      const wrBk = await wrText(wrCoach, '/api/export/backup');
+      const wrEnv = JSON.parse(wrBk.text);
+      check('the backup export carries floor progress',
+        !!wrEnv.data.floorProgress &&
+        !!wrEnv.data.floorProgress[benP.id + '|' + D1 + '|session:MAX-01'] &&
+        wrEnv.data.floorProgress[benP.id + '|' + D1 + '|session:MAX-01'].step === 1,
+        wrEnv.data.floorProgress);
+    } finally {
+      wrChild.kill('SIGKILL');
+      fs.rmSync(WR_DIR, { recursive: true, force: true });
+    }
+  }
+
+  /* ==================== v47: Reports library expansion ==================== */
+  /* Completion trend (the by-group weekly math aggregated into a
+     percentage), period comparison (best in A vs best in B out of
+     testingHistoryFor), team assessment by quality, and the raw
+     session-completions CSV. Own isolated store; every window is
+     pinned with explicit dates so the counts are exact on any run
+     date. */
+  {
+    const RP_BASE = 'http://127.0.0.1:3224';
+    const rpApi = async (cookie, method, p, body) => {
+      const headers = {};
+      if (cookie) headers.cookie = cookie;
+      let data;
+      if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+      const res = await fetch(RP_BASE + p, { method, headers, body: data });
+      let json = null;
+      try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+      let setCookie = [];
+      try { setCookie = res.headers.getSetCookie(); } catch (_) {
+        const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+      }
+      return { status: res.status, json, setCookie };
+    };
+    const rpText = async (cookie, p) => {
+      const res = await fetch(RP_BASE + p, { headers: cookie ? { cookie } : {} });
+      return {
+        status: res.status, text: await res.text(),
+        type: res.headers.get('content-type') || '',
+        disp: res.headers.get('content-disposition') || '',
+      };
+    };
+    const RP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-reports-'));
+    let rpLog = '';
+    const rpChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, {
+        PORT: '3224', DATA_DIR: RP_DIR, SESSION_SECRET: 'reports-secret',
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    rpChild.stdout.on('data', d => { rpLog += d; });
+    rpChild.stderr.on('data', d => { rpLog += d; });
+    const waitRp = async () => {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(RP_BASE + '/api/content');
+          if (res.status === 200) return true;
+        } catch (_) { /* not up yet */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    try {
+      check('reports-library server starts', await waitRp(), rpLog);
+      let rp = await rpApi(null, 'POST', '/api/register', { email: 'rpcoach@test.com', password: 'testpass123' });
+      const rpCoach = cookieOf(rp);
+      await rpApi(rpCoach, 'POST', '/api/client-invites', { email: 'rpathlete@test.com' });
+      rp = await rpApi(null, 'POST', '/api/register', { email: 'rpathlete@test.com', password: 'testpass123' });
+      const rpAthlete = cookieOf(rp);
+
+      /* Served wiring: the three new reports + the CSV download. */
+      const rpJs = await rpText(null, '/app.js');
+      check('reports page fetches the trend, comparison and assessment endpoints',
+        rpJs.text.includes('/api/reports/completion-trend') &&
+        rpJs.text.includes('/api/reports/compare') &&
+        rpJs.text.includes('/api/reports/assessment'));
+      check('reports page renders the three new cards and the raw CSV link',
+        rpJs.text.includes('Completion trend') && rpJs.text.includes('Period comparison') &&
+        rpJs.text.includes('Team assessment by quality') &&
+        rpJs.text.includes('/api/export/completions.csv') &&
+        rpJs.text.includes('Session completions (raw)'));
+
+      /* Fixtures: a two-athlete squad and an empty group. */
+      rp = await rpApi(rpCoach, 'POST', '/api/groups', { name: 'Trend Squad' });
+      const gTrend = rp.json.group.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/groups', { name: 'Empty Group' });
+      const gEmpty = rp.json.group.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/profiles', { firstName: 'Pia', lastName: 'Trend', groupId: gTrend });
+      const piaT = rp.json.profile.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/profiles', { firstName: 'Quinn', lastName: 'Trend', groupId: gTrend });
+      const quinnT = rp.json.profile.id;
+      const c1 = await rpApi(rpCoach, 'POST', '/api/completions', { profileId: piaT, date: '2026-10-26', marks: 'Felt good, strong finish', feel: 4 });
+      const c2 = await rpApi(rpCoach, 'POST', '/api/completions', { profileId: piaT, date: '2026-10-28' });
+      const c3 = await rpApi(rpCoach, 'POST', '/api/completions', { profileId: quinnT, date: '2026-10-26' });
+      check('trend fixtures: three completions recorded in season week 1',
+        c1.status === 200 && c2.status === 200 && c3.status === 200,
+        [c1.status, c2.status, c3.status]);
+
+      /* ---- completion trend ---- */
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=4&through=2026-11-16&groupId=' + gTrend);
+      const tw = rp.json.weeks || [];
+      check('completion trend: window is the 4 season weeks ending at through',
+        rp.status === 200 && rp.json.scope.type === 'group' && rp.json.scope.group.id === gTrend &&
+        tw.map(w => w.monday).join(',') === '2026-10-26,2026-11-02,2026-11-09,2026-11-16', rp.json);
+      const tw1 = tw.find(w => w.monday === '2026-10-26') || {};
+      check('completion trend: week 1 is 25% — 3 completions of 12 possible (6 assigned days x 2 athletes)',
+        tw1.assigned === 6 && tw1.possible === 12 && tw1.completions === 3 &&
+        tw1.completedDays === 2 && tw1.percent === 25, tw1);
+      const tw4 = tw.find(w => w.monday === '2026-11-16') || {};
+      check('completion trend: a week with nothing marked is 0%, not an error',
+        tw4.assigned === 3 && tw4.completions === 0 && tw4.percent === 0, tw4);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completions');
+      const compWeeks = ((rp.json.groups.find(g => g.group.id === gTrend) || {}).weeks || []);
+      check('completion trend reuses the by-group weekly math exactly (parity per week)',
+        tw.length === 4 && tw.every(w => {
+          const src = compWeeks.find(x => x.monday === w.monday) || {};
+          return src.assigned === w.assigned && src.completions === w.completions &&
+            src.completedDays === w.completedDays;
+        }));
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=4&through=2026-10-26');
+      check('completion trend: team scope sums the same week (3 of 12, 25%)',
+        rp.status === 200 && rp.json.scope.type === 'team' && rp.json.weeks.length === 1 &&
+        rp.json.weeks[0].completions === 3 && rp.json.weeks[0].possible === 12 &&
+        rp.json.weeks[0].percent === 25, rp.json);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=4&through=2026-11-16&groupId=' + gEmpty);
+      check('completion trend: an empty group has possible 0 and percent null in every week (no divide by zero)',
+        rp.status === 200 && rp.json.weeks.length === 4 &&
+        rp.json.weeks.every(w => w.possible === 0 && w.percent === null && w.completions === 0),
+        rp.json.weeks);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=12&through=2027-05-10');
+      const trendLen12 = (rp.json.weeks || []).length;
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=99&through=2027-05-10');
+      check('completion trend: range is one of 4/8/12 (anything else falls back to 8)',
+        trendLen12 === 12 && (rp.json.weeks || []).length === 8,
+        [trendLen12, (rp.json.weeks || []).length]);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?groupId=nope');
+      check('completion trend: unknown group is 400', rp.status === 400, rp.status);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?through=2026-02-30');
+      check('completion trend: an impossible through date is 400', rp.status === 400, rp.status);
+      rp = await rpApi(rpAthlete, 'GET', '/api/reports/completion-trend');
+      check('athlete is 403 on the completion trend', rp.status === 403, rp.status);
+      rp = await rpApi(null, 'GET', '/api/reports/completion-trend');
+      check('completion trend without login is 401', rp.status === 401, rp.status);
+
+      /* ---- assessment before any custom test: no Speed section ---- */
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/assessment');
+      check('assessment: with no timed test in the battery, only Power and Strength appear',
+        rp.status === 200 && (rp.json.qualities || []).map(q => q.quality).join(',') === 'power,strength',
+        rp.json.qualities);
+
+      /* ---- testing fixtures across two periods ---- */
+      rp = await rpApi(rpCoach, 'POST', '/api/tests', { name: 'Fly 10m', unit: 'sec' });
+      const flyT = rp.json.test || {};
+      check('a seconds custom test is derived as a timed, lower-is-better measure',
+        rp.status === 201 && flyT.kind === 'measure' && flyT.better === 'lower', rp.json);
+      rp = await rpApi(rpCoach, 'POST', '/api/test-days', { date: '2026-11-09', title: 'RP Day 1', testKeys: ['back-squat', 'vertical-jump', flyT.key] });
+      const rpDay1 = rp.json.testDay.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/test-days', { date: '2027-02-08', title: 'RP Day 2', testKeys: ['back-squat', 'vertical-jump', flyT.key] });
+      const rpDay2 = rp.json.testDay.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/results/bulk', {
+        testDayId: rpDay1,
+        entries: [
+          { profileId: piaT, testKey: 'back-squat', weight: 200, reps: 5 },
+          { profileId: quinnT, testKey: 'back-squat', weight: 150, reps: 5 },
+          { profileId: piaT, testKey: 'vertical-jump', value: 24 },
+          { profileId: quinnT, testKey: 'vertical-jump', value: 28 },
+          { profileId: piaT, testKey: flyT.key, value: 2.0 },
+          { profileId: quinnT, testKey: flyT.key, value: 1.95 },
+        ],
+      });
+      check('period fixtures: day 1 grid saves 6 results', rp.status === 200 && rp.json.saved === 6, rp.json);
+      rp = await rpApi(rpCoach, 'POST', '/api/results/bulk', {
+        testDayId: rpDay2,
+        entries: [
+          { profileId: piaT, testKey: 'back-squat', weight: 210, reps: 5 },
+          { profileId: quinnT, testKey: 'back-squat', weight: 160, reps: 5 },
+          { profileId: piaT, testKey: 'vertical-jump', value: 26 },
+          { profileId: piaT, testKey: flyT.key, value: 1.9 },
+        ],
+      });
+      check('period fixtures: day 2 grid saves 4 results (Quinn has no day-2 jump or fly)',
+        rp.status === 200 && rp.json.saved === 4, rp.json);
+      rp = await rpApi(rpCoach, 'POST', '/api/profiles', { firstName: 'Rae', lastName: 'Trend', groupId: gTrend });
+      const raeT = rp.json.profile.id;
+
+      /* ---- period comparison ---- */
+      const cmpQs = 'aFrom=2026-11-01&aTo=2026-11-30&bFrom=2027-02-01&bTo=2027-02-28';
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=back-squat&' + cmpQs);
+      const cmpRows = rp.json.rows || [];
+      const cmpPia = cmpRows.find(x => x.profileId === piaT) || {};
+      const cmpQuinn = cmpRows.find(x => x.profileId === quinnT) || {};
+      const cmpRae = cmpRows.find(x => x.profileId === raeT) || {};
+      check('compare (higher is better): best per period from Epley displays, signed delta, improved',
+        rp.status === 200 && cmpPia.bestA === 233 && cmpPia.bestB === 245 &&
+        cmpPia.delta === 12 && cmpPia.improved === true &&
+        cmpQuinn.bestA === 175 && cmpQuinn.bestB === 187 && cmpQuinn.delta === 12, rp.json);
+      check('compare: an athlete with no results shows both periods empty and no delta',
+        cmpRae.bestA === null && cmpRae.bestB === null && cmpRae.delta === null &&
+        cmpRae.improved === null, cmpRae);
+      check('compare summary: period averages over athletes who have a mark, plus improved count',
+        rp.json.summary.avgA === 204 && rp.json.summary.avgB === 216 &&
+        rp.json.summary.athletesWithA === 2 && rp.json.summary.athletesWithB === 2 &&
+        rp.json.summary.improved === 2 && rp.json.summary.declined === 0, rp.json.summary);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=' + flyT.key + '&' + cmpQs);
+      const flyRows = rp.json.rows || [];
+      const flyPia = flyRows.find(x => x.profileId === piaT) || {};
+      const flyQuinn = flyRows.find(x => x.profileId === quinnT) || {};
+      check('compare (lower is better): a faster time is a negative delta and still an improvement',
+        flyPia.bestA === 2 && flyPia.bestB === 1.9 && flyPia.delta === -0.1 &&
+        flyPia.improved === true, flyPia);
+      check('compare: a missing second period leaves that side and the delta empty',
+        flyQuinn.bestA === 1.95 && flyQuinn.bestB === null && flyQuinn.delta === null &&
+        rp.json.summary.athletesWithB === 1 && rp.json.summary.avgB === 1.9, rp.json.summary);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=back-squat');
+      const openPia = (rp.json.rows || []).find(x => x.profileId === piaT) || {};
+      check('compare with open bounds: both periods are all-time, delta 0 counts as unchanged',
+        openPia.bestA === 245 && openPia.bestB === 245 && openPia.delta === 0 &&
+        openPia.improved === null && rp.json.summary.unchanged === 2, rp.json.summary);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=nope');
+      check('compare: unknown test is 404', rp.status === 404, rp.status);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=back-squat&aFrom=2026-13-01');
+      check('compare: a malformed date bound is 400', rp.status === 400, rp.status);
+      rp = await rpApi(rpAthlete, 'GET', '/api/reports/compare?testKey=back-squat');
+      check('athlete is 403 on period comparison', rp.status === 403, rp.status);
+      rp = await rpApi(null, 'GET', '/api/reports/compare?testKey=back-squat');
+      check('period comparison without login is 401', rp.status === 401, rp.status);
+
+      /* ---- team assessment by quality ---- */
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/assessment');
+      const quals = rp.json.qualities || [];
+      check('assessment: qualities come in speed, power, strength order',
+        quals.map(q => q.quality).join(',') === 'speed,power,strength', quals.map(q => q.quality));
+      const qSpeed = quals.find(q => q.quality === 'speed') || { tests: [], rows: [] };
+      const qPower = quals.find(q => q.quality === 'power') || { tests: [], averages: {} };
+      const qStrength = quals.find(q => q.quality === 'strength') || { tests: [], averages: {}, counts: {} };
+      check('assessment: the timed custom test is the Speed section; jumps are Power; the five lifts are Strength',
+        qSpeed.tests.map(t => t.key).join(',') === flyT.key &&
+        qPower.tests.map(t => t.key).join(',') === 'vertical-jump,broad-jump' &&
+        qStrength.tests.map(t => t.key).join(',') === 'back-squat,trap-bar-deadlift,bench-press,hang-clean,power-clean',
+        quals.map(q => q.tests.map(t => t.key)));
+      check('assessment: pull-ups (kind reps) are tagged to no quality',
+        !quals.some(q => q.tests.some(t => t.key === 'pull-ups')));
+      check('assessment: strength average is over best marks (squat (245+187)/2 = 216, n=2); untested lifts average null',
+        qStrength.averages['back-squat'] === 216 && qStrength.counts['back-squat'] === 2 &&
+        qStrength.averages['bench-press'] === null && qStrength.counts['bench-press'] === 0,
+        qStrength.averages);
+      check('assessment: power average for the vertical jump is (26+28)/2 = 27',
+        qPower.averages['vertical-jump'] === 27 && qPower.averages['broad-jump'] === null,
+        qPower.averages);
+      const spdPia = qSpeed.rows.find(x => x.profileId === piaT) || { marks: {} };
+      const spdRae = qSpeed.rows.find(x => x.profileId === raeT) || { marks: {} };
+      const strPia = (qStrength.rows || []).find(x => x.profileId === piaT) || { marks: {} };
+      check('assessment rows carry each athlete\'s overall best per test, empty where untested',
+        spdPia.marks[flyT.key] === 1.9 && spdRae.marks[flyT.key] === null &&
+        strPia.marks['back-squat'] === 245, { spdPia, spdRae, strPia });
+      rp = await rpApi(rpAthlete, 'GET', '/api/reports/assessment');
+      check('athlete is 403 on the assessment', rp.status === 403, rp.status);
+
+      /* ---- raw session completions CSV ---- */
+      const csv = await rpText(rpCoach, '/api/export/completions.csv');
+      const csvLines = csv.text.trim().split('\r\n');
+      check('completions CSV: 200, csv type, session-completions.csv filename',
+        csv.status === 200 && csv.type.includes('text/csv') &&
+        csv.disp.includes('filename="session-completions.csv"'), { status: csv.status, disp: csv.disp });
+      check('completions CSV: header row, then one row per completion record',
+        csvLines[0] === 'Date,Athlete,Group,Session,Session Title,Marks,Feel,Notes' &&
+        csvLines.length === 4, csvLines);
+      check('completions CSV: rows carry the stored session code, its title, and marks — commas quoted',
+        csvLines[1] === '2026-10-26,Pia Trend,Trend Squad,ACC-01,Block starts and short drives,"Felt good, strong finish",4,' &&
+        csvLines[2].startsWith('2026-10-26,Quinn Trend,Trend Squad,ACC-01,') &&
+        csvLines[3].startsWith('2026-10-28,Pia Trend,Trend Squad,ACC-02,'), csvLines);
+      const csvAth = await rpText(rpAthlete, '/api/export/completions.csv');
+      check('athlete is 403 on the raw completions CSV', csvAth.status === 403, csvAth.status);
+      const csvAnon = await rpText(null, '/api/export/completions.csv');
+      check('raw completions CSV without login is 401', csvAnon.status === 401, csvAnon.status);
+    } finally {
+      rpChild.kill('SIGKILL');
+      fs.rmSync(RP_DIR, { recursive: true, force: true });
+    }
+  }
 
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
