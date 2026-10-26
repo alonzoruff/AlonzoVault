@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v2 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v2"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v3 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v3"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v2'") &&
-    swJs.text.includes("ruffin-performance-v2"));
+    appJs.text.includes("const APP_VERSION = 'v3'") &&
+    swJs.text.includes("ruffin-performance-v3"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v2"') &&
-    pageHtml.text.includes('Ruffin Performance · App v2') &&
+    pageHtml.text.includes('data-app-version="v3"') &&
+    pageHtml.text.includes('Ruffin Performance · App v3') &&
     appJs.text.includes('appVersionHtml'));
   /* ---------------- Ruffin Performance: landing + brand + theme ----
      The logged-out home is the landing page for AJ's own membership.
@@ -5451,6 +5451,140 @@ async function waitForServer(tries = 60) {
       } finally {
         lbChild.kill('SIGKILL');
         fs.rmSync(LB_DIR, { recursive: true, force: true });
+      }
+    }
+
+    /* Stripe Checkout endpoint (Build C, endpoint only): inert by
+       default — with no STRIPE_SECRET_KEY the endpoint answers 503
+       and never calls Stripe; with a key it creates a hosted
+       Checkout Session against STRIPE_API_BASE, which here is a
+       local stub that captures the exact form body so every
+       configured parameter can be asserted. Runs its own
+       server/port/data dir plus the stub, like the blocks above. */
+    {
+      const http = require('http');
+      const CO_BASE = 'http://127.0.0.1:3222';
+      let stubHits = [];
+      const stub = http.createServer((req2, res2) => {
+        let raw = '';
+        req2.on('data', (d) => { raw += d; });
+        req2.on('end', () => {
+          stubHits.push({
+            method: req2.method, url: req2.url,
+            auth: req2.headers.authorization || '',
+            type: req2.headers['content-type'] || '',
+            params: Object.fromEntries(new URLSearchParams(raw)),
+          });
+          res2.writeHead(200, { 'content-type': 'application/json' });
+          res2.end(JSON.stringify({ id: 'cs_test_stub', url: 'https://checkout.example.test/pay/cs_test_stub' }));
+        });
+      });
+      await new Promise(r => stub.listen(3223, '127.0.0.1', r));
+      const CO_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-checkout-'));
+      const coEnvBase = Object.assign({}, process.env, {
+        PORT: '3222', DATA_DIR: CO_DIR, SESSION_SECRET: 'checkout-secret',
+      });
+      delete coEnvBase.STRIPE_SECRET_KEY;
+      delete coEnvBase.STRIPE_PRICE_ID;
+      delete coEnvBase.DOMAIN;
+      delete coEnvBase.STRIPE_API_BASE;
+      let coLog = '';
+      const startCo = (extraEnv) => {
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, coEnvBase, extraEnv || {}),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', d => { coLog += d; });
+        c.stderr.on('data', d => { coLog += d; });
+        return c;
+      };
+      const waitCo = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(CO_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      const coApi = async (method, p, body) => {
+        const headers = {};
+        let data;
+        if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+        const res = await fetch(CO_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        return { status: res.status, json, text: json ? '' : await res.text().catch(() => '') };
+      };
+      let coChild = startCo();
+      try {
+        check('checkout server starts (no Stripe key configured)', await waitCo(), coLog);
+        let cr = await coApi('POST', '/api/checkout/session', {});
+        check('checkout endpoint is inert without STRIPE_SECRET_KEY (503 JSON)',
+          cr.status === 503 && !!cr.json && cr.json.error === 'Payments are not configured yet.',
+          cr.status + ' ' + JSON.stringify(cr.json));
+        check('no Stripe call is attempted while unconfigured', stubHits.length === 0, stubHits.length);
+        const coPage = await (await fetch(CO_BASE + '/')).text();
+        check('landing page still carries no checkout/stripe wording',
+          !coPage.includes('checkout') && !coPage.includes('stripe'));
+
+        coChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        stubHits = [];
+        coChild = startCo({
+          STRIPE_SECRET_KEY: 'sk_test_stub_key',
+          STRIPE_API_BASE: 'http://127.0.0.1:3223',
+        });
+        check('checkout server restarts with a Stripe key', await waitCo(), coLog);
+        cr = await coApi('POST', '/api/checkout/session', {});
+        check('checkout endpoint returns the hosted session URL',
+          cr.status === 200 && !!cr.json && cr.json.url === 'https://checkout.example.test/pay/cs_test_stub',
+          cr.status + ' ' + JSON.stringify(cr.json));
+        check('exactly one Stripe API call was made, to the sessions path',
+          stubHits.length === 1 && stubHits[0].method === 'POST' && stubHits[0].url === '/v1/checkout/sessions',
+          stubHits.map(h => h.method + ' ' + h.url));
+        const hp = (stubHits[0] && stubHits[0].params) || {};
+        check('the Stripe call carries the bearer key, form-encoded',
+          stubHits.length === 1 && stubHits[0].auth === 'Bearer sk_test_stub_key' &&
+          stubHits[0].type.includes('application/x-www-form-urlencoded'),
+          stubHits[0] && stubHits[0].auth);
+        check('checkout params: fixed hosted/subscription values are exact',
+          hp.ui_mode === 'hosted_page' && hp.mode === 'subscription' &&
+          hp.billing_address_collection === 'auto' &&
+          hp['phone_number_collection[enabled]'] === 'false' &&
+          hp['automatic_tax[enabled]'] === 'false' &&
+          hp.allow_promotion_codes === 'false' &&
+          hp.payment_method_collection === 'always' &&
+          hp.submit_type === 'auto', hp);
+        check('checkout params: Studio identifiers ride as metadata',
+          hp['metadata[integration_identifier]'] === 'hosted_web_0001' &&
+          hp['metadata[origin_context]'] === 'web', hp);
+        check('checkout params: placeholder price, quantity and DOMAIN URLs',
+          hp['line_items[0][price]'] === 'price_...' && hp['line_items[0][quantity]'] === '1' &&
+          hp.success_url === 'https://example.com/checkout/success?session_id={CHECKOUT_SESSION_ID}' &&
+          hp.cancel_url === 'https://example.com/', hp);
+
+        coChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        stubHits = [];
+        coChild = startCo({
+          STRIPE_SECRET_KEY: 'sk_test_stub_key',
+          STRIPE_API_BASE: 'http://127.0.0.1:3223',
+          STRIPE_PRICE_ID: 'price_test_123',
+          DOMAIN: 'https://ruffin-performance.onrender.com',
+        });
+        check('checkout server restarts with price + DOMAIN configured', await waitCo(), coLog);
+        cr = await coApi('POST', '/api/checkout/session', {});
+        const ep = (stubHits[0] && stubHits[0].params) || {};
+        check('configured env wins: real price ID and DOMAIN URLs are sent',
+          cr.status === 200 && ep['line_items[0][price]'] === 'price_test_123' &&
+          ep.success_url === 'https://ruffin-performance.onrender.com/checkout/success?session_id={CHECKOUT_SESSION_ID}' &&
+          ep.cancel_url === 'https://ruffin-performance.onrender.com/', ep);
+      } finally {
+        coChild.kill('SIGKILL');
+        stub.close();
+        fs.rmSync(CO_DIR, { recursive: true, force: true });
       }
     }
 

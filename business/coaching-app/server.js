@@ -16,6 +16,21 @@
  *   SESSION_SECRET  Secret used to sign login cookies. If not set, a random
  *                   one is generated once and kept in DATA_DIR so logins
  *                   survive restarts.
+ *   STRIPE_SECRET_KEY  Stripe secret key for the membership checkout
+ *                   endpoint (POST /api/checkout/session). If not set,
+ *                   the endpoint answers 503 and never attempts a
+ *                   payment call — payments stay off until the key is
+ *                   configured on the host. See
+ *                   STRIPE_INTEGRATION_TODO.md for the full setup.
+ *   STRIPE_PRICE_ID The default Stripe Price ID the checkout endpoint
+ *                   sells; until it is set the endpoint sends the
+ *                   placeholder price_... (see the TODO file).
+ *   DOMAIN          Public base URL of this app, used to build the
+ *                   checkout success/cancel URLs (default
+ *                   https://example.com — a placeholder; on the live
+ *                   host it is https://ruffin-performance.onrender.com).
+ *   STRIPE_API_BASE Stripe API base URL (default
+ *                   https://api.stripe.com); overridable for tests.
  *   COACH_INVITE_EMAILS  Optional comma-separated emails to seed as
  *                   assistant-coach invites at startup. Seeding is
  *                   idempotent and removal-wins: once an email has
@@ -73,8 +88,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v2',
-  cache: 'ruffin-performance-v2',
+  version: 'v3',
+  cache: 'ruffin-performance-v3',
 };
 
 /* ------------------------------------------------------------------ */
@@ -2627,6 +2642,65 @@ const cleanEvents = (v) => {
 };
 
 /* ------------------------------------------------------------------ */
+/* Stripe Checkout (endpoint only — payments stay off by default)      */
+/*                                                                     */
+/* Zero-dependency: the Checkout Session is created with a direct    */
+/* REST call via Node's built-in fetch, form-encoded, exactly as the */
+/* Stripe API expects. The endpoint is inert until STRIPE_SECRET_KEY */
+/* is configured on the host: with no key it answers 503 and never   */
+/* attempts a Stripe call. There is deliberately no paywall, no join */
+/* flow change, and no webhook handler yet — see                     */
+/* STRIPE_INTEGRATION_TODO.md for the remaining Build C steps.       */
+/* ------------------------------------------------------------------ */
+const STRIPE_API_BASE = process.env.STRIPE_API_BASE || 'https://api.stripe.com';
+/* The Checkout Session parameters as a flat form map, built fresh
+   per request so env changes need no code change. The fixed values
+   come from the Checkout Studio configuration and must not drift;
+   price / success_url / cancel_url carry the documented placeholder
+   values until real ones are configured (see the TODO file). The
+   Studio's integration_identifier / origin_context have no native
+   Checkout Session parameter, so they ride along as metadata. */
+function buildCheckoutSessionParams() {
+  const domain = process.env.DOMAIN || 'https://example.com';
+  return {
+    ui_mode: 'hosted_page',
+    mode: 'subscription',
+    billing_address_collection: 'auto',
+    'phone_number_collection[enabled]': 'false',
+    'automatic_tax[enabled]': 'false',
+    allow_promotion_codes: 'false',
+    payment_method_collection: 'always',
+    submit_type: 'auto',
+    'line_items[0][price]': process.env.STRIPE_PRICE_ID || 'price_...',
+    'line_items[0][quantity]': '1',
+    success_url: domain + '/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+    cancel_url: domain + '/',
+    'metadata[integration_identifier]': 'hosted_web_0001',
+    'metadata[origin_context]': 'web',
+  };
+}
+async function createCheckoutSession() {
+  const form = new URLSearchParams(buildCheckoutSessionParams());
+  const stripeRes = await fetch(STRIPE_API_BASE + '/v1/checkout/sessions', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer ' + process.env.STRIPE_SECRET_KEY,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: form.toString(),
+  });
+  const session = await stripeRes.json().catch(() => null);
+  if (!stripeRes.ok || !session || !session.url) {
+    const msg = (session && session.error && typeof session.error.message === 'string')
+      ? session.error.message : 'Payment provider error.';
+    const err = new Error(msg);
+    err.stripeMessage = msg;
+    throw err;
+  }
+  return session;
+}
+
+/* ------------------------------------------------------------------ */
 /* API                                                                 */
 /* ------------------------------------------------------------------ */
 async function handleApi(req, res, url) {
@@ -2635,6 +2709,23 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/content' && req.method === 'GET') {
     return sendJson(res, 200, Object.assign({}, CONTENT, { videoUpload: VIDEO_UPLOAD, brand: BRAND }));
+  }
+
+  /* Membership checkout: creates a hosted Stripe Checkout Session
+     and answers with its URL. Inert by design until the host has
+     STRIPE_SECRET_KEY configured (503, and no Stripe call is made);
+     nothing here gates registration or content — the paywall and
+     join flow are a later Build C stage. */
+  if (p === '/api/checkout/session' && req.method === 'POST') {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return sendJson(res, 503, { error: 'Payments are not configured yet.' });
+    }
+    try {
+      const session = await createCheckoutSession();
+      return sendJson(res, 200, { url: session.url });
+    } catch (err) {
+      return sendJson(res, 502, { error: (err && err.stripeMessage) || 'Payment provider unreachable.' });
+    }
   }
 
   /* Warm-up card edits are public to read (the cards themselves are
