@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v44',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v44"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v45',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v45"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v44'") &&
-    swJs.text.includes("sprinter-app-v44"));
+    appJs.text.includes("const APP_VERSION = 'v45'") &&
+    swJs.text.includes("sprinter-app-v45"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v44"') &&
-    pageHtml.text.includes('Cadets Sprint · App v44') &&
+    pageHtml.text.includes('data-app-version="v45"') &&
+    pageHtml.text.includes('Cadets Sprint · App v45') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -2391,9 +2391,16 @@ async function main() {
     !stylesCss.text.includes('Floodlight') && !stylesCss.text.includes('.view > h1') &&
     !/\.tabbar \.tab\.active\s*\{[^}]*linear-gradient\(180deg, var\(--red\)/.test(stylesCss.text) &&
     !/\.menu-item\s*\{[^}]*var\(--hud-bg\)/.test(stylesCss.text));
-  check('runner animation + Phase 1 in-place guards untouched by the rollback',
+  check('hero runner: continuous 0.88s sprint cycle (phase-locked limb keyframes, no travel timeline)',
     stylesCss.text.includes('@keyframes athleteMove') &&
-    stylesCss.text.includes('athleteMove 12s') &&
+    stylesCss.text.includes('athleteMove .88s') &&
+    stylesCss.text.includes('@keyframes thighNear') && stylesCss.text.includes('@keyframes thighFar') &&
+    stylesCss.text.includes('@keyframes shinNear') && stylesCss.text.includes('@keyframes shinFar') &&
+    stylesCss.text.includes('@keyframes footNear') && stylesCss.text.includes('@keyframes footFar') &&
+    stylesCss.text.includes('@keyframes foreNear') && stylesCss.text.includes('@keyframes foreFar') &&
+    !stylesCss.text.includes('heroTravel') && !stylesCss.text.includes('heroFade') &&
+    pageHtml.text.includes('class="foot foot-near o-ankle-near"') &&
+    pageHtml.text.includes('class="foot foot-far o-ankle-far"') &&
     appJs.text.includes('function flashSaved('));
 
   /* ---------------- QA + polish pass (Oct 24) ----------------
