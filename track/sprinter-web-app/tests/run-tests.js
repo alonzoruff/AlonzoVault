@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v46',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v46"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v47',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v47"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v46'") &&
-    swJs.text.includes("sprinter-app-v46"));
+    appJs.text.includes("const APP_VERSION = 'v47'") &&
+    swJs.text.includes("sprinter-app-v47"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v46"') &&
-    pageHtml.text.includes('Cadets Sprint · App v46') &&
+    pageHtml.text.includes('data-app-version="v47"') &&
+    pageHtml.text.includes('Cadets Sprint · App v47') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -5642,6 +5642,275 @@ async function waitForServer(tries = 60) {
     } finally {
       wrChild.kill('SIGKILL');
       fs.rmSync(WR_DIR, { recursive: true, force: true });
+    }
+  }
+
+  /* ==================== v47: Reports library expansion ==================== */
+  /* Completion trend (the by-group weekly math aggregated into a
+     percentage), period comparison (best in A vs best in B out of
+     testingHistoryFor), team assessment by quality, and the raw
+     session-completions CSV. Own isolated store; every window is
+     pinned with explicit dates so the counts are exact on any run
+     date. */
+  {
+    const RP_BASE = 'http://127.0.0.1:3224';
+    const rpApi = async (cookie, method, p, body) => {
+      const headers = {};
+      if (cookie) headers.cookie = cookie;
+      let data;
+      if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+      const res = await fetch(RP_BASE + p, { method, headers, body: data });
+      let json = null;
+      try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+      let setCookie = [];
+      try { setCookie = res.headers.getSetCookie(); } catch (_) {
+        const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+      }
+      return { status: res.status, json, setCookie };
+    };
+    const rpText = async (cookie, p) => {
+      const res = await fetch(RP_BASE + p, { headers: cookie ? { cookie } : {} });
+      return {
+        status: res.status, text: await res.text(),
+        type: res.headers.get('content-type') || '',
+        disp: res.headers.get('content-disposition') || '',
+      };
+    };
+    const RP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-reports-'));
+    let rpLog = '';
+    const rpChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, {
+        PORT: '3224', DATA_DIR: RP_DIR, SESSION_SECRET: 'reports-secret',
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    rpChild.stdout.on('data', d => { rpLog += d; });
+    rpChild.stderr.on('data', d => { rpLog += d; });
+    const waitRp = async () => {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(RP_BASE + '/api/content');
+          if (res.status === 200) return true;
+        } catch (_) { /* not up yet */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    try {
+      check('reports-library server starts', await waitRp(), rpLog);
+      let rp = await rpApi(null, 'POST', '/api/register', { email: 'rpcoach@test.com', password: 'testpass123' });
+      const rpCoach = cookieOf(rp);
+      rp = await rpApi(null, 'POST', '/api/register', { email: 'rpathlete@test.com', password: 'testpass123' });
+      const rpAthlete = cookieOf(rp);
+
+      /* Served wiring: the three new reports + the CSV download. */
+      const rpJs = await rpText(null, '/app.js');
+      check('reports page fetches the trend, comparison and assessment endpoints',
+        rpJs.text.includes('/api/reports/completion-trend') &&
+        rpJs.text.includes('/api/reports/compare') &&
+        rpJs.text.includes('/api/reports/assessment'));
+      check('reports page renders the three new cards and the raw CSV link',
+        rpJs.text.includes('Completion trend') && rpJs.text.includes('Period comparison') &&
+        rpJs.text.includes('Team assessment by quality') &&
+        rpJs.text.includes('/api/export/completions.csv') &&
+        rpJs.text.includes('Session completions (raw)'));
+
+      /* Fixtures: a two-athlete squad and an empty group. */
+      rp = await rpApi(rpCoach, 'POST', '/api/groups', { name: 'Trend Squad' });
+      const gTrend = rp.json.group.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/groups', { name: 'Empty Group' });
+      const gEmpty = rp.json.group.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/profiles', { firstName: 'Pia', lastName: 'Trend', groupId: gTrend });
+      const piaT = rp.json.profile.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/profiles', { firstName: 'Quinn', lastName: 'Trend', groupId: gTrend });
+      const quinnT = rp.json.profile.id;
+      const c1 = await rpApi(rpCoach, 'POST', '/api/completions', { profileId: piaT, date: '2026-10-26', marks: 'Felt good, strong finish', feel: 4 });
+      const c2 = await rpApi(rpCoach, 'POST', '/api/completions', { profileId: piaT, date: '2026-10-28' });
+      const c3 = await rpApi(rpCoach, 'POST', '/api/completions', { profileId: quinnT, date: '2026-10-26' });
+      check('trend fixtures: three completions recorded in season week 1',
+        c1.status === 200 && c2.status === 200 && c3.status === 200,
+        [c1.status, c2.status, c3.status]);
+
+      /* ---- completion trend ---- */
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=4&through=2026-11-16&groupId=' + gTrend);
+      const tw = rp.json.weeks || [];
+      check('completion trend: window is the 4 season weeks ending at through',
+        rp.status === 200 && rp.json.scope.type === 'group' && rp.json.scope.group.id === gTrend &&
+        tw.map(w => w.monday).join(',') === '2026-10-26,2026-11-02,2026-11-09,2026-11-16', rp.json);
+      const tw1 = tw.find(w => w.monday === '2026-10-26') || {};
+      check('completion trend: week 1 is 25% — 3 completions of 12 possible (6 assigned days x 2 athletes)',
+        tw1.assigned === 6 && tw1.possible === 12 && tw1.completions === 3 &&
+        tw1.completedDays === 2 && tw1.percent === 25, tw1);
+      const tw4 = tw.find(w => w.monday === '2026-11-16') || {};
+      check('completion trend: a week with nothing marked is 0%, not an error',
+        tw4.assigned === 3 && tw4.completions === 0 && tw4.percent === 0, tw4);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completions');
+      const compWeeks = ((rp.json.groups.find(g => g.group.id === gTrend) || {}).weeks || []);
+      check('completion trend reuses the by-group weekly math exactly (parity per week)',
+        tw.length === 4 && tw.every(w => {
+          const src = compWeeks.find(x => x.monday === w.monday) || {};
+          return src.assigned === w.assigned && src.completions === w.completions &&
+            src.completedDays === w.completedDays;
+        }));
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=4&through=2026-10-26');
+      check('completion trend: team scope sums the same week (3 of 12, 25%)',
+        rp.status === 200 && rp.json.scope.type === 'team' && rp.json.weeks.length === 1 &&
+        rp.json.weeks[0].completions === 3 && rp.json.weeks[0].possible === 12 &&
+        rp.json.weeks[0].percent === 25, rp.json);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=4&through=2026-11-16&groupId=' + gEmpty);
+      check('completion trend: an empty group has possible 0 and percent null in every week (no divide by zero)',
+        rp.status === 200 && rp.json.weeks.length === 4 &&
+        rp.json.weeks.every(w => w.possible === 0 && w.percent === null && w.completions === 0),
+        rp.json.weeks);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=12&through=2027-05-10');
+      const trendLen12 = (rp.json.weeks || []).length;
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?weeks=99&through=2027-05-10');
+      check('completion trend: range is one of 4/8/12 (anything else falls back to 8)',
+        trendLen12 === 12 && (rp.json.weeks || []).length === 8,
+        [trendLen12, (rp.json.weeks || []).length]);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?groupId=nope');
+      check('completion trend: unknown group is 400', rp.status === 400, rp.status);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/completion-trend?through=2026-02-30');
+      check('completion trend: an impossible through date is 400', rp.status === 400, rp.status);
+      rp = await rpApi(rpAthlete, 'GET', '/api/reports/completion-trend');
+      check('athlete is 403 on the completion trend', rp.status === 403, rp.status);
+      rp = await rpApi(null, 'GET', '/api/reports/completion-trend');
+      check('completion trend without login is 401', rp.status === 401, rp.status);
+
+      /* ---- assessment before any custom test: no Speed section ---- */
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/assessment');
+      check('assessment: with no timed test in the battery, only Power and Strength appear',
+        rp.status === 200 && (rp.json.qualities || []).map(q => q.quality).join(',') === 'power,strength',
+        rp.json.qualities);
+
+      /* ---- testing fixtures across two periods ---- */
+      rp = await rpApi(rpCoach, 'POST', '/api/tests', { name: 'Fly 10m', unit: 'sec' });
+      const flyT = rp.json.test || {};
+      check('a seconds custom test is derived as a timed, lower-is-better measure',
+        rp.status === 201 && flyT.kind === 'measure' && flyT.better === 'lower', rp.json);
+      rp = await rpApi(rpCoach, 'POST', '/api/test-days', { date: '2026-11-09', title: 'RP Day 1', testKeys: ['back-squat', 'vertical-jump', flyT.key] });
+      const rpDay1 = rp.json.testDay.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/test-days', { date: '2027-02-08', title: 'RP Day 2', testKeys: ['back-squat', 'vertical-jump', flyT.key] });
+      const rpDay2 = rp.json.testDay.id;
+      rp = await rpApi(rpCoach, 'POST', '/api/results/bulk', {
+        testDayId: rpDay1,
+        entries: [
+          { profileId: piaT, testKey: 'back-squat', weight: 200, reps: 5 },
+          { profileId: quinnT, testKey: 'back-squat', weight: 150, reps: 5 },
+          { profileId: piaT, testKey: 'vertical-jump', value: 24 },
+          { profileId: quinnT, testKey: 'vertical-jump', value: 28 },
+          { profileId: piaT, testKey: flyT.key, value: 2.0 },
+          { profileId: quinnT, testKey: flyT.key, value: 1.95 },
+        ],
+      });
+      check('period fixtures: day 1 grid saves 6 results', rp.status === 200 && rp.json.saved === 6, rp.json);
+      rp = await rpApi(rpCoach, 'POST', '/api/results/bulk', {
+        testDayId: rpDay2,
+        entries: [
+          { profileId: piaT, testKey: 'back-squat', weight: 210, reps: 5 },
+          { profileId: quinnT, testKey: 'back-squat', weight: 160, reps: 5 },
+          { profileId: piaT, testKey: 'vertical-jump', value: 26 },
+          { profileId: piaT, testKey: flyT.key, value: 1.9 },
+        ],
+      });
+      check('period fixtures: day 2 grid saves 4 results (Quinn has no day-2 jump or fly)',
+        rp.status === 200 && rp.json.saved === 4, rp.json);
+      rp = await rpApi(rpCoach, 'POST', '/api/profiles', { firstName: 'Rae', lastName: 'Trend', groupId: gTrend });
+      const raeT = rp.json.profile.id;
+
+      /* ---- period comparison ---- */
+      const cmpQs = 'aFrom=2026-11-01&aTo=2026-11-30&bFrom=2027-02-01&bTo=2027-02-28';
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=back-squat&' + cmpQs);
+      const cmpRows = rp.json.rows || [];
+      const cmpPia = cmpRows.find(x => x.profileId === piaT) || {};
+      const cmpQuinn = cmpRows.find(x => x.profileId === quinnT) || {};
+      const cmpRae = cmpRows.find(x => x.profileId === raeT) || {};
+      check('compare (higher is better): best per period from Epley displays, signed delta, improved',
+        rp.status === 200 && cmpPia.bestA === 233 && cmpPia.bestB === 245 &&
+        cmpPia.delta === 12 && cmpPia.improved === true &&
+        cmpQuinn.bestA === 175 && cmpQuinn.bestB === 187 && cmpQuinn.delta === 12, rp.json);
+      check('compare: an athlete with no results shows both periods empty and no delta',
+        cmpRae.bestA === null && cmpRae.bestB === null && cmpRae.delta === null &&
+        cmpRae.improved === null, cmpRae);
+      check('compare summary: period averages over athletes who have a mark, plus improved count',
+        rp.json.summary.avgA === 204 && rp.json.summary.avgB === 216 &&
+        rp.json.summary.athletesWithA === 2 && rp.json.summary.athletesWithB === 2 &&
+        rp.json.summary.improved === 2 && rp.json.summary.declined === 0, rp.json.summary);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=' + flyT.key + '&' + cmpQs);
+      const flyRows = rp.json.rows || [];
+      const flyPia = flyRows.find(x => x.profileId === piaT) || {};
+      const flyQuinn = flyRows.find(x => x.profileId === quinnT) || {};
+      check('compare (lower is better): a faster time is a negative delta and still an improvement',
+        flyPia.bestA === 2 && flyPia.bestB === 1.9 && flyPia.delta === -0.1 &&
+        flyPia.improved === true, flyPia);
+      check('compare: a missing second period leaves that side and the delta empty',
+        flyQuinn.bestA === 1.95 && flyQuinn.bestB === null && flyQuinn.delta === null &&
+        rp.json.summary.athletesWithB === 1 && rp.json.summary.avgB === 1.9, rp.json.summary);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=back-squat');
+      const openPia = (rp.json.rows || []).find(x => x.profileId === piaT) || {};
+      check('compare with open bounds: both periods are all-time, delta 0 counts as unchanged',
+        openPia.bestA === 245 && openPia.bestB === 245 && openPia.delta === 0 &&
+        openPia.improved === null && rp.json.summary.unchanged === 2, rp.json.summary);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=nope');
+      check('compare: unknown test is 404', rp.status === 404, rp.status);
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/compare?testKey=back-squat&aFrom=2026-13-01');
+      check('compare: a malformed date bound is 400', rp.status === 400, rp.status);
+      rp = await rpApi(rpAthlete, 'GET', '/api/reports/compare?testKey=back-squat');
+      check('athlete is 403 on period comparison', rp.status === 403, rp.status);
+      rp = await rpApi(null, 'GET', '/api/reports/compare?testKey=back-squat');
+      check('period comparison without login is 401', rp.status === 401, rp.status);
+
+      /* ---- team assessment by quality ---- */
+      rp = await rpApi(rpCoach, 'GET', '/api/reports/assessment');
+      const quals = rp.json.qualities || [];
+      check('assessment: qualities come in speed, power, strength order',
+        quals.map(q => q.quality).join(',') === 'speed,power,strength', quals.map(q => q.quality));
+      const qSpeed = quals.find(q => q.quality === 'speed') || { tests: [], rows: [] };
+      const qPower = quals.find(q => q.quality === 'power') || { tests: [], averages: {} };
+      const qStrength = quals.find(q => q.quality === 'strength') || { tests: [], averages: {}, counts: {} };
+      check('assessment: the timed custom test is the Speed section; jumps are Power; the five lifts are Strength',
+        qSpeed.tests.map(t => t.key).join(',') === flyT.key &&
+        qPower.tests.map(t => t.key).join(',') === 'vertical-jump,broad-jump' &&
+        qStrength.tests.map(t => t.key).join(',') === 'back-squat,trap-bar-deadlift,bench-press,hang-clean,power-clean',
+        quals.map(q => q.tests.map(t => t.key)));
+      check('assessment: pull-ups (kind reps) are tagged to no quality',
+        !quals.some(q => q.tests.some(t => t.key === 'pull-ups')));
+      check('assessment: strength average is over best marks (squat (245+187)/2 = 216, n=2); untested lifts average null',
+        qStrength.averages['back-squat'] === 216 && qStrength.counts['back-squat'] === 2 &&
+        qStrength.averages['bench-press'] === null && qStrength.counts['bench-press'] === 0,
+        qStrength.averages);
+      check('assessment: power average for the vertical jump is (26+28)/2 = 27',
+        qPower.averages['vertical-jump'] === 27 && qPower.averages['broad-jump'] === null,
+        qPower.averages);
+      const spdPia = qSpeed.rows.find(x => x.profileId === piaT) || { marks: {} };
+      const spdRae = qSpeed.rows.find(x => x.profileId === raeT) || { marks: {} };
+      const strPia = (qStrength.rows || []).find(x => x.profileId === piaT) || { marks: {} };
+      check('assessment rows carry each athlete\'s overall best per test, empty where untested',
+        spdPia.marks[flyT.key] === 1.9 && spdRae.marks[flyT.key] === null &&
+        strPia.marks['back-squat'] === 245, { spdPia, spdRae, strPia });
+      rp = await rpApi(rpAthlete, 'GET', '/api/reports/assessment');
+      check('athlete is 403 on the assessment', rp.status === 403, rp.status);
+
+      /* ---- raw session completions CSV ---- */
+      const csv = await rpText(rpCoach, '/api/export/completions.csv');
+      const csvLines = csv.text.trim().split('\r\n');
+      check('completions CSV: 200, csv type, session-completions.csv filename',
+        csv.status === 200 && csv.type.includes('text/csv') &&
+        csv.disp.includes('filename="session-completions.csv"'), { status: csv.status, disp: csv.disp });
+      check('completions CSV: header row, then one row per completion record',
+        csvLines[0] === 'Date,Athlete,Group,Session,Session Title,Marks,Feel,Notes' &&
+        csvLines.length === 4, csvLines);
+      check('completions CSV: rows carry the stored session code, its title, and marks — commas quoted',
+        csvLines[1] === '2026-10-26,Pia Trend,Trend Squad,ACC-01,Block starts and short drives,"Felt good, strong finish",4,' &&
+        csvLines[2].startsWith('2026-10-26,Quinn Trend,Trend Squad,ACC-01,') &&
+        csvLines[3].startsWith('2026-10-28,Pia Trend,Trend Squad,ACC-02,'), csvLines);
+      const csvAth = await rpText(rpAthlete, '/api/export/completions.csv');
+      check('athlete is 403 on the raw completions CSV', csvAth.status === 403, csvAth.status);
+      const csvAnon = await rpText(null, '/api/export/completions.csv');
+      check('raw completions CSV without login is 401', csvAnon.status === 401, csvAnon.status);
+    } finally {
+      rpChild.kill('SIGKILL');
+      fs.rmSync(RP_DIR, { recursive: true, force: true });
     }
   }
 

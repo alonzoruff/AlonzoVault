@@ -1850,6 +1850,76 @@ function loadsForProfile(workout, profileId) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Reports: shared per-group weekly completion math                    */
+/* ------------------------------------------------------------------ */
+/* Per group per season week: assigned = the days that week whose
+   resolved assignment has a session (plan or coach override);
+   completions = the coach-marked completion records for the group
+   that week, with completedDays = the distinct days they cover.
+   This is the ONE computation behind both the Completions-by-group
+   report and the completion Trend report — the trend aggregates
+   these exact numbers, it never recounts. */
+function completionsByGroup() {
+  const today = todayStr();
+  return db.groups.map(g => {
+    const daySets = new Map();
+    const weeks = CONTENT.weeks.map(w => {
+      let assigned = 0;
+      for (let i = 0; i < 7; i++) {
+        const ds = addDaysStr(w.start, i);
+        if (!ds) continue;
+        const a = resolveAssignment(g.id, ds);
+        if (a && a.sessionId) assigned++;
+      }
+      daySets.set(w.start, new Set());
+      return {
+        week: w.week, monday: w.start, assigned,
+        completedDays: 0, completions: 0, upcoming: w.start > today,
+      };
+    });
+    const byMonday = new Map(weeks.map(x => [x.monday, x]));
+    for (const c of Object.values(db.completions)) {
+      if (c.groupId !== g.id) continue;
+      const mon = mondayOf(c.date);
+      const wk = mon ? byMonday.get(mon) : null;
+      if (!wk) continue; // outside the season weeks — not charted
+      wk.completions++;
+      daySets.get(wk.monday).add(c.date);
+    }
+    for (const wk of weeks) wk.completedDays = daySets.get(wk.monday).size;
+    return { group: { id: g.id, name: g.name }, weeks };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Reports: performance qualities for the team assessment              */
+/* ------------------------------------------------------------------ */
+/* Speed = timed tests, power = jumps, strength = lifts. The built-in
+   battery carries no timed test, so Speed appears only when a coach
+   adds a timed (seconds) custom test; the jump keys are named
+   outright. Custom tests are tagged only where the meaning is
+   unambiguous: kind 'lift' is strength, a seconds unit is a timed
+   test (speed). Pull-ups (kind 'reps') and any other custom test
+   stay untagged and appear in no quality until a coach-facing
+   tagging control exists. */
+const TEST_QUALITY = {
+  'back-squat': 'strength', 'trap-bar-deadlift': 'strength',
+  'bench-press': 'strength', 'hang-clean': 'strength', 'power-clean': 'strength',
+  'vertical-jump': 'power', 'broad-jump': 'power',
+};
+const QUALITY_ORDER = [
+  { key: 'speed', label: 'Speed' },
+  { key: 'power', label: 'Power' },
+  { key: 'strength', label: 'Strength' },
+];
+function qualityForTest(t) {
+  if (TEST_QUALITY[t.key]) return TEST_QUALITY[t.key];
+  if (t.kind === 'lift') return 'strength';
+  if (t.unit === 'sec') return 'speed';
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
 /* AMS attention flags (coach-side only)                               */
 /* ------------------------------------------------------------------ */
 /* Four flags, each computed from data the app already holds, with
@@ -3946,6 +4016,29 @@ async function handleApi(req, res, url) {
     return sendCsv(res, 'school-records.csv', rows);
   }
 
+  if (p === '/api/export/completions.csv' && req.method === 'GET') {
+    // Raw session completions: one row per record in the store,
+    // exactly as marked (session code as stored, its library title
+    // alongside, marks/feel/notes verbatim).
+    const rows = [['Date', 'Athlete', 'Group', 'Session', 'Session Title', 'Marks', 'Feel', 'Notes']];
+    const entries = [];
+    for (const c of Object.values(db.completions)) {
+      const prof = profileById(c.profileId);
+      const pub = prof ? publicProfile(prof) : null;
+      const grp = c.groupId ? groupById(c.groupId) : null;
+      const sess = c.sessionId ? SESSION_BY_ID.get(c.sessionId) : null;
+      entries.push({
+        date: c.date, name: pub ? pub.name : c.profileId,
+        row: [c.date, pub ? pub.name : c.profileId, grp ? grp.name : '',
+          c.sessionId || '', sess ? sess.name : '', c.marks || '',
+          c.feel === null || c.feel === undefined ? '' : String(c.feel), c.notes || ''],
+      });
+    }
+    entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.name.localeCompare(b.name)));
+    for (const e of entries) rows.push(e.row);
+    return sendCsv(res, 'session-completions.csv', rows);
+  }
+
   /* ---------- CSV exports (coach-only downloads) ---------- */
   if (p === '/api/export/testing.csv' && req.method === 'GET') {
     const rows = [['Test Day', 'Date', 'Athlete', 'Group', 'Test', 'Raw Entry', 'Est. 1RM (lb)']];
@@ -4988,40 +5081,182 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/reports/completions' && req.method === 'GET') {
-    // Per group per season week: assigned = days that week whose
-    // resolved assignment has a session (plan or coach override);
-    // completed = the coach-marked completions recorded for the group
-    // that week, with the distinct days they cover.
+    // The math lives in completionsByGroup (shared with the trend).
+    return sendJson(res, 200, { groups: completionsByGroup() });
+  }
+
+  if (p === '/api/reports/completion-trend' && req.method === 'GET') {
+    // Completion % per week over the last N season weeks, team-wide
+    // or for one group. The per-week inputs (assigned days, recorded
+    // completions, distinct days covered) come straight out of
+    // completionsByGroup — the same numbers the Completions-by-group
+    // report charts. The percentage follows the athlete report
+    // card's math, aggregated: numerator = completion records that
+    // week, denominator = assigned session days x the athletes in
+    // scope (current non-archived roster). possible 0 (a week with
+    // nothing scheduled, or a scope with no athletes) -> percent
+    // null, never a divide by zero. `through` (any date) ends the
+    // window at that date's week, for looking back mid-season.
+    let n = parseInt(q.get('weeks') || '8', 10);
+    if (![4, 8, 12].includes(n)) n = 8;
+    let through = null;
+    const throughRaw = q.get('through');
+    if (throughRaw) {
+      if (!parseDateStr(throughRaw)) return sendJson(res, 400, { error: 'through must be YYYY-MM-DD.' });
+      through = mondayOf(throughRaw);
+    }
+    const gid = q.get('groupId');
+    let scopeGroups = completionsByGroup();
+    let scope = { type: 'team' };
+    if (gid && gid !== 'all') {
+      const g = groupById(gid);
+      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      scopeGroups = scopeGroups.filter(x => x.group.id === gid);
+      scope = { type: 'group', group: { id: g.id, name: g.name } };
+    }
+    const allWeeks = CONTENT.weeks;
+    let eligible;
+    if (through) {
+      eligible = allWeeks.filter(w => w.start <= through);
+    } else {
+      const today = todayStr();
+      eligible = allWeeks.filter(w => w.start <= today);
+      if (!eligible.length) eligible = allWeeks.slice(0, n); // season not started: the opening weeks
+    }
+    const chosen = eligible.slice(-n);
+    const rosterCounts = new Map(db.groups.map(g => [
+      g.id, db.profiles.filter(pr => !pr.archived && pr.groupId === g.id).length,
+    ]));
     const today = todayStr();
-    const groups = db.groups.map(g => {
-      const daySets = new Map();
-      const weeks = CONTENT.weeks.map(w => {
-        let assigned = 0;
-        for (let i = 0; i < 7; i++) {
-          const ds = addDaysStr(w.start, i);
-          if (!ds) continue;
-          const a = resolveAssignment(g.id, ds);
-          if (a && a.sessionId) assigned++;
-        }
-        daySets.set(w.start, new Set());
-        return {
-          week: w.week, monday: w.start, assigned,
-          completedDays: 0, completions: 0, upcoming: w.start > today,
-        };
-      });
-      const byMonday = new Map(weeks.map(x => [x.monday, x]));
-      for (const c of Object.values(db.completions)) {
-        if (c.groupId !== g.id) continue;
-        const mon = mondayOf(c.date);
-        const wk = mon ? byMonday.get(mon) : null;
-        if (!wk) continue; // outside the season weeks — not charted
-        wk.completions++;
-        daySets.get(wk.monday).add(c.date);
+    const weeks = chosen.map(w => {
+      let assigned = 0, completions = 0, completedDays = 0, possible = 0, athletes = 0;
+      for (const grp of scopeGroups) {
+        const wk = grp.weeks.find(x => x.monday === w.start);
+        if (!wk) continue;
+        const size = rosterCounts.get(grp.group.id) || 0;
+        assigned += wk.assigned;
+        completions += wk.completions;
+        completedDays += wk.completedDays;
+        possible += wk.assigned * size;
+        athletes += size;
       }
-      for (const wk of weeks) wk.completedDays = daySets.get(wk.monday).size;
-      return { group: { id: g.id, name: g.name }, weeks };
+      return {
+        week: w.week, monday: w.start, end: w.end, upcoming: w.start > today,
+        assigned, athletes, possible, completions, completedDays,
+        percent: possible > 0 ? Math.round((completions / possible) * 100) : null,
+      };
     });
-    return sendJson(res, 200, { groups });
+    return sendJson(res, 200, { scope, weeks });
+  }
+
+  if (p === '/api/reports/compare' && req.method === 'GET') {
+    // Period comparison for ONE test: each athlete's best mark in
+    // period A vs period B, the signed delta, and whether it is an
+    // improvement under the test's own better-direction. Every value
+    // is a "best" out of testingHistoryFor — the display values the
+    // report card ranks by (Epley estimates for lifts included). A
+    // series entry only counts toward a period when its test-day
+    // date falls inside it; an undated entry counts only toward a
+    // fully open period. Bounds are optional (open-ended).
+    const test = findTest(q.get('testKey') || '');
+    if (!test) return sendJson(res, 404, { error: 'Unknown test.' });
+    const bound = (name) => {
+      const v = q.get(name);
+      if (v === null || v === '') return null;
+      return parseDateStr(v) ? v : undefined;
+    };
+    const aFrom = bound('aFrom'), aTo = bound('aTo'), bFrom = bound('bFrom'), bTo = bound('bTo');
+    if ([aFrom, aTo, bFrom, bTo].some(v => v === undefined)) {
+      return sendJson(res, 400, { error: 'Dates must be YYYY-MM-DD.' });
+    }
+    const better = test.better || 'higher';
+    const inPeriod = (date, from, to) => {
+      if (!date) return !from && !to;
+      return (!from || date >= from) && (!to || date <= to);
+    };
+    const bestIn = (series, from, to) => {
+      const vals = series
+        .filter(r => inPeriod(r.date, from, to))
+        .map(r => r.display)
+        .filter(d => d !== null && d !== undefined);
+      return vals.length ? (better === 'lower' ? Math.min : Math.max).apply(null, vals) : null;
+    };
+    const rows = db.profiles.filter(pr => !pr.archived).map(pr => {
+      const pub = publicProfile(pr);
+      const hist = testingHistoryFor(pr.id).find(t => t.testKey === test.key);
+      const series = hist ? hist.series : [];
+      const bestA = bestIn(series, aFrom, aTo);
+      const bestB = bestIn(series, bFrom, bTo);
+      const delta = bestA !== null && bestB !== null ? round2(bestB - bestA) : null;
+      const improved = delta === null || delta === 0 ? null
+        : (better === 'lower' ? delta < 0 : delta > 0);
+      return {
+        profileId: pr.id, name: pub.name, groupName: pub.groupName || '',
+        bestA, bestB, delta, improved,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    const avgOf = (vals) => vals.length ? round2(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+    const withA = rows.filter(r => r.bestA !== null);
+    const withB = rows.filter(r => r.bestB !== null);
+    const both = rows.filter(r => r.delta !== null);
+    return sendJson(res, 200, {
+      test: { key: test.key, name: test.name, unit: test.unit, kind: test.kind, better },
+      periodA: { from: aFrom, to: aTo }, periodB: { from: bFrom, to: bTo },
+      rows,
+      summary: {
+        athletesWithA: withA.length, athletesWithB: withB.length,
+        avgA: avgOf(withA.map(r => r.bestA)), avgB: avgOf(withB.map(r => r.bestB)),
+        improved: both.filter(r => r.improved === true).length,
+        declined: both.filter(r => r.improved === false).length,
+        unchanged: both.filter(r => r.improved === null).length,
+      },
+    });
+  }
+
+  if (p === '/api/reports/assessment' && req.method === 'GET') {
+    // Team assessment by performance quality: per quality, an
+    // athlete x test matrix of best marks (testingHistoryFor's best,
+    // the same number the report card shows) plus a team-average row
+    // over the athletes who have a mark. No ranks, no percentiles —
+    // the raw bests and the honest middle of the room.
+    const athletes = db.profiles.filter(pr => !pr.archived);
+    const bests = new Map();
+    for (const pr of athletes) {
+      const m = new Map();
+      for (const h of testingHistoryFor(pr.id)) m.set(h.testKey, h.best);
+      bests.set(pr.id, m);
+    }
+    const tests = allTests();
+    const qualities = QUALITY_ORDER.map(qd => {
+      const qTests = tests.filter(t => qualityForTest(t) === qd.key);
+      if (!qTests.length) return null;
+      const averages = {}, counts = {};
+      for (const t of qTests) {
+        const vals = athletes
+          .map(pr => bests.get(pr.id).get(t.key))
+          .filter(v => v !== null && v !== undefined);
+        counts[t.key] = vals.length;
+        averages[t.key] = vals.length ? round2(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+      }
+      return {
+        quality: qd.key, label: qd.label,
+        tests: qTests.map(t => ({
+          key: t.key, name: t.name, unit: t.unit, kind: t.kind,
+          better: t.better || 'higher', custom: !!t.custom,
+        })),
+        rows: athletes.map(pr => {
+          const pub = publicProfile(pr);
+          const marks = {};
+          for (const t of qTests) {
+            const v = bests.get(pr.id).get(t.key);
+            marks[t.key] = v === undefined ? null : v;
+          }
+          return { profileId: pr.id, name: pub.name, groupName: pub.groupName || '', marks };
+        }).sort((a, b) => a.name.localeCompare(b.name)),
+        averages, counts,
+      };
+    }).filter(Boolean);
+    return sendJson(res, 200, { qualities });
   }
 
   if (p === '/api/reports/load' && req.method === 'GET') {

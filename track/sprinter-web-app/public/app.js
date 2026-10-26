@@ -59,6 +59,13 @@ const state = {
   reportTest: null,
   reportGroup: null,
   reportAthleteId: null,
+  reportTrendWeeks: 8,
+  reportTrendGroup: 'all',
+  reportCmpTest: null,
+  reportCmpAFrom: null,
+  reportCmpATo: null,
+  reportCmpBFrom: null,
+  reportCmpBTo: null,
   digestWeek: null,
   digestLatest: null,
   meetEvents: [],
@@ -128,8 +135,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v46';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v46';
+const APP_VERSION = 'v47';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v47';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -4749,13 +4756,23 @@ async function renderReports() {
   if (!el) return;
   if (!isCoachUser()) { gateHtml(el, 'Reports and athlete report cards live here.'); return; }
   await refreshProfiles();
-  let trend, comp, load, health;
+  let trend, comp, load, health, assessment;
   try {
-    [trend, comp, load, health] = await Promise.all([
+    [trend, comp, load, health, assessment] = await Promise.all([
       api('/api/reports/team-trend'), api('/api/reports/completions'),
       api('/api/reports/load'), api('/api/reports/health'),
+      api('/api/reports/assessment'),
     ]);
   } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  if (state.reportTrendGroup !== 'all' && !comp.groups.some(g => g.group.id === state.reportTrendGroup)) {
+    state.reportTrendGroup = 'all';
+  }
+  let compTrend = null, compTrendErr = '';
+  try {
+    compTrend = await api('/api/reports/completion-trend?weeks=' + state.reportTrendWeeks
+      + (state.reportTrendGroup !== 'all'
+        ? '&groupId=' + encodeURIComponent(state.reportTrendGroup) : ''));
+  } catch (err) { compTrendErr = err.message; }
   const testsWithData = trend.tests.filter(t => t.points.length);
   if (!state.reportTest || !trend.tests.some(t => t.testKey === state.reportTest)) {
     state.reportTest = (testsWithData[0] || {}).testKey || null;
@@ -4790,6 +4807,68 @@ async function renderReports() {
   } else {
     compHtml = '<p class="muted">Pick a group to see its completion chart.</p>';
   }
+  /* Completion trend: the by-group math above, aggregated into a
+     percentage per week over the last N weeks. */
+  let trendWeeksHtml;
+  if (compTrendErr) {
+    trendWeeksHtml = `<p class="error">${esc(compTrendErr)}</p>`;
+  } else if (!compTrend || !compTrend.weeks.length) {
+    trendWeeksHtml = '<p class="muted">No season weeks in this window yet.</p>';
+  } else {
+    trendWeeksHtml = barChart(
+      compTrend.weeks.map(w => ({ label: 'W' + w.week })),
+      [{ name: 'Completion %', cls: 'bar-a', values: compTrend.weeks.map(w => w.percent || 0) }], false)
+      + `<div class="table-wrap"><table class="ranked"><thead><tr><th>Week</th><th>Completion</th><th>Assigned days</th><th>Days covered</th></tr></thead><tbody>${compTrend.weeks.map(w => `<tr><td>W${w.week} · ${esc(w.monday)}</td><td>${w.percent === null ? '—' : `<strong>${w.percent}%</strong> — ${w.completions} of ${w.possible}`}</td><td>${w.assigned}</td><td>${w.completedDays}</td></tr>`).join('')}</tbody></table></div>`
+      + '<p class="muted">The denominator is assigned session days × athletes in scope — the report card\'s per-athlete math, summed. Future weeks in the window show the plan only.</p>';
+  }
+  /* Period comparison: defaults split the season at its midpoint —
+     first half vs second half through today — all editable. */
+  const dstr = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  if (load.weeks.length) {
+    const midWeek = load.weeks[Math.floor(load.weeks.length / 2)];
+    if (!state.reportCmpAFrom) state.reportCmpAFrom = load.weeks[0].start;
+    if (!state.reportCmpATo) { const d = parseDate(midWeek.start); d.setDate(d.getDate() - 1); state.reportCmpATo = dstr(d); }
+    if (!state.reportCmpBFrom) state.reportCmpBFrom = midWeek.start;
+    if (!state.reportCmpBTo) state.reportCmpBTo = dstr(new Date());
+  }
+  if (!state.reportCmpTest || !trend.tests.some(t => t.testKey === state.reportCmpTest)) {
+    state.reportCmpTest = ((testsWithData[0] || trend.tests[0] || {}).testKey) || null;
+  }
+  let cmpHtml;
+  if (!trend.tests.length) {
+    cmpHtml = '<p class="muted">No tests in the battery yet.</p>';
+  } else if (!state.reportCmpTest) {
+    cmpHtml = '<p class="muted">Pick a test to compare two periods.</p>';
+  } else {
+    let cmp = null, cmpErr = '';
+    try {
+      cmp = await api('/api/reports/compare?testKey=' + encodeURIComponent(state.reportCmpTest)
+        + (state.reportCmpAFrom ? '&aFrom=' + state.reportCmpAFrom : '')
+        + (state.reportCmpATo ? '&aTo=' + state.reportCmpATo : '')
+        + (state.reportCmpBFrom ? '&bFrom=' + state.reportCmpBFrom : '')
+        + (state.reportCmpBTo ? '&bTo=' + state.reportCmpBTo : ''));
+    } catch (err) { cmpErr = err.message; }
+    if (cmpErr) {
+      cmpHtml = `<p class="error">${esc(cmpErr)}</p>`;
+    } else {
+      const u = cmp.test.unit;
+      const mark = (v) => v === null ? '—' : `<strong>${fmtNum(v)} ${esc(u)}</strong>`;
+      const change = (row) => {
+        if (row.delta === null) return '—';
+        if (row.delta === 0) return 'No change';
+        return `${row.delta > 0 ? '+' : ''}${fmtNum(row.delta)} ${esc(u)} — ${row.improved ? 'improved' : 'declined'}`;
+      };
+      const s = cmp.summary;
+      cmpHtml = `<div class="table-wrap"><table class="ranked"><thead><tr><th>Athlete</th><th>Group</th><th>Best — period A</th><th>Best — period B</th><th>Change</th></tr></thead><tbody>${cmp.rows.map(row => `<tr><td>${esc(row.name)}</td><td>${esc(row.groupName || '—')}</td><td>${mark(row.bestA)}</td><td>${mark(row.bestB)}</td><td>${change(row)}</td></tr>`).join('')}</tbody></table></div>`
+        + `<p class="muted">Period A average: <strong>${s.avgA === null ? '—' : fmtNum(s.avgA) + ' ' + esc(u)}</strong> (${s.athletesWithA} athlete${s.athletesWithA === 1 ? '' : 's'}) · Period B average: <strong>${s.avgB === null ? '—' : fmtNum(s.avgB) + ' ' + esc(u)}</strong> (${s.athletesWithB} athlete${s.athletesWithB === 1 ? '' : 's'}) · <strong>${s.improved}</strong> improved, <strong>${s.declined}</strong> declined, <strong>${s.unchanged}</strong> unchanged.</p>`;
+    }
+  }
+  /* Team assessment by quality: best marks matrix + average row. */
+  const assessmentHtml = !assessment.qualities.length
+    ? '<p class="muted">No tests are tagged to a quality yet.</p>'
+    : assessment.qualities.map(q => `
+      <h3>${esc(q.label)}</h3>
+      <div class="table-wrap"><table class="ranked"><thead><tr><th>Athlete</th>${q.tests.map(t => `<th>${esc(t.name)} (${esc(t.unit)})</th>`).join('')}</tr></thead><tbody>${q.rows.map(row => `<tr><td>${esc(row.name)}${row.groupName ? ` <span class="muted">· ${esc(row.groupName)}</span>` : ''}</td>${q.tests.map(t => `<td>${row.marks[t.key] === null ? '—' : `<strong>${fmtNum(row.marks[t.key])}</strong>`}</td>`).join('')}</tr>`).join('')}</tbody><tfoot><tr><td><strong>Team average</strong></td>${q.tests.map(t => `<td>${q.averages[t.key] === null ? '—' : `<strong>${fmtNum(q.averages[t.key])}</strong> <span class="muted">(n=${q.counts[t.key]})</span>`}</td>`).join('')}</tr></tfoot></table></div>`).join('');
   const loadSeries = [
     { name: 'High-CNS days', cls: 'bar-a', values: load.weeks.map(w => w.high) },
     { name: 'Low-CNS days', cls: 'bar-b', values: load.weeks.map(w => w.low) },
@@ -4825,6 +4904,28 @@ async function renderReports() {
       <div id="report-comp">${compHtml}</div>
     </div>
     <div class="card">
+      <h2>Completion trend</h2>
+      <p class="muted">Completion percentage week by week — the share of assigned athlete-sessions the coach marked complete, from the same weekly counts as the chart above.</p>
+      <label>Last <select id="report-trend-weeks">${[4, 8, 12].map(n => `<option value="${n}" ${state.reportTrendWeeks === n ? 'selected' : ''}>${n} weeks</option>`).join('')}</select></label>
+      <label>Scope <select id="report-trend-group"><option value="all" ${state.reportTrendGroup === 'all' ? 'selected' : ''}>Whole team</option>${comp.groups.map(g => `<option value="${g.group.id}" ${state.reportTrendGroup === g.group.id ? 'selected' : ''}>${esc(g.group.name)}</option>`).join('')}</select></label>
+      <div id="report-trend-weeks-zone">${trendWeeksHtml}</div>
+    </div>
+    <div class="card">
+      <h2>Period comparison</h2>
+      <p class="muted">One test, two date ranges: every athlete's best mark in each period and the change, judged by the test's own direction (lower is better for timed tests).</p>
+      <label>Test <select id="report-cmp-test">${trend.tests.map(t => `<option value="${t.testKey}" ${state.reportCmpTest === t.testKey ? 'selected' : ''}>${esc(t.name)}${t.points.length ? '' : ' (no results yet)'}</option>`).join('')}</select></label>
+      <label>Period A from <input type="date" id="report-cmp-afrom" value="${esc(state.reportCmpAFrom || '')}"></label>
+      <label>to <input type="date" id="report-cmp-ato" value="${esc(state.reportCmpATo || '')}"></label>
+      <label>Period B from <input type="date" id="report-cmp-bfrom" value="${esc(state.reportCmpBFrom || '')}"></label>
+      <label>to <input type="date" id="report-cmp-bto" value="${esc(state.reportCmpBTo || '')}"></label>
+      <div id="report-cmp">${cmpHtml}</div>
+    </div>
+    <div class="card">
+      <h2>Team assessment by quality</h2>
+      <p class="muted">Best marks grouped by what they measure — speed (timed tests), power (jumps), strength (lifts) — with the team average under each test. A test with no results yet still shows, so the gaps are visible.</p>
+      <div id="report-assessment">${assessmentHtml}</div>
+    </div>
+    <div class="card">
       <h2>Planned load</h2>
       <p class="muted">High-CNS vs low-CNS days per week, straight from the season plan.</p>
       <div id="report-load">${loadHtml}</div>
@@ -4843,6 +4944,20 @@ async function renderReports() {
   if (rt) rt.addEventListener('change', () => { state.reportTest = rt.value; renderReports(); });
   const rg = $('#report-group');
   if (rg) rg.addEventListener('change', () => { state.reportGroup = rg.value; renderReports(); });
+  const rtw = $('#report-trend-weeks');
+  if (rtw) rtw.addEventListener('change', () => { state.reportTrendWeeks = parseInt(rtw.value, 10) || 8; renderReports(); });
+  const rtg = $('#report-trend-group');
+  if (rtg) rtg.addEventListener('change', () => { state.reportTrendGroup = rtg.value; renderReports(); });
+  const rct = $('#report-cmp-test');
+  if (rct) rct.addEventListener('change', () => { state.reportCmpTest = rct.value; renderReports(); });
+  const bindCmpDate = (id, key) => {
+    const inp = $(id);
+    if (inp) inp.addEventListener('change', () => { state[key] = inp.value || null; renderReports(); });
+  };
+  bindCmpDate('#report-cmp-afrom', 'reportCmpAFrom');
+  bindCmpDate('#report-cmp-ato', 'reportCmpATo');
+  bindCmpDate('#report-cmp-bfrom', 'reportCmpBFrom');
+  bindCmpDate('#report-cmp-bto', 'reportCmpBTo');
   const ra = $('#report-athlete');
   if (ra) {
     ra.addEventListener('change', () => { state.reportAthleteId = ra.value || null; renderReportCard(); });
@@ -5873,6 +5988,7 @@ async function renderData() {
       <p>
         <a class="btn secondary" href="/api/export/meet-results.csv">Meet results</a>
         <a class="btn secondary" href="/api/export/roster.csv">Roster</a>
+        <a class="btn secondary" href="/api/export/completions.csv">Session completions (raw)</a>
       </p>
     </div>`;
   const fileInput = $('#data-file');
