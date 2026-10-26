@@ -123,8 +123,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v43';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v43';
+const APP_VERSION = 'v44';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v44';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -660,6 +660,7 @@ function renderHome() {
     ${daysHtml}
     <button class="btn" id="home-open-season" type="button">Open the full season plan</button>
     ${state.user ? '<h2>Your latest log entries</h2>' + LANE_DIVIDER + '<div id="home-logs"></div>' : '<div class="card"><strong>Keep a practice log.</strong><p class="muted">Create a free account to save what your group actually ran, and to save cross-training swaps. <button class="btn secondary" data-goto="account" type="button">Go to account</button></p></div>'}
+    ${state.user && !isCoachUser() ? '<div id="home-loads"></div>' : ''}
   `;
   const runHomeSearch = () => {
     state.libQuery = $('#home-search').value;
@@ -686,6 +687,7 @@ function renderHome() {
   const gotoBtn = $('#home-content [data-goto]');
   if (gotoBtn) gotoBtn.addEventListener('click', () => showView(gotoBtn.dataset.goto));
   if (state.user) renderHomeLogs();
+  if (state.user && !isCoachUser()) renderHomeLoads();
   if (isCoachUser()) renderCoachToday();
   renderAnnouncePanel();
 }
@@ -761,6 +763,27 @@ function renderHomeLogs() {
   if (!el) return;
   if (!state.logs.length) { el.innerHTML = '<p class="muted">No entries yet. Add your first one in My Log.</p>'; return; }
   el.innerHTML = state.logs.slice(0, 3).map(logEntryHtml).join('');
+}
+
+/* The athlete's own lifting loads: for every custom workout with
+   % of max steps, the weight computed from THEIR best max — the
+   one athlete-facing window onto coach-built workouts, fed by
+   /api/my/loads, which only ever computes the caller's numbers.
+   Renders nothing when the account is unlinked or no workout
+   carries a % step yet. */
+async function renderHomeLoads() {
+  const el = $('#home-loads');
+  if (!el) return;
+  let data;
+  try { data = await api('/api/my/loads'); } catch (_) { el.innerHTML = ''; return; }
+  if (!data.linked || !data.workouts || !data.workouts.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<h2>Your lifting loads</h2>' + LANE_DIVIDER + data.workouts.map(w => `
+    <div class="card">
+      <h3>${esc(w.title)}</h3>
+      ${w.steps.map(s => `<p class="cw-block-line"><strong>${esc(s.name)}</strong> — ${s.sets} × ${s.reps} @ ${s.weight !== null
+        ? `<strong>${s.weight} lb</strong> <span class="muted">(${s.percent}% of ${s.max} est. max)</span>`
+        : '<span class="muted">No max on file — ask coach</span>'}</p>`).join('')}
+    </div>`).join('');
 }
 
 /* ---------------- day card (shared by home + season) ---------------- */
@@ -3465,9 +3488,13 @@ async function renderInventory() {
 /* Runner mode — pure step-building. No DOM in this section: the
    test suite loads it directly to verify the step sequences.
    A runner plan is { title, blocks: [{ rounds, restBetweenRounds,
-   restAfterBlock, exercises: [{ name, reps }] }] } — exactly the
-   shape of a coach-built custom workout, and the shape library
-   sessions are mapped into by sessionToRunnerPlan below.
+   restAfterBlock, exercises: [{ name, reps, load? }] }] } — exactly
+   the shape of a coach-built custom workout, and the shape library
+   sessions are mapped into by sessionToRunnerPlan below. A custom
+   workout's % of max prescription rides along on the step as
+   `load` ({ testKey, percent, sets, reps }), untouched, so the
+   runner display can name the prescription; library exercises
+   never carry one.
    buildRunnerSteps flattens a plan into the walk: every exercise
    of every round, a rest step after each round (the block's
    rest-between-rounds) and after each block except the last (the
@@ -3484,6 +3511,7 @@ function buildRunnerSteps(plan) {
         steps.push({
           type: 'exercise', block: bi, blocks: blocks.length,
           round, rounds, exIndex: ei, name: ex.name, reps: ex.reps,
+          load: ex.load || null,
         });
       });
       if (round < rounds && block.restBetweenRounds > 0) {
@@ -3768,6 +3796,18 @@ function runnerNextExercise(fromIdx) {
    test battery — the movements the media map is keyed by. What the
    runner shows is the movement's current demo, uploaded videos
    included, through the same player as everywhere else. */
+/* Display name for a lift test key (a % prescription's target).
+   The loaded test battery wins; the five preloaded lifts are the
+   fallback so the runner can name a prescription even when the
+   Testing view was never opened this session. */
+const LIFT_NAME_FALLBACK = {
+  'back-squat': 'Back Squat', 'trap-bar-deadlift': 'Trap Bar Deadlift',
+  'bench-press': 'Bench Press', 'hang-clean': 'Hang Clean', 'power-clean': 'Power Clean',
+};
+function liftNameForKey(key) {
+  const t = (state.tests || []).find(x => x.key === key);
+  return t ? t.name : (LIFT_NAME_FALLBACK[key] || key);
+}
 function demoForRunnerExercise(name) {
   const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const target = norm(name);
@@ -3813,16 +3853,26 @@ function renderRunnerStep() {
     else if (nxtEx) nextText = 'Next: ' + esc(nxtEx.name) + ' × ' + esc(repsLabel(nxtEx.reps));
     else nextText = '';
     const demo = demoForRunnerExercise(step.name);
+    const loadHtml = step.load ? `
+      <p class="runner-load">${esc(step.name)} — ${step.load.percent}% of ${esc(liftNameForKey(step.load.testKey))} max</p>
+      ${runner.plan && runner.plan.workoutId ? '<button class="btn secondary" id="runner-loadchart" type="button">Load chart — every athlete\'s weight</button>' : ''}` : '';
     main.innerHTML = head + `
       <p class="runner-where">Block ${step.block + 1} of ${step.blocks} · Round ${step.round} of ${step.rounds}</p>
       <h2 class="runner-ex-name">${esc(step.name)}</h2>
       <p class="runner-ex-reps">× ${esc(repsLabel(step.reps))}</p>
+      ${loadHtml}
       <p class="runner-next">${nextText}</p>
       ${demo ? `<div class="runner-demo"><button class="btn secondary" id="runner-demo-btn" type="button">▶ Watch demo</button><div id="runner-demo-slot"></div></div>` : ''}
       <div class="runner-controls">
         <button class="btn runner-btn secondary" id="runner-back" type="button" ${runner.idx === 0 ? 'disabled' : ''}>← Back</button>
         <button class="btn runner-btn primary" id="runner-advance" type="button">Done — next →</button>
       </div>`;
+    const chartBtn = $('#runner-loadchart');
+    if (chartBtn) chartBtn.addEventListener('click', () => {
+      const wid = runner.plan && runner.plan.workoutId;
+      closeRunner();
+      if (wid) { state.cwOpenChart = wid; showView('custom'); }
+    });
     const demoBtn = $('#runner-demo-btn');
     if (demoBtn) demoBtn.addEventListener('click', () => {
       $('#runner-demo-slot').innerHTML = mediaPlayerHtml(demo);
@@ -3883,12 +3933,93 @@ function cwScrapeForm() {
     rounds: cwNum(blockEl.querySelector('.cw-rounds').value),
     restBetweenRounds: cwNum(blockEl.querySelector('.cw-rest-round').value),
     restAfterBlock: cwNum(blockEl.querySelector('.cw-rest-block').value),
-    exercises: Array.from(blockEl.querySelectorAll('.cw-ex-row')).map(row => ({
-      name: row.querySelector('.cw-ex-name').value,
-      reps: row.querySelector('.cw-ex-reps').value,
-    })),
+    exercises: Array.from(blockEl.querySelectorAll('.cw-ex-row')).map(row => {
+      const ex = {
+        name: row.querySelector('.cw-ex-name').value,
+        reps: row.querySelector('.cw-ex-reps').value,
+      };
+      const mode = row.querySelector('.cw-ex-mode');
+      if (mode && mode.value === 'pct') {
+        const pctRaw = row.querySelector('.cw-ex-pct').value;
+        ex.load = {
+          testKey: row.querySelector('.cw-ex-test').value,
+          percent: pctRaw === '' ? '' : Number(pctRaw),
+          sets: cwNum(row.querySelector('.cw-ex-sets').value),
+          reps: cwNum(row.querySelector('.cw-ex-lreps').value),
+        };
+      }
+      return ex;
+    }),
   }));
 }
+/* The lifts a % prescription can target, as <option>s: the loaded
+   battery's lift-kind tests, or the five preloaded lifts when the
+   battery has not loaded. */
+function cwLiftOptions(selectedKey) {
+  const lifts = (state.tests || []).filter(t => t.kind === 'lift');
+  const list = lifts.length
+    ? lifts.map(t => ({ key: t.key, name: t.name }))
+    : Object.entries(LIFT_NAME_FALLBACK).map(([key, name]) => ({ key, name }));
+  return list.map(t =>
+    `<option value="${esc(t.key)}" ${t.key === selectedKey ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+}
+/* The %-prescribed steps of a workout draft/stored workout, for
+   deciding whether the Load chart button belongs on its card. */
+function cwHasPctSteps(w) {
+  return (w.blocks || []).some(b => (b.exercises || []).some(e => e.load));
+}
+function loadCellText(cell, percent) {
+  if (!cell) return '—';
+  return `<strong>${cell.weight} lb</strong> <span class="muted">(${percent}% of ${cell.max} est. max)</span>`;
+}
+/* The coach load chart for one custom workout: one row per athlete,
+   one column per %-prescribed exercise, each cell the athlete's
+   own working weight with the max it came from. Fetched fresh from
+   the server (the only place roster-wide loads exist); the group
+   picker re-fetches for the picked group. */
+async function renderCwLoadChart(workoutId, groupId) {
+  const slot = document.getElementById('cw-chart-' + workoutId);
+  if (!slot) return;
+  if (!state.groups || !state.groups.length) await refreshProfiles();
+  slot.innerHTML = '<p class="muted">Loading the load chart…</p>';
+  let data;
+  try {
+    data = await api('/api/custom-workouts/' + encodeURIComponent(workoutId) + '/load-chart'
+      + (groupId ? '?groupId=' + encodeURIComponent(groupId) : ''));
+  } catch (err) {
+    slot.innerHTML = '<p class="error">Could not load the load chart: ' + esc(err.message) + '</p>';
+    return;
+  }
+  if (!data.columns.length) {
+    slot.innerHTML = '<p class="muted">No % of max exercises in this workout yet — switch an exercise\'s Load to "% of max" in the editor and the chart fills in.</p>';
+    return;
+  }
+  const groupOptions = ['<option value="">All roster</option>']
+    .concat((state.groups || []).map(g =>
+      `<option value="${esc(g.id)}" ${g.id === data.groupId ? 'selected' : ''}>${esc(g.name)}</option>`)).join('');
+  const head = data.columns.map(c =>
+    `<th>${esc(c.name)}<br><span class="muted">${c.percent}% of ${esc(c.testName)} · ${c.sets} × ${c.reps}</span></th>`).join('');
+  const body = data.rows.map(row => `
+    <tr><td><strong>${esc(row.name)}</strong>${row.groupName ? `<br><span class="muted">${esc(row.groupName)}</span>` : ''}</td>
+    ${row.cells.map((cell, i) => `<td>${loadCellText(cell, data.columns[i].percent)}</td>`).join('')}</tr>`).join('');
+  const needs = data.needsMax.length
+    ? `<p class="cw-needs-max"><strong>Needs a max test:</strong> ${data.needsMax.map(n =>
+        esc(n.name) + ' (' + n.lifts.map(esc).join(', ') + ')').join(' · ')}</p>`
+    : '';
+  slot.innerHTML = `
+    <div class="filter-row">
+      <label>Group <select class="cw-chart-group">${groupOptions}</select></label>
+    </div>
+    ${data.rows.length
+      ? `<div class="cw-chart-scroll"><table class="cw-chart-table">
+           <thead><tr><th>Athlete</th>${head}</tr></thead><tbody>${body}</tbody>
+         </table></div>`
+      : '<p class="muted">No athletes in this group yet.</p>'}
+    ${needs}`;
+  const sel = slot.querySelector('.cw-chart-group');
+  if (sel) sel.addEventListener('change', () => renderCwLoadChart(workoutId, sel.value || null));
+}
+
 async function renderCustomWorkouts() {
   const el = $('#custom-main');
   if (!el) return;
@@ -3900,6 +4031,11 @@ async function renderCustomWorkouts() {
   } catch (err) {
     el.innerHTML = '<p class="error">Could not load custom workouts: ' + esc(err.message) + '</p>';
     return;
+  }
+  /* The % of max editor names its lifts from the test battery;
+     load it once if this session has not been to Testing yet. */
+  if (!state.tests) {
+    try { const t = await api('/api/tests'); state.tests = t.tests || []; } catch (_) { /* the editor falls back to the preloaded lifts */ }
   }
   const workouts = state.cwWorkouts;
   const editing = state.cwEditId && state.cwEditId !== 'new'
@@ -3914,19 +4050,21 @@ async function renderCustomWorkouts() {
     const steps = buildRunnerSteps(w);
     const exSteps = steps.filter(s => s.type === 'exercise').length;
     const summaries = w.blocks.map((b, i) =>
-      `<p class="cw-block-line"><strong>Block ${i + 1}</strong> — ${b.exercises.map(e => esc(e.name) + ' × ' + esc(e.reps)).join(', ')} · ${b.rounds} rounds · rest ${b.restBetweenRounds}s between rounds, ${b.restAfterBlock}s after</p>`).join('');
+      `<p class="cw-block-line"><strong>Block ${i + 1}</strong> — ${b.exercises.map(e => esc(e.name) + ' × ' + esc(e.reps) + (e.load ? ' @ ' + e.load.percent + '% of max' : '')).join(', ')} · ${b.rounds} rounds · rest ${b.restBetweenRounds}s between rounds, ${b.restAfterBlock}s after</p>`).join('');
     return `
     <div class="card cw-card">
       <div class="roster-row">
         <span><strong>${esc(w.title)}</strong></span>
         <span class="roster-actions">
           <button class="btn primary" data-cw-run="${w.id}" type="button">Run it</button>
+          ${cwHasPctSteps(w) ? `<button class="btn secondary" data-cw-chart="${w.id}" type="button">Load chart</button>` : ''}
           <button class="btn secondary" data-cw-edit="${w.id}" type="button">Edit</button>
           <button class="btn danger" data-cw-del="${w.id}" type="button">Delete</button>
         </span>
       </div>
       <p class="muted">${w.blocks.length} blocks · ${exSteps} exercise steps in runner mode</p>
       ${summaries}
+      <div class="cw-chart-slot" id="cw-chart-${w.id}"></div>
     </div>`;
   };
   let formHtml = '';
@@ -3944,10 +4082,22 @@ async function renderCustomWorkouts() {
           <label>Rest after block (sec) <input type="number" class="cw-rest-block" min="0" max="600" value="${b.restAfterBlock}"></label>
         </div>
         ${b.exercises.map((e, j) => `
-        <div class="cw-ex-row filter-row">
-          <label>Exercise <input type="text" class="cw-ex-name" value="${esc(e.name)}" placeholder="e.g. Hang Clean"></label>
-          <label>Reps <input type="text" class="cw-ex-reps" value="${esc(e.reps)}" placeholder="3, max, 5 each…"></label>
-          <button class="btn danger" data-cw-delex="${i}:${j}" type="button">Remove</button>
+        <div class="cw-ex-row">
+          <div class="filter-row">
+            <label>Exercise <input type="text" class="cw-ex-name" value="${esc(e.name)}" placeholder="e.g. Hang Clean"></label>
+            <label>Load <select class="cw-ex-mode">
+              <option value="" ${e.load ? '' : 'selected'}>Reps (free text)</option>
+              <option value="pct" ${e.load ? 'selected' : ''}>% of max</option>
+            </select></label>
+            <label class="cw-reps-wrap" ${e.load ? 'hidden' : ''}>Reps <input type="text" class="cw-ex-reps" value="${esc(e.reps)}" placeholder="3, max, 5 each…"></label>
+            <button class="btn danger" data-cw-delex="${i}:${j}" type="button">Remove</button>
+          </div>
+          <div class="filter-row cw-load-fields" ${e.load ? '' : 'hidden'}>
+            <label>Lift <select class="cw-ex-test">${cwLiftOptions(e.load ? e.load.testKey : 'back-squat')}</select></label>
+            <label>% of max <input type="number" class="cw-ex-pct" min="30" max="110" step="any" value="${e.load ? e.load.percent : 80}"></label>
+            <label>Sets <input type="number" class="cw-ex-sets" min="1" max="10" value="${e.load ? e.load.sets : 4}"></label>
+            <label>Reps per set <input type="number" class="cw-ex-lreps" min="1" max="30" value="${e.load ? e.load.reps : 5}"></label>
+          </div>
         </div>`).join('')}
         <button class="btn secondary" data-cw-addex="${i}" type="button">+ Add exercise</button>
       </div>`;
@@ -3970,7 +4120,7 @@ async function renderCustomWorkouts() {
     ${formHtml}`;
   el.querySelectorAll('[data-cw-run]').forEach(b => b.addEventListener('click', () => {
     const w = state.cwWorkouts.find(x => x.id === b.dataset.cwRun);
-    if (w) openRunner({ title: w.title, blocks: w.blocks });
+    if (w) openRunner({ title: w.title, blocks: w.blocks, workoutId: w.id });
   }));
   el.querySelectorAll('[data-cw-edit]').forEach(b => b.addEventListener('click', () => {
     state.cwEditId = b.dataset.cwEdit;
@@ -3986,6 +4136,16 @@ async function renderCustomWorkouts() {
       renderCustomWorkouts();
     } catch (err) { alert(err.message); }
   }));
+  el.querySelectorAll('[data-cw-chart]').forEach(b => b.addEventListener('click', () => {
+    const slot = document.getElementById('cw-chart-' + b.dataset.cwChart);
+    if (slot && slot.innerHTML.trim()) { slot.innerHTML = ''; return; }
+    renderCwLoadChart(b.dataset.cwChart, null);
+  }));
+  if (state.cwOpenChart) {
+    const wid = state.cwOpenChart;
+    state.cwOpenChart = null;
+    if (workouts.some(w => w.id === wid)) renderCwLoadChart(wid, null);
+  }
   const newBtn = $('#cw-new');
   if (newBtn) newBtn.addEventListener('click', () => {
     state.cwEditId = 'new';
@@ -4016,6 +4176,18 @@ async function renderCustomWorkouts() {
     const [bi, ei] = b.dataset.cwDelex.split(':').map(n => parseInt(n, 10));
     state.cwDraft.blocks[bi].exercises.splice(ei, 1);
     renderCustomWorkouts();
+  }));
+  /* Load mode per exercise row: free-text reps or a % of max
+     prescription. Toggling swaps which fields show, in place —
+     no re-render, so nothing typed is lost. */
+  el.querySelectorAll('.cw-ex-mode').forEach(sel => sel.addEventListener('change', () => {
+    const row = sel.closest('.cw-ex-row');
+    if (!row) return;
+    const pct = sel.value === 'pct';
+    const repsWrap = row.querySelector('.cw-reps-wrap');
+    const loadFields = row.querySelector('.cw-load-fields');
+    if (repsWrap) repsWrap.hidden = pct;
+    if (loadFields) loadFields.hidden = !pct;
   }));
   $('#cw-form').addEventListener('submit', async (e) => {
     e.preventDefault();

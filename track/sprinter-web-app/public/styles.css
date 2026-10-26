@@ -2073,6 +2073,13 @@ body.runner-mode { overflow: hidden; }
   font-size: clamp(44px, 10vw, 96px); line-height: 1.05; margin: 4px 0 0; font-weight: 800;
 }
 .runner-ex-reps { font-size: clamp(34px, 7.5vw, 68px); color: var(--red-on-dark); font-weight: 800; margin: 0; }
+.runner-load { font-size: clamp(19px, 4.2vw, 30px); font-weight: 700; margin: 2px 0 0; }
+.cw-load-fields { margin-top: 6px; }
+.cw-chart-scroll { overflow-x: auto; }
+.cw-chart-table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 15px; }
+.cw-chart-table th, .cw-chart-table td { border: 1px solid var(--border, #d8d8de); padding: 6px 8px; text-align: left; vertical-align: top; }
+.cw-chart-table thead th { background: var(--surface-2, #f2f2f5); }
+.cw-needs-max { margin-top: 10px; }
 .runner-rest-label {
   font-size: clamp(40px, 9vw, 80px); letter-spacing: .18em; margin: 4px 0 0; font-weight: 800; color: var(--hud-text-dim);
 }

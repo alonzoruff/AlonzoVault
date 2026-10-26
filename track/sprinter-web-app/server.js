@@ -1304,15 +1304,47 @@ function validateCustomWorkout(body) {
     const exercises = [];
     for (let j = 0; j < b.exercises.length; j++) {
       const e = b.exercises[j] && typeof b.exercises[j] === 'object' ? b.exercises[j] : {};
+      const at = where + ', exercise ' + (j + 1);
       const name = typeof e.name === 'string' ? e.name.trim() : '';
       if (!name || name.length > 60) {
-        return { error: where + ', exercise ' + (j + 1) + ': a name of 1 to 60 characters is required.' };
+        return { error: at + ': a name of 1 to 60 characters is required.' };
       }
-      const reps = typeof e.reps === 'string' ? e.reps.trim() : '';
-      if (!reps || reps.length > 24) {
-        return { error: where + ', exercise ' + (j + 1) + ': reps of 1 to 24 characters are required (try "3", "max", or "5 each").' };
+      /* An exercise carries free-text reps OR a % of max load
+         prescription — never both. With a prescription the reps
+         text is derived from its sets × reps, so every surface
+         that only knows the text shape still reads sensibly. */
+      let load = null;
+      if (e.load !== undefined && e.load !== null) {
+        const l = typeof e.load === 'object' ? e.load : {};
+        if (!liftTestKeys().includes(l.testKey)) {
+          return { error: at + ': a % load must name one of the lift tests (Back Squat, Trap Bar Deadlift, Bench Press, Hang Clean, Power Clean).' };
+        }
+        const pct = num(l.percent);
+        if (pct === null || pct < 30 || pct > 110) {
+          return { error: at + ': the % of max must be a number from 30 to 110.' };
+        }
+        const sets = num(l.sets);
+        if (sets === null || !Number.isInteger(sets) || sets < 1 || sets > 10) {
+          return { error: at + ': sets for a % load must be a whole number from 1 to 10.' };
+        }
+        const loadReps = num(l.reps);
+        if (loadReps === null || !Number.isInteger(loadReps) || loadReps < 1 || loadReps > 30) {
+          return { error: at + ': reps per set for a % load must be a whole number from 1 to 30.' };
+        }
+        load = { testKey: l.testKey, percent: pct, sets, reps: loadReps };
       }
-      exercises.push({ name, reps });
+      let reps;
+      if (load) {
+        reps = load.sets + ' × ' + load.reps;
+      } else {
+        reps = typeof e.reps === 'string' ? e.reps.trim() : '';
+        if (!reps || reps.length > 24) {
+          return { error: at + ': reps of 1 to 24 characters are required (try "3", "max", or "5 each").' };
+        }
+      }
+      const ex = { name, reps };
+      if (load) ex.load = load;
+      exercises.push(ex);
     }
     blocks.push({ rounds, restBetweenRounds, restAfterBlock, exercises });
   }
@@ -1725,6 +1757,67 @@ function testingHistoryFor(profileId) {
       latestDate: series.length ? series[series.length - 1].date : null,
     };
   }).filter(t => t.series.length);
+}
+
+/* ------------------------------------------------------------------ */
+/* Percentage loading (% of a tested max)                              */
+/* ------------------------------------------------------------------ */
+/* The tests a % prescription can point at: every lift-kind test in
+   the battery (the five preloaded lifts, plus any custom lift test
+   a coach adds later). */
+function liftTestKeys() {
+  return allTests().filter(t => t.kind === 'lift').map(t => t.key);
+}
+/* An athlete's max for a lift = the best of their testing history,
+   read out of testingHistoryFor — the same "best" the report card,
+   the AMS profile and the leaderboard all show. Each stored
+   result's display value already carries the canonical precedence
+   (displayValue: the Epley estimate when reps were logged, the
+   tested weight itself when they were not), so a max computed
+   here can never disagree with a max shown anywhere else. */
+function bestMaxFor(profileId, testKey) {
+  const h = testingHistoryFor(profileId).find(t => t.testKey === testKey);
+  return h ? h.best : null;
+}
+/* Working weight for a % prescription: max × percent / 100, rounded
+   to the nearest 5 lb — the plates a weight room actually loads.
+   Null when there is no max to work from. */
+function prescribedWeight(maxLb, percent) {
+  if (maxLb === null || maxLb === undefined || !(percent > 0)) return null;
+  return Math.round((maxLb * percent / 100) / 5) * 5;
+}
+/* The %-prescribed exercises of a custom workout, in workout
+   order, exact duplicates collapsed (the same lift prescribed the
+   same way in two blocks is one column of the load chart, not
+   two). Free-text exercises never appear here. */
+function pctStepsOf(workout) {
+  const out = [];
+  const seen = new Set();
+  for (const b of (workout && workout.blocks) || []) {
+    for (const e of b.exercises || []) {
+      if (!e.load) continue;
+      const key = [e.name, e.load.testKey, e.load.percent, e.load.sets, e.load.reps].join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const t = findTest(e.load.testKey);
+      out.push({
+        name: e.name, testKey: e.load.testKey, testName: t ? t.name : e.load.testKey,
+        percent: e.load.percent, sets: e.load.sets, reps: e.load.reps,
+      });
+    }
+  }
+  return out;
+}
+/* One athlete's computed loads for a workout's % steps: their own
+   max and working weight per step, nulls where no max is on file.
+   This is the ONLY load computation an athlete-facing payload may
+   carry — it is built for exactly one profile, so a teammate's
+   numbers cannot ride along by construction. */
+function loadsForProfile(workout, profileId) {
+  return pctStepsOf(workout).map(s => {
+    const max = bestMaxFor(profileId, s.testKey);
+    return Object.assign({}, s, { max, weight: prescribedWeight(max, s.percent) });
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -2729,6 +2822,29 @@ async function handleApi(req, res, url) {
       linked: true, profileId: prof.id,
       athleteName: prof.firstName + ' ' + prof.lastName,
       goals: goalsForProfile(prof.id),
+    });
+  }
+
+  /* ---------- athlete lifting loads (own numbers only) ----------
+     Custom workouts stay coach-only to read, but a % prescription
+     is meaningless if the athlete cannot see their own number.
+     This is the one window: for each custom workout that carries
+     % steps, the caller's OWN computed loads — and nothing else.
+     The profile comes from the caller's own binding (never the
+     request) and loadsForProfile computes for that one profile,
+     so another athlete's load is unreachable by construction. */
+  if (p === '/api/my/loads' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    if (!prof) return sendJson(res, 200, { linked: false, workouts: [] });
+    const workouts = [];
+    for (const w of db.customWorkouts) {
+      const steps = loadsForProfile(w, prof.id);
+      if (steps.length) workouts.push({ id: w.id, title: w.title, steps });
+    }
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      workouts,
     });
   }
 
@@ -5373,6 +5489,53 @@ async function handleApi(req, res, url) {
     db.customWorkouts = db.customWorkouts.filter(w => w.id !== id);
     saveDb();
     return sendJson(res, 200, { ok: true });
+  }
+
+  /* Coach load chart: for one custom workout, every athlete's
+     working weight for each %-prescribed exercise — the sheet the
+     coach reads off in the weight room. Coach-only (it lives below
+     the coach gate): it carries the whole roster's numbers, which
+     is exactly why athletes instead get /api/my/loads with only
+     their own. A cell is null when the athlete has no max on file
+     for that lift; those athletes are also named, per missing
+     lift, in needsMax so the coach knows who to test next. */
+  const cwLoadChartMatch = p.match(/^\/api\/custom-workouts\/([^/]+)\/load-chart$/);
+  if (cwLoadChartMatch && req.method === 'GET') {
+    const workout = db.customWorkouts.find(w => w.id === decodeURIComponent(cwLoadChartMatch[1]));
+    if (!workout) return sendJson(res, 404, { error: 'Custom workout not found.' });
+    let groupId = null;
+    const gRaw = q.get('groupId');
+    if (gRaw) {
+      const g = groupById(gRaw);
+      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      groupId = g.id;
+    }
+    const columns = pctStepsOf(workout);
+    const profs = db.profiles
+      .filter(pr => !pr.archived && (!groupId || pr.groupId === groupId))
+      .slice()
+      .sort((a, b) => (a.firstName + ' ' + a.lastName).localeCompare(b.firstName + ' ' + b.lastName));
+    const rows = [];
+    const needsMax = [];
+    for (const pr of profs) {
+      const name = pr.firstName + ' ' + pr.lastName;
+      const missing = [];
+      const cells = columns.map(col => {
+        const max = bestMaxFor(pr.id, col.testKey);
+        if (max === null) {
+          if (!missing.includes(col.testName)) missing.push(col.testName);
+          return null;
+        }
+        return { weight: prescribedWeight(max, col.percent), max };
+      });
+      const g = pr.groupId ? groupById(pr.groupId) : null;
+      rows.push({ profileId: pr.id, name, groupName: g ? g.name : null, cells });
+      if (missing.length) needsMax.push({ profileId: pr.id, name, lifts: missing });
+    }
+    return sendJson(res, 200, {
+      workout: { id: workout.id, title: workout.title },
+      groupId, columns, rows, needsMax,
+    });
   }
 
   /* ---------- programs (coach-built templates) + applications -----
