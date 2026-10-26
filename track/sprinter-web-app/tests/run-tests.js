@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v42',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v42"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v43',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v43"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,17 +2317,67 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v42'") &&
-    swJs.text.includes("sprinter-app-v42"));
+    appJs.text.includes("const APP_VERSION = 'v43'") &&
+    swJs.text.includes("sprinter-app-v43"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v42"') &&
-    pageHtml.text.includes('Cadets Sprint · App v42') &&
+    pageHtml.text.includes('data-app-version="v43"') &&
+    pageHtml.text.includes('Cadets Sprint · App v43') &&
     appJs.text.includes('appVersionHtml'));
+
+  /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
+     Presentation only. The header's dropdown groups and the phone
+     sheet are built from GROUP_SUBNAV (one source of truth), and
+     movement rows render a thumbnail only when a demo exists. */
+  check('header carries the dropdown groups (Train, Learn, Coach) with menu containers',
+    pageHtml.text.includes('class="mainnav primary-nav"') &&
+    pageHtml.text.includes('data-menu="train"') && pageHtml.text.includes('data-menu="learn"') &&
+    pageHtml.text.includes('data-menu="coachhub"') &&
+    pageHtml.text.includes('class="tab nav-group-btn" data-area="train"') &&
+    pageHtml.text.includes('class="tab nav-group-btn" data-area="learn"') &&
+    pageHtml.text.includes('class="tab nav-group-btn" data-area="coachhub"'));
+  check('header carries the narrow-screen Menu button and sheet',
+    pageHtml.text.includes('id="nav-toggle"') && pageHtml.text.includes('id="nav-sheet"'));
+  check('dropdown menus are built from GROUP_SUBNAV and close on Escape',
+    appJs.text.includes('function buildMainNav') && appJs.text.includes('navMenuItemsHtml') &&
+    appJs.text.includes('GROUP_SUBNAV[area]') && appJs.text.includes('function closeNavMenus') &&
+    appJs.text.includes("e.key === 'Escape'"));
+  check('dropdown menus contain the right views (drills under Train, AMS under Coach)',
+    appJs.text.includes("['drills', 'Warm-Up Drills']") &&
+    appJs.text.includes("['ams', 'AMS']") &&
+    appJs.text.includes('data-view="${area}"'));
+  check('cosmetic styles ship (dropdown menu, thumbnails, shadow tokens)',
+    stylesCss.text.includes('.nav-menu') && stylesCss.text.includes('.row-thumb') &&
+    stylesCss.text.includes('--shadow-card') && stylesCss.text.includes('--shadow-pop'));
+  check('Today band: the scarlet hero carries the view title caption',
+    pageHtml.text.includes('class="hero-caption"') && pageHtml.text.includes('<h1>Today</h1>'));
+  const thumbMatch = appJs.text.match(/\/\* THUMB-BEGIN \*\/([\s\S]*?)\/\* THUMB-END \*\//);
+  check('thumbnail core is extractable for behavior tests', !!thumbMatch);
+  if (thumbMatch) {
+    const thumbCore = new Function(thumbMatch[1] + '\nreturn { thumbUrlFor };')();
+    check('thumbnail: a YouTube demo yields its poster frame',
+      thumbCore.thumbUrlFor({ type: 'youtube', url: 'https://www.youtube.com/watch?v=abcdefghijk' }) ===
+        'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg');
+    check('thumbnail: a youtu.be demo yields its poster frame',
+      thumbCore.thumbUrlFor({ type: 'youtube', url: 'https://youtu.be/abcdefghijk' }) ===
+        'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg');
+    check('thumbnail: an uploaded demo yields the Cloudinary still (extension swap)',
+      thumbCore.thumbUrlFor({ type: 'upload', url: 'https://res.cloudinary.com/l8qblw99/video/upload/v1/demo.mp4' }) ===
+        'https://res.cloudinary.com/l8qblw99/video/upload/v1/demo.jpg');
+    check('thumbnail: a GIF demo is its own thumbnail',
+      thumbCore.thumbUrlFor({ type: 'gif', url: 'https://example.com/move.gif' }) === 'https://example.com/move.gif');
+    check('thumbnail: no demo (or no usable URL) yields no thumbnail',
+      thumbCore.thumbUrlFor(null) === '' &&
+      thumbCore.thumbUrlFor({ type: 'youtube', url: 'https://example.com/x' }) === '' &&
+      thumbCore.thumbUrlFor({ type: 'upload', url: 'https://example.com/noext' }) === '');
+  }
+  check('thumbnail renderer lazy-loads and stays out of the TV render path',
+    appJs.text.includes('function thumbHtml') && appJs.text.includes('loading="lazy"') &&
+    !tvCode.includes('thumbHtml'));
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
     pageHtml.text.includes('<div class="hero" aria-hidden="true">') &&
     !pageHtml.text.includes('today-scoreboard') && !pageHtml.text.includes('today-hero') &&

@@ -19,24 +19,40 @@
   <div class="topbar-inner">
     <div class="brand-block">
       <img class="site-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
-      <div class="identity">St. John's College High School — Cadets Track &amp; Field</div>
-      <div class="app-name">Sprinter Workout App</div>
+      <div class="brand-text">
+        <div class="identity">St. John's College High School — Cadets Track &amp; Field</div>
+        <div class="app-name">Sprinter Workout App</div>
+      </div>
     </div>
-    <div id="account-chip" class="account-chip"></div>
+    <div class="topbar-right">
+      <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
+      <div id="account-chip" class="account-chip"></div>
+    </div>
   </div>
-  <nav class="tabs primary-nav" id="main-tabs" aria-label="Main">
-    <button type="button" data-view="home" class="tab active"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="tab-label">Today</span></button>
-    <button type="button" data-view="train" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L9.8 22l8.7-11.5H12L13 2z"/></svg></span><span class="tab-label">Train</span></button>
-    <button type="button" data-view="learn" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7.3 4.2 4 4.2v14c3.3 0 6 .6 8 2.3 2-1.7 4.7-2.3 8-2.3v-14c-3.3 0-6 .6-8 2.3z"/><path d="M12 6.5v14"/></svg></span><span class="tab-label">Learn</span></button>
-    <button type="button" data-view="log" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.5 11h5M9.5 15h3.5"/></svg></span><span class="tab-label">My Log</span></button>
-    <button type="button" data-view="account" class="tab"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c1.4-3.8 4.2-5.4 7.5-5.4s6.1 1.6 7.5 5.4"/></svg></span><span class="tab-label">Account</span></button>
-    <button type="button" data-view="coachhub" class="tab coach-tab" hidden><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.3 13.2l2 2 3.6-3.8"/></svg></span><span class="tab-label">Coach</span></button>
+  <nav class="mainnav primary-nav" id="main-tabs" aria-label="Main">
+    <button type="button" data-view="home" class="tab nav-direct active"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="tab-label">Today</span></button>
+    <div class="nav-group" data-area-group="train">
+      <button type="button" class="tab nav-group-btn" data-area="train" aria-haspopup="true" aria-expanded="false"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L9.8 22l8.7-11.5H12L13 2z"/></svg></span><span class="tab-label">Train</span><span class="nav-chev" aria-hidden="true">▾</span></button>
+      <div class="nav-menu" data-menu="train" role="menu"></div>
+    </div>
+    <div class="nav-group" data-area-group="learn">
+      <button type="button" class="tab nav-group-btn" data-area="learn" aria-haspopup="true" aria-expanded="false"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7.3 4.2 4 4.2v14c3.3 0 6 .6 8 2.3 2-1.7 4.7-2.3 8-2.3v-14c-3.3 0-6 .6-8 2.3z"/><path d="M12 6.5v14"/></svg></span><span class="tab-label">Learn</span><span class="nav-chev" aria-hidden="true">▾</span></button>
+      <div class="nav-menu" data-menu="learn" role="menu"></div>
+    </div>
+    <button type="button" data-view="log" class="tab nav-direct"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.5 11h5M9.5 15h3.5"/></svg></span><span class="tab-label">My Log</span></button>
+    <button type="button" data-view="account" class="tab nav-direct"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c1.4-3.8 4.2-5.4 7.5-5.4s6.1 1.6 7.5 5.4"/></svg></span><span class="tab-label">Account</span></button>
+    <div class="nav-group coach-tab" data-area-group="coachhub" hidden>
+      <button type="button" class="tab nav-group-btn" data-area="coachhub" aria-haspopup="true" aria-expanded="false"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.3 13.2l2 2 3.6-3.8"/></svg></span><span class="tab-label">Coach</span><span class="nav-chev" aria-hidden="true">▾</span></button>
+      <div class="nav-menu" data-menu="coachhub" role="menu"></div>
+    </div>
   </nav>
+  <div class="nav-sheet" id="nav-sheet" hidden></div>
 </header>
 
 <main id="app">
   <!-- TODAY -->
   <section id="view-home" class="view active">
+    <div class="hero-wrap">
     <div class="hero" aria-hidden="true">
       <div class="blocks">
         <svg viewBox="0 0 58 34" focusable="false" aria-hidden="true">
@@ -96,6 +112,8 @@
         <div class="lane-line"><div class="lane-strip ls-b"></div></div>
         <div class="lane-line"><div class="lane-strip ls-c"></div></div>
       </div>
+    </div>
+    <div class="hero-caption"><h1>Today</h1><p>Practice plan, check-in &amp; team news</p></div>
     </div>
     <div id="checkin-slot"></div>
     <div id="goals-slot"></div>
@@ -898,7 +916,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v42">Cadets Sprint · App v42</div>
+  <div class="app-version" data-app-version="v43">Cadets Sprint · App v43</div>
 </footer>
 
 <script src="/app.js"></script>

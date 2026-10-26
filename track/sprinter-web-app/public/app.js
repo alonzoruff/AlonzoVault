@@ -123,8 +123,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v42';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v42';
+const APP_VERSION = 'v43';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v43';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -334,10 +334,77 @@ function renderSubnav(name, area) {
     nav.scrollLeft += actBtn.getBoundingClientRect().left - nav.getBoundingClientRect().left - 24;
   }
 }
+/* ---------------- dropdown header navigation ----------------
+   The header's primary wayfinding: Train, Learn and Coach are
+   dropdown groups whose menus list the same views the hub pages
+   carry, built from GROUP_SUBNAV so there is one source of truth;
+   Today, My Log and Account are direct buttons. On narrow screens
+   the bar collapses behind the Menu button, which opens a sheet
+   with every group expanded. Menus close on selection, on an
+   outside click, and on Escape. */
+const NAV_GROUP_LABELS = { train: 'Train', learn: 'Learn', coachhub: 'Coach' };
+function navMenuItemsHtml(area) {
+  return `<button type="button" class="nav-item nav-overview" data-view="${area}">${NAV_GROUP_LABELS[area]} overview</button>` +
+    GROUP_SUBNAV[area].map(([v, label]) =>
+      `<button type="button" class="nav-item" data-view="${v}">${label}</button>`).join('');
+}
+function buildMainNav() {
+  $$('.nav-menu').forEach(menu => { menu.innerHTML = navMenuItemsHtml(menu.dataset.menu); });
+  const sheet = $('#nav-sheet');
+  if (!sheet) return;
+  const section = (area) => `
+    <div class="sheet-section${area === 'coachhub' ? ' coach-tab' : ''}"${area === 'coachhub' ? ' hidden' : ''}>
+      <div class="sheet-label">${NAV_GROUP_LABELS[area]}</div>
+      ${navMenuItemsHtml(area)}
+    </div>`;
+  sheet.innerHTML = `
+    <button type="button" class="nav-item sheet-top" data-view="home">Today</button>
+    ${section('train')}
+    ${section('learn')}
+    <button type="button" class="nav-item sheet-top" data-view="log">My Log</button>
+    ${section('coachhub')}
+    <button type="button" class="nav-item sheet-top" data-view="account">Account</button>`;
+}
+function closeNavMenus() {
+  $$('.nav-group.open').forEach(g => {
+    g.classList.remove('open');
+    const b = g.querySelector('.nav-group-btn');
+    if (b) b.setAttribute('aria-expanded', 'false');
+  });
+  const sheet = $('#nav-sheet');
+  if (sheet && !sheet.hidden) sheet.hidden = true;
+  const toggle = $('#nav-toggle');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+buildMainNav();
+$$('.nav-group-btn').forEach(btn => btn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const group = btn.closest('.nav-group');
+  const wasOpen = !!(group && group.classList.contains('open'));
+  closeNavMenus();
+  if (group && !wasOpen) { group.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+}));
+const navToggleBtn = $('#nav-toggle');
+if (navToggleBtn) navToggleBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const sheet = $('#nav-sheet');
+  const willOpen = !!(sheet && sheet.hidden);
+  closeNavMenus();
+  if (willOpen) { sheet.hidden = false; navToggleBtn.setAttribute('aria-expanded', 'true'); }
+});
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-view]')) { closeNavMenus(); return; }
+  if (!e.target.closest('.mainnav') && !e.target.closest('.nav-sheet') && !e.target.closest('#nav-toggle')) closeNavMenus();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNavMenus(); });
+
 function showView(name) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const area = VIEW_AREA[name] || 'home';
   $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
+  $$('.nav-group-btn').forEach(b => b.classList.toggle('active', b.dataset.area === area));
+  $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  closeNavMenus();
   renderSubnav(name, area);
   /* The TV board takes over the whole screen: body.tv-mode hides
      the app chrome (CSS), and its timers run only while it shows. */
@@ -401,8 +468,9 @@ function badge(cns) {
 }
 function sessionRow(s) {
   return `<button class="session-row" data-session="${esc(s.id)}">
-    <span class="code">${esc(s.id)}</span> · <span class="name">${esc(s.name)}</span> ${badge(s.cns_demand)}
-    <div class="meta">${esc(labelQuality(s.quality))} · ${esc(labelPhase(s.phase))} · ${s.total_volume_m ? esc(s.total_volume_m) + ' m total' : 'no running volume'}</div>
+    ${thumbHtml(s.id)}
+    <span class="row-main"><span class="code">${esc(s.id)}</span> · <span class="name">${esc(s.name)}</span> ${badge(s.cns_demand)}
+    <div class="meta">${esc(labelQuality(s.quality))} · ${esc(labelPhase(s.phase))} · ${s.total_volume_m ? esc(s.total_volume_m) + ' m total' : 'no running volume'}</div></span>
   </button>`;
 }
 function labelQuality(q) {
@@ -568,7 +636,6 @@ function renderHome() {
 
   $('#home-content').removeAttribute('aria-busy');
   $('#home-content').innerHTML = `
-    <h1>Today</h1>
     ${LANE_DIVIDER}
     <p>${statusLine}</p>
     ${isCoachUser() ? '<div id="coach-today"></div>' : ''}
@@ -787,11 +854,14 @@ function renderDrills() {
   $('#drill-list').innerHTML = Object.keys(byCat).map(cat => `
     <h2>${esc(catName[cat] || cat)}</h2>
     ${LANE_DIVIDER}
-    ${byCat[cat].map(d => `<div class="card">
-      <strong>${esc(d.id.replace('DRL-', 'Drill '))} · ${esc(d.name)}</strong>
-      <div class="muted">${esc(d.distance_or_reps)}</div>
-      <p style="margin-bottom:0">${esc(d.coaching_cue)}</p>
-      ${demoHtml(d.id, d.name)}
+    ${byCat[cat].map(d => `<div class="card drill-card">
+      ${thumbHtml(d.id)}
+      <div class="drill-main">
+        <strong>${esc(d.id.replace('DRL-', 'Drill '))} · ${esc(d.name)}</strong>
+        <div class="muted">${esc(d.distance_or_reps)}</div>
+        <p style="margin-bottom:0">${esc(d.coaching_cue)}</p>
+        ${demoHtml(d.id, d.name)}
+      </div>
     </div>`).join('')}
   `).join('');
 }
@@ -1834,6 +1904,30 @@ async function loadMedia() {
     if (covView && covView.classList.contains('active')) renderCoverage();
   } catch (_) { /* media is optional */ }
 }
+/* Thumbnail for a movement's demo, when one exists: a YouTube demo
+   shows the video's own poster frame, an uploaded demo shows a
+   still Cloudinary derives from the video itself, and a GIF demo
+   is its own thumbnail. No demo, no thumbnail — the row stays
+   clean text. Self-contained on purpose: the suite extracts this
+   function and exercises it directly. */
+/* THUMB-BEGIN */
+function thumbUrlFor(m) {
+  if (!m || !m.url) return '';
+  if (m.type === 'upload') {
+    const u = String(m.url);
+    const still = u.replace(/\.(mp4|mov|webm|m4v)(\?.*)?$/i, '.jpg$2');
+    return still !== u ? still : '';
+  }
+  if (m.type === 'gif') return String(m.url);
+  const match = String(m.url).match(/(?:[?&]v=|youtu\.be\/|\/(?:embed|shorts|live)\/)([A-Za-z0-9_-]{11})/);
+  return match ? 'https://i.ytimg.com/vi/' + match[1] + '/hqdefault.jpg' : '';
+}
+/* THUMB-END */
+function thumbHtml(id, cls) {
+  const url = thumbUrlFor(state.media[id]);
+  if (!url) return '';
+  return `<span class="row-thumb ${cls || ''}" aria-hidden="true"><img loading="lazy" src="${esc(url)}" alt=""></span>`;
+}
 function demoHtml(id, title) {
   if (!isCoachUser()) return '';
   const m = state.media[id];
@@ -2721,7 +2815,7 @@ async function renderTesting() {
   const renderRankedHtml = () => dayTests.map(t => {
         const rows = dayResults.filter(r => r.testKey === t.key).slice()
           .sort((a, b) => t.better === 'lower' ? (a.display || 0) - (b.display || 0) : (b.display || 0) - (a.display || 0));
-        return `<h3>${esc(t.name)} ${demoHtml(t.key, t.name)}</h3>
+        return `<h3>${thumbHtml(t.key, 'thumb-sm')}${esc(t.name)} ${demoHtml(t.key, t.name)}</h3>
         ${rows.length ? `<div class="table-wrap"><table class="ranked">
           <thead><tr><th>#</th><th>Athlete</th><th>Result</th>${t.kind === 'lift' ? '<th>Est. 1RM</th>' : ''}</tr></thead>
           <tbody>${rows.map((r, i) => {
@@ -2867,7 +2961,7 @@ async function renderTesting() {
         const out = await apiPost('/api/results', body);
         applyResultInPlace(p2, test, out.result);
         block.innerHTML = `
-          <div class="roster-row"><strong>${esc(test.name)}</strong> ${demoHtml(test.key, test.name)}</div>
+          <div class="roster-row"><span class="row-lead">${thumbHtml(test.key, 'thumb-sm')}<strong>${esc(test.name)}</strong></span> ${demoHtml(test.key, test.name)}</div>
           ${testInputs(test, resultFor(p2, key), p2)}`;
         wireRapidBlock(block);
         flashSaved(block);
@@ -2889,7 +2983,7 @@ async function renderTesting() {
     const pr = state.profiles.find(x => x.id === pid);
     zone.innerHTML = `<h3>${esc(pr ? pr.name : '')}</h3>` + dayTests.map(t => `
       <div class="rapid-test" data-rapid-block="${pid}:${t.key}">
-        <div class="roster-row"><strong>${esc(t.name)}</strong> ${demoHtml(t.key, t.name)}</div>
+        <div class="roster-row"><span class="row-lead">${thumbHtml(t.key, 'thumb-sm')}<strong>${esc(t.name)}</strong></span> ${demoHtml(t.key, t.name)}</div>
         ${testInputs(t, resultFor(pid, t.key), pid)}
       </div>`).join('');
     zone.querySelectorAll('[data-rapid-block]').forEach(wireRapidBlock);
@@ -5560,7 +5654,7 @@ async function renderCoverage() {
       `<button type="button" class="chip ${state.coverageFilter === v ? 'active' : ''}" data-covfilter="${v}">${label} (${counts[v]})</button>`).join('')}
     </div>
     <div id="coverage-list">${shown.length ? shown.map(r => `
-      <div class="roster-row"><strong>${esc(r.name)}</strong> <span class="badge plain">${esc(r.kind)}</span> ${coverageBadge(r.status)} ${demoHtml(r.id, r.name)}</div>`).join('')
+      <div class="roster-row"><span class="row-lead">${thumbHtml(r.id, 'thumb-sm')}<strong>${esc(r.name)}</strong></span> <span class="badge plain">${esc(r.kind)}</span> ${coverageBadge(r.status)} ${demoHtml(r.id, r.name)}</div>`).join('')
       : '<p class="muted">Nothing in this bucket yet.</p>'}
     </div>`;
   main.querySelectorAll('[data-covfilter]').forEach(b => b.addEventListener('click', () => {
