@@ -96,6 +96,11 @@ const state = {
   calMonth: null,
   calData: null,
   calDay: null,
+  wrGroupId: '',
+  wrWorkoutId: '',
+  wrCols: 'auto',
+  wrData: null,
+  wrUpdatedAt: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -123,8 +128,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v45';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v45';
+const APP_VERSION = 'v46';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v46';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -311,12 +316,12 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -410,6 +415,7 @@ function showView(name) {
      the app chrome (CSS), and its timers run only while it shows. */
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
+  if (name === 'weightroom') enterWeightRoom(); else exitWeightRoom();
   if (name === 'home' || name === 'log') renderCheckin();
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
@@ -6226,6 +6232,223 @@ async function renderAnnouncements() {
       renderAnnouncePanel();
     } catch (err) { $('#ann-err').textContent = err.message; }
   });
+}
+
+/* ================================================================
+   WEIGHT ROOM — the multi-athlete floor view. Coach-only. One
+   panel per athlete, big enough to read across the room: today's
+   session resolved server-side exactly like the checklist
+   (resolveAssignment), or one custom workout the coach puts on
+   every panel — with each athlete's own % of max load computed
+   server-side per panel. The coach walks each panel with Prev /
+   Next (position persists in db.floorProgress via
+   /api/weight-room/progress) and marks the session done through
+   the same POST /api/completions the checklist uses — there is
+   no second completion store. Nothing here is athlete-entered,
+   and no wellness, health, or notes data is ever fetched.
+   ================================================================ */
+const WR_REFRESH_MS = 60 * 1000;   /* re-resolve while the floor view is open */
+let wrRefreshTimer = null;
+
+function enterWeightRoom() {
+  renderWeightRoom();
+  if (wrRefreshTimer) clearInterval(wrRefreshTimer);
+  wrRefreshTimer = setInterval(() => { renderWeightRoom(); }, WR_REFRESH_MS);
+}
+function exitWeightRoom() {
+  if (wrRefreshTimer) { clearInterval(wrRefreshTimer); wrRefreshTimer = null; }
+}
+
+/* The step walk a panel shows, built with the runner's own core:
+   a custom workout walks as itself; a library session walks via
+   sessionToRunnerPlan, the same mapping the runner uses. */
+function wrStepsFor(panel, floorWorkout) {
+  if (floorWorkout) return buildRunnerSteps(floorWorkout);
+  const a = panel.assignment;
+  if (!a || !a.sessionId) return [];
+  const s = state.sessions.get(a.sessionId);
+  return s ? buildRunnerSteps(sessionToRunnerPlan(s)) : [];
+}
+function wrWorkoutKey(panel, floorWorkout) {
+  if (floorWorkout) return 'cw:' + floorWorkout.id;
+  const a = panel.assignment;
+  return a && a.sessionId ? 'session:' + a.sessionId : null;
+}
+/* A runner step's % prescription, matched to the panel's own
+   server-computed load (loadsForProfile's collapsed shape). */
+function wrLoadFor(panel, step) {
+  if (!step || !step.load || !Array.isArray(panel.loads)) return null;
+  const L = step.load;
+  return panel.loads.find(x => x.name === step.name && x.testKey === L.testKey &&
+    x.percent === L.percent && x.sets === L.sets && x.reps === L.reps) || null;
+}
+function wrStepLine(panel, step) {
+  if (step.type === 'rest') return `<span class="muted">Rest ${esc(step.seconds)}s</span>`;
+  const load = wrLoadFor(panel, step);
+  let loadHtml = '';
+  if (step.load) {
+    loadHtml = load && load.weight !== null && load.weight !== undefined
+      ? ' — ' + loadCellText({ weight: load.weight, max: load.max }, step.load.percent)
+      : ' — <span class="muted">No max on file</span>';
+  }
+  return `<strong>${esc(step.name)}</strong>${step.reps ? ` <span class="muted">× ${esc(step.reps)}</span>` : ''}${loadHtml}`;
+}
+
+async function renderWeightRoom() {
+  const el = $('#weightroom-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The weight room floor view lives here.'); return; }
+  const date = todayStr();
+  const params = new URLSearchParams({ date });
+  if (state.wrGroupId) params.set('groupId', state.wrGroupId);
+  if (state.wrWorkoutId) params.set('workoutId', state.wrWorkoutId);
+  let data, workouts;
+  try {
+    [data, workouts] = await Promise.all([
+      api('/api/weight-room?' + params.toString()),
+      api('/api/custom-workouts'),
+    ]);
+  } catch (err) {
+    el.innerHTML = `<div class="card"><p class="error">Could not load the weight room: ${esc(err.message)}</p><button class="btn secondary" id="wr-retry" type="button">Retry</button></div>`;
+    const rb = $('#wr-retry'); if (rb) rb.addEventListener('click', renderWeightRoom);
+    return;
+  }
+  state.wrData = data;
+  state.wrUpdatedAt = new Date();
+  state.cwWorkouts = workouts.workouts || [];
+  const floorWorkout = state.wrWorkoutId
+    ? state.cwWorkouts.find(w => w.id === state.wrWorkoutId) || null : null;
+  if (state.wrWorkoutId && !floorWorkout) state.wrWorkoutId = '';
+
+  const groupOpts = ['<option value="">All groups</option>'].concat(
+    (data.groups || []).map(g =>
+      `<option value="${esc(g.id)}" ${g.id === state.wrGroupId ? 'selected' : ''}>${esc(g.name)}</option>`)).join('');
+  const workoutOpts = ['<option value="">Today\'s assignment</option>'].concat(
+    state.cwWorkouts.map(w =>
+      `<option value="${esc(w.id)}" ${w.id === state.wrWorkoutId ? 'selected' : ''}>${esc(w.title)}</option>`)).join('');
+  const colsOpts = [['auto', 'Auto'], ['2', '2 across'], ['3', '3 across']].map(([v, label]) =>
+    `<option value="${v}" ${v === state.wrCols ? 'selected' : ''}>${label}</option>`).join('');
+
+  el.innerHTML = `
+    <div class="card wr-setup">
+      <div class="filter-row">
+        <label>Group <select id="wr-group">${groupOpts}</select></label>
+        <label>On the floor <select id="wr-workout">${workoutOpts}</select></label>
+        <label>Panels <select id="wr-cols">${colsOpts}</select></label>
+        <button class="btn secondary" id="wr-refresh" type="button">Refresh</button>
+      </div>
+      <p class="muted" style="margin-bottom:0">${esc(fmtDate(parseDate(data.date)))} · ${data.panels.length} athlete${data.panels.length === 1 ? '' : 's'} on the floor · updated ${state.wrUpdatedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · re-checks itself every minute while open</p>
+    </div>
+    ${data.panels.length
+      ? `<div class="wr-grid" data-cols="${esc(state.wrCols)}">${data.panels.map(p => wrPanelHtml(p, floorWorkout)).join('')}</div>`
+      : '<div class="card"><p class="muted">No athletes in this group yet — add them in Roster &amp; Groups.</p></div>'}`;
+  $('#wr-group').addEventListener('change', (e) => { state.wrGroupId = e.target.value; renderWeightRoom(); });
+  $('#wr-workout').addEventListener('change', (e) => { state.wrWorkoutId = e.target.value; renderWeightRoom(); });
+  $('#wr-cols').addEventListener('change', (e) => { state.wrCols = e.target.value; renderWeightRoom(); });
+  $('#wr-refresh').addEventListener('click', renderWeightRoom);
+  el.querySelectorAll('[data-wr-panel]').forEach(panelEl => wrWirePanel(panelEl, data, floorWorkout));
+}
+
+function wrPanelHtml(panel, floorWorkout) {
+  const pr = panel.profile;
+  const key = wrWorkoutKey(panel, floorWorkout);
+  const steps = wrStepsFor(panel, floorWorkout);
+  const prog = key && panel.progress ? panel.progress[key] : null;
+  const cur = prog ? Math.min(prog.step, steps.length) : 0;
+  const a = panel.assignment;
+  /* What this panel is running: the floor workout when one is
+     picked, else the athlete's own resolved assignment. */
+  let titleHtml, stepsWorkout = !!floorWorkout;
+  if (floorWorkout) {
+    titleHtml = `<strong>${esc(floorWorkout.title)}</strong> <span class="badge plain">CUSTOM WORKOUT</span>`;
+  } else if (a && a.sessionId) {
+    const others = (a.codes || []).filter(c => c.id !== a.sessionId);
+    titleHtml = `<strong>${esc(a.sessionId)} · ${esc(a.sessionName)}</strong>
+      ${a.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : '<span class="badge plain">FROM THE PLAN</span>'}
+      ${others.length ? `<br><span class="muted">Also today: ${others.map(c => esc(c.id)).join(', ')}</span>` : ''}`;
+  } else {
+    titleHtml = '';
+    stepsWorkout = false;
+  }
+  const statusChip = panel.completed
+    ? '<span class="badge low">COMPLETED ✓</span>'
+    : steps.length
+      ? `<span class="badge plain">STEP ${Math.min(cur + 1, steps.length)} OF ${steps.length}</span>`
+      : '';
+  const stepsHtml = steps.length ? `
+    <ol class="wr-steps">
+      ${steps.map((s, i) => `<li class="wr-step${i === cur && !panel.completed ? ' current' : ''}${panel.completed || i < cur ? ' done' : ''}">${wrStepLine(panel, s)}</li>`).join('')}
+    </ol>` : '';
+  const controls = panel.completed
+    ? `<div class="filter-row"><button class="btn secondary" data-wr-undo="${esc(pr.id)}" type="button">Undo completion</button></div>`
+    : stepsWorkout && steps.length
+      ? `<div class="filter-row">
+           <button class="btn secondary" data-wr-prev="${esc(pr.id)}" type="button" ${cur === 0 ? 'disabled' : ''}>← Prev</button>
+           <button class="btn secondary" data-wr-next="${esc(pr.id)}" type="button" ${cur >= steps.length ? 'disabled' : ''}>Next →</button>
+           <button class="btn primary" data-wr-complete="${esc(pr.id)}" type="button">Complete session</button>
+         </div>`
+      : '';
+  const emptyHtml = !floorWorkout && !(a && a.sessionId)
+    ? `<p class="muted">${a && a.isOff ? 'Off day in the plan — no session today.' : 'No session assigned today.'}</p>
+       <p><button class="btn secondary" data-wr-checklist="${esc(pr.id)}" type="button">Open Today's Checklist to assign</button></p>`
+    : '';
+  return `
+  <div class="card wr-panel" data-wr-panel="${esc(pr.id)}">
+    <div class="roster-row">
+      <span><strong>${esc(pr.name)}</strong>${pr.groupName ? ` <span class="muted">· ${esc(pr.groupName)}</span>` : ''}</span>
+      ${statusChip}
+    </div>
+    ${titleHtml ? `<p class="wr-title">${titleHtml}</p>` : ''}
+    ${!floorWorkout && a && a.note ? `<p class="muted">Note: ${esc(a.note)}</p>` : ''}
+    ${emptyHtml}
+    ${stepsHtml}
+    ${controls}
+    <p class="error" data-wr-err hidden></p>
+  </div>`;
+}
+
+function wrWirePanel(panelEl, data, floorWorkout) {
+  const pid = panelEl.dataset.wrPanel;
+  const panel = (data.panels || []).find(p => p.profile.id === pid);
+  if (!panel) return;
+  const errEl = panelEl.querySelector('[data-wr-err]');
+  const fail = (err) => { if (errEl) { errEl.textContent = err.message; errEl.hidden = false; } };
+  const key = wrWorkoutKey(panel, floorWorkout);
+  const steps = wrStepsFor(panel, floorWorkout);
+  const prog = key && panel.progress ? panel.progress[key] : null;
+  const cur = prog ? Math.min(prog.step, steps.length) : 0;
+  const move = async (nextStep) => {
+    try {
+      await apiPost('/api/weight-room/progress', {
+        profileId: pid, date: data.date, workoutKey: key, step: nextStep, total: steps.length,
+      });
+      renderWeightRoom();
+    } catch (err) { fail(err); }
+  };
+  const prevBtn = panelEl.querySelector('[data-wr-prev]');
+  if (prevBtn) prevBtn.addEventListener('click', () => move(Math.max(0, cur - 1)));
+  const nextBtn = panelEl.querySelector('[data-wr-next]');
+  if (nextBtn) nextBtn.addEventListener('click', () => move(Math.min(steps.length, cur + 1)));
+  const doneBtn = panelEl.querySelector('[data-wr-complete]');
+  if (doneBtn) doneBtn.addEventListener('click', async () => {
+    try {
+      /* The checklist's own write: the completion record it has
+         always used, with the floor workout named in marks when
+         the panel was running one. */
+      const marks = floorWorkout ? 'Weight room · ' + floorWorkout.title : '';
+      await apiPost('/api/completions', { profileId: pid, date: data.date, marks });
+      renderWeightRoom();
+    } catch (err) { fail(err); }
+  });
+  const undoBtn = panelEl.querySelector('[data-wr-undo]');
+  if (undoBtn) undoBtn.addEventListener('click', async () => {
+    try {
+      await apiPost('/api/completions', { profileId: pid, date: data.date, completed: false });
+      renderWeightRoom();
+    } catch (err) { fail(err); }
+  });
+  const listBtn = panelEl.querySelector('[data-wr-checklist]');
+  if (listBtn) listBtn.addEventListener('click', () => { state.feedDate = data.date; showView('coach'); });
 }
 
 /* ================================================================

@@ -1573,3 +1573,22 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .vid-card, .def-card, .edu-card { box-shadow: var(--shadow-card); }
 .media-box { box-shadow: var(--shadow-pop); }
 .chip { font-weight: 600; }
+
+/* Weight Room floor view: one panel per athlete, sized to read
+   across the room. The current step carries the scarlet edge the
+   runner uses; finished steps recede. */
+.wr-grid { display: grid; gap: var(--card-gap); grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); align-items: start; }
+.wr-grid[data-cols="2"] { grid-template-columns: repeat(2, 1fr); }
+.wr-grid[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) {
+  .wr-grid[data-cols="2"], .wr-grid[data-cols="3"] { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 620px) {
+  .wr-grid, .wr-grid[data-cols="2"], .wr-grid[data-cols="3"] { grid-template-columns: 1fr; }
+}
+.wr-panel { margin-bottom: 0; }
+.wr-title { font-size: 16.5px; margin: 6px 0 2px; }
+.wr-steps { list-style: none; margin: 10px 0; padding: 0; counter-reset: wrstep; }
+.wr-step { padding: 7px 10px; border-left: 3px solid transparent; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 15.5px; }
+.wr-step.done { color: var(--muted); }
+.wr-step.current { border-left-color: var(--scarlet); background: #fdf0f3; font-size: 16.5px; }

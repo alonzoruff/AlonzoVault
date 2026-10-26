@@ -142,6 +142,7 @@
     <div class="menu-list">
       <button type="button" class="menu-item" data-view="coach">Today's Checklist <span>Each group's workout for the day, with check-offs</span></button>
       <button type="button" class="menu-item" data-view="tv">TV Board <span>The weight-room display: the full Workout of the Day, one page per group</span></button>
+      <button type="button" class="menu-item" data-view="weightroom">Weight Room <span>Every athlete's workout side by side — walk each panel through its steps and check them off</span></button>
       <button type="button" class="menu-item" data-view="custom">Custom Workouts <span>Build your own blocks, rounds, and rests — then run it step by step</span></button>
       <button type="button" class="menu-item" data-view="programs">Programs <span>Reusable week-by-week training templates — build once, apply to any group</span></button>
       <button type="button" class="menu-item" data-view="calendar">Team Calendar <span>The whole month at a glance: every group's sessions, meets, and test days</span></button>
@@ -810,6 +811,15 @@
     </div>
   </section>
 
+  <!-- WEIGHT ROOM (coach) -->
+  <section id="view-weightroom" class="view">
+    <h1>Weight Room</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Every athlete on one screen, each with today's workout and their own loads. Walk a panel through its steps as the room moves, and check the session off when it's done. Coaches only.</p>
+    <div id="weightroom-main"></div>
+  </section>
+
   <!-- CUSTOM WORKOUTS (coach) -->
   <section id="view-custom" class="view">
     <h1>Custom Workouts</h1>
@@ -898,7 +908,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v45">Cadets Sprint · App v45</div>
+  <div class="app-version" data-app-version="v46">Cadets Sprint · App v46</div>
 </footer>
 
 <script src="/app.js"></script>

@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v45',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v45"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v46',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v46"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v45'") &&
-    swJs.text.includes("sprinter-app-v45"));
+    appJs.text.includes("const APP_VERSION = 'v46'") &&
+    swJs.text.includes("sprinter-app-v46"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v45"') &&
-    pageHtml.text.includes('Cadets Sprint · App v45') &&
+    pageHtml.text.includes('data-app-version="v46"') &&
+    pageHtml.text.includes('Cadets Sprint · App v46') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -5359,6 +5359,289 @@ async function waitForServer(tries = 60) {
     } finally {
       plChild.kill('SIGKILL');
       fs.rmSync(PL_DIR, { recursive: true, force: true });
+    }
+  }
+
+  /* ==================== v46: Weight Room floor view ==================== */
+  /* One panel per athlete: the day's session resolved by the same
+     resolveAssignment the checklist uses (parity-checked against
+     /api/coach/feed), per-athlete % loads when a custom workout is
+     on the floor, step position in db.floorProgress, and completion
+     through the checklist's own POST /api/completions — no second
+     store. Own isolated store; dates pinned: D1 is plan Week 1
+     Monday (ACC-01 + STR-01), D0 is before the season (no plan). */
+  {
+    const WR_BASE = 'http://127.0.0.1:3223';
+    const wrApi = async (cookie, method, p, body) => {
+      const headers = {};
+      if (cookie) headers.cookie = cookie;
+      let data;
+      if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+      const res = await fetch(WR_BASE + p, { method, headers, body: data });
+      let json = null;
+      try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+      let setCookie = [];
+      try { setCookie = res.headers.getSetCookie(); } catch (_) {
+        const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+      }
+      return { status: res.status, json, setCookie };
+    };
+    const wrText = async (cookie, p) => {
+      const res = await fetch(WR_BASE + p, { headers: cookie ? { cookie } : {} });
+      return { status: res.status, text: await res.text() };
+    };
+    const WR_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-weightroom-'));
+    let wrLog = '';
+    const wrChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, {
+        PORT: '3223', DATA_DIR: WR_DIR, SESSION_SECRET: 'weightroom-secret',
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    wrChild.stdout.on('data', d => { wrLog += d; });
+    wrChild.stderr.on('data', d => { wrLog += d; });
+    const waitWr = async () => {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(WR_BASE + '/api/content');
+          if (res.status === 200) return true;
+        } catch (_) { /* not up yet */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    try {
+      check('weight-room server starts', await waitWr(), wrLog);
+      const D1 = '2026-10-26';   /* plan Week 1 Monday: ACC-01 + STR-01 */
+      const D0 = '2026-11-01';   /* plan Week 1 Sunday: "Sun off" — an off day */
+
+      /* Served wiring: view, nav entries, renderer, styles. */
+      const wrPage = await wrText(null, '/');
+      const wrJs = await wrText(null, '/app.js');
+      const wrCss = await wrText(null, '/styles.css');
+      check('served page has the weight room view and hub entry',
+        wrPage.text.includes('id="view-weightroom"') && wrPage.text.includes('id="weightroom-main"') &&
+        wrPage.text.includes('data-view="weightroom"'), wrPage.status);
+      check('weight room is wired in the served JS (nav, renderer, endpoints, timers)',
+        wrJs.text.includes("['weightroom', 'Weight Room']") && wrJs.text.includes("weightroom: 'coachhub'") &&
+        wrJs.text.includes('renderWeightRoom') && wrJs.text.includes('enterWeightRoom') &&
+        wrJs.text.includes('/api/weight-room') && wrJs.text.includes('/api/weight-room/progress') &&
+        wrJs.text.includes('No session assigned'), wrJs.status);
+      check('weight room grid styles are served',
+        wrCss.text.includes('.wr-grid') && wrCss.text.includes('.wr-step.current'), wrCss.status);
+      const wrTvStart = wrJs.text.indexOf('TV BOARD');
+      const wrTvEnd = wrJs.text.indexOf('/* ---------------- boot', wrTvStart);
+      const wrTvCode = wrTvStart >= 0 && wrTvEnd > wrTvStart ? wrJs.text.slice(wrTvStart, wrTvEnd) : '';
+      check('TV board render path stays free of the weight room',
+        wrTvCode.length > 500 && !wrTvCode.includes('/api/weight-room') &&
+        !wrTvCode.includes('floorProgress') && !wrTvCode.includes('renderWeightRoom'),
+        wrTvCode.length);
+
+      /* Accounts + roster. */
+      let wr = await wrApi(null, 'POST', '/api/register', { email: 'wrcoach@test.com', password: 'testpass123' });
+      check('weight-room store: first account is the coach', wr.status === 201 && wr.json.role === 'coach', wr.json);
+      const wrCoach = cookieOf(wr);
+      wr = await wrApi(null, 'POST', '/api/register', { email: 'wrathlete@test.com', password: 'testpass123' });
+      const wrAthlete = cookieOf(wr);
+
+      wr = await wrApi(wrCoach, 'POST', '/api/groups', { name: 'WR Sprinters' });
+      const wrGroupA = wr.json.group;
+      wr = await wrApi(wrCoach, 'POST', '/api/groups', { name: 'WR Throwers' });
+      const wrGroupB = wr.json.group;
+      const wrMk = async (firstName, lastName, groupId) =>
+        (await wrApi(wrCoach, 'POST', '/api/profiles', { firstName, lastName, groupId, events: ['100m'] })).json.profile;
+      const avaP = await wrMk('Ava', 'Max', wrGroupA.id);
+      const benP = await wrMk('Ben', 'Nomax', wrGroupA.id);
+      const cidP = await wrMk('Cid', 'Solo', wrGroupB.id);
+      const deeP = await wrMk('Dee', 'Free', null);
+      const eveP = await wrMk('Eve', 'Old', wrGroupA.id);
+      wr = await wrApi(wrCoach, 'PUT', '/api/profiles/' + eveP.id, { archived: true });
+      check('weight-room fixtures: roster across two groups, one groupless, one archived',
+        !!(avaP && benP && cidP && deeP && eveP) && wr.status === 200,
+        [avaP, benP, cidP, deeP, eveP].map(x => x && x.id));
+
+      /* Ava's squat max: 200 x 5 -> Epley 233. Ben: nothing. */
+      wr = await wrApi(wrCoach, 'POST', '/api/test-days', { date: '2026-10-20', title: 'WR Max Day', testKeys: ['back-squat'] });
+      const wrDay = wr.json.testDay;
+      wr = await wrApi(wrCoach, 'POST', '/api/results/bulk', {
+        testDayId: wrDay.id,
+        entries: [{ profileId: avaP.id, testKey: 'back-squat', weight: 200, reps: 5 }],
+      });
+      check('weight-room fixtures: Ava\'s max recorded', wr.status === 200, wr.json);
+
+      /* The floor workout: one % step + one free-text step. */
+      wr = await wrApi(wrCoach, 'POST', '/api/custom-workouts', {
+        title: 'WR Floor Lift',
+        blocks: [{
+          rounds: 1, restBetweenRounds: 0, restAfterBlock: 0,
+          exercises: [
+            { name: 'Back Squat', load: { testKey: 'back-squat', percent: 80, sets: 4, reps: 5 } },
+            { name: 'Nordic Curl', reps: '3' },
+          ],
+        }],
+      });
+      const wrWorkout = wr.json && wr.json.workout;
+      check('weight-room fixtures: the floor workout saves', wr.status === 201 && !!wrWorkout, wr.json);
+
+      /* Auth gates. */
+      wr = await wrApi(null, 'GET', '/api/weight-room?date=' + D1);
+      check('weight room: logged-out read is 401', wr.status === 401, wr.status);
+      wr = await wrApi(wrAthlete, 'GET', '/api/weight-room?date=' + D1);
+      check('weight room: athlete read is 403', wr.status === 403, wr.status);
+      wr = await wrApi(wrAthlete, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'session:ACC-01', step: 1 });
+      check('weight room: athlete progress write is 403', wr.status === 403, wr.status);
+      wr = await wrApi(null, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'session:ACC-01', step: 1 });
+      check('weight room: logged-out progress write is 401', wr.status === 401, wr.status);
+
+      /* Panels + plan parity with the checklist feed. */
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const wrPanels = (wr.json && wr.json.panels) || [];
+      const panelOf = (id) => wrPanels.find(p => p.profile.id === id);
+      check('panels cover the active roster (archived athlete excluded)',
+        wr.status === 200 && wrPanels.length === 4 && !panelOf(eveP.id),
+        wrPanels.map(p => p.profile.name));
+      const feed = (await wrApi(wrCoach, 'GET', '/api/coach/feed?date=' + D1)).json;
+      const feedA = (feed.groups || []).find(g => g.group && g.group.id === wrGroupA.id);
+      check('plan parity: the panel assignment matches the checklist feed',
+        !!feedA && feedA.assignment.sessionId === 'ACC-01' &&
+        panelOf(avaP.id).assignment.sessionId === feedA.assignment.sessionId &&
+        panelOf(avaP.id).assignment.source === 'plan',
+        panelOf(avaP.id) && panelOf(avaP.id).assignment);
+      check('a multi-session plan day keeps its full code list with names',
+        JSON.stringify(panelOf(avaP.id).assignment.codes.map(c => c.id)) === JSON.stringify(['ACC-01', 'STR-01']) &&
+        panelOf(avaP.id).assignment.codes[0].name === 'Block starts and short drives',
+        panelOf(avaP.id).assignment.codes);
+      check('a groupless athlete gets a panel with no assignment',
+        !!panelOf(deeP.id) && panelOf(deeP.id).assignment === null, panelOf(deeP.id));
+
+      /* A coach override beats the plan — in the panels and the feed alike. */
+      wr = await wrApi(wrCoach, 'POST', '/api/assignments/override',
+        { groupId: wrGroupA.id, date: D1, sessionId: 'MAX-01', note: 'Floor test' });
+      check('weight-room setup: the group override saves', wr.status === 200, wr.json);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const wrPanels2 = (wr.json && wr.json.panels) || [];
+      const panel2Of = (id) => wrPanels2.find(p => p.profile.id === id);
+      const feed2 = (await wrApi(wrCoach, 'GET', '/api/coach/feed?date=' + D1)).json;
+      const feedA2 = (feed2.groups || []).find(g => g.group && g.group.id === wrGroupA.id);
+      check('override parity: panels and feed agree the override wins',
+        panel2Of(avaP.id).assignment.sessionId === 'MAX-01' &&
+        panel2Of(avaP.id).assignment.source === 'override' &&
+        feedA2.assignment.sessionId === 'MAX-01',
+        panel2Of(avaP.id).assignment);
+      check('the override reaches only its own group',
+        panel2Of(cidP.id).assignment.sessionId === 'ACC-01', panel2Of(cidP.id).assignment);
+
+      /* Empty state: a plan off day resolves no session. (Dates
+         outside the season clamp to the nearest week by design —
+         planDayFor, same as Home — so the off day is the honest
+         nothing-assigned case, alongside the groupless panel.) */
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D0);
+      const wrD0 = ((wr.json && wr.json.panels) || []).find(p => p.profile.id === avaP.id);
+      check('a day with nothing assigned resolves an empty panel (no fake content)',
+        !!wrD0 && !!wrD0.assignment && wrD0.assignment.sessionId === null &&
+        wrD0.assignment.isOff === true &&
+        wrD0.assignment.codes.length === 0 && wrD0.completed === false, wrD0);
+
+      /* Group filter. */
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&groupId=' + wrGroupB.id);
+      check('the group filter narrows the floor to that group',
+        wr.status === 200 && wr.json.panels.length === 1 && wr.json.panels[0].profile.id === cidP.id,
+        wr.json && wr.json.panels);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&groupId=bogus');
+      check('an unknown group is a 400', wr.status === 400, wr.status);
+
+      /* Custom workout on the floor: per-athlete loads. */
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&workoutId=' + wrWorkout.id);
+      const wrCw = ((wr.json && wr.json.panels) || []);
+      const cwOf = (id) => wrCw.find(p => p.profile.id === id);
+      const avaLoads = (cwOf(avaP.id) || {}).loads || [];
+      const benLoads = (cwOf(benP.id) || {}).loads || [];
+      check('the floor payload names the workout on the floor',
+        !!wr.json.workout && wr.json.workout.id === wrWorkout.id, wr.json.workout);
+      check('per-athlete % loads differ by athlete (Ava 185 from her 233 max)',
+        avaLoads.length === 1 && avaLoads[0].max === 233 && avaLoads[0].weight === 185, avaLoads);
+      check('an athlete with no max gets the step with null numbers',
+        benLoads.length === 1 && benLoads[0].max === null && benLoads[0].weight === null, benLoads);
+      check('loads ride along only in floor-workout mode',
+        panelOf(avaP.id).loads === null, panelOf(avaP.id).loads);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&workoutId=nope');
+      check('an unknown floor workout is a 404', wr.status === 404, wr.status);
+
+      /* Step progress: writes land in floorProgress and read back. */
+      const cwKey = 'cw:' + wrWorkout.id;
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: 2, total: 5 });
+      check('a progress write is accepted', wr.status === 200 && wr.json.ok === true, wr.json);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1 + '&workoutId=' + wrWorkout.id);
+      const avaProg = ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).progress || {};
+      check('the panel reads its step back', !!avaProg[cwKey] && avaProg[cwKey].step === 2, avaProg);
+      check('progress alone never marks the session complete',
+        ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).completed === false);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: 3, total: 5 });
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const avaProg2 = ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).progress || {};
+      check('advancing moves the stored step', !!avaProg2[cwKey] && avaProg2[cwKey].step === 3, avaProg2);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'session:MAX-01', step: 1, total: 4 });
+      check('a session-keyed step is accepted for the day\'s session', wr.status === 200, wr.json);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: -1 });
+      check('a negative step is a 400', wr.status === 400, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: 9, total: 5 });
+      check('a step past the end of the walk is a 400', wr.status === 400, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'bogus', step: 1 });
+      check('a malformed workoutKey is a 400', wr.status === 400, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: 'cw:nope', step: 1 });
+      check('an unknown custom workout key is a 404', wr.status === 404, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: 'nope', date: D1, workoutKey: cwKey, step: 1 });
+      check('an unknown profile is a 404', wr.status === 404, wr.status);
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: avaP.id, date: D1, workoutKey: cwKey, step: null });
+      check('a null step clears the panel position', wr.status === 200 && wr.json.cleared === true, wr.json);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const avaProg3 = ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).progress || {};
+      check('the cleared position is gone on the next read', !(cwKey in avaProg3), avaProg3);
+
+      /* Completion flows through the checklist's own endpoint. */
+      wr = await wrApi(wrCoach, 'POST', '/api/completions',
+        { profileId: avaP.id, date: D1, marks: 'Weight room · WR Floor Lift' });
+      check('the checklist completion write is accepted', wr.status === 200 && !!wr.json.completion, wr.json);
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      const avaDone = ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {});
+      check('the panel shows the completion the checklist wrote',
+        avaDone.completed === true && !!avaDone.completion &&
+        avaDone.completion.marks === 'Weight room · WR Floor Lift', avaDone);
+      const feed3 = (await wrApi(wrCoach, 'GET', '/api/coach/feed?date=' + D1)).json;
+      const feedA3 = (feed3.groups || []).find(g => g.group && g.group.id === wrGroupA.id);
+      const feedAva = (feedA3.members || []).find(m => m.profile.id === avaP.id);
+      check('the checklist sees the same single completion record',
+        !!feedAva && feedAva.completed === true, feedAva);
+      wr = await wrApi(wrCoach, 'POST', '/api/completions',
+        { profileId: avaP.id, date: D1, completed: false });
+      wr = await wrApi(wrCoach, 'GET', '/api/weight-room?date=' + D1);
+      check('undoing through the same endpoint clears the panel',
+        ((wr.json.panels || []).find(p => p.profile.id === avaP.id) || {}).completed === false);
+
+      /* Floor progress rides the backup like every other collection. */
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/progress',
+        { profileId: benP.id, date: D1, workoutKey: 'session:MAX-01', step: 1, total: 4 });
+      const wrBk = await wrText(wrCoach, '/api/export/backup');
+      const wrEnv = JSON.parse(wrBk.text);
+      check('the backup export carries floor progress',
+        !!wrEnv.data.floorProgress &&
+        !!wrEnv.data.floorProgress[benP.id + '|' + D1 + '|session:MAX-01'] &&
+        wrEnv.data.floorProgress[benP.id + '|' + D1 + '|session:MAX-01'].step === 1,
+        wrEnv.data.floorProgress);
+    } finally {
+      wrChild.kill('SIGKILL');
+      fs.rmSync(WR_DIR, { recursive: true, force: true });
     }
   }
 

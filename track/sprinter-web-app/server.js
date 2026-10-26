@@ -94,6 +94,7 @@ let db = {
   attendance: {},
   coachNotes: {},
   announcements: [],
+  floorProgress: {},
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -195,6 +196,15 @@ function migrate() {
   // the read endpoint filters per caller, so a group post never
   // reaches an athlete outside that group.
   db.announcements = Array.isArray(db.announcements) ? db.announcements : [];
+  // Weight Room floor progress: { 'profileId|date|workoutKey':
+  // { step, total, by, at } } — where one athlete's panel walk
+  // stands for one workout on one day. workoutKey is 'session:<code>'
+  // for the day's resolved library session or 'cw:<id>' for a
+  // custom workout the coach put on the floor. Coach-entered only;
+  // it tracks position in the step walk, never completion (that is
+  // db.completions, written through the checklist's endpoint).
+  db.floorProgress = (db.floorProgress && typeof db.floorProgress === 'object' && !Array.isArray(db.floorProgress))
+    ? db.floorProgress : {};
   // Coach-built training programs (reusable week-grid templates) and
   // their applications onto the team calendar. An application carries
   // an exact snapshot of every override it wrote, so removing it
@@ -1526,6 +1536,25 @@ function resolveAssignment(groupId, dateString) {
 function completionFor(profileId, dateString) {
   return db.completions[profileId + '|' + dateString] || null;
 }
+/* One athlete's Weight Room floor progress for a day, as a map of
+   workoutKey -> { step, total, by, at }. Keys are written only by
+   the weight-room progress endpoint; anything malformed in the
+   store is skipped rather than served. */
+function floorProgressFor(profileId, dateString) {
+  const prefix = profileId + '|' + dateString + '|';
+  const out = {};
+  for (const k of Object.keys(db.floorProgress)) {
+    if (!k.startsWith(prefix)) continue;
+    const rec = db.floorProgress[k];
+    if (rec && Number.isInteger(rec.step) && rec.step >= 0) {
+      out[k.slice(prefix.length)] = {
+        step: rec.step, total: Number.isInteger(rec.total) ? rec.total : null,
+        by: rec.by || null, at: rec.at || null,
+      };
+    }
+  }
+  return out;
+}
 
 /* ------------------------------------------------------------------ */
 /* Programs: reusable templates + calendar applications                */
@@ -2332,7 +2361,7 @@ const BACKUP_ARRAY_KEYS = {
 const BACKUP_OBJECT_KEYS = [
   'overrides', 'completions', 'testResults', 'weekly', 'concerns',
   'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
-  'attendance', 'coachNotes',
+  'attendance', 'coachNotes', 'floorProgress',
 ];
 function buildBackupData() {
   return {
@@ -2351,6 +2380,7 @@ function buildBackupData() {
     customWorkoutsSeeded: db.customWorkoutsSeeded === true,
     programs: db.programs, programApplications: db.programApplications,
     announcements: db.announcements,
+    floorProgress: db.floorProgress,
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -5536,6 +5566,110 @@ async function handleApi(req, res, url) {
       workout: { id: workout.id, title: workout.title },
       groupId, columns, rows, needsMax,
     });
+  }
+
+  /* ---------- weight room (multi-athlete floor view) ----------
+     One panel per athlete: today's session exactly as the rest of
+     the app resolves it (resolveAssignment — the same precedence
+     the checklist, Coach Today and the calendar use: coach override
+     over program application over season plan), the day's
+     completion record, and the panel's place in the step walk.
+     When the coach puts a custom workout on the floor (?workoutId=),
+     each panel also carries THAT athlete's own computed loads for
+     the workout's % steps (loadsForProfile — the same helper the
+     athlete's own loads window uses, here behind the coach gate).
+     Coach-only like everything below the gate; the payload is a
+     training surface only — no check-in, health, or notes data.
+     Step position writes go to db.floorProgress; marking a session
+     complete stays with POST /api/completions, unchanged. */
+  if (p === '/api/weight-room' && req.method === 'GET') {
+    const date = clean(q.get('date') || todayStr(), 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    let groupId = null;
+    const gRaw = q.get('groupId');
+    if (gRaw) {
+      const g = groupById(gRaw);
+      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      groupId = g.id;
+    }
+    let floorWorkout = null;
+    const wRaw = q.get('workoutId');
+    if (wRaw) {
+      floorWorkout = db.customWorkouts.find(w => w.id === wRaw) || null;
+      if (!floorWorkout) return sendJson(res, 404, { error: 'Custom workout not found.' });
+    }
+    const profs = db.profiles
+      .filter(pr => !pr.archived && (!groupId || pr.groupId === groupId))
+      .slice()
+      .sort((a, b) => (a.firstName + ' ' + a.lastName).localeCompare(b.firstName + ' ' + b.lastName));
+    const panels = profs.map(pr => {
+      let assignment = null;
+      if (pr.groupId) {
+        const a = resolveAssignment(pr.groupId, date);
+        assignment = {
+          sessionId: a.sessionId, sessionName: a.sessionName, source: a.source,
+          codes: (a.codes || []).map(code => {
+            const s = SESSION_BY_ID.get(code);
+            return { id: code, name: s ? s.name : code };
+          }),
+          note: a.note || '', planText: a.planText || '', isOff: !!a.isOff,
+        };
+      }
+      const c = completionFor(pr.id, date);
+      return {
+        profile: publicProfile(pr),
+        assignment,
+        completed: !!c,
+        completion: c ? { sessionId: c.sessionId, marks: c.marks, feel: c.feel } : null,
+        progress: floorProgressFor(pr.id, date),
+        loads: floorWorkout ? loadsForProfile(floorWorkout, pr.id) : null,
+      };
+    });
+    return sendJson(res, 200, {
+      date,
+      groups: db.groups.map(g => ({ id: g.id, name: g.name })),
+      workout: floorWorkout ? { id: floorWorkout.id, title: floorWorkout.title } : null,
+      panels,
+    });
+  }
+
+  if (p === '/api/weight-room/progress' && req.method === 'POST') {
+    const body = await readBody(req);
+    const prof = profileById(clean(body.profileId, 80));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    const date = clean(body.date || todayStr(), 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const workoutKey = clean(body.workoutKey, 120);
+    const sep = workoutKey.indexOf(':');
+    const kind = sep > 0 ? workoutKey.slice(0, sep) : '';
+    const ref = sep > 0 ? workoutKey.slice(sep + 1) : '';
+    if (kind === 'cw') {
+      if (!db.customWorkouts.some(w => w.id === ref)) {
+        return sendJson(res, 404, { error: 'Custom workout not found.' });
+      }
+    } else if (kind === 'session') {
+      if (!SESSION_IDS.has(ref)) return sendJson(res, 400, { error: 'Unknown session code.' });
+    } else {
+      return sendJson(res, 400, { error: 'workoutKey must name a session code or a custom workout.' });
+    }
+    const key = prof.id + '|' + date + '|' + workoutKey;
+    if (body.step === null) {
+      delete db.floorProgress[key];
+      saveDb();
+      return sendJson(res, 200, { ok: true, cleared: true });
+    }
+    const step = body.step;
+    if (!Number.isInteger(step) || step < 0 || step > 999) {
+      return sendJson(res, 400, { error: 'Step must be a whole number from 0 up.' });
+    }
+    const total = Number.isInteger(body.total) && body.total > 0 ? body.total : null;
+    if (total !== null && step > total) {
+      return sendJson(res, 400, { error: 'Step cannot be past the end of the walk.' });
+    }
+    const rec = { step, total, by: user.id, at: new Date().toISOString() };
+    db.floorProgress[key] = rec;
+    saveDb();
+    return sendJson(res, 200, { ok: true, progress: { [workoutKey]: rec } });
   }
 
   /* ---------- programs (coach-built templates) + applications -----
