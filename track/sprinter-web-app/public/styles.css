@@ -1592,3 +1592,12 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .wr-step { padding: 7px 10px; border-left: 3px solid transparent; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 15.5px; }
 .wr-step.done { color: var(--muted); }
 .wr-step.current { border-left-color: var(--scarlet); background: #fdf0f3; font-size: 16.5px; }
+
+/* Compliance pass (v48): check-in safety notice, held banners,
+   athletic-trainer summary, concern audit trail. */
+.ci-notice { border: 1px solid var(--line, #d8d8d8); border-left: 4px solid var(--scarlet); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; background: #fdf7f8; }
+.ci-notice p { margin: 4px 0; }
+.ci-held { border: 1px solid #b3261e; border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; background: #fdecea; }
+.at-summary-text { white-space: pre-wrap; font-size: 14px; background: #fafafa; border: 1px solid var(--line, #d8d8d8); border-radius: var(--radius-sm); padding: 10px 12px; }
+.concern-audit { margin-top: 10px; }
+.concern-audit summary { cursor: pointer; font-weight: 600; }

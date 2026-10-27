@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v47',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v47"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v48',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v48"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -508,16 +508,16 @@ async function main() {
     qrSeg.includes('out.summary') && qrSeg.includes('out.checklist') &&
     qrSeg.includes("state.meetDayFlags") && !qrSeg.includes('renderMeetDay('), qrSeg.slice(0, 120));
 
-  r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123', ageAttested: true });
   check('first register is 201', r.status === 201, r.status);
   check('first account is coach', r.json.role === 'coach', r.json.role);
   const coach = cookieOf(r);
-  r = await api(null, 'POST', '/api/register', { email: 'athlete@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'athlete@test.com', password: 'testpass123', ageAttested: true });
   check('second account is athlete', r.json.role === 'athlete', r.json.role);
   const athlete = cookieOf(r);
-  r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123', ageAttested: true });
   check('duplicate email is 409', r.status === 409, r.status);
-  r = await api(null, 'POST', '/api/register', { email: 'not-an-email', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'not-an-email', password: 'testpass123', ageAttested: true });
   check('bad email is 400', r.status === 400, r.status);
   r = await api(null, 'POST', '/api/register', { email: 'x@test.com', password: 'short' });
   check('short password is 400', r.status === 400, r.status);
@@ -1294,7 +1294,7 @@ async function main() {
   check('inviting the owner email is 400', r.status === 400, r.status);
 
   // The invited email registers straight into coach access.
-  r = await api(null, 'POST', '/api/register', { email: 'NewCoach@Test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'NewCoach@Test.com', password: 'testpass123', ageAttested: true });
   check('invite-before-registration lands as coach', r.status === 201 && r.json.role === 'coach', r.json);
   check('invited coach is not the owner', r.json.isOwner === false, r.json);
   const assistant = cookieOf(r);
@@ -1340,7 +1340,7 @@ async function main() {
   check('pending invite is added', r.status === 200, r.status);
   r = await api(coach, 'DELETE', '/api/coach-invites/pending@test.com');
   check('pending invite is removed', r.status === 200 && r.json.removedInvite === true, r.json);
-  r = await api(null, 'POST', '/api/register', { email: 'pending@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'pending@test.com', password: 'testpass123', ageAttested: true });
   check('registering after the invite was revoked is athlete', r.status === 201 && r.json.role === 'athlete', r.json);
   r = await api(coach, 'DELETE', '/api/coach-invites/ghost@test.com');
   check('removing an unknown email is 404', r.status === 404, r.status);
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v47'") &&
-    swJs.text.includes("sprinter-app-v47"));
+    appJs.text.includes("const APP_VERSION = 'v48'") &&
+    swJs.text.includes("sprinter-app-v48"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v47"') &&
-    pageHtml.text.includes('Cadets Sprint · App v47') &&
+    pageHtml.text.includes('data-app-version="v48"') &&
+    pageHtml.text.includes('Cadets Sprint · App v48') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -2476,7 +2476,7 @@ async function main() {
 
   /* Unlinked athlete: browses fine, check-in shows the clear
      "ask your coach" state (never an error wall). */
-  r = await api(null, 'POST', '/api/register', { email: 'will@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'will@test.com', password: 'testpass123', ageAttested: true });
   check('wellness athlete registers as athlete role', r.status === 201 && r.json.role === 'athlete', r.json);
   const will = cookieOf(r);
   r = await api(will, 'GET', '/api/checkin/today');
@@ -2534,7 +2534,7 @@ async function main() {
   r = await api(coach, 'PUT', '/api/profiles/' + wendyP.id + '/link', { email: 'wendy@test.com' });
   check('link before register reports no account yet',
     r.status === 200 && r.json.accountLinked === false, r.json);
-  r = await api(null, 'POST', '/api/register', { email: 'wendy@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'wendy@test.com', password: 'testpass123', ageAttested: true });
   check('registering a linked email stays athlete role', r.status === 201 && r.json.role === 'athlete', r.json);
   const wendy = cookieOf(r);
   r = await api(wendy, 'GET', '/api/me');
@@ -2661,7 +2661,7 @@ async function main() {
   check('the TV board payload carries no health data',
     r.status === 200 && Array.isArray(r.json.healthFlags) && r.json.healthFlags.length === 0
     && r.json.wellness === null && Array.isArray(r.json.groups), r.json);
-  r = await api(null, 'POST', '/api/register', { email: 'qa-assistant@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'qa-assistant@test.com', password: 'testpass123', ageAttested: true });
   const asst = cookieOf(r);
   r = await api(coach, 'GET', '/api/coaches');
   const asstUser = r.json.users.find(u => u.email === 'qa-assistant@test.com');
@@ -3178,9 +3178,9 @@ async function main() {
   check('profile status edit back to active saves', r.status === 200 && r.json.profile.status === 'active', r.json);
 
   /* Link Amy + Ben so they can check in. */
-  r = await api(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123', ageAttested: true });
   const amyAcct = cookieOf(r);
-  r = await api(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123', ageAttested: true });
   const benAcct = cookieOf(r);
   await api(coach, 'PUT', '/api/profiles/' + amyP.id + '/link', { email: 'amy@test.com' });
   await api(coach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
@@ -3599,13 +3599,13 @@ async function main() {
   await api(coach, 'PUT', '/api/profiles/' + anaP.id + '/link', { email: 'ana@test.com' });
   await api(coach, 'PUT', '/api/profiles/' + bobP.id + '/link', { email: 'bob@test.com' });
   await api(coach, 'PUT', '/api/profiles/' + umaP.id + '/link', { email: 'uma@test.com' });
-  r = await api(null, 'POST', '/api/register', { email: 'ana@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'ana@test.com', password: 'testpass123', ageAttested: true });
   const ana = cookieOf(r);
-  r = await api(null, 'POST', '/api/register', { email: 'bob@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'bob@test.com', password: 'testpass123', ageAttested: true });
   const bob = cookieOf(r);
-  r = await api(null, 'POST', '/api/register', { email: 'uma@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'uma@test.com', password: 'testpass123', ageAttested: true });
   const uma = cookieOf(r);
-  r = await api(null, 'POST', '/api/register', { email: 'unl@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'unl@test.com', password: 'testpass123', ageAttested: true });
   const unl = cookieOf(r);
 
   /* Empty feed + auth gates. */
@@ -3797,7 +3797,7 @@ async function main() {
   check('data fixture testing result saves', r.status === 201 || r.status === 200, r.status);
   r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '9.99', name: 'Data Record', year: 2027, meet: 'Data Meet' });
   check('data fixture school record saves', r.status === 201 || r.status === 200, r.status);
-  r = await api(null, 'POST', '/api/register', { email: 'data@test.com', password: 'testpass123' });
+  r = await api(null, 'POST', '/api/register', { email: 'data@test.com', password: 'testpass123', ageAttested: true });
   check('data fixture athlete account registers', r.status === 201, r.status);
   const dataUser = cookieOf(r);
   r = await api(coach, 'PUT', '/api/profiles/' + dataP.id + '/link', { email: 'data@test.com' });
@@ -4389,7 +4389,7 @@ async function waitForServer(tries = 60) {
       let rtChild = startRt();
       try {
         check('round-trip server starts on an empty store', await waitRt(), rtLog);
-        let sr = await rtApi(null, 'POST', '/api/register', { email: 'rt-coach@test.com', password: 'testpass123' });
+        let sr = await rtApi(null, 'POST', '/api/register', { email: 'rt-coach@test.com', password: 'testpass123', ageAttested: true });
         check('round-trip store: first account is the coach', sr.status === 201 && sr.json.role === 'coach', sr.json);
         const rtCoach = cookieOf(sr);
         sr = await rtApi(rtCoach, 'POST', '/api/import/backup', ctx.backup);
@@ -4471,14 +4471,14 @@ async function waitForServer(tries = 60) {
       let seedChild = startSeed();
       try {
         check('seed server starts with COACH_INVITE_EMAILS', await waitSeed(), seedLog);
-        let sr = await seedApi(null, 'POST', '/api/register', { email: 'owner@test.com', password: 'testpass123' });
+        let sr = await seedApi(null, 'POST', '/api/register', { email: 'owner@test.com', password: 'testpass123', ageAttested: true });
         check('seed store: first account is owner coach', sr.status === 201 && sr.json.role === 'coach' && sr.json.isOwner === true, sr.json);
         const seedOwner = cookieOf(sr);
         sr = await seedApi(seedOwner, 'GET', '/api/coach-invites');
         check('env invites are seeded, trimmed + lowercased',
           sr.status === 200 && (sr.json.invites || []).includes('friend@test.com') && (sr.json.invites || []).includes('second@test.com'),
           sr.json && sr.json.invites);
-        sr = await seedApi(null, 'POST', '/api/register', { email: 'friend@test.com', password: 'testpass123' });
+        sr = await seedApi(null, 'POST', '/api/register', { email: 'friend@test.com', password: 'testpass123', ageAttested: true });
         check('a seeded invite registers as coach', sr.status === 201 && sr.json.role === 'coach', sr.json);
         sr = await seedApi(seedOwner, 'DELETE', '/api/coach-invites/second@test.com');
         check('owner can remove a seeded invite', sr.status === 200 && sr.json.removedInvite === true, sr.json);
@@ -4511,7 +4511,7 @@ async function waitForServer(tries = 60) {
         check('fresh store: TV board today source still returns the plan day',
           sr.status === 200 && Number.isInteger(sr.json.week) && Array.isArray(sr.json.groups) &&
           sr.json.groups.length === 0, sr.json && sr.json.week);
-        sr = await seedApi(null, 'POST', '/api/register', { email: 'second@test.com', password: 'testpass123' });
+        sr = await seedApi(null, 'POST', '/api/register', { email: 'second@test.com', password: 'testpass123', ageAttested: true });
         check('registering a removed seeded invite is athlete', sr.status === 201 && sr.json.role === 'athlete', sr.json);
       } finally {
         seedChild.kill('SIGKILL');
@@ -4579,12 +4579,12 @@ async function waitForServer(tries = 60) {
         check('digest wiring is in the served JS',
           dJs.status === 200 && dJs.text.includes('renderDigest') && dJs.text.includes('/api/digest'));
 
-        let dr = await dApi(null, 'POST', '/api/register', { email: 'dcoach@test.com', password: 'testpass123' });
+        let dr = await dApi(null, 'POST', '/api/register', { email: 'dcoach@test.com', password: 'testpass123', ageAttested: true });
         check('digest store: first account is coach', dr.status === 201 && dr.json.role === 'coach', dr.json);
         const dCoach = cookieOf(dr);
-        dr = await dApi(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123' });
+        dr = await dApi(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123', ageAttested: true });
         const dAmy = cookieOf(dr);
-        dr = await dApi(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123' });
+        dr = await dApi(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123', ageAttested: true });
         const dBen = cookieOf(dr);
 
         dr = await dApi(dAmy, 'GET', '/api/digest');
@@ -4841,12 +4841,12 @@ async function waitForServer(tries = 60) {
           !lbTvCode.includes('/api/leaderboard'), lbTvCode.length);
 
         /* Accounts: the coach, then two athletes linked below. */
-        let lr = await lbApi(null, 'POST', '/api/register', { email: 'lcoach@test.com', password: 'testpass123' });
+        let lr = await lbApi(null, 'POST', '/api/register', { email: 'lcoach@test.com', password: 'testpass123', ageAttested: true });
         check('leaderboard store: first account is coach', lr.status === 201 && lr.json.role === 'coach', lr.json);
         const lbCoach = cookieOf(lr);
-        lr = await lbApi(null, 'POST', '/api/register', { email: 'lia@test.com', password: 'testpass123' });
+        lr = await lbApi(null, 'POST', '/api/register', { email: 'lia@test.com', password: 'testpass123', ageAttested: true });
         const lbLia = cookieOf(lr);
-        lr = await lbApi(null, 'POST', '/api/register', { email: 'max@test.com', password: 'testpass123' });
+        lr = await lbApi(null, 'POST', '/api/register', { email: 'max@test.com', password: 'testpass123', ageAttested: true });
         const lbMax = cookieOf(lr);
 
         /* Auth + the empty state + the read-only surface. */
@@ -5028,16 +5028,23 @@ async function waitForServer(tries = 60) {
         check('>=2 gate: a one-athlete event (400m) produces no board',
           !mBoard('400m'), lb.meets.map(b => b.event));
 
-        /* Athletes read the same boards (their own profileIds ride
-           along — that is what the client highlights as "you"). */
+        /* Athletes read the MEET PR boards (their own profileIds
+           ride along — that is what the client highlights as
+           "you") — but the TESTING boards are coach-only as of
+           v48: the split is enforced in the payload, not the
+           client, so an athlete's response carries no testing
+           section at all. */
         lr = await lbApi(lbLia, 'GET', '/api/leaderboard');
-        check('athlete reads the same boards as the coach',
-          lr.status === 200 && lr.json.testing.length === lb.testing.length &&
+        check('athlete leaderboard: meet boards arrive, testing section is coach-only',
+          lr.status === 200 && lr.json.testing.length === 0 &&
+          lr.json.testingCoachOnly === true &&
           lr.json.meets.length === lb.meets.length &&
-          lr.json.testing.find(b => b.testKey === 'vertical-jump').leaders[0].profileId === liaP.id,
+          lr.json.meets.find(b => b.event === '100m').leaders[0].profileId === liaP.id,
           lr.json && lr.json.testing.length);
+        check('athlete leaderboard payload contains no testing leader names',
+          !JSON.stringify(lr.json).includes('ForceDecks'), JSON.stringify(lr.json).slice(0, 120));
         lr = await lbApi(lbMax, 'GET', '/api/leaderboard');
-        check('a second athlete reads the boards too',
+        check('a second athlete reads the meet boards too',
           lr.status === 200 && lr.json.meets.find(b => b.event === '100m').leaders.length === 3, lr.status);
 
         /* Payload purity: performance keys only — no check-in,
@@ -5136,14 +5143,14 @@ async function waitForServer(tries = 60) {
         !plTvCode.includes('Needs a max test'), plTvCode.length);
 
       /* Accounts + roster. */
-      let pr = await plApi(null, 'POST', '/api/register', { email: 'plcoach@test.com', password: 'testpass123' });
+      let pr = await plApi(null, 'POST', '/api/register', { email: 'plcoach@test.com', password: 'testpass123', ageAttested: true });
       check('pct store: first account is the coach', pr.status === 201 && pr.json.role === 'coach', pr.json);
       const plCoach = cookieOf(pr);
-      pr = await plApi(null, 'POST', '/api/register', { email: 'esther@test.com', password: 'testpass123' });
+      pr = await plApi(null, 'POST', '/api/register', { email: 'esther@test.com', password: 'testpass123', ageAttested: true });
       const plEsther = cookieOf(pr);
-      pr = await plApi(null, 'POST', '/api/register', { email: 'mia@test.com', password: 'testpass123' });
+      pr = await plApi(null, 'POST', '/api/register', { email: 'mia@test.com', password: 'testpass123', ageAttested: true });
       const plMia = cookieOf(pr);
-      pr = await plApi(null, 'POST', '/api/register', { email: 'solo@test.com', password: 'testpass123' });
+      pr = await plApi(null, 'POST', '/api/register', { email: 'solo@test.com', password: 'testpass123', ageAttested: true });
       const plSolo = cookieOf(pr);
 
       pr = await plApi(plCoach, 'POST', '/api/groups', { name: 'PL Sprinters' });
@@ -5438,10 +5445,10 @@ async function waitForServer(tries = 60) {
         wrTvCode.length);
 
       /* Accounts + roster. */
-      let wr = await wrApi(null, 'POST', '/api/register', { email: 'wrcoach@test.com', password: 'testpass123' });
+      let wr = await wrApi(null, 'POST', '/api/register', { email: 'wrcoach@test.com', password: 'testpass123', ageAttested: true });
       check('weight-room store: first account is the coach', wr.status === 201 && wr.json.role === 'coach', wr.json);
       const wrCoach = cookieOf(wr);
-      wr = await wrApi(null, 'POST', '/api/register', { email: 'wrathlete@test.com', password: 'testpass123' });
+      wr = await wrApi(null, 'POST', '/api/register', { email: 'wrathlete@test.com', password: 'testpass123', ageAttested: true });
       const wrAthlete = cookieOf(wr);
 
       wr = await wrApi(wrCoach, 'POST', '/api/groups', { name: 'WR Sprinters' });
@@ -5482,6 +5489,13 @@ async function waitForServer(tries = 60) {
       });
       const wrWorkout = wr.json && wr.json.workout;
       check('weight-room fixtures: the floor workout saves', wr.status === 201 && !!wrWorkout, wr.json);
+
+      /* v48: the floor view opens in shared-display mode by
+         default (no names/loads — asserted in the v48 section).
+         This v46 section exercises the coach-detail payloads, so
+         switch the store to Coach detail first. */
+      wr = await wrApi(wrCoach, 'POST', '/api/weight-room/display', { shared: false });
+      check('weight-room setup: coach-detail mode persists', wr.status === 200 && wr.json.sharedDisplay === false, wr.json);
 
       /* Auth gates. */
       wr = await wrApi(null, 'GET', '/api/weight-room?date=' + D1);
@@ -5698,9 +5712,9 @@ async function waitForServer(tries = 60) {
     };
     try {
       check('reports-library server starts', await waitRp(), rpLog);
-      let rp = await rpApi(null, 'POST', '/api/register', { email: 'rpcoach@test.com', password: 'testpass123' });
+      let rp = await rpApi(null, 'POST', '/api/register', { email: 'rpcoach@test.com', password: 'testpass123', ageAttested: true });
       const rpCoach = cookieOf(rp);
-      rp = await rpApi(null, 'POST', '/api/register', { email: 'rpathlete@test.com', password: 'testpass123' });
+      rp = await rpApi(null, 'POST', '/api/register', { email: 'rpathlete@test.com', password: 'testpass123', ageAttested: true });
       const rpAthlete = cookieOf(rp);
 
       /* Served wiring: the three new reports + the CSV download. */
@@ -5911,6 +5925,488 @@ async function waitForServer(tries = 60) {
     } finally {
       rpChild.kill('SIGKILL');
       fs.rmSync(RP_DIR, { recursive: true, force: true });
+    }
+  }
+
+  /* ==================== v48: Compliance fixes ==================== */
+  /* The no-admin-input fixes from the 2026-10-26 compliance
+     review: concussion branch + held state, concern workflow and
+     audit trail, crisis notice + distress flag, privacy page,
+     weight-room shared display, leaderboard split, age floor,
+     export hardening (log + passphrase encryption), retention
+     tooling, announcement window notice, athlete-video consent.
+     Own isolated store; check-in dates are pinned relative to
+     today (the endpoint accepts dates within the last 14 days). */
+  {
+    const CP_BASE = 'http://127.0.0.1:3225';
+    const cpApi = async (cookie, method, p, body) => {
+      const headers = {};
+      if (cookie) headers.cookie = cookie;
+      let data;
+      if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+      const res = await fetch(CP_BASE + p, { method, headers, body: data });
+      let json = null;
+      try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+      let setCookie = [];
+      try { setCookie = res.headers.getSetCookie(); } catch (_) {
+        const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+      }
+      return { status: res.status, json, setCookie };
+    };
+    const cpText = async (cookie, p) => {
+      const res = await fetch(CP_BASE + p, { headers: cookie ? { cookie } : {} });
+      return { status: res.status, text: await res.text() };
+    };
+    const CP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-compliance-'));
+    let cpLog = '';
+    const cpChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, {
+        PORT: '3225', DATA_DIR: CP_DIR, SESSION_SECRET: 'compliance-secret',
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    cpChild.stdout.on('data', d => { cpLog += d; });
+    cpChild.stderr.on('data', d => { cpLog += d; });
+    const waitCp = async () => {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(CP_BASE + '/api/content');
+          if (res.status === 200) return true;
+        } catch (_) { /* not up yet */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    const pad2c = (n) => String(n).padStart(2, '0');
+    const fmtCp = (d) => d.getFullYear() + '-' + pad2c(d.getMonth() + 1) + '-' + pad2c(d.getDate());
+    const cpToday = fmtCp(new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })));
+    const cpAdd = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return fmtCp(d); };
+    try {
+      check('compliance server starts', await waitCp(), cpLog);
+
+      /* ---- age floor (R10): registration needs the attestation ---- */
+      let cp = await cpApi(null, 'POST', '/api/register', { email: 'cpcoach@test.com', password: 'testpass123' });
+      check('registration without the 13+ attestation is refused', cp.status === 400, cp);
+      cp = await cpApi(null, 'POST', '/api/register', { email: 'cpcoach@test.com', password: 'testpass123', ageAttested: false });
+      check('registration with the attestation unchecked is refused', cp.status === 400, cp.status);
+      cp = await cpApi(null, 'POST', '/api/register', { email: 'cpcoach@test.com', password: 'testpass123', ageAttested: true });
+      check('registration with the attestation succeeds; first account is the coach',
+        cp.status === 201 && cp.json.role === 'coach', cp.json);
+      const cpCoach = cookieOf(cp);
+      const mkAthlete = async (email) => {
+        const rr = await cpApi(null, 'POST', '/api/register', { email, password: 'testpass123', ageAttested: true });
+        return cookieOf(rr);
+      };
+      const cpHal = await mkAthlete('hal@test.com');
+      const cpDot = await mkAthlete('dot@test.com');
+      const cpCal = await mkAthlete('cal@test.com');
+      const cpRae = await mkAthlete('rae@test.com');
+      cp = await cpApi(null, 'POST', '/api/login', { email: 'cpcoach@test.com', password: 'testpass123' });
+      check('existing accounts still sign in (attestation is registration-only)',
+        cp.status === 200 && cp.json.role === 'coach', cp.status);
+
+      /* ---- served bundle: crisis notice, privacy page, wiring ---- */
+      const cpPage = await cpText(null, '/');
+      const cpJs = await cpText(null, '/app.js');
+      check('privacy & safety view is in the served page',
+        cpPage.text.includes('id="view-privacy"') && cpPage.text.includes('id="privacy-main"'), cpPage.status);
+      check('check-in crisis notice ships in the bundle (not monitored 24/7, 988, not confidential)',
+        cpJs.text.includes('not monitored 24/7') && cpJs.text.includes('988') &&
+        cpJs.text.includes('cannot be kept confidential'), cpJs.status);
+      check('privacy page copy ships (what is held, staff sharing, parent questions)',
+        cpJs.text.includes('renderPrivacy') && cpJs.text.includes('What this app holds') &&
+        cpJs.text.includes('school athletic and medical staff') &&
+        cpJs.text.includes('parent or guardian'), cpJs.status);
+      check('register form carries the 13+ attestation',
+        cpJs.text.includes('I am 13 or older') && cpJs.text.includes('ageAttested'), cpJs.status);
+      check('announcement window notice ships (soft warning, Eastern window)',
+        cpJs.text.includes('announcementInWindow') && cpJs.text.includes('America/New_York') &&
+        cpJs.text.includes('Outside the usual 6 AM'), cpJs.status);
+      check('data page ships the export log, encryption, and retention wiring',
+        cpJs.text.includes('/api/export/log') && cpJs.text.includes('Download encrypted backup') &&
+        cpJs.text.includes('/api/retention') && cpJs.text.includes('Purge health data'), cpJs.status);
+      check('weight room ships the shared-display toggle and the "See coach" panel',
+        cpJs.text.includes('/api/weight-room/display') && cpJs.text.includes('Shared display') &&
+        cpJs.text.includes('See coach'), cpJs.status);
+      check('health view ships the trainer summary and clearance workflow',
+        cpJs.text.includes('Copy summary for the athletic trainer') &&
+        cpJs.text.includes('HELD — CLEARANCE REQUIRED') && cpJs.text.includes('Audit trail'), cpJs.status);
+      check('media editor ships the athlete-video consent guard',
+        cpJs.text.includes('Features an SJC athlete') &&
+        cpJs.text.includes('specific written parent/guardian permission'), cpJs.status);
+
+      /* ---- roster fixtures ---- */
+      cp = await cpApi(cpCoach, 'POST', '/api/groups', { name: 'Compliance Squad' });
+      const cpGroup = cp.json.group.id;
+      const mkProfile = async (firstName, lastName) =>
+        (await cpApi(cpCoach, 'POST', '/api/profiles', { firstName, lastName, groupId: cpGroup, events: ['100m'] })).json.profile;
+      const halP = await mkProfile('Hal', 'Headley');
+      const dotP = await mkProfile('Dot', 'Distell');
+      const calP = await mkProfile('Cal', 'Calmers');
+      const raeP = await mkProfile('Rae', 'Retman');
+      await cpApi(cpCoach, 'PUT', '/api/profiles/' + halP.id + '/link', { email: 'hal@test.com' });
+      await cpApi(cpCoach, 'PUT', '/api/profiles/' + dotP.id + '/link', { email: 'dot@test.com' });
+      await cpApi(cpCoach, 'PUT', '/api/profiles/' + calP.id + '/link', { email: 'cal@test.com' });
+      await cpApi(cpCoach, 'PUT', '/api/profiles/' + raeP.id + '/link', { email: 'rae@test.com' });
+
+      /* ---- concussion branch (R2) + workflow/audit (R1) ---- */
+      cp = await cpApi(cpHal, 'POST', '/api/checkin', {
+        sleep: 7, soreness: 2, energy: 4, hurts: true,
+        painText: 'Headache since the fall at practice', headSymptoms: true,
+      });
+      check('head-symptoms check-in is accepted and records the head flag',
+        cp.status === 201 && cp.json.checkin.headSymptoms === true, cp.json);
+      cp = await cpApi(cpHal, 'GET', '/api/checkin/today');
+      check('the held athlete sees the hold and the plain-language reason',
+        cp.status === 200 && cp.json.held.held === true &&
+        /paused from training/.test(cp.json.held.message || ''), cp.json.held);
+      cp = await cpApi(cpCoach, 'GET', '/api/concerns');
+      const halConcern = (cp.json.concerns || []).find(c => c.profileId === halP.id);
+      check('the check-in filed ONE athlete-reported, head-related concern',
+        !!halConcern && halConcern.source === 'athlete' && halConcern.headRelated === true &&
+        halConcern.status === 'new' && Array.isArray(halConcern.audit) &&
+        halConcern.audit.some(a => a.action === 'reported'), halConcern);
+      const halCid = halConcern.id;
+      cp = await cpApi(cpCoach, 'GET', '/api/coach/today');
+      check('coach today lists the held athlete (flag only)',
+        (cp.json.heldAthletes || []).some(h => h.profileId === halP.id), cp.json.heldAthletes);
+      cp = await cpApi(cpCoach, 'GET', '/api/coach/today?board=1');
+      check('the TV board variant of coach today carries NO held athletes',
+        Array.isArray(cp.json.heldAthletes) && cp.json.heldAthletes.length === 0, cp.json.heldAthletes);
+      cp = await cpApi(cpCoach, 'GET', '/api/ams/athlete/' + halP.id);
+      check('the AMS profile shows the hold', cp.json.held && cp.json.held.held === true, cp.json.held);
+      cp = await cpApi(cpCoach, 'GET', '/api/ams/roster');
+      const halRow = (cp.json.athletes || []).find(a => a.profile.id === halP.id);
+      check('the AMS roster row shows the hold', !!halRow && halRow.held && halRow.held.held === true, halRow);
+      cp = await cpApi(cpCoach, 'DELETE', '/api/concerns/' + halCid);
+      check('an athlete-reported concern cannot be deleted', cp.status === 403, cp.status);
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + halCid, { status: 'cleared', disposition: 'Seen by the athletic trainer' });
+      check('a head-related concern cannot close without a recorded clearance', cp.status === 400, cp.status);
+      cp = await cpApi(cpCoach, 'GET', '/api/concerns/' + halCid);
+      check('the refused close left the concern untouched (still new, no disposition saved)',
+        cp.json.concern.status === 'new' && !cp.json.concern.disposition, cp.json.concern);
+      check('reading an athlete-reported concern appends a "viewed" audit entry',
+        cp.json.concern.audit.some(a => a.action === 'viewed' && a.email === 'cpcoach@test.com'),
+        cp.json.concern.audit);
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + halCid, { acknowledge: true });
+      check('acknowledgment is recorded with who and when',
+        cp.status === 200 && !!cp.json.concern.acknowledgedAt &&
+        cp.json.concern.acknowledgedByEmail === 'cpcoach@test.com' &&
+        cp.json.concern.audit.some(a => a.action === 'acknowledged'), cp.json.concern);
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + halCid, {
+        clearance: { by: 'Dr. A Example, MD', date: cpToday, note: 'Written clearance received and filed with the school' },
+      });
+      check('clearance can be recorded ahead of the close',
+        cp.status === 200 && cp.json.concern.clearance &&
+        cp.json.concern.clearance.by === 'Dr. A Example, MD' &&
+        cp.json.concern.clearance.recordedBy === 'cpcoach@test.com' &&
+        cp.json.concern.status === 'new', cp.json.concern);
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + halCid, { status: 'cleared' });
+      check('an athlete-reported concern also cannot close without a disposition', cp.status === 400, cp.status);
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + halCid, {
+        status: 'cleared', disposition: 'Seen by the athletic trainer; written clearance on file',
+      });
+      check('with clearance + disposition the head concern closes',
+        cp.status === 200 && cp.json.concern.status === 'cleared' &&
+        cp.json.concern.audit.some(a => a.action === 'closed') &&
+        cp.json.concern.audit.some(a => a.action === 'disposition'), cp.json.concern);
+      cp = await cpApi(cpHal, 'GET', '/api/checkin/today');
+      check('the hold lifts once the concern is cleared', cp.json.held.held === false, cp.json.held);
+
+      /* Coach-filed concerns: deletable, and head-related ones
+         follow the same clearance gate (disposition not required). */
+      cp = await cpApi(cpCoach, 'POST', '/api/concerns', {
+        profileId: calP.id, area: 'calf', side: 'left', feeling: 'tightness',
+        pain: 4, started: cpToday, impact: 'modified', note: 'Tight calf',
+      });
+      check('a coach-filed concern saves', cp.status === 201 && cp.json.concern.headRelated === false, cp.json);
+      const calCid = cp.json.concern.id;
+      cp = await cpApi(cpCoach, 'DELETE', '/api/concerns/' + calCid);
+      check('a coach-filed concern can still be deleted', cp.status === 200, cp.status);
+      cp = await cpApi(cpCoach, 'POST', '/api/concerns', {
+        profileId: calP.id, area: 'other', side: 'na', feeling: 'other',
+        pain: 3, started: cpToday, impact: 'stopped', note: 'Hit in a collision; dizzy', headRelated: true,
+      });
+      const calHead = cp.json.concern;
+      check('a coach can file a concern as head-related', cp.status === 201 && calHead.headRelated === true, cp.json);
+      cp = await cpApi(cpCoach, 'GET', '/api/coach/today');
+      check('a coach-filed head concern holds the athlete too',
+        (cp.json.heldAthletes || []).some(h => h.profileId === calP.id), cp.json.heldAthletes);
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + calHead.id, { status: 'cleared' });
+      check('a coach-filed head concern also cannot close without clearance', cp.status === 400, cp.status);
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + calHead.id, {
+        status: 'cleared',
+        clearance: { by: 'School Nurse, RN', date: cpToday, note: 'Written clearance from the treating provider received' },
+      });
+      check('clearance supplied with the close clears a coach-filed head concern',
+        cp.status === 200 && cp.json.concern.status === 'cleared' && !!cp.json.concern.clearance, cp.json);
+
+      /* ---- distress flag (R3): 3+ of the last 5 check-ins ---- */
+      for (let i = 4; i >= 0; i--) {
+        const d = cpAdd(cpToday, -i);
+        await cpApi(cpDot, 'POST', '/api/checkin', {
+          date: d, sleep: 7, soreness: 2, energy: i === 2 ? 5 : 2, hurts: false,
+        });
+        await cpApi(cpCal, 'POST', '/api/checkin', {
+          date: d, sleep: 8, soreness: 2, energy: 4, hurts: false,
+        });
+      }
+      cp = await cpApi(cpCoach, 'GET', '/api/ams/roster');
+      const dotRow = (cp.json.athletes || []).find(a => a.profile.id === dotP.id);
+      const calRow = (cp.json.athletes || []).find(a => a.profile.id === calP.id);
+      check('distress flag fires at 4 of the last 5 check-ins with energy ≤2',
+        !!dotRow && (dotRow.flags || []).some(f => f.key === 'distress' &&
+          f.label === 'Distress pattern — check in with this athlete'), dotRow && dotRow.flags);
+      check('no distress flag for steady check-ins',
+        !!calRow && !(calRow.flags || []).some(f => f.key === 'distress'), calRow && calRow.flags);
+      cp = await cpApi(cpDot, 'GET', '/api/checkin/mine');
+      check('the distress label never appears in the athlete\'s own payload',
+        !JSON.stringify(cp.json).includes('Distress'), cp.status);
+
+      /* ---- leaderboard split (YELLOW): testing is coach-only ---- */
+      cp = await cpApi(cpCoach, 'POST', '/api/test-days', { date: cpAdd(cpToday, -2), title: 'CP Day', testKeys: ['vertical-jump'] });
+      const cpDay = cp.json.testDay.id;
+      await cpApi(cpCoach, 'POST', '/api/results/bulk', {
+        testDayId: cpDay,
+        entries: [
+          { profileId: halP.id, testKey: 'vertical-jump', value: 26 },
+          { profileId: dotP.id, testKey: 'vertical-jump', value: 24 },
+        ],
+      });
+      await cpApi(cpCoach, 'POST', '/api/meet-results', { profileId: halP.id, date: cpAdd(cpToday, -3), meet: 'CP Invite', event: '100m', mark: '11.20' });
+      await cpApi(cpCoach, 'POST', '/api/meet-results', { profileId: dotP.id, date: cpAdd(cpToday, -3), meet: 'CP Invite', event: '100m', mark: '11.45' });
+      cp = await cpApi(cpCoach, 'GET', '/api/leaderboard');
+      check('coach leaderboard carries testing and meet boards',
+        (cp.json.testing || []).length > 0 && (cp.json.meets || []).length > 0, cp.json);
+      cp = await cpApi(cpHal, 'GET', '/api/leaderboard');
+      check('athlete leaderboard: testing section empty and marked coach-only, meet boards intact',
+        Array.isArray(cp.json.testing) && cp.json.testing.length === 0 &&
+        cp.json.testingCoachOnly === true && (cp.json.meets || []).length > 0, cp.json);
+      check('no testing leader data leaks into the athlete payload',
+        !JSON.stringify(cp.json).includes('Vertical'), JSON.stringify(cp.json).slice(0, 200));
+
+      /* ---- weight room shared display (R7) ---- */
+      cp = await cpApi(cpCoach, 'POST', '/api/test-days', { date: cpAdd(cpToday, -6), title: 'CP Max Day', testKeys: ['back-squat'] });
+      const cpMaxDay = cp.json.testDay.id;
+      await cpApi(cpCoach, 'POST', '/api/results/bulk', {
+        testDayId: cpMaxDay,
+        entries: [{ profileId: halP.id, testKey: 'back-squat', weight: 200, reps: 5 }],
+      });
+      cp = await cpApi(cpCoach, 'POST', '/api/custom-workouts', {
+        title: 'CP Floor Lift',
+        blocks: [{
+          rounds: 1, restBetweenRounds: 0, restAfterBlock: 0,
+          exercises: [{ name: 'Back Squat', load: { testKey: 'back-squat', percent: 80, sets: 4, reps: 5 } }],
+        }],
+      });
+      const cpWorkout = cp.json.workout;
+      const wrUrl = '/api/weight-room?date=2026-10-26&groupId=' + cpGroup + '&workoutId=' + cpWorkout.id;
+      cp = await cpApi(cpCoach, 'GET', wrUrl);
+      check('weight room opens in shared display by default', cp.json.sharedDisplay === true, cp.json.sharedDisplay);
+      const sharedJson = JSON.stringify(cp.json);
+      check('shared payload carries no athlete names and no load figures',
+        (cp.json.panels || []).every(pn => pn.profile.name === '' && pn.loads === null) &&
+        !sharedJson.includes('Headley') && !sharedJson.includes('Distell') &&
+        !sharedJson.includes('"weight":185'), sharedJson.slice(0, 300));
+      cp = await cpApi(cpCoach, 'POST', '/api/concerns', {
+        profileId: dotP.id, area: 'other', side: 'na', feeling: 'other',
+        pain: 3, started: cpToday, impact: 'stopped', note: 'Dizzy after a collision', headRelated: true,
+      });
+      const dotHead = cp.json.concern;
+      cp = await cpApi(cpCoach, 'GET', wrUrl);
+      const dotSharedPanel = (cp.json.panels || []).find(pn => pn.profile.id === dotP.id);
+      check('a held athlete\'s shared panel is a flag with no name and no reason',
+        !!dotSharedPanel && dotSharedPanel.held === true && dotSharedPanel.profile.name === '',
+        dotSharedPanel);
+      cp = await cpApi(cpCoach, 'POST', '/api/weight-room/display', { shared: false });
+      check('the coach can switch to coach detail, and it persists',
+        cp.status === 200 && cp.json.sharedDisplay === false, cp.json);
+      cp = await cpApi(cpCoach, 'GET', wrUrl);
+      const halPanel = (cp.json.panels || []).find(pn => pn.profile.id === halP.id);
+      check('coach detail restores names and per-athlete loads (Hal 185 from his 233 max)',
+        cp.json.sharedDisplay === false && !!halPanel && halPanel.profile.name === 'Hal Headley' &&
+        Array.isArray(halPanel.loads) && halPanel.loads.length === 1 &&
+        halPanel.loads[0].max === 233 && halPanel.loads[0].weight === 185, halPanel);
+      const dotPanel = (cp.json.panels || []).find(pn => pn.profile.id === dotP.id);
+      check('coach detail marks the held panel', !!dotPanel && dotPanel.held === true, dotPanel);
+      cp = await cpApi(cpCoach, 'POST', '/api/weight-room/display', { shared: true });
+      check('switching back to shared display persists', cp.json.sharedDisplay === true, cp.json);
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + dotHead.id, {
+        status: 'cleared',
+        clearance: { by: 'Dr. A Example, MD', date: cpToday, note: 'Written clearance received' },
+      });
+      check('the held weight-room fixture clears for the retention/export steps',
+        cp.status === 200 && cp.json.concern.status === 'cleared', cp.status);
+
+      /* ---- athlete-video consent guard (R8 partial) ---- */
+      cp = await cpApi(cpCoach, 'PUT', '/api/media/DRL-01', {
+        url: 'https://www.youtube.com/watch?v=X0J1m-R6CKk', athleteFeatures: true,
+      });
+      check('athlete-marked media cannot save without the consent attestation', cp.status === 400, cp.status);
+      cp = await cpApi(cpCoach, 'PUT', '/api/media/DRL-01', {
+        url: 'https://www.youtube.com/watch?v=X0J1m-R6CKk', athleteFeatures: true, consentAttested: true,
+      });
+      check('athlete-marked media saves with the attestation', cp.status === 200, cp.status);
+      cp = await cpApi(cpCoach, 'PUT', '/api/media/DRL-02', {
+        url: 'https://www.youtube.com/watch?v=X0J1m-R6CKk',
+      });
+      check('coach-only footage is unaffected by the consent guard', cp.status === 200, cp.status);
+      cp = await cpApi(cpCoach, 'GET', '/api/demo-coverage');
+      const covRow = (cp.json.rows || []).find(x => x.id === 'DRL-01');
+      check('demo coverage shows the stored consent attestation (who + when)',
+        !!covRow && covRow.athleteFeatures === true && !!covRow.consent &&
+        covRow.consent.email === 'cpcoach@test.com' && !!covRow.consent.at, covRow);
+
+      /* ---- retention tooling (R11) ---- */
+      await cpApi(cpRae, 'POST', '/api/checkin', { sleep: 7, soreness: 3, energy: 3, hurts: false });
+      await cpApi(cpCoach, 'POST', '/api/ams/athlete/' + raeP.id + '/notes', { text: 'Prefers morning lifts' });
+      await cpApi(cpCoach, 'POST', '/api/concerns', {
+        profileId: raeP.id, area: 'hamstring', side: 'right', feeling: 'tightness',
+        pain: 4, started: cpToday, impact: 'modified', note: 'Tight hamstring',
+      });
+      await cpApi(cpCoach, 'POST', '/api/meet-results', { profileId: raeP.id, date: cpAdd(cpToday, -3), meet: 'CP Invite', event: '100m', mark: '12.10' });
+      cp = await cpApi(cpCoach, 'PUT', '/api/profiles/' + raeP.id, { archived: true });
+      check('retention fixture: athlete archived', cp.status === 200, cp.status);
+      cp = await cpApi(cpCoach, 'GET', '/api/retention');
+      check('retention: a just-archived athlete is NOT past the default 12-month window',
+        cp.status === 200 && cp.json.months === 12 &&
+        !(cp.json.candidates || []).some(c => c.profile.id === raeP.id), cp.json);
+      cp = await cpApi(cpCoach, 'PUT', '/api/retention/settings', { months: 0 });
+      check('retention window below 1 month is refused', cp.status === 400, cp.status);
+      cp = await cpApi(cpCoach, 'PUT', '/api/retention/settings', { months: 6 });
+      check('the retention window is coach-settable', cp.status === 200 && cp.json.months === 6, cp.json);
+      cp = await cpApi(cpCoach, 'POST', '/api/retention/purge', { profileId: raeP.id });
+      check('purge without confirm is refused', cp.status === 400, cp.status);
+      cp = await cpApi(cpCoach, 'POST', '/api/retention/purge', { profileId: dotP.id, confirm: true });
+      check('purge of a non-archived athlete is refused', cp.status === 400, cp.status);
+      cp = await cpApi(cpCoach, 'POST', '/api/retention/purge', { profileId: raeP.id, confirm: true });
+      check('purge deletes exactly the health collections (1 check-in, 1 concern, 1 note)',
+        cp.status === 200 && cp.json.counts.checkins === 1 && cp.json.counts.concerns === 1 &&
+        cp.json.counts.coachNotes === 1, cp.json);
+      cp = await cpApi(cpCoach, 'GET', '/api/ams/athlete/' + raeP.id);
+      check('after purge: notes and wellness are gone, meet history (program history) is intact',
+        (cp.json.notes || []).length === 0 && cp.json.wellness.summary.days === 0 &&
+        (cp.json.meetPrs || []).length >= 1, {
+          notes: (cp.json.notes || []).length, days: cp.json.wellness.summary.days,
+          prs: (cp.json.meetPrs || []).length,
+        });
+      cp = await cpApi(cpCoach, 'GET', '/api/concerns');
+      check('after purge: the athlete\'s concerns are gone from the list',
+        !(cp.json.concerns || []).some(c => c.profileId === raeP.id), cp.status);
+      /* An athlete archived long ago (arrives via backup import)
+         lists as a candidate with health-record counts. */
+      cp = await cpApi(cpCoach, 'POST', '/api/import/backup', {
+        app: 'sprinter-workout-app', kind: 'backup', version: 1,
+        data: {
+          profiles: [{
+            id: 'oldprof-v48', firstName: 'Olga', lastName: 'Oldtimer', groupId: null,
+            events: [], archived: true, archivedAt: '2024-01-15T00:00:00.000Z',
+            createdAt: '2023-09-01T00:00:00.000Z',
+          }],
+          checkins: {
+            'oldprof-v48': {
+              '2024-01-10': {
+                profileId: 'oldprof-v48', date: '2024-01-10', sleep: 7, soreness: 2,
+                energy: 3, hurts: false, painText: '', headSymptoms: false, note: '',
+                concernId: null, createdAt: '2024-01-10T12:00:00.000Z', updatedAt: '2024-01-10T12:00:00.000Z',
+              },
+            },
+          },
+          concerns: { 'oldprof-v48': [] },
+          coachNotes: {
+            'oldprof-v48': [{ id: 'note-old-v48', profileId: 'oldprof-v48', text: 'Old imported note', createdAt: '2024-01-10T12:00:00.000Z' }],
+          },
+        },
+      });
+      check('the old archived athlete imports cleanly', cp.status === 200, cp.json);
+      cp = await cpApi(cpCoach, 'GET', '/api/retention');
+      const oldCand = (cp.json.candidates || []).find(c => c.profile.id === 'oldprof-v48');
+      check('retention lists the long-archived athlete with health-record counts',
+        !!oldCand && oldCand.counts.checkins === 1 && oldCand.counts.coachNotes === 1 &&
+        oldCand.counts.concerns === 0, oldCand);
+      cp = await cpApi(cpCoach, 'POST', '/api/retention/purge', { profileId: 'oldprof-v48', confirm: true });
+      check('purging the imported athlete reports the same counts',
+        cp.status === 200 && cp.json.counts.checkins === 1 && cp.json.counts.coachNotes === 1, cp.json);
+      cp = await cpApi(cpCoach, 'GET', '/api/retention');
+      const oldCand2 = (cp.json.candidates || []).find(c => c.profile.id === 'oldprof-v48');
+      check('after purge the candidate\'s health counts are zero',
+        !!oldCand2 && oldCand2.counts.checkins === 0 && oldCand2.counts.coachNotes === 0, oldCand2);
+
+      /* ---- export hardening (R6): audit log + encryption ---- */
+      const csvRes = await cpText(cpCoach, '/api/export/roster.csv');
+      check('roster CSV downloads for the export-log step', csvRes.status === 200, csvRes.status);
+      cp = await cpApi(cpCoach, 'POST', '/api/export/backup', { passphrase: 'short' });
+      check('an encrypted backup needs a passphrase of 8+ characters', cp.status === 400, cp.status);
+      cp = await cpApi(cpCoach, 'POST', '/api/export/backup', { passphrase: 'correct horse battery' });
+      check('encrypted backup returns a sealed envelope (no plaintext data key)',
+        cp.status === 200 && cp.json.kind === 'backup-encrypted' && !!cp.json.data &&
+        !!cp.json.salt && !!cp.json.iv && !!cp.json.tag && !('groups' in cp.json), cp.json && cp.json.kind);
+      const envelope = cp.json;
+      cp = await cpApi(cpCoach, 'GET', '/api/export/log');
+      const kinds = (cp.json.entries || []).map(e => e.kind);
+      check('export log records the CSV export, the encrypted backup, the import, and the purges',
+        kinds.includes('csv') && kinds.includes('backup') && kinds.includes('backup-import') &&
+        kinds.includes('retention-purge'), kinds);
+      check('export log entries carry who and when',
+        (cp.json.entries || []).every(e => e.email === 'cpcoach@test.com' && !!e.at), cp.json.entries && cp.json.entries[0]);
+      cp = await cpApi(cpHal, 'GET', '/api/export/log');
+      check('athletes cannot read the export log', cp.status === 403, cp.status);
+
+      /* Encryption round trip: the envelope restores into a
+         FRESH store — wrong passphrase fails, right one restores. */
+      const RT2_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-roundtrip2-'));
+      const rtChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+        env: Object.assign({}, process.env, {
+          PORT: '3226', DATA_DIR: RT2_DIR, SESSION_SECRET: 'roundtrip2-secret',
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      try {
+        let up = false;
+        for (let i = 0; i < 60 && !up; i++) {
+          try {
+            const res = await fetch('http://127.0.0.1:3226/api/content');
+            up = res.status === 200;
+          } catch (_) { /* not up yet */ }
+          if (!up) await new Promise(r => setTimeout(r, 150));
+        }
+        check('round-trip server starts', up);
+        const rtApi = async (cookie, method, p, body) => {
+          const headers = {};
+          if (cookie) headers.cookie = cookie;
+          let data;
+          if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+          const res = await fetch('http://127.0.0.1:3226' + p, { method, headers, body: data });
+          let json = null;
+          try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+          let setCookie = [];
+          try { setCookie = res.headers.getSetCookie(); } catch (_) {
+            const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+          }
+          return { status: res.status, json, setCookie };
+        };
+        let rt = await rtApi(null, 'POST', '/api/register', { email: 'rtcoach@test.com', password: 'testpass123', ageAttested: true });
+        const rtCoach = cookieOf(rt);
+        rt = await rtApi(rtCoach, 'POST', '/api/import/backup', { ...envelope });
+        check('an encrypted backup without its passphrase is refused', rt.status === 400, rt.status);
+        rt = await rtApi(rtCoach, 'POST', '/api/import/backup', { ...envelope, passphrase: 'wrong passphrase entirely' });
+        check('a wrong passphrase is refused and nothing is imported', rt.status === 400, rt.status);
+        rt = await rtApi(rtCoach, 'GET', '/api/groups');
+        check('the refused imports left the fresh store empty',
+          (rt.json.groups || []).length === 0, rt.json.groups);
+        rt = await rtApi(rtCoach, 'POST', '/api/import/backup', { ...envelope, passphrase: 'correct horse battery' });
+        check('the right passphrase decrypts and merges the backup',
+          rt.status === 200 && rt.json.ok === true && rt.json.totalAdded > 0, rt.json);
+        rt = await rtApi(rtCoach, 'GET', '/api/groups');
+        check('the restored store holds the exported data (Compliance Squad)',
+          (rt.json.groups || []).some(g => g.name === 'Compliance Squad'), rt.json.groups);
+      } finally {
+        rtChild.kill('SIGKILL');
+        fs.rmSync(RT2_DIR, { recursive: true, force: true });
+      }
+    } finally {
+      cpChild.kill('SIGKILL');
+      fs.rmSync(CP_DIR, { recursive: true, force: true });
     }
   }
 

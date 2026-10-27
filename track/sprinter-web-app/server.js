@@ -95,6 +95,8 @@ let db = {
   coachNotes: {},
   announcements: [],
   floorProgress: {},
+  exportLog: [],
+  settings: { retentionMonths: 12, weightRoomSharedDisplay: true },
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -205,6 +207,23 @@ function migrate() {
   // db.completions, written through the checklist's endpoint).
   db.floorProgress = (db.floorProgress && typeof db.floorProgress === 'object' && !Array.isArray(db.floorProgress))
     ? db.floorProgress : {};
+  /* Data audit log: every export, import, and retention purge is
+     recorded here ({ id, at, userId, email, kind, detail }) so the
+     copies of team data that leave the app can be accounted for.
+     Server-side only — it is never part of a backup file. */
+  db.exportLog = Array.isArray(db.exportLog) ? db.exportLog : [];
+  /* Coach-level settings: the retention window (months) applied to
+     archived athletes' health-adjacent data, and whether the Weight
+     Room floor view opens in shared-display mode (no names/loads). */
+  db.settings = (db.settings && typeof db.settings === 'object' && !Array.isArray(db.settings))
+    ? db.settings : {};
+  if (!Number.isInteger(db.settings.retentionMonths)
+    || db.settings.retentionMonths < 1 || db.settings.retentionMonths > 60) {
+    db.settings.retentionMonths = 12;
+  }
+  if (db.settings.weightRoomSharedDisplay === undefined) {
+    db.settings.weightRoomSharedDisplay = true;
+  }
   // Coach-built training programs (reusable week-grid templates) and
   // their applications onto the team calendar. An application carries
   // an exact snapshot of every override it wrote, so removing it
@@ -1202,7 +1221,16 @@ function mergedMedia() {
   for (const [id, raw] of Object.entries(db.mediaOverrides)) {
     if (raw === null) { delete out[id]; continue; }
     const e = mediaEntry(raw);
-    if (e) out[id] = Object.assign({}, e, { source: 'coach' });
+    if (e) {
+      out[id] = Object.assign({}, e, { source: 'coach' });
+      /* Athlete-video consent rides with a coach entry: whether
+         the video features an SJC athlete, and the attestation
+         recorded when the coach saved it. */
+      if (raw.athleteFeatures) {
+        out[id].athleteFeatures = true;
+        out[id].consent = raw.consent || null;
+      }
+    }
   }
   return out;
 }
@@ -1222,7 +1250,11 @@ function demoCoverage() {
   const add = (id, name, kind) => {
     const e = media[id];
     const status = !e ? 'none' : (e.type === 'upload' ? 'yours' : 'placeholder');
-    rows.push({ id, name, kind, status });
+    rows.push({
+      id, name, kind, status,
+      athleteFeatures: !!(e && e.athleteFeatures),
+      consent: e && e.athleteFeatures ? (e.consent || null) : null,
+    });
   };
   for (const d of CONTENT.drills) add(d.id, d.name, 'Drill');
   for (const t of allTests()) add(t.key, t.name, 'Test');
@@ -1646,6 +1678,7 @@ function publicCheckin(c) {
   return {
     date: c.date, sleep: c.sleep, soreness: c.soreness, energy: c.energy,
     hurts: !!c.hurts, painText: c.painText || '', note: c.note || '',
+    headSymptoms: !!c.headSymptoms,
     flags: checkinFlags(c), updatedAt: c.updatedAt,
   };
 }
@@ -1670,7 +1703,7 @@ function checkinStreak(profileId) {
    "other", no pain score (null — the coach sets one when they pick
    it up), and source 'athlete' marks it as self-reported wherever
    concerns are shown. Returns the new concern's id. */
-function createAthleteConcern(prof, date, painText, userId) {
+function createAthleteConcern(prof, date, painText, userId, headSymptoms) {
   const now = new Date().toISOString();
   const concern = {
     id: crypto.randomUUID(), profileId: prof.id,
@@ -1678,11 +1711,81 @@ function createAthleteConcern(prof, date, painText, userId) {
     started: date, impact: 'none',
     note: painText, status: 'new', coachNote: '',
     source: 'athlete', reportedBy: userId || null, checkinDate: date,
+    headRelated: !!headSymptoms,
+    acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
+    disposition: '', dispositionBy: null, dispositionAt: null,
+    clearance: null,
+    audit: [{ userId: userId || null, email: null, action: 'reported', at: now, detail: '' }],
     createdAt: now, updatedAt: now,
   };
   db.concerns[prof.id] = db.concerns[prof.id] || [];
   db.concerns[prof.id].push(concern);
   return concern.id;
+}
+/* Append one entry to a concern's audit trail. The trail records
+   who viewed, acknowledged, dispositioned, or closed an
+   athlete-reported concern and when — the paper trail the care
+   workflow runs on. Coach-filed concerns carry a trail too, seeded
+   at filing, though only athlete-reported ones are required to. */
+function concernAuditPush(concern, user, action, detail) {
+  if (!Array.isArray(concern.audit)) concern.audit = [];
+  concern.audit.push({
+    userId: user ? user.id : null,
+    email: user ? user.email : null,
+    action, at: new Date().toISOString(), detail: detail || '',
+  });
+}
+/* The open head-related concern holding an athlete out, if any.
+   A head-related concern holds the athlete from the moment it is
+   filed until it is CLEARED — and clearing one requires a recorded
+   clearance (see the concern PUT), so there is no quiet way past
+   the hold. Symptom detail never rides along here: surfaces that
+   show the hold show the flag, not the report. */
+function openHeadConcernFor(profileId) {
+  return (db.concerns[profileId] || [])
+    .find(c => c.headRelated && c.status !== 'cleared') || null;
+}
+function heldInfoFor(profileId) {
+  const c = openHeadConcernFor(profileId);
+  if (!c) return { held: false, since: null, concernId: null };
+  return { held: true, since: c.createdAt, concernId: c.id };
+}
+/* Record a data-movement event (export, import, retention purge)
+   in the audit log. Capped so the log itself stays small. */
+function logDataEvent(user, kind, detail) {
+  db.exportLog.push({
+    id: crypto.randomUUID(), at: new Date().toISOString(),
+    userId: user ? user.id : null, email: user ? user.email : null,
+    kind, detail: detail || '',
+  });
+  if (db.exportLog.length > 1000) {
+    db.exportLog = db.exportLog.slice(db.exportLog.length - 1000);
+  }
+}
+/* Passphrase encryption for backup files: AES-256-GCM with a
+   scrypt-derived key. The envelope is self-describing JSON; the
+   plaintext is the ordinary backup JSON, so an unlocked file
+   imports through the exact same path as a plain one. */
+function encryptBackupEnvelope(plaintext, passphrase) {
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.scryptSync(passphrase, salt, 32);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const data = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  return {
+    app: 'sprinter-workout-app', kind: 'backup-encrypted', version: 1,
+    kdf: 'scrypt',
+    salt: salt.toString('base64'), iv: iv.toString('base64'),
+    tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64'),
+  };
+}
+function decryptBackupEnvelope(env, passphrase) {
+  const key = crypto.scryptSync(passphrase, Buffer.from(env.salt, 'base64'), 32);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(env.iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(env.tag, 'base64'));
+  return Buffer.concat([
+    decipher.update(Buffer.from(env.data, 'base64')), decipher.final(),
+  ]).toString('utf8');
 }
 /* The check-in validation rules, in one place: sleep 3–13 hours in
    half-hour steps, soreness/energy whole numbers 1–5, pain text up
@@ -1717,6 +1820,11 @@ function validateCheckin(body) {
     fields: {
       sleep, soreness, energy,
       hurts: !!body.hurts,
+      /* The concussion branch: a structured yes/no the athlete
+         answers alongside "something hurts" — headache, dizziness,
+         or a hit to the head. It files the concern as head-related,
+         which holds the athlete until a clearance is recorded. */
+      headSymptoms: !!body.hurts && !!body.headSymptoms,
       painText: clean(body.painText, 240),
       note: clean(body.note, 500),
     },
@@ -1954,6 +2062,24 @@ function amsFlagsFor(pr, today) {
     flags.push({
       key: 'readiness', label: 'Readiness', count: flaggedDays,
       detail: flaggedDays + ' flagged check-ins this week',
+    });
+  }
+  /* Distress pattern: very low energy (≤2) or very short sleep
+     (<5h) on 3 or more of the athlete's last 5 check-ins. This is
+     a prompt for a human check-in with the athlete — it is coach-
+     facing only and the athlete is never labeled with it. */
+  const recentCheckins = Object.values(byDate)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, 5);
+  const distressDays = recentCheckins
+    .filter(c => c.energy <= 2 || c.sleep < 5).length;
+  if (recentCheckins.length >= 3 && distressDays >= 3) {
+    flags.push({
+      key: 'distress', label: 'Distress pattern — check in with this athlete',
+      count: distressDays,
+      detail: distressDays + ' of the last ' + recentCheckins.length
+        + ' check-ins show energy at 2 or below, or under 5 hours of sleep',
     });
   }
   if (linkedEmailForProfile(pr.id)) {
@@ -2683,6 +2809,15 @@ async function handleApi(req, res, url) {
     if (password.length < 8) {
       return sendJson(res, 400, { error: 'Password must be at least 8 characters.' });
     }
+    /* Age floor: the app is for athletes 13 and older (COPPA).
+       Registration requires the attestation; accounts that already
+       exist are unaffected. Anyone younger needs a parent/school
+       arrangement first — the register form says so in plain words. */
+    if (body.ageAttested !== true) {
+      return sendJson(res, 400, {
+        error: 'Please confirm you are 13 or older. If you are under 13, do not sign up yet — ask a parent or guardian to contact the coach so the school can set up the right arrangement first.',
+      });
+    }
     if (db.users.some(u => u.email === email)) {
       return sendJson(res, 409, { error: 'An account with that email already exists. Try logging in.' });
     }
@@ -2698,6 +2833,7 @@ async function handleApi(req, res, url) {
       role: firstAccount || db.coachInvites.includes(email) ? 'coach' : 'athlete',
       isOwner: firstAccount,
       profileId: null,
+      ageAttestedAt: new Date().toISOString(),
     };
     // If a coach already linked this email to a roster profile, the
     // new account is born bound to it (daily check-in works at once).
@@ -2821,10 +2957,22 @@ async function handleApi(req, res, url) {
     const date = todayStr();
     if (!prof) return sendJson(res, 200, { linked: false, date, checkin: null });
     const entry = (db.checkins[prof.id] || {})[date] || null;
+    /* The athlete's own hold state, in plain language: they are
+       paused from training because they reported head symptoms,
+       and they come back when the school has written clearance
+       from a licensed medical provider on file. No clinical
+       detail — the flag and the path back, nothing more. */
+    const held = heldInfoFor(prof.id);
     return sendJson(res, 200, {
       linked: true, profileId: prof.id,
       athleteName: prof.firstName + ' ' + prof.lastName,
       date, checkin: entry ? publicCheckin(entry) : null,
+      held: {
+        held: held.held, since: held.since,
+        message: held.held
+          ? 'You are paused from training right now because you reported head symptoms (a headache, dizziness, or a hit to the head). That pause stays until the school has written clearance from a licensed medical provider on file. Talk to your coach or the athletic trainer if you have questions — and if you still feel unwell, tell an adult right away.'
+          : '',
+      },
     });
   }
 
@@ -2871,6 +3019,7 @@ async function handleApi(req, res, url) {
     Object.assign(entry, {
       sleep: f.sleep, soreness: f.soreness, energy: f.energy,
       hurts: f.hurts, painText: f.hurts ? f.painText : '',
+      headSymptoms: f.headSymptoms,
       note: f.note, updatedAt: now,
     });
     /* Pain integration: "something hurts" + words files ONE
@@ -2888,13 +3037,25 @@ async function handleApi(req, res, url) {
       if (concern) {
         concern.note = f.painText;
         concern.updatedAt = now;
+        /* Head symptoms reported on a re-submit mark the concern
+           head-related (and so hold the athlete). The reverse never
+           happens here: an edit cannot un-mark a head concern —
+           only a recorded clearance closes one. */
+        if (f.headSymptoms && !concern.headRelated) {
+          concern.headRelated = true;
+          concernAuditPush(concern, null, 'head-flagged',
+            'Head symptoms reported in the daily check-in');
+        }
       } else {
-        entry.concernId = createAthleteConcern(prof, date, f.painText, user.id);
+        entry.concernId = createAthleteConcern(prof, date, f.painText, user.id, f.headSymptoms);
       }
     } else if (entry.concernId) {
       const list = db.concerns[prof.id] || [];
       const idx = list.findIndex(c => c.id === entry.concernId);
-      if (idx >= 0 && list[idx].status === 'new') {
+      /* A head-related concern is never withdrawn by an edit, even
+         while it is still 'new' — it stands until a coach works it
+         through disposition and recorded clearance. */
+      if (idx >= 0 && list[idx].status === 'new' && !list[idx].headRelated) {
         list.splice(idx, 1);
         entry.concernId = null;
       } else if (idx < 0) {
@@ -2966,7 +3127,16 @@ async function handleApi(req, res, url) {
      point of the surface; nothing private rides along, and there
      is no write side at all. */
   if (p === '/api/leaderboard' && req.method === 'GET') {
-    return sendJson(res, 200, leaderboardData());
+    const data = leaderboardData();
+    /* The testing section is coach-only: a full ranking of
+       coach-collected testing numbers is not public-results data,
+       so athlete accounts receive the meet PR leaders only. The
+       split is enforced here, in the payload — not just hidden
+       in the client. */
+    if (user.role !== 'coach') {
+      return sendJson(res, 200, { testing: [], meets: data.meets, testingCoachOnly: true });
+    }
+    return sendJson(res, 200, data);
   }
 
   /* ================================================================ */
@@ -3274,7 +3444,12 @@ async function handleApi(req, res, url) {
     }
     if (body.events !== undefined) prof.events = cleanEvents(body.events);
     if (body.topAthlete !== undefined) prof.topAthlete = !!body.topAthlete;
-    if (body.archived !== undefined) prof.archived = !!body.archived;
+    if (body.archived !== undefined) {
+      const next = !!body.archived;
+      if (next && !prof.archived) prof.archivedAt = new Date().toISOString();
+      if (!next) prof.archivedAt = null;
+      prof.archived = next;
+    }
     if (body.status !== undefined) prof.status = clean(body.status, 20);
     saveDb();
     return sendJson(res, 200, { profile: publicProfile(prof) });
@@ -3282,6 +3457,7 @@ async function handleApi(req, res, url) {
   if (profileMatch && req.method === 'DELETE') {
     const prof = profileById(decodeURIComponent(profileMatch[1]));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof.archived) prof.archivedAt = new Date().toISOString();
     prof.archived = true;
     saveDb();
     return sendJson(res, 200, { ok: true, archived: true });
@@ -3454,6 +3630,20 @@ async function handleApi(req, res, url) {
       if (a.flagged !== b.flagged) return a.flagged ? -1 : 1;
       return a.createdAt < b.createdAt ? 1 : -1;
     });
+    /* Athletes held for head symptoms: the flag only (name +
+       since), never the symptom detail — the checklist shows who
+       is out, the concern itself lives in Aches & Pains. */
+    const heldAthletes = [];
+    for (const pr of db.profiles) {
+      if (pr.archived) continue;
+      const held = heldInfoFor(pr.id);
+      if (held.held) {
+        heldAthletes.push({
+          profileId: pr.id, name: pr.firstName + ' ' + pr.lastName,
+          since: held.since, concernId: held.concernId,
+        });
+      }
+    }
     return sendJson(res, 200, {
       date,
       dayName: d ? d.toLocaleDateString('en-US', { weekday: 'long' }) : '',
@@ -3463,6 +3653,7 @@ async function handleApi(req, res, url) {
       planText: plan ? plan.planText : '',
       groups,
       healthFlags: boardOnly ? [] : healthFlags,
+      heldAthletes: boardOnly ? [] : heldAthletes,
       wellness: boardOnly ? null : wellnessTodaySummary(),
     });
   }
@@ -3643,6 +3834,7 @@ async function handleApi(req, res, url) {
           profile: pub,
           status: pub.status,
           linked: !!pub.linkedEmail,
+          held: heldInfoFor(pr.id),
           flags: amsFlagsFor(pr, today),
         };
       });
@@ -3703,6 +3895,7 @@ async function handleApi(req, res, url) {
       status: pub.status,
       linked: !!pub.linkedEmail,
       linkedEmail: pub.linkedEmail,
+      held: heldInfoFor(prof.id),
       flags: amsFlagsFor(prof, today),
       wellness,
       testing: testingHistoryFor(prof.id),
@@ -3901,17 +4094,47 @@ async function handleApi(req, res, url) {
   }
 
   /* ---------- Data page: backup export / import + more CSVs ---------- */
-  if (p === '/api/export/backup' && req.method === 'GET') {
-    const body = JSON.stringify({
-      app: 'sprinter-workout-app', kind: 'backup', version: 1,
-      exportedAt: new Date().toISOString(), data: buildBackupData(),
-    }, null, 1);
+  /* The export audit log: who took what data out, and when.
+     Coaches only, like everything in this section. */
+  if (p === '/api/export/log' && req.method === 'GET') {
+    const entries = db.exportLog.slice().reverse().slice(0, 200);
+    return sendJson(res, 200, { entries });
+  }
+
+  function sendBackupDownload(res, payload, filename) {
+    const body = JSON.stringify(payload, null, 1);
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="sprinter-backup-' + todayStr() + '.json"',
+      'Content-Disposition': 'attachment; filename="' + filename + '"',
       'Content-Length': Buffer.byteLength(body),
     });
     return res.end(body);
+  }
+  if (p === '/api/export/backup' && req.method === 'GET') {
+    logDataEvent(user, 'backup', 'Full backup (plain JSON)');
+    saveDb();
+    return sendBackupDownload(res, {
+      app: 'sprinter-workout-app', kind: 'backup', version: 1,
+      exportedAt: new Date().toISOString(), data: buildBackupData(),
+    }, 'sprinter-backup-' + todayStr() + '.json');
+  }
+  /* Encrypted backup: same dataset, sealed with the coach's
+     passphrase (AES-256-GCM + scrypt). The passphrase never leaves
+     this request — it is not stored and cannot be recovered. */
+  if (p === '/api/export/backup' && req.method === 'POST') {
+    const body = await readBody(req);
+    const passphrase = typeof body.passphrase === 'string' ? body.passphrase : '';
+    if (passphrase.length < 8) {
+      return sendJson(res, 400, { error: 'A passphrase of at least 8 characters is required to encrypt a backup.' });
+    }
+    const plain = JSON.stringify({
+      app: 'sprinter-workout-app', kind: 'backup', version: 1,
+      exportedAt: new Date().toISOString(), data: buildBackupData(),
+    });
+    const envelope = encryptBackupEnvelope(plain, passphrase);
+    logDataEvent(user, 'backup', 'Full backup (passphrase-encrypted)');
+    saveDb();
+    return sendBackupDownload(res, envelope, 'sprinter-backup-' + todayStr() + '.encrypted.json');
   }
 
   if (p === '/api/import/backup' && req.method === 'POST') {
@@ -3924,6 +4147,27 @@ async function handleApi(req, res, url) {
       }
       return sendJson(res, 400, { error: 'That file is not valid JSON.' });
     }
+    /* An encrypted backup unlocks here, server-side, and then
+       flows through the exact same validation and merge as a
+       plain one. A wrong passphrase fails the GCM tag check and
+       nothing is touched. */
+    if (isPlainObj(body) && body.kind === 'backup-encrypted') {
+      const passphrase = typeof body.passphrase === 'string' ? body.passphrase : '';
+      if (!passphrase) {
+        return sendJson(res, 400, { error: 'This backup is encrypted — enter its passphrase to import it.' });
+      }
+      let plain;
+      try {
+        plain = decryptBackupEnvelope(body, passphrase);
+      } catch (_) {
+        return sendJson(res, 400, { error: 'That passphrase did not unlock this backup.' });
+      }
+      try {
+        body = JSON.parse(plain);
+      } catch (_) {
+        return sendJson(res, 400, { error: 'That backup file looks damaged.' });
+      }
+    }
     if (!isPlainObj(body) || body.app !== 'sprinter-workout-app' || body.kind !== 'backup'
       || !isPlainObj(body.data)) {
       return sendJson(res, 400, { error: 'That is not a sprinter app backup file.' });
@@ -3934,11 +4178,87 @@ async function handleApi(req, res, url) {
     if (invalid) return sendJson(res, 400, { error: invalid });
     const merged = mergeBackupData(body.data);
     migrate();
+    logDataEvent(user, 'backup-import',
+      'Backup import merged: ' + merged.totalAdded + ' added, ' + merged.totalUpdated + ' updated');
     saveDb();
     return sendJson(res, 200, {
       ok: true, counts: merged.counts,
       totalAdded: merged.totalAdded, totalUpdated: merged.totalUpdated,
     });
+  }
+
+  /* ---------- Retention: archived athletes' health data ----------
+     Health-adjacent collections (check-ins, concerns, coach notes)
+     do not live forever: once an athlete has been archived longer
+     than the coach-set window, the Retention panel lists them and
+     a confirmed purge deletes exactly those collections.
+     Performance history (testing, meet results) is program
+     history and is NOT purged — that stays until the school sets
+     its own retention schedule. */
+  function monthsAgoStr(months) {
+    const d = parseDateStr(todayStr());
+    d.setMonth(d.getMonth() - months);
+    return dateStr(d);
+  }
+  function healthCountsFor(profileId) {
+    return {
+      checkins: Object.keys(db.checkins[profileId] || {}).length,
+      concerns: (db.concerns[profileId] || []).length,
+      coachNotes: (db.coachNotes[profileId] || []).length,
+    };
+  }
+  function retentionCandidates() {
+    const cutoff = monthsAgoStr(db.settings.retentionMonths);
+    const out = [];
+    for (const pr of db.profiles) {
+      if (!pr.archived) continue;
+      const archivedDate = (pr.archivedAt || pr.createdAt || '').slice(0, 10);
+      if (archivedDate && archivedDate > cutoff) continue;
+      out.push({
+        profile: publicProfile(pr),
+        archivedDate: archivedDate || null,
+        counts: healthCountsFor(pr.id),
+      });
+    }
+    out.sort((a, b) => a.profile.name.localeCompare(b.profile.name));
+    return out;
+  }
+  if (p === '/api/retention' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      months: db.settings.retentionMonths,
+      candidates: retentionCandidates(),
+    });
+  }
+  if (p === '/api/retention/settings' && req.method === 'PUT') {
+    const body = await readBody(req);
+    const months = num(body.months);
+    if (months === null || !Number.isInteger(months) || months < 1 || months > 60) {
+      return sendJson(res, 400, { error: 'Retention window must be a whole number of months from 1 to 60.' });
+    }
+    db.settings.retentionMonths = months;
+    saveDb();
+    return sendJson(res, 200, { ok: true, months });
+  }
+  if (p === '/api/retention/purge' && req.method === 'POST') {
+    const body = await readBody(req);
+    const prof = profileById(clean(body.profileId, 80));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof.archived) {
+      return sendJson(res, 400, { error: 'Only an archived athlete\'s health data can be purged. Archive the profile first.' });
+    }
+    if (body.confirm !== true) {
+      return sendJson(res, 400, { error: 'Purging is permanent — send confirm: true to proceed.' });
+    }
+    const counts = healthCountsFor(prof.id);
+    delete db.checkins[prof.id];
+    delete db.concerns[prof.id];
+    delete db.coachNotes[prof.id];
+    logDataEvent(user, 'retention-purge',
+      'Purged health data for ' + prof.firstName + ' ' + prof.lastName
+      + ': ' + counts.checkins + ' check-ins, ' + counts.concerns
+      + ' concerns, ' + counts.coachNotes + ' coach notes');
+    saveDb();
+    return sendJson(res, 200, { ok: true, counts });
   }
 
   if (p === '/api/export/attendance.csv' && req.method === 'GET') {
@@ -3957,6 +4277,8 @@ async function handleApi(req, res, url) {
     }
     entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.name.localeCompare(b.name)));
     for (const e of entries) rows.push(e.row);
+    logDataEvent(user, 'csv', 'attendance.csv');
+    saveDb();
     return sendCsv(res, 'attendance.csv', rows);
   }
 
@@ -3979,6 +4301,8 @@ async function handleApi(req, res, url) {
     entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1
       : a.name.localeCompare(b.name) || a.testName.localeCompare(b.testName)));
     for (const e of entries) rows.push(e.row);
+    logDataEvent(user, 'csv', 'testing-detail.csv');
+    saveDb();
     return sendCsv(res, 'testing-detail.csv', rows);
   }
 
@@ -4001,6 +4325,8 @@ async function handleApi(req, res, url) {
     entries.sort((a, b) => a.name.localeCompare(b.name)
       || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     for (const e of entries) rows.push(e.row);
+    logDataEvent(user, 'csv', 'checkins.csv');
+    saveDb();
     return sendCsv(res, 'checkins.csv', rows);
   }
 
@@ -4013,6 +4339,8 @@ async function handleApi(req, res, url) {
           r.year === null || r.year === undefined ? '' : String(r.year), r.meet || '']);
       }
     }
+    logDataEvent(user, 'csv', 'school-records.csv');
+    saveDb();
     return sendCsv(res, 'school-records.csv', rows);
   }
 
@@ -4036,6 +4364,8 @@ async function handleApi(req, res, url) {
     }
     entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.name.localeCompare(b.name)));
     for (const e of entries) rows.push(e.row);
+    logDataEvent(user, 'csv', 'session-completions.csv');
+    saveDb();
     return sendCsv(res, 'session-completions.csv', rows);
   }
 
@@ -4064,6 +4394,8 @@ async function handleApi(req, res, url) {
       dayRows.sort((a, b) => a.testOrder - b.testOrder || a.athlete.localeCompare(b.athlete));
       for (const dr of dayRows) rows.push(dr.row);
     }
+    logDataEvent(user, 'csv', 'testing-results.csv');
+    saveDb();
     return sendCsv(res, 'testing-results.csv', rows);
   }
 
@@ -4090,6 +4422,8 @@ async function handleApi(req, res, url) {
       a.metricName.localeCompare(b.metricName) ||
       (a.week < b.week ? -1 : a.week > b.week ? 1 : 0));
     for (const e of entries) rows.push(e.row);
+    logDataEvent(user, 'csv', 'weekly-tracker.csv');
+    saveDb();
     return sendCsv(res, 'weekly-tracker.csv', rows);
   }
 
@@ -4101,6 +4435,8 @@ async function handleApi(req, res, url) {
       const pub = publicProfile(pr);
       rows.push([pub.name, pub.groupName || '', (pr.events || []).join('; '), pr.topAthlete ? 'yes' : 'no']);
     }
+    logDataEvent(user, 'csv', 'roster.csv');
+    saveDb();
     return sendCsv(res, 'roster.csv', rows);
   }
 
@@ -4381,12 +4717,21 @@ async function handleApi(req, res, url) {
     if (pain === null || !Number.isInteger(pain) || pain < 1 || pain > 10) {
       return sendJson(res, 400, { error: 'Pain level must be a whole number from 1 to 10.' });
     }
+    const now = new Date().toISOString();
     const concern = {
       id: crypto.randomUUID(), profileId: prof.id,
       area, side, feeling, pain, started, impact,
       note: clean(body.note, 500),
       status: 'new', coachNote: '',
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      /* A coach can file a concern as head-related (the athlete
+         said it in person, the hit happened at practice): it
+         holds the athlete exactly like a check-in head report. */
+      headRelated: !!body.headRelated,
+      acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
+      disposition: '', dispositionBy: null, dispositionAt: null,
+      clearance: null,
+      audit: [{ userId: user.id, email: user.email, action: 'filed', at: now, detail: '' }],
+      createdAt: now, updatedAt: now,
     };
     db.concerns[prof.id] = db.concerns[prof.id] || [];
     db.concerns[prof.id].push(concern);
@@ -4412,21 +4757,140 @@ async function handleApi(req, res, url) {
   }
 
   const concernMatch = p.match(/^\/api\/concerns\/([^/]+)$/);
+  function findConcern(id) {
+    for (const pid of Object.keys(db.concerns)) {
+      const c = (db.concerns[pid] || []).find(x => x.id === id);
+      if (c) return c;
+    }
+    return null;
+  }
+  /* One concern, in full — including its audit trail. Reading the
+     detail of an athlete-reported concern is itself recorded:
+     who looked at a minor's health report is part of the record. */
+  if (concernMatch && req.method === 'GET') {
+    const found = findConcern(decodeURIComponent(concernMatch[1]));
+    if (!found) return sendJson(res, 404, { error: 'Concern not found.' });
+    const prof = profileById(found.profileId);
+    if (found.source === 'athlete') {
+      concernAuditPush(found, user, 'viewed', '');
+      found.updatedAt = new Date().toISOString();
+      saveDb();
+    }
+    return sendJson(res, 200, {
+      concern: Object.assign({}, found, {
+        athleteName: prof ? prof.firstName + ' ' + prof.lastName : '',
+        held: !!(found.headRelated && found.status !== 'cleared'),
+      }),
+    });
+  }
+  /* Athlete-reported concerns are never deleted — they close
+     through disposition (and clearance, when head-related), so
+     the record of what an athlete reported always stands. A
+     coach's own filed entries can still be removed. */
+  if (concernMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(concernMatch[1]);
+    const found = findConcern(id);
+    if (!found) return sendJson(res, 404, { error: 'Concern not found.' });
+    if (found.source === 'athlete') {
+      return sendJson(res, 403, {
+        error: 'Athlete-reported concerns cannot be deleted. Close it with a disposition instead, so the record of the report stands.',
+      });
+    }
+    db.concerns[found.profileId] = (db.concerns[found.profileId] || [])
+      .filter(c => c.id !== id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
   if (concernMatch && req.method === 'PUT') {
     const id = decodeURIComponent(concernMatch[1]);
-    let found = null;
-    for (const pid of Object.keys(db.concerns)) {
-      found = (db.concerns[pid] || []).find(c => c.id === id) || found;
-      if (found) break;
-    }
+    const found = findConcern(id);
     if (!found) return sendJson(res, 404, { error: 'Concern not found.' });
     const body = await readBody(req);
-    if (body.status !== undefined) {
-      if (!['new', 'monitoring', 'cleared'].includes(body.status)) {
-        return sendJson(res, 400, { error: 'Status must be New, Monitoring, or Cleared.' });
+    /* Validate everything before mutating anything: a refused
+       close must leave the concern exactly as it was. */
+    if (body.status !== undefined
+      && !['new', 'monitoring', 'cleared'].includes(body.status)) {
+      return sendJson(res, 400, { error: 'Status must be New, Monitoring, or Cleared.' });
+    }
+    let newClearance = null;
+    if (body.clearance !== undefined && body.clearance !== null) {
+      const cl = body.clearance;
+      const by = clean(cl.by, 120);
+      const date = clean(cl.date, 10);
+      const note = clean(cl.note, 500);
+      if (!by) return sendJson(res, 400, { error: 'Clearance needs the name of who cleared the athlete.' });
+      if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Clearance date must be a date (YYYY-MM-DD).' });
+      if (!note) return sendJson(res, 400, { error: 'Clearance needs a note attesting that written clearance from a licensed provider was received.' });
+      newClearance = {
+        by, date, note,
+        recordedBy: user.email, recordedAt: new Date().toISOString(),
+      };
+    }
+    if (body.pain !== undefined) {
+      const pain = num(body.pain);
+      if (pain === null || !Number.isInteger(pain) || pain < 1 || pain > 10) {
+        return sendJson(res, 400, { error: 'Pain level must be a whole number from 1 to 10.' });
       }
-      if (body.status === 'cleared' && found.status !== 'cleared') {
+    }
+    const closing = body.status === 'cleared' && found.status !== 'cleared';
+    if (closing) {
+      /* A head-related concern cannot close on a coach's say-so:
+         it closes only with a recorded clearance on file (one
+         already recorded, or one arriving with this request). */
+      if (found.headRelated && !found.clearance && !newClearance) {
+        return sendJson(res, 400, {
+          error: 'This concern is head-related. It can only be cleared with a recorded clearance: who cleared the athlete, the date, and a note attesting that written clearance from a licensed provider was received.',
+        });
+      }
+      /* An athlete-reported concern closes with a disposition —
+         what was done about the report — never silently. */
+      const dispAfter = body.disposition !== undefined
+        ? clean(body.disposition, 500) : (found.disposition || '');
+      if (found.source === 'athlete' && !dispAfter.trim()) {
+        return sendJson(res, 400, {
+          error: 'Athlete-reported concerns close with a disposition note: what was done (for example, "Seen by the athletic trainer; modified training this week"). Add the disposition, then clear it.',
+        });
+      }
+    }
+    const auditActions = [];
+    /* Acknowledgment: a coach confirms they have picked the
+       report up. Recorded once; later saves don't rewrite it. */
+    if (body.acknowledge === true && !found.acknowledgedAt) {
+      found.acknowledgedBy = user.id;
+      found.acknowledgedByEmail = user.email;
+      found.acknowledgedAt = new Date().toISOString();
+      auditActions.push(['acknowledged', '']);
+    }
+    if (body.headRelated !== undefined && !!body.headRelated !== !!found.headRelated) {
+      found.headRelated = !!body.headRelated;
+      auditActions.push([found.headRelated ? 'head-flagged' : 'head-unflagged',
+        found.headRelated ? 'Marked head-related — athlete held' : 'Head-related mark removed']);
+    }
+    if (body.disposition !== undefined) {
+      const disp = clean(body.disposition, 500);
+      if (disp !== (found.disposition || '')) {
+        found.disposition = disp;
+        found.dispositionBy = user.email;
+        found.dispositionAt = new Date().toISOString();
+        auditActions.push(['disposition', disp]);
+      }
+    }
+    /* Clearance: the record that written clearance from a
+       licensed provider was received — who cleared the athlete,
+       the clearance date, and the note attesting to it. It can be
+       recorded on its own, ahead of the close. */
+    if (newClearance) {
+      found.clearance = newClearance;
+      auditActions.push(['clearance',
+        'Written clearance recorded — ' + newClearance.by + ', ' + newClearance.date]);
+    }
+    if (body.status !== undefined) {
+      if (closing) {
         found.clearedAt = new Date().toISOString();
+        auditActions.push(['closed', '']);
+      }
+      if (body.status !== 'cleared' && found.status === 'cleared') {
+        auditActions.push(['reopened', '']);
       }
       if (body.status !== 'cleared') found.clearedAt = null;
       found.status = body.status;
@@ -4438,6 +4902,10 @@ async function handleApi(req, res, url) {
         return sendJson(res, 400, { error: 'Pain level must be a whole number from 1 to 10.' });
       }
       found.pain = pain;
+    }
+    if (found.source === 'athlete') {
+      if (!auditActions.length) auditActions.push(['updated', '']);
+      for (const [action, detail] of auditActions) concernAuditPush(found, user, action, detail);
     }
     found.updatedAt = new Date().toISOString();
     saveDb();
@@ -4639,6 +5107,8 @@ async function handleApi(req, res, url) {
       rows.push([r.date, r.meet, pub ? pub.name : '', pub ? (pub.groupName || '') : '',
         ev ? ev.name : r.event, r.mark]);
     }
+    logDataEvent(user, 'csv', 'meet-results.csv');
+    saveDb();
     return sendCsv(res, 'meet-results.csv', rows);
   }
 
@@ -5660,7 +6130,25 @@ async function handleApi(req, res, url) {
         ? 'That is not a video from your Cloudinary account. Add your own video with the Upload your video button instead.'
         : 'That link is not a YouTube video or a GIF. Paste a YouTube watch/share link or a direct .gif link.' });
     }
-    db.mediaOverrides[movementId] = { type: entry.type, url: entry.url, title: entry.title || '' };
+    /* Athlete-video consent guard: a demo marked as featuring an
+       SJC athlete can only be saved with the coach's attestation
+       that specific written parent/guardian permission is on
+       file. The attestation (who + when) is stored on the entry
+       and surfaces in Demo Coverage. Coach-only footage is
+       unaffected. */
+    const athleteFeatures = body.athleteFeatures === true;
+    if (athleteFeatures && body.consentAttested !== true) {
+      return sendJson(res, 400, {
+        error: 'This video is marked as featuring an SJC athlete. Saving it requires confirming: "I have specific written parent/guardian permission to use this athlete\'s video."',
+      });
+    }
+    db.mediaOverrides[movementId] = {
+      type: entry.type, url: entry.url, title: entry.title || '',
+      athleteFeatures,
+      consent: athleteFeatures
+        ? { by: user.id, email: user.email, at: new Date().toISOString() }
+        : null,
+    };
     saveDb();
     return sendJson(res, 200, { ok: true, movementId, media: entry });
   }
@@ -5858,14 +6346,44 @@ async function handleApi(req, res, url) {
         completion: c ? { sessionId: c.sessionId, marks: c.marks, feel: c.feel } : null,
         progress: floorProgressFor(pr.id, date),
         loads: floorWorkout ? loadsForProfile(floorWorkout, pr.id) : null,
+        held: heldInfoFor(pr.id).held,
       };
     });
+    /* Shared-display mode is the default: on a screen the whole
+       room can see, a panel carries a station number and a group —
+       never an athlete's name, never their computed loads (only
+       the % prescription itself, which lives in the workout), and
+       a held athlete is a generic "See coach" panel. The coach
+       switches to Coach detail deliberately, and the choice
+       persists. Sanitizing happens HERE, in the payload, so no
+       client state can leak what the room should not see. */
+    const sharedDisplay = db.settings.weightRoomSharedDisplay !== false;
+    const outPanels = sharedDisplay
+      ? panels.map((pn, i) => ({
+        station: i + 1,
+        profile: { id: pn.profile.id, name: '', groupName: pn.profile.groupName },
+        assignment: pn.assignment,
+        completed: pn.completed,
+        completion: pn.completion,
+        progress: pn.progress,
+        loads: null,
+        held: pn.held,
+      }))
+      : panels;
     return sendJson(res, 200, {
       date,
       groups: db.groups.map(g => ({ id: g.id, name: g.name })),
       workout: floorWorkout ? { id: floorWorkout.id, title: floorWorkout.title } : null,
-      panels,
+      sharedDisplay,
+      panels: outPanels,
     });
+  }
+
+  if (p === '/api/weight-room/display' && req.method === 'POST') {
+    const body = await readBody(req);
+    db.settings.weightRoomSharedDisplay = body.shared !== false;
+    saveDb();
+    return sendJson(res, 200, { ok: true, sharedDisplay: db.settings.weightRoomSharedDisplay });
   }
 
   if (p === '/api/weight-room/progress' && req.method === 'POST') {

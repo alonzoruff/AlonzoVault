@@ -108,6 +108,7 @@ const state = {
   wrCols: 'auto',
   wrData: null,
   wrUpdatedAt: null,
+  wrShared: true,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -135,8 +136,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v47';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v47';
+const APP_VERSION = 'v48';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v48';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -324,6 +325,7 @@ const VIEW_AREA = {
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
+  privacy: 'account',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
@@ -449,6 +451,7 @@ function showView(name) {
   if (name === 'devices') renderDevices();
   if (name === 'coverage') renderCoverage();
   if (name === 'exercises') renderExercises();
+  if (name === 'privacy') renderPrivacy();
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -747,6 +750,10 @@ async function renderCoachToday() {
       <span class="badge ${c.status === 'new' ? 'high' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
     </div>`).join('') + (open.length > 8 ? `<p class="muted">…and ${open.length - 8} more open in Aches &amp; Pains.</p>` : '')
     : '<p class="muted">No open health flags. Good news.</p>';
+  const heldList = data.heldAthletes || [];
+  const heldHtml = heldList.length ? `<h3>Held — clearance required (${heldList.length})</h3>`
+    + heldList.map(h => `<div class="roster-row"><span>⛔ <strong>${esc(h.name)}</strong></span><span class="badge high">HELD</span></div>`).join('')
+    + '<p class="muted">Head-related concern open. The hold lifts only when written clearance from a licensed provider is recorded on the concern in Aches &amp; Pains.</p>' : '';
   const w = data.wellness || { checkedIn: 0, total: 0, flagged: [] };
   const wellHtml = w.total
     ? `<p>Wellness: <strong>${w.checkedIn}/${w.total} checked in</strong>${w.flagged.length ? ` · ${w.flagged.length} flagged` : ''}</p>`
@@ -761,6 +768,7 @@ async function renderCoachToday() {
     <p><button class="btn secondary" id="ct-open-coach" type="button">Open today's checklist</button></p>
     <h3>Health flags${open.length ? ` (${open.length} open)` : ''}</h3>
     ${healthHtml}
+    ${heldHtml}
     <p><button class="btn secondary" id="ct-open-health" type="button">Open Aches &amp; Pains</button></p>
     <h3>Daily wellness</h3>
     ${wellHtml}
@@ -1251,6 +1259,39 @@ async function refreshUserData() {
 }
 
 /* ---------------- account ---------------- */
+/* ---------------- privacy & safety ----------------
+   One plain-language page for athletes, parents, and coaches:
+   what the app holds, who can see it, and how questions get
+   raised. Linked from Account and from the check-in screen. */
+function renderPrivacy() {
+  const el = $('#privacy-main');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="card">
+      <h2>What this app holds</h2>
+      <p>This is the St. John's track &amp; field team app. For each athlete it can hold: their name, team group and events, and school email; daily wellness check-ins (sleep, soreness, energy, and a note when something hurts); health concerns a coach or the athlete reports; training and testing results; meet results; attendance; and the coach's training notes.</p>
+      <h2>Who can see it</h2>
+      <p>Only the coaching staff, through their coach accounts. Athletes can see their own check-ins, their own lifting loads, their goals, and team meet results. Health details — check-ins, concerns, coach notes — are never shown on the weight-room TV boards, never on leaderboards, and never to other athletes.</p>
+      <h2>Sharing for safety</h2>
+      <p>Health and safety information may be shared with school athletic and medical staff — for example the athletic trainer — when that is needed to look after an athlete. If an athlete reports head symptoms (a headache, dizziness, or a hit to the head), they are paused from training until the school has written clearance from a licensed medical provider on file.</p>
+      <h2>How long it is kept</h2>
+      <p>Wellness check-ins, health concerns, and coach notes are kept while an athlete is on the team. After an athlete leaves the roster, that health information is deleted once the team's retention window (set by the coach) has passed. Testing and meet results stay as part of the program's history.</p>
+      <h2>Questions from a parent or guardian</h2>
+      <p>Parents and guardians: to ask about an athlete's information, to correct something, or to raise a privacy question, contact the coach or the school office directly. The coaching staff will bring the question to the school's administration.</p>
+      <p><button class="btn secondary" type="button" data-view="account">Back to Account</button></p>
+    </div>`;
+}
+
+/* The check-in safety notice: shown on the check-in screen at
+   all times. Check-ins are reviewed by coaches on school days
+   before practice — they are not monitored around the clock and
+   they are not an emergency channel. */
+const CHECKIN_SAFETY_NOTICE = `<div class="ci-notice">
+  <p><strong>Before you check in:</strong> your coaches read check-ins on school days before practice. Check-ins are <strong>not monitored 24/7</strong> and are <strong>not for emergencies</strong>.</p>
+  <p>If you are in crisis or thinking about hurting yourself, call or text <strong>988</strong> right away and tell a trusted adult. If something is wrong right now, tell a coach, the athletic trainer, or another adult in person — do not wait for a check-in to be read.</p>
+  <p>What you share about your safety cannot be kept confidential — your coaches will pass it on to the people whose job is to help. <button type="button" class="code-link" data-view="privacy">Privacy &amp; Safety</button></p>
+</div>`;
+
 function renderAccount() {
   const chip = $('#account-chip');
   const note = $('#menu-account-note');
@@ -1262,6 +1303,7 @@ function renderAccount() {
       <p>${state.user.role === 'coach' ? '<span class="badge high">COACH ACCOUNT</span>' : '<span class="badge low">NOT A COACH ACCOUNT</span>'}</p>
       <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Athlete account: once your coach links this email to your name on the team roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. The rest of the team side stays coach-run.'} Your personal log entries and cross-training swaps save to this account.</p>
       <button class="btn" id="acct-logout" type="button">Log out</button>
+      <button class="btn secondary" type="button" data-view="privacy">Privacy &amp; Safety</button>
       ${appVersionHtml()}</div>
       <div id="coach-accounts"></div>
       <div id="coach-invites"></div>`;
@@ -1291,6 +1333,8 @@ function renderAccount() {
         <p class="muted">Free. Athletes: use your school email — your account is how your coach links you for the daily check-in, and it holds your practice log and cross-training swaps. Coach accounts unlock the coach tools.</p>
         <label>Email <input type="email" id="rg-email" required autocomplete="email"></label>
         <label>Password (8+ characters) <input type="password" id="rg-pass" required autocomplete="new-password" minlength="8"></label>
+        <label class="check-line"><input type="checkbox" id="rg-age" required> I am 13 or older</label>
+        <p class="muted">Under 13? Please don't sign up yet — ask a parent or guardian to contact the coach so the school can set up the right arrangement first. See <button type="button" class="code-link" data-view="privacy">Privacy &amp; Safety</button>.</p>
         <button class="btn primary" type="submit">Create account</button>
         <p class="error" id="rg-err"></p>
       </form>
@@ -1305,7 +1349,7 @@ function renderAccount() {
     $('#register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        state.user = await apiPost('/api/register', { email: $('#rg-email').value, password: $('#rg-pass').value });
+        state.user = await apiPost('/api/register', { email: $('#rg-email').value, password: $('#rg-pass').value, ageAttested: $('#rg-age').checked });
         await refreshUserData(); syncAuthUi(); showView(state.user.role === 'coach' ? 'coachhub' : 'home');
       } catch (err) { $('#rg-err').textContent = err.message; }
     });
@@ -1369,6 +1413,8 @@ async function renderCheckin() {
       slot.innerHTML = `<div class="card checkin-card">
         <h2>Daily Check-In ${c ? '<span class="badge low">DONE TODAY ✓</span>' : ''}</h2>
         <p class="muted">${esc(today.athleteName || '')} · ${esc(fmtDate(parseDate(today.date)))} — takes under 20 seconds. Your coaches see this before practice.</p>
+        ${today.held && today.held.held ? `<div class="ci-held"><strong>You are paused from training.</strong> ${esc(today.held.message || '')}</div>` : ''}
+        ${CHECKIN_SAFETY_NOTICE}
         ${mine && mine.streak ? `<p class="checkin-streak">🔥 Checked in ${mine.streak} day${mine.streak === 1 ? '' : 's'} in a row</p>` : ''}
         <div class="ci-label">Sleep last night</div>
         <div class="ci-stepper">
@@ -1383,6 +1429,8 @@ async function renderCheckin() {
         <label class="check-line ci-hurts"><input type="checkbox" id="ci-hurts" ${c && c.hurts ? 'checked' : ''}> Something hurts</label>
         <div id="ci-pain-wrap" ${c && c.hurts ? '' : 'hidden'}>
           <label>What hurts, and where? <input type="text" id="ci-pain" maxlength="240" value="${esc(c ? c.painText : '')}" placeholder="e.g. Right hamstring feels tight"></label>
+          <label class="check-line ci-head"><input type="checkbox" id="ci-head" ${c && c.headSymptoms ? 'checked' : ''}> Head symptoms — a headache, dizziness, or a hit to the head</label>
+          <p class="muted" id="ci-head-note" ${c && c.headSymptoms ? '' : 'hidden'}>If you check this, you will be paused from training until the school has written clearance from a licensed medical provider on file. That is the DC rule for head injuries — it protects you.</p>
         </div>
         <label>Anything else? (optional) <input type="text" id="ci-note" maxlength="500" value="${esc(c ? c.note : '')}" placeholder="Short note for your coach"></label>
         ${c ? '' : '<p class="muted" id="ci-hint">Tap each answer to fill it in — nothing is pre-filled, so what saves is really yours.</p>'}
@@ -1417,7 +1465,10 @@ async function renderCheckin() {
       }));
       $('#ci-hurts').addEventListener('change', (e) => {
         $('#ci-pain-wrap').hidden = !e.target.checked;
-        if (!e.target.checked) $('#ci-pain').value = '';
+        if (!e.target.checked) { $('#ci-pain').value = ''; $('#ci-head').checked = false; $('#ci-head-note').hidden = true; }
+      });
+      $('#ci-head').addEventListener('change', (e) => {
+        $('#ci-head-note').hidden = !e.target.checked;
       });
       updateSave();
       saveBtn.addEventListener('click', async () => {
@@ -1425,7 +1476,9 @@ async function renderCheckin() {
         try {
           await apiPost('/api/checkin', {
             sleep, soreness: picked.soreness, energy: picked.energy,
-            hurts: $('#ci-hurts').checked, painText: $('#ci-hurts').checked ? $('#ci-pain').value : '', note: $('#ci-note').value,
+            hurts: $('#ci-hurts').checked, painText: $('#ci-hurts').checked ? $('#ci-pain').value : '',
+            headSymptoms: $('#ci-hurts').checked && $('#ci-head').checked,
+            note: $('#ci-note').value,
           });
           state.ciMsg = 'Saved — your coaches can see it. ✓';
           await renderCheckin();
@@ -1701,7 +1754,7 @@ async function renderAms() {
     slot.innerHTML = `<div class="table-wrap"><table class="ranked">
       <thead><tr><th>Athlete</th><th>Group</th><th>Events</th><th>Status</th><th>Account</th><th>Attention</th></tr></thead>
       <tbody>${rows.length ? rows.map(a => `<tr>
-        <td><button type="button" class="code-link" data-ams-open="${a.profile.id}">${esc(a.profile.name)}</button>${a.profile.topAthlete ? ' <span class="badge star">★</span>' : ''}${a.profile.archived ? ' <span class="badge plain">ARCHIVED</span>' : ''}</td>
+        <td><button type="button" class="code-link" data-ams-open="${a.profile.id}">${esc(a.profile.name)}</button>${a.profile.topAthlete ? ' <span class="badge star">★</span>' : ''}${a.profile.archived ? ' <span class="badge plain">ARCHIVED</span>' : ''}${a.held && a.held.held ? ' <span class="badge high">HELD — CLEARANCE REQUIRED</span>' : ''}</td>
         <td>${esc(a.profile.groupName || 'No group')}</td>
         <td>${esc((a.profile.events || []).join(', ') || '—')}</td>
         <td>${esc(AMS_STATUS_LABELS[a.status] || a.status)}</td>
@@ -1762,6 +1815,7 @@ async function renderAmsProfile(el, profileId) {
         </select></label>
       </div>
       <p>Attention: ${amsFlagBadges(d.flags)}</p>
+      ${d.held && d.held.held ? `<div class="ci-held"><strong>HELD — clearance required.</strong> A head-related concern has been open since ${esc(String(d.held.since || '').slice(0, 10))}. This athlete stays out until written clearance from a licensed provider is recorded on the concern in Aches &amp; Pains.</div>` : ''}
     </div>
     <div class="card">
       <h2>Wellness — last 14 days</h2>
@@ -2032,6 +2086,9 @@ function openMedia(id, title, editOnly) {
     const vu = (state.content && state.content.videoUpload) || null;
     ed.innerHTML = `<label>Demo link — YouTube or a .gif
       <input type="url" id="media-url" value="${m ? esc(m.url) : ''}" placeholder="https://www.youtube.com/watch?v=…"></label>
+      <label class="check-line"><input type="checkbox" id="media-athlete" ${m && m.athleteFeatures ? 'checked' : ''}> Features an SJC athlete</label>
+      <label class="check-line" id="media-consent-wrap" ${m && m.athleteFeatures ? '' : 'hidden'}><input type="checkbox" id="media-consent"> I have specific written parent/guardian permission to use this athlete's video</label>
+      ${m && m.athleteFeatures && m.consent ? `<p class="muted">Consent attested by ${esc(m.consent.email || '')} on ${esc(String(m.consent.at || '').slice(0, 10))}.</p>` : ''}
       <div class="filter-row">
         <button class="btn primary" id="media-save" type="button" style="width:auto">Save demo</button>
         ${m ? '<button class="btn danger" id="media-remove" type="button" style="width:auto">Remove</button>' : ''}
@@ -2040,9 +2097,16 @@ function openMedia(id, title, editOnly) {
         <input type="file" id="media-file" accept="video/*"></label>
       <p class="muted" id="media-upload-status">Your own demo video (up to 100 MB) — it plays right in the app, for you and your athletes.</p>` : ''}
       <p class="error" id="media-err"></p>`;
+    const consentFields = () => ({
+      athleteFeatures: $('#media-athlete').checked,
+      consentAttested: $('#media-consent').checked,
+    });
+    $('#media-athlete').addEventListener('change', (e) => {
+      $('#media-consent-wrap').hidden = !e.target.checked;
+    });
     $('#media-save').addEventListener('click', async () => {
       try {
-        await apiPut('/api/media/' + encodeURIComponent(mediaTarget), { url: $('#media-url').value });
+        await apiPut('/api/media/' + encodeURIComponent(mediaTarget), { url: $('#media-url').value, ...consentFields() });
         closeMedia();
         await loadMedia();
       } catch (err) { $('#media-err').textContent = err.message; }
@@ -2068,7 +2132,7 @@ function openMedia(id, title, editOnly) {
         const secureUrl = await uploadDemoVideo(file, (pct) => {
           if (status) status.textContent = 'Uploading… ' + pct + '%';
         });
-        await apiPut('/api/media/' + encodeURIComponent(mediaTarget), { url: secureUrl, type: 'upload' });
+        await apiPut('/api/media/' + encodeURIComponent(mediaTarget), { url: secureUrl, type: 'upload', ...consentFields() });
         closeMedia();
         await loadMedia();
       } catch (err) {
@@ -3292,6 +3356,7 @@ async function renderHealth() {
   let concerns = [];
   try { concerns = (await api('/api/concerns')).concerns; state.concerns = concerns; }
   catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const isHeld = (c) => !!c.headRelated && c.status !== 'cleared';
   const concernCard = (c) => `
     <div class="card concern-card ${c.flagged ? 'flagged' : ''}">
       <div class="roster-row">
@@ -3299,10 +3364,16 @@ async function renderHealth() {
         <span>${c.pain == null ? '<span class="badge plain">NO SCORE YET</span>' : `<span class="badge ${c.pain >= 7 ? 'high' : 'plain'}">PAIN ${c.pain}/10</span>`}
         ${c.impact === 'stopped' ? '<span class="badge high">STOPPED</span>' : `<span class="badge plain">${esc(IMPACT_LABELS[c.impact] || c.impact)}</span>`}
         ${c.source === 'athlete' ? '<span class="badge star">ATHLETE REPORTED</span>' : ''}
+        ${c.headRelated ? '<span class="badge high">HEAD-RELATED</span>' : ''}
+        ${isHeld(c) ? '<span class="badge high">HELD — CLEARANCE REQUIRED</span>' : ''}
+        ${c.clearance ? '<span class="badge low">CLEARANCE RECORDED</span>' : ''}
         <span class="badge ${c.status === 'cleared' ? 'low' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span></span>
       </div>
       <p class="muted">Started ${esc(c.started)} · filed ${esc(String(c.createdAt).slice(0, 10))}</p>
       ${c.note ? `<p>${esc(c.note)}</p>` : ''}
+      ${c.source === 'athlete' ? (c.acknowledgedAt
+        ? `<p class="muted">Acknowledged by ${esc(c.acknowledgedByEmail || 'a coach')} · ${esc(String(c.acknowledgedAt).slice(0, 10))}</p>`
+        : `<label class="check-line"><input type="checkbox" id="ca-${c.id}"> Mark acknowledged — I have picked this report up</label>`) : ''}
       <div class="filter-row">
         <label>Status <select id="cs-${c.id}">
           ${Object.keys(STATUS_LABELS).map(s => `<option value="${s}" ${c.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
@@ -3311,9 +3382,27 @@ async function renderHealth() {
           <option value="" ${c.pain == null ? 'selected' : ''}>— not recorded —</option>
           ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${c.pain === n ? 'selected' : ''}>${n}/10</option>`).join('')}
         </select></label>
+        <label class="check-line"><input type="checkbox" id="ch-${c.id}" ${c.headRelated ? 'checked' : ''}> Head-related</label>
       </div>
       <label>Coach note <input type="text" id="cn-${c.id}" value="${esc(c.coachNote || '')}" placeholder="e.g. Sent to athletic trainer"></label>
-      <button class="btn primary" data-concern-save="${c.id}" type="button">Save update</button>
+      <label>Disposition — what was done <input type="text" id="cdis-${c.id}" value="${esc(c.disposition || '')}" placeholder="e.g. Seen by the athletic trainer; modified training this week"></label>
+      ${c.source === 'athlete' && c.status !== 'cleared' ? '<p class="muted">Athlete-reported concerns close with a disposition — what was done about the report. They cannot be deleted.</p>' : ''}
+      ${c.headRelated ? (c.clearance
+        ? `<p>Clearance on file: <strong>${esc(c.clearance.by)}</strong> · ${esc(c.clearance.date)} — ${esc(c.clearance.note)} <span class="muted">(recorded by ${esc(c.clearance.recordedBy || '')})</span></p>`
+        : `<div class="filter-row">
+            <label>Cleared by <input type="text" id="ccb-${c.id}" placeholder="Name of the licensed provider"></label>
+            <label>Clearance date <input type="date" id="ccd-${c.id}"></label>
+          </div>
+          <label>Clearance note <input type="text" id="ccn-${c.id}" placeholder="Attests: written clearance from a licensed provider was received"></label>
+          <p class="muted">A head-related concern can only be cleared once this clearance is recorded.</p>`) : ''}
+      <div class="filter-row">
+        <button class="btn primary" data-concern-save="${c.id}" type="button">Save update</button>
+        <button class="btn secondary" data-concern-copy="${c.id}" type="button">Copy summary for the athletic trainer</button>
+        ${c.source !== 'athlete' ? `<button class="btn danger" data-concern-del="${c.id}" type="button">Delete</button>` : ''}
+      </div>
+      ${(c.audit && c.audit.length) ? `<details class="concern-audit"><summary>Audit trail (${c.audit.length})</summary>
+        ${c.audit.map(a => `<div class="roster-row"><span>${esc(a.action)}${a.detail ? ' — ' + esc(a.detail) : ''}</span><span class="muted">${esc(a.email || 'athlete')} · ${esc(String(a.at || '').slice(0, 16).replace('T', ' '))}</span></div>`).join('')}
+      </details>` : ''}
     </div>`;
   const byAthlete = {};
   for (const c of concerns) { (byAthlete[c.athleteName] = byAthlete[c.athleteName] || []).push(c); }
@@ -3335,6 +3424,7 @@ async function renderHealth() {
         <label>Effect on training <select id="hc-impact"><option value="none">No effect</option><option value="modified">Modified</option><option value="stopped">Stopped me</option></select></label>
       </div>
       <label>Note <textarea id="hc-note" rows="2" placeholder="What the athlete said, in their words if you can"></textarea></label>
+      <label class="check-line"><input type="checkbox" id="hc-head"> Head-related — headache, dizziness, or a hit to the head (holds the athlete until clearance is recorded)</label>
       <button class="btn primary" type="submit">File concern</button>
       <p class="error" id="hc-err"></p>
     </form>
@@ -3349,6 +3439,7 @@ async function renderHealth() {
       ${byAthlete[name].map(c => `<div class="roster-row"><span>${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}) · ${esc(FEELING_LABELS[c.feeling] || c.feeling)} · started ${esc(c.started)}${c.source === 'athlete' ? ' · athlete reported' : ''}</span>
         <span><span class="badge ${c.pain != null && c.pain >= 7 ? 'high' : 'plain'}">${c.pain == null ? 'no score' : c.pain + '/10'}</span> <span class="badge plain">${esc(STATUS_LABELS[c.status] || c.status)}</span></span></div>`).join('')}
       </details>`).join('') || '<p class="muted">Nothing yet.</p>'}`;
+  el.insertAdjacentHTML('beforeend', '<div id="at-summary"></div>');
   $('#concern-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
@@ -3357,20 +3448,94 @@ async function renderHealth() {
         area: $('#hc-area').value, side: $('#hc-side').value, feeling: $('#hc-feeling').value,
         pain: parseInt($('#hc-pain').value, 10), started: $('#hc-started').value,
         impact: $('#hc-impact').value, note: $('#hc-note').value,
+        headRelated: $('#hc-head').checked,
       });
       renderHealth();
     } catch (err) { $('#hc-err').textContent = err.message; }
   });
   el.querySelectorAll('[data-concern-save]').forEach(b => b.addEventListener('click', async () => {
     const id = b.dataset.concernSave;
+    const q = (sel) => document.getElementById(sel + id);
     try {
-      await apiPut('/api/concerns/' + encodeURIComponent(id), {
-        status: $('#cs-' + CSS.escape(id)).value,
-        pain: $('#cp-' + CSS.escape(id)).value === '' ? undefined : parseInt($('#cp-' + CSS.escape(id)).value, 10),
-        coachNote: $('#cn-' + CSS.escape(id)).value,
-      });
+      const payload = {
+        status: q('cs-').value,
+        pain: q('cp-').value === '' ? undefined : parseInt(q('cp-').value, 10),
+        coachNote: q('cn-').value,
+        disposition: q('cdis-') ? q('cdis-').value : undefined,
+        headRelated: q('ch-') ? q('ch-').checked : undefined,
+      };
+      const ack = q('ca-');
+      if (ack && ack.checked) payload.acknowledge = true;
+      /* Clearance rides along only when its fields are filled in;
+         the server validates the set as a whole. */
+      const ccb = q('ccb-');
+      if (ccb && ccb.value.trim()) {
+        payload.clearance = { by: ccb.value, date: q('ccd-').value, note: q('ccn-').value };
+      }
+      await apiPut('/api/concerns/' + encodeURIComponent(id), payload);
       renderHealth();
     } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-concern-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Delete this coach-filed concern? Athlete-reported concerns cannot be deleted — they close with a disposition.')) return;
+    try {
+      await apiDel('/api/concerns/' + encodeURIComponent(b.dataset.concernDel));
+      renderHealth();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-concern-copy]').forEach(b => b.addEventListener('click', () => {
+    const c = concerns.find(x => x.id === b.dataset.concernCopy);
+    if (!c) return;
+    const lines = [
+      'Athlete health concern — summary for the athletic trainer',
+      'Athlete: ' + (c.athleteName || ''),
+      'Reported: ' + String(c.createdAt || '').slice(0, 10)
+        + (c.source === 'athlete' ? ' (athlete-reported in the daily check-in)' : ' (filed by a coach)'),
+      'What: ' + (AREA_LABELS[c.area] || c.area) + ' (' + c.side + ') — ' + (FEELING_LABELS[c.feeling] || c.feeling)
+        + (c.headRelated ? ' · HEAD-RELATED' : ''),
+      'Started: ' + (c.started || '') + ' · Pain: ' + (c.pain == null ? 'not scored yet' : c.pain + '/10')
+        + ' · Effect on training: ' + (IMPACT_LABELS[c.impact] || c.impact),
+      c.note ? 'Athlete\'s words / note: ' + c.note : '',
+      'Status: ' + (STATUS_LABELS[c.status] || c.status)
+        + (c.acknowledgedAt ? ' · acknowledged ' + String(c.acknowledgedAt).slice(0, 10) : ' · not yet acknowledged'),
+      c.disposition ? 'Disposition: ' + c.disposition : 'Disposition: none recorded yet',
+      c.clearance ? 'Clearance on file: ' + c.clearance.by + ', ' + c.clearance.date + ' — ' + c.clearance.note : '',
+    ].filter(Boolean).join('\n');
+    const box = $('#at-summary');
+    box.innerHTML = `<div class="card" id="at-summary-card">
+      <h3>Summary for the athletic trainer</h3>
+      <pre class="at-summary-text">${esc(lines)}</pre>
+      <div class="filter-row">
+        <button class="btn primary" id="at-copy" type="button">Copy summary</button>
+        <button class="btn secondary" id="at-print" type="button">Print</button>
+        <button class="btn secondary" id="at-close" type="button">Close</button>
+      </div>
+      <p class="muted" id="at-copy-msg"></p>
+    </div>`;
+    $('#at-copy').addEventListener('click', async () => {
+      const msg = $('#at-copy-msg');
+      try {
+        await navigator.clipboard.writeText(lines);
+        msg.textContent = 'Copied — paste it wherever the athletic trainer will see it.';
+      } catch (_) {
+        msg.textContent = 'Copy did not work in this browser — select the text above and copy it by hand.';
+      }
+    });
+    $('#at-print').addEventListener('click', () => {
+      const card = $('#at-summary-card');
+      card.classList.add('print-target');
+      document.body.classList.add('printing-card');
+      const cleanup = () => {
+        card.classList.remove('print-target');
+        document.body.classList.remove('printing-card');
+        window.removeEventListener('afterprint', cleanup);
+      };
+      window.addEventListener('afterprint', cleanup);
+      setTimeout(cleanup, 1500);
+      window.print();
+    });
+    $('#at-close').addEventListener('click', () => { box.innerHTML = ''; });
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
 }
 
@@ -5701,7 +5866,8 @@ async function renderLeaderboard() {
   }
   main.innerHTML = `
     ${testingCards ? `<h2>Testing Leaders</h2>${LANE_DIVIDER}${testingCards}` : ''}
-    ${meetCards ? `<h2>Meet PR Leaders</h2>${LANE_DIVIDER}${meetCards}` : ''}`;
+    ${meetCards ? `<h2>Meet PR Leaders</h2>${LANE_DIVIDER}${meetCards}` : ''}
+    ${data.testingCoachOnly ? '<p class="muted">Testing leaders are coach-only — meet PR leaders are shown to everyone.</p>' : ''}`;
 }
 
 /* ================================================================
@@ -5947,7 +6113,7 @@ async function renderCoverage() {
       `<button type="button" class="chip ${state.coverageFilter === v ? 'active' : ''}" data-covfilter="${v}">${label} (${counts[v]})</button>`).join('')}
     </div>
     <div id="coverage-list">${shown.length ? shown.map(r => `
-      <div class="roster-row"><span class="row-lead">${thumbHtml(r.id, 'thumb-sm')}<strong>${esc(r.name)}</strong></span> <span class="badge plain">${esc(r.kind)}</span> ${coverageBadge(r.status)} ${demoHtml(r.id, r.name)}</div>`).join('')
+      <div class="roster-row"><span class="row-lead">${thumbHtml(r.id, 'thumb-sm')}<strong>${esc(r.name)}</strong></span> <span class="badge plain">${esc(r.kind)}</span> ${coverageBadge(r.status)} ${r.athleteFeatures ? '<span class="badge star">ATHLETE VIDEO</span>' + (r.consent ? ` <span class="muted">consent attested by ${esc(r.consent.email || '')} · ${esc(String(r.consent.at || '').slice(0, 10))}</span>` : ' <span class="badge high">NO CONSENT ON FILE</span>') : ''} ${demoHtml(r.id, r.name)}</div>`).join('')
       : '<p class="muted">Nothing in this bucket yet.</p>'}
     </div>`;
   main.querySelectorAll('[data-covfilter]').forEach(b => b.addEventListener('click', () => {
@@ -5965,7 +6131,13 @@ async function renderData() {
     <div class="card">
       <h3>Full backup</h3>
       <p class="muted">One JSON file with the whole team dataset: roster and groups, assignments and completions, testing, weekly numbers, health concerns, inventory, warm-up card edits, meet results, school records, goals, check-ins, attendance, coach notes, custom workouts, programs, and announcements. Accounts and passwords are never in the file.</p>
-      <p><a class="btn" href="/api/export/backup">Download full backup</a></p>
+      <p><strong>Handling a backup:</strong> it holds athlete health information. Encrypt it with a passphrase below, keep it only in school-managed storage, and delete local copies (Downloads, desktops) within 30 days.</p>
+      <p><a class="btn secondary" href="/api/export/backup">Download plain backup</a></p>
+      <div class="filter-row">
+        <label>Passphrase (8+ characters) <input type="password" id="data-pass" autocomplete="new-password"></label>
+        <button class="btn" id="data-enc-download" type="button">Download encrypted backup</button>
+      </div>
+      <p class="muted" id="data-enc-msg">You will need this exact passphrase to restore an encrypted backup. The app does not keep it.</p>
     </div>
     <div class="card">
       <h3>Restore from a backup</h3>
@@ -5990,7 +6162,82 @@ async function renderData() {
         <a class="btn secondary" href="/api/export/roster.csv">Roster</a>
         <a class="btn secondary" href="/api/export/completions.csv">Session completions (raw)</a>
       </p>
+      <p class="muted">Every export is written to the export log below.</p>
+    </div>
+    <div class="card">
+      <h3>Export log</h3>
+      <div id="data-export-log"><p class="muted">Loading…</p></div>
+    </div>
+    <div class="card">
+      <h3>Retention — archived athletes</h3>
+      <p class="muted">Wellness check-ins, health concerns, and coach notes for an archived athlete can be purged once they are past the retention window. Testing and meet records are <strong>not</strong> purged — they stay as program history until the school sets a retention schedule.</p>
+      <div class="filter-row">
+        <label>Retention window (months) <input type="number" id="ret-months" min="1" max="60" step="1" style="width:6em"></label>
+        <button class="btn secondary" id="ret-save" type="button">Save window</button>
+      </div>
+      <div id="ret-list"><p class="muted">Loading…</p></div>
     </div>`;
+  $('#data-enc-download').addEventListener('click', async () => {
+    const msg = $('#data-enc-msg');
+    const pass = $('#data-pass').value;
+    if (!pass || pass.length < 8) { msg.textContent = 'Set a passphrase of at least 8 characters first.'; return; }
+    msg.textContent = 'Encrypting…';
+    try {
+      const env = await apiPost('/api/export/backup', { passphrase: pass });
+      const blob = new Blob([JSON.stringify(env, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'sprinter-backup-encrypted.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      msg.textContent = 'Encrypted backup downloaded. Keep the passphrase somewhere safe — without it the file cannot be restored.';
+    } catch (err) { msg.textContent = err.message; }
+  });
+  (async () => {
+    try {
+      const log = await api('/api/export/log');
+      const box = $('#data-export-log');
+      if (box) {
+        box.innerHTML = log.entries && log.entries.length
+          ? '<div class="table-wrap"><table class="ranked"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>'
+            + log.entries.map(e => `<tr><td>${esc(String(e.at || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(e.email || '')}</td><td>${esc(e.kind || '')}</td><td>${esc(e.detail || '')}</td></tr>`).join('')
+            + '</tbody></table></div>'
+          : '<p class="muted">No exports yet.</p>';
+      }
+    } catch (_) { const box = $('#data-export-log'); if (box) box.innerHTML = '<p class="muted">Export log unavailable.</p>'; }
+  })();
+  const paintRetention = async () => {
+    const box = $('#ret-list');
+    if (!box) return;
+    let d;
+    try { d = await api('/api/retention'); }
+    catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+    $('#ret-months').value = d.months;
+    box.innerHTML = d.candidates.length ? d.candidates.map(cand => `
+      <div class="roster-row">
+        <span><strong>${esc(cand.profile.name)}</strong> <span class="muted">archived ${esc(cand.archivedDate ? String(cand.archivedDate).slice(0, 10) : 'date unknown')}</span></span>
+        <span class="muted">${cand.counts.checkins} check-ins · ${cand.counts.concerns} concerns · ${cand.counts.coachNotes} coach notes</span>
+        <button class="btn danger" data-ret-purge="${cand.profile.id}" type="button">Purge health data</button>
+      </div>`).join('')
+      : '<p class="muted">No archived athletes are past the retention window.</p>';
+    box.querySelectorAll('[data-ret-purge]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Purge this athlete\'s check-ins, concerns, and coach notes? Testing and meet records stay. This cannot be undone.')) return;
+      try {
+        await apiPost('/api/retention/purge', { profileId: b.dataset.retPurge, confirm: true });
+        paintRetention();
+      } catch (err) { alert(err.message); }
+    }));
+  };
+  $('#ret-save').addEventListener('click', async () => {
+    const months = parseInt($('#ret-months').value, 10);
+    try {
+      await apiPut('/api/retention/settings', { months });
+      paintRetention();
+    } catch (err) { alert(err.message); }
+  });
+  paintRetention();
   const fileInput = $('#data-file');
   fileInput.addEventListener('change', async () => {
     const box = $('#data-import-box');
@@ -6003,6 +6250,33 @@ async function renderData() {
       parsed = JSON.parse(await file.text());
     } catch (_) {
       box.innerHTML = '<p class="error">That file is not valid JSON.</p>';
+      return;
+    }
+    if (parsed && parsed.app === 'sprinter-workout-app' && parsed.kind === 'backup-encrypted' && parsed.encrypted) {
+      pendingBackup = parsed;
+      const when = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString() : 'an unknown date';
+      box.innerHTML =
+        '<p>Encrypted backup from <strong>' + esc(when) + '</strong>. Enter its passphrase to restore it — it decrypts on the server and merges like a normal backup.</p>'
+        + '<div class="filter-row"><label>Passphrase <input type="password" id="data-import-pass" autocomplete="off"></label></div>'
+        + '<p><button type="button" class="btn" id="data-import-go">Decrypt and import</button> '
+        + '<button type="button" class="btn secondary" id="data-import-cancel">Cancel</button></p>'
+        + '<div id="data-import-result"></div>';
+      $('#data-import-cancel').addEventListener('click', () => {
+        pendingBackup = null;
+        box.innerHTML = '';
+        fileInput.value = '';
+      });
+      $('#data-import-go').addEventListener('click', async () => {
+        const out = $('#data-import-result');
+        out.innerHTML = '<p class="muted">Decrypting and importing…</p>';
+        try {
+          const r = await apiPost('/api/import/backup', { ...pendingBackup, passphrase: $('#data-import-pass').value });
+          out.innerHTML = '<p><strong>Import complete:</strong> ' + r.totalAdded + ' added, ' + r.totalUpdated + ' updated.</p>';
+          pendingBackup = null;
+        } catch (err) {
+          out.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
+        }
+      });
       return;
     }
     if (!parsed || parsed.app !== 'sprinter-workout-app' || parsed.kind !== 'backup'
@@ -6283,6 +6557,20 @@ function renderValdApiPanel(panel) {
    its audience, author, date, and pin state. Any coach can post
    and manage; the feed endpoint already returns coaches the
    full, unfiltered list in feed order (pinned, then newest). */
+/* The usual team-communication window: 6:00 AM–10:00 PM US
+   Eastern. Returns true when `date` falls inside it. Used for a
+   soft warning only — announcements are never blocked. */
+function announcementInWindow(date) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23',
+    }).formatToParts(date || new Date());
+    const hour = parseInt((parts.find(p => p.type === 'hour') || {}).value, 10);
+    if (Number.isNaN(hour)) return true;
+    return hour >= 6 && hour < 22;
+  } catch (_) { return true; }
+}
+
 async function renderAnnouncements() {
   const el = $('#announce-main');
   if (!el) return;
@@ -6310,6 +6598,7 @@ async function renderAnnouncements() {
       <label class="check-line"><input type="checkbox" id="ann-pinned" ${editing && editing.pinned ? 'checked' : ''}> Pin to the top of the feed</label>
       <button class="btn primary" type="submit">${editing ? 'Save changes' : 'Post announcement'}</button>
       ${editing ? '<button class="btn secondary" id="ann-cancel" type="button">Cancel edit</button>' : ''}
+      <p class="muted" id="ann-window-note" hidden>Outside the usual 6 AM–10 PM communication window. You can still post — tap the button again to send anyway.</p>
       <p class="error" id="ann-err"></p>
     </form>
     ${posts.length
@@ -6332,8 +6621,18 @@ async function renderAnnouncements() {
   }));
   const cancelBtn = $('#ann-cancel');
   if (cancelBtn) cancelBtn.addEventListener('click', () => { state.annEditId = null; renderAnnouncements(); });
+  let annWindowWarned = false;
   $('#ann-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    /* Soft window notice (not a block): outside 6 AM–10 PM
+       America/New_York the first submit shows the note and the
+       second posts. Edits are exempt — they do not re-notify. */
+    if (!state.annEditId && !annWindowWarned && !announcementInWindow(new Date())) {
+      annWindowWarned = true;
+      const note = $('#ann-window-note');
+      if (note) note.hidden = false;
+      return;
+    }
     const payload = {
       title: $('#ann-title').value,
       body: $('#ann-body').value,
@@ -6398,14 +6697,20 @@ function wrLoadFor(panel, step) {
   return panel.loads.find(x => x.name === step.name && x.testKey === L.testKey &&
     x.percent === L.percent && x.sets === L.sets && x.reps === L.reps) || null;
 }
-function wrStepLine(panel, step) {
+function wrStepLine(panel, step, shared) {
   if (step.type === 'rest') return `<span class="muted">Rest ${esc(step.seconds)}s</span>`;
-  const load = wrLoadFor(panel, step);
   let loadHtml = '';
   if (step.load) {
-    loadHtml = load && load.weight !== null && load.weight !== undefined
-      ? ' — ' + loadCellText({ weight: load.weight, max: load.max }, step.load.percent)
-      : ' — <span class="muted">No max on file</span>';
+    if (shared) {
+      /* Shared display shows the prescription only — never an
+         athlete's computed load or max. */
+      loadHtml = ' — ' + esc(step.load.percent) + '% of max';
+    } else {
+      const load = wrLoadFor(panel, step);
+      loadHtml = load && load.weight !== null && load.weight !== undefined
+        ? ' — ' + loadCellText({ weight: load.weight, max: load.max }, step.load.percent)
+        : ' — <span class="muted">No max on file</span>';
+    }
   }
   return `<strong>${esc(step.name)}</strong>${step.reps ? ` <span class="muted">× ${esc(step.reps)}</span>` : ''}${loadHtml}`;
 }
@@ -6445,6 +6750,8 @@ async function renderWeightRoom() {
   const colsOpts = [['auto', 'Auto'], ['2', '2 across'], ['3', '3 across']].map(([v, label]) =>
     `<option value="${v}" ${v === state.wrCols ? 'selected' : ''}>${label}</option>`).join('');
 
+  const shared = data.sharedDisplay !== false;
+  state.wrShared = shared;
   el.innerHTML = `
     <div class="card wr-setup">
       <div class="filter-row">
@@ -6453,11 +6760,27 @@ async function renderWeightRoom() {
         <label>Panels <select id="wr-cols">${colsOpts}</select></label>
         <button class="btn secondary" id="wr-refresh" type="button">Refresh</button>
       </div>
+      <div class="filter-row">
+        <span class="muted">Display:</span>
+        <button class="btn ${shared ? 'primary' : 'secondary'}" id="wr-mode-shared" type="button">Shared display</button>
+        <button class="btn ${shared ? 'secondary' : 'primary'}" id="wr-mode-coach" type="button">Coach detail</button>
+        <span class="muted">${shared
+          ? 'Shared display is what the room sees: stations and groups only — no names, no personal loads, held athletes show as "See coach".'
+          : 'Coach detail: names and each athlete\'s own loads. Switch back to Shared display before this screen faces the room.'}</span>
+      </div>
       <p class="muted" style="margin-bottom:0">${esc(fmtDate(parseDate(data.date)))} · ${data.panels.length} athlete${data.panels.length === 1 ? '' : 's'} on the floor · updated ${state.wrUpdatedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · re-checks itself every minute while open</p>
     </div>
     ${data.panels.length
-      ? `<div class="wr-grid" data-cols="${esc(state.wrCols)}">${data.panels.map(p => wrPanelHtml(p, floorWorkout)).join('')}</div>`
+      ? `<div class="wr-grid" data-cols="${esc(state.wrCols)}">${data.panels.map(p => wrPanelHtml(p, floorWorkout, shared)).join('')}</div>`
       : '<div class="card"><p class="muted">No athletes in this group yet — add them in Roster &amp; Groups.</p></div>'}`;
+  const setMode = async (wantShared) => {
+    try {
+      await apiPost('/api/weight-room/display', { shared: wantShared });
+      renderWeightRoom();
+    } catch (err) { alert(err.message); }
+  };
+  $('#wr-mode-shared').addEventListener('click', () => setMode(true));
+  $('#wr-mode-coach').addEventListener('click', () => setMode(false));
   $('#wr-group').addEventListener('change', (e) => { state.wrGroupId = e.target.value; renderWeightRoom(); });
   $('#wr-workout').addEventListener('change', (e) => { state.wrWorkoutId = e.target.value; renderWeightRoom(); });
   $('#wr-cols').addEventListener('change', (e) => { state.wrCols = e.target.value; renderWeightRoom(); });
@@ -6465,8 +6788,19 @@ async function renderWeightRoom() {
   el.querySelectorAll('[data-wr-panel]').forEach(panelEl => wrWirePanel(panelEl, data, floorWorkout));
 }
 
-function wrPanelHtml(panel, floorWorkout) {
+function wrPanelHtml(panel, floorWorkout, shared) {
   const pr = panel.profile;
+  /* Shared display + held: a generic panel with no name, no
+     workout detail, and no reason — just "See coach". */
+  if (shared && panel.held) {
+    return `
+  <div class="card wr-panel" data-wr-panel="${esc(pr.id)}">
+    <div class="roster-row">
+      <span><strong>Station ${panel.station}</strong>${pr.groupName ? ` <span class="muted">· ${esc(pr.groupName)}</span>` : ''}</span>
+    </div>
+    <p class="wr-title"><strong>See coach</strong></p>
+  </div>`;
+  }
   const key = wrWorkoutKey(panel, floorWorkout);
   const steps = wrStepsFor(panel, floorWorkout);
   const prog = key && panel.progress ? panel.progress[key] : null;
@@ -6493,7 +6827,7 @@ function wrPanelHtml(panel, floorWorkout) {
       : '';
   const stepsHtml = steps.length ? `
     <ol class="wr-steps">
-      ${steps.map((s, i) => `<li class="wr-step${i === cur && !panel.completed ? ' current' : ''}${panel.completed || i < cur ? ' done' : ''}">${wrStepLine(panel, s)}</li>`).join('')}
+      ${steps.map((s, i) => `<li class="wr-step${i === cur && !panel.completed ? ' current' : ''}${panel.completed || i < cur ? ' done' : ''}">${wrStepLine(panel, s, shared)}</li>`).join('')}
     </ol>` : '';
   const controls = panel.completed
     ? `<div class="filter-row"><button class="btn secondary" data-wr-undo="${esc(pr.id)}" type="button">Undo completion</button></div>`
@@ -6511,7 +6845,9 @@ function wrPanelHtml(panel, floorWorkout) {
   return `
   <div class="card wr-panel" data-wr-panel="${esc(pr.id)}">
     <div class="roster-row">
-      <span><strong>${esc(pr.name)}</strong>${pr.groupName ? ` <span class="muted">· ${esc(pr.groupName)}</span>` : ''}</span>
+      <span>${shared
+        ? `<strong>Station ${panel.station}</strong>${pr.groupName ? ` <span class="muted">· ${esc(pr.groupName)}</span>` : ''}`
+        : `<strong>${esc(pr.name)}</strong>${pr.groupName ? ` <span class="muted">· ${esc(pr.groupName)}</span>` : ''}${panel.held ? ' <span class="badge high">HELD — CLEARANCE REQUIRED</span>' : ''}`}</span>
       ${statusChip}
     </div>
     ${titleHtml ? `<p class="wr-title">${titleHtml}</p>` : ''}
