@@ -2354,13 +2354,22 @@ function deviceTestDayFor(device, date, testKeys) {
    device. Returns { filed, skipped, results }: a row files when its
    athlete exists, its date parses, and it carries at least one
    finite number; anything else is counted as skipped — visible to
-   the coach in the response, never dropped silently. */
-function fileDeviceRows(device, rows, userId) {
+   the coach in the response, never dropped silently. fallbackDate
+   (an already-validated YYYY-MM-DD from the commit endpoint) fills
+   ONLY rows that carry no date of their own — dateless exports
+   (VALD Hub's Results Export has no date column) file under the
+   coach-supplied session date. A row with its own date, valid or
+   not, is never overridden by the fallback. */
+function fileDeviceRows(device, rows, userId, fallbackDate) {
   let filed = 0, skipped = 0, results = 0;
   for (const row of Array.isArray(rows) ? rows : []) {
     const r = row && typeof row === 'object' ? row : {};
     const prof = profileById(clean(r.profileId, 80));
-    const date = parseDeviceDate(r.date);
+    let date = parseDeviceDate(r.date);
+    if (!date && fallbackDate
+      && (r.date === null || r.date === undefined || String(r.date).trim() === '')) {
+      date = fallbackDate;
+    }
     const entries = (isPlainObj(r.metrics) ? Object.entries(r.metrics) : [])
       .map(([label, v]) => [label, num(v)])
       .filter(([, v]) => v !== null);
@@ -2391,10 +2400,14 @@ function previewDeviceCsv(device, csvText) {
   if (nameIdx < 0) {
     return { error: 'That file has no athlete name column — the import needs a column headed Name or Athlete.' };
   }
+  /* A file with NO date column is not an error: VALD Hub's Results
+     Export carries none. The preview then runs in coach-dated mode
+     (needsDate) — every row carries date: null, the preview UI asks
+     the coach what day the testing happened, and the commit files
+     all rows under that one supplied date. A file WITH a date
+     column keeps per-row dates, exactly as before. */
   const dateIdx = norm.findIndex(h => DEVICE_DATE_HEADERS.includes(h));
-  if (dateIdx < 0) {
-    return { error: 'That file has no date column — the import needs a column headed Date, Test Date, or Session Date.' };
-  }
+  const hasDates = dateIdx >= 0;
   /* Metric columns: every other column that carries at least one
      number somewhere in the file — recognized VALD headers and
      unknown ones alike. An unrecognized numeric column is captured
@@ -2409,7 +2422,7 @@ function previewDeviceCsv(device, csvText) {
     seenLabels.add(h);
     metricCols.push({ idx: i, label: h });
   });
-  const out = { columns: headers, rows: [], errors: [] };
+  const out = { columns: headers, rows: [], errors: [], needsDate: !hasDates };
   rows.slice(1).forEach((cells, i) => {
     const rowIndex = i + 1;
     const rawName = String(cells[nameIdx] || '').trim();
@@ -2417,14 +2430,17 @@ function previewDeviceCsv(device, csvText) {
       out.errors.push({ rowIndex, rawName: '', reason: 'No athlete name in this row.' });
       return;
     }
-    const date = parseDeviceDate(cells[dateIdx]);
-    if (!date) {
-      out.errors.push({
-        rowIndex, rawName,
-        reason: 'Unrecognized date "' + String(cells[dateIdx] || '').trim()
-          + '" — dates must be YYYY-MM-DD or M/D/YYYY.',
-      });
-      return;
+    let date = null;
+    if (hasDates) {
+      date = parseDeviceDate(cells[dateIdx]);
+      if (!date) {
+        out.errors.push({
+          rowIndex, rawName,
+          reason: 'Unrecognized date "' + String(cells[dateIdx] || '').trim()
+            + '" — dates must be YYYY-MM-DD or M/D/YYYY.',
+        });
+        return;
+      }
     }
     const metrics = {};
     for (const mc of metricCols) {
@@ -3984,6 +4000,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, {
       device: device.id, columns: preview.columns,
       rows: preview.rows, errors: preview.errors,
+      needsDate: preview.needsDate === true, today: todayStr(),
     });
   }
   const deviceCommitMatch = p.match(/^\/api\/devices\/([a-z]+)\/commit$/);
@@ -4004,7 +4021,21 @@ async function handleApi(req, res, url) {
     if (rows.length > 2000) {
       return sendJson(res, 400, { error: 'That import has more than 2,000 rows — split it into smaller files.' });
     }
-    const out = fileDeviceRows(device, rows, user.id);
+    /* Coach-supplied session date for dateless files: validated
+       here (a real calendar date, never in the future) and passed
+       down as a fallback that fills only dateless rows — a row's
+       own file date always wins. */
+    let sessionDate = null;
+    if (isPlainObj(body) && typeof body.sessionDate === 'string' && body.sessionDate.trim()) {
+      sessionDate = parseDeviceDate(body.sessionDate);
+      if (!sessionDate) {
+        return sendJson(res, 400, { error: 'That session date is not a real date — enter it as YYYY-MM-DD.' });
+      }
+      if (sessionDate > todayStr()) {
+        return sendJson(res, 400, { error: 'That session date is in the future — use the day the testing actually happened.' });
+      }
+    }
+    const out = fileDeviceRows(device, rows, user.id, sessionDate);
     if (out.filed) saveDb();
     return sendJson(res, 200, {
       ok: true, filed: out.filed, skipped: out.skipped, results: out.results,

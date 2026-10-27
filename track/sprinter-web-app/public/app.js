@@ -136,8 +136,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v48';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v48';
+const APP_VERSION = 'v49';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v49';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -6414,12 +6414,17 @@ function paintDevicePreview(device) {
   const unmapped = pv.rows.length - matched;
   slot.innerHTML = `
     <p><strong>${pv.rows.length + pv.errors.length} rows read</strong> — ${matched} matched to the roster${unmapped ? ' · ' + unmapped + ' to map by hand' : ''}${pv.errors.length ? ' · ' + pv.errors.length + ' could not be read' : ''}.</p>
+    ${pv.needsDate ? `<div class="card">
+      <p><strong>This file has no date column — what day was this testing?</strong></p>
+      <p><label>Testing date <input type="date" id="dev-session-date" value="${esc(pv.today || '')}"></label></p>
+      <p class="muted">Every row in this file files under this one date. The date matters: importing this same file again with the same date files nothing twice, while a different date counts as a different testing day.</p>
+    </div>` : '<p class="muted">Dates come from the file itself — each row files under its own date.</p>'}
     ${pv.errors.length ? pv.errors.map(e => `<p class="error">Row ${e.rowIndex}${e.rawName ? ' (' + esc(e.rawName) + ')' : ''}: ${esc(e.reason)}</p>`).join('') : ''}
     ${pv.rows.length ? `<div class="table-wrap"><table class="ranked">
       <thead><tr><th>Athlete in file</th><th>Date</th><th>Results</th><th>Files to</th></tr></thead>
       <tbody>${pv.rows.map(r => `<tr>
         <td>${esc(r.rawName)}${r.matchNote ? `<br><span class="muted">${esc(r.matchNote)}</span>` : ''}</td>
-        <td>${esc(r.date)}</td>
+        <td>${r.date ? esc(r.date) : `<span data-dev-rowdate>${esc(pv.today || '')}</span>`}</td>
         <td>${Object.entries(r.metrics).map(([k, v]) => esc(k) + ' ' + esc(fmtNum(v))).join(' · ')}</td>
         <td>${r.matchStatus === 'matched'
           ? esc(nameOf(r.profileId))
@@ -6436,8 +6441,22 @@ function paintDevicePreview(device) {
     const f = $('#dev-file');
     if (f) f.value = '';
   });
+  const dateInput = $('#dev-session-date');
+  if (dateInput) dateInput.addEventListener('change', () => {
+    slot.querySelectorAll('[data-dev-rowdate]').forEach(s => { s.textContent = dateInput.value; });
+  });
   const commit = $('#dev-commit');
   if (commit) commit.addEventListener('click', async () => {
+    const out = $('#dev-commit-result');
+    let sessionDate = null;
+    if (pv.needsDate) {
+      const di = slot.querySelector('#dev-session-date');
+      sessionDate = di && di.value ? di.value : '';
+      if (!sessionDate) {
+        out.innerHTML = '<p class="error">Pick the testing date above first — every row in this file files under that day.</p>';
+        return;
+      }
+    }
     const rows = pv.rows.map(r => {
       let pid = r.profileId;
       if (!pid) {
@@ -6446,10 +6465,11 @@ function paintDevicePreview(device) {
       }
       return { profileId: pid, date: r.date, metrics: r.metrics };
     });
-    const out = $('#dev-commit-result');
     out.innerHTML = '<p class="muted">Filing…</p>';
     try {
-      const res = await apiPost('/api/devices/' + device + '/commit', { rows });
+      const payload = { rows };
+      if (sessionDate) payload.sessionDate = sessionDate;
+      const res = await apiPost('/api/devices/' + device + '/commit', payload);
       state.devPreviews[device] = null;
       devFlash = 'Filed ' + res.filed + ' athlete row' + (res.filed === 1 ? '' : 's')
         + ' (' + res.results + ' results) from the ' + DEVICE_NAMES[device] + ' file'

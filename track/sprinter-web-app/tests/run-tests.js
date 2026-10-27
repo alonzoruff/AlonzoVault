@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v48',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v48"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v49',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v49"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v48'") &&
-    swJs.text.includes("sprinter-app-v48"));
+    appJs.text.includes("const APP_VERSION = 'v49'") &&
+    swJs.text.includes("sprinter-app-v49"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v48"') &&
-    pageHtml.text.includes('Cadets Sprint · App v48') &&
+    pageHtml.text.includes('data-app-version="v49"') &&
+    pageHtml.text.includes('Cadets Sprint · App v49') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -4258,6 +4258,111 @@ async function main() {
     !!r.json.devices.tapex && r.json.devices.tapex.date === '2026-10-23' &&
     r.json.devices.tapex.metrics.some(m => m.name === 'T-APEX · Peak Speed (m/s)' && m.value === 8.9),
     r.json.devices);
+
+  /* Dateless exports: VALD Hub's Results Export carries no date
+     column. The preview must not fail — it flags needsDate, leaves
+     row dates null, and the commit files every row under one
+     coach-supplied session date (validated server-side, and never
+     allowed to override a file's own dates). */
+  const nbDateless = [
+    'Name,Max Force Left (N),Max Force Right (N),Impulse (Ns)',
+    'Dana Device,310,300,1550',
+    'Evan Device,280,275,1400',
+    'Zed Stranger,290,285,1450',
+  ].join('\n');
+  r = await api(coach, 'POST', '/api/devices/nordbord/preview', { csv: nbDateless });
+  const nbDl = r.json;
+  check('dateless preview: no date column is not an error — it asks for a session date',
+    r.status === 200 && nbDl.needsDate === true && nbDl.rows.length === 3 &&
+    nbDl.rows.every(x => x.date === null) && /^\d{4}-\d{2}-\d{2}$/.test(nbDl.today || ''), nbDl);
+  check('dateless preview: names still match exactly, strangers stay unmatched',
+    nbDl.rows[0].profileId === danaD && nbDl.rows[1].profileId === evanD &&
+    nbDl.rows[2].matchStatus === 'unmatched' && nbDl.rows[2].profileId === null, nbDl.rows);
+  const nbDlRows = () => nbDl.rows.map(x => ({ profileId: x.profileId, date: x.date, metrics: x.metrics }));
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit', { rows: nbDlRows() });
+  check('dateless rows committed with no session date file nothing (all skipped)',
+    r.status === 200 && r.json.filed === 0 && r.json.skipped === 3, r.json);
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: nbDlRows(), sessionDate: '2999-01-01' });
+  check('a future coach-supplied date is rejected',
+    r.status === 400 && /future/i.test(r.json.error), r.json);
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: nbDlRows(), sessionDate: '2026-13-40' });
+  check('a non-existent calendar date is rejected', r.status === 400, r.json);
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: nbDlRows(), sessionDate: 'banana' });
+  check('a garbage session date is rejected', r.status === 400, r.json);
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: nbDlRows(), sessionDate: '2026-10-24' });
+  check('dateless commit files the matched rows under the coach-supplied date',
+    r.status === 200 && r.json.filed === 2 && r.json.skipped === 1 && r.json.results === 6, r.json);
+  r = await api(coach, 'GET', '/api/devices/nordbord/summary');
+  check('the coach-dated file becomes a nordbord test day on the chosen date',
+    r.json.days.filter(d => d.date === '2026-10-24').length === 1 &&
+    r.json.days.some(d => d.date === '2026-10-24' && d.athletes === 2 && d.results === 6),
+    r.json.days);
+  /* Idempotency in coach-dated mode: same file + same date again. */
+  const danaNbBefore = (await api(coach, 'GET', '/api/results?profileId=' + danaD)).json.results
+    .filter(x => x.testKey.startsWith('nb_')).length;
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: nbDlRows(), sessionDate: '2026-10-24' });
+  check('re-importing the dateless file with the same date still reports the rows filed',
+    r.status === 200 && r.json.filed === 2, r.json);
+  r = await api(coach, 'GET', '/api/results?profileId=' + danaD);
+  check('same-date re-import overwrites instead of duplicating',
+    r.json.results.filter(x => x.testKey.startsWith('nb_')).length === danaNbBefore,
+    r.json.results.filter(x => x.testKey.startsWith('nb_')).length);
+  r = await api(coach, 'GET', '/api/devices/nordbord/summary');
+  check('same-date re-import reuses the one test day',
+    r.json.days.filter(d => d.date === '2026-10-24').length === 1, r.json.days);
+  /* A different chosen date is a different test day. */
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: [{ profileId: danaD, date: null, metrics: nbDl.rows[0].metrics }], sessionDate: '2026-10-25' });
+  check('the same rows under a different chosen date file as a different day',
+    r.status === 200 && r.json.filed === 1, r.json);
+  r = await api(coach, 'GET', '/api/devices/nordbord/summary');
+  check('summary now holds both coach-chosen days',
+    r.json.days.some(d => d.date === '2026-10-24') && r.json.days.some(d => d.date === '2026-10-25'),
+    r.json.days.map(d => d.date));
+  /* Unmatched rows still map by hand in dateless mode. */
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: [{ profileId: fayD, date: null, metrics: nbDl.rows[2].metrics }], sessionDate: '2026-10-24' });
+  check('a hand-mapped dateless row files to the chosen athlete under the chosen date',
+    r.status === 200 && r.json.filed === 1 && r.json.skipped === 0, r.json);
+  r = await api(coach, 'GET', '/api/results?profileId=' + fayD);
+  check('the hand-mapped dateless result is on fay\'s record',
+    r.json.results.some(x => x.testKey === 'nb_max_force_left_n' && x.value === 290), r.json.results);
+
+  /* A dated file ignores the coach-supplied date entirely. */
+  const fdDated = ['Athlete,Date,Jump Height (cm)', 'Dana Device,2026-10-26,39.1'].join('\n');
+  r = await api(coach, 'POST', '/api/devices/forcedecks/preview', { csv: fdDated });
+  const fdDatedPv = r.json;
+  check('dated preview: needsDate is false and the row keeps its file date',
+    r.status === 200 && fdDatedPv.needsDate === false && fdDatedPv.rows[0].date === '2026-10-26', fdDatedPv);
+  r = await api(coach, 'POST', '/api/devices/forcedecks/commit', {
+    rows: fdDatedPv.rows.map(x => ({ profileId: x.profileId, date: x.date, metrics: x.metrics })),
+    sessionDate: '2026-10-24',
+  });
+  check('dated commit files under the file date, not the coach date',
+    r.status === 200 && r.json.filed === 1, r.json);
+  r = await api(coach, 'GET', '/api/devices/forcedecks/summary');
+  check('no forcedecks day was created on the coach-supplied date',
+    r.json.days.some(d => d.date === '2026-10-26') &&
+    !r.json.days.some(d => d.date === '2026-10-24'), r.json.days.map(d => d.date));
+
+  /* The fallback lives in the shared parser: ForceDecks files and
+     the T-APEX file import get the same dateless mode. */
+  r = await api(coach, 'POST', '/api/devices/forcedecks/preview',
+    { csv: 'Athlete,Jump Height (cm)\nDana Device,40.0' });
+  check('a dateless forcedecks file previews in coach-dated mode too',
+    r.status === 200 && r.json.needsDate === true && r.json.rows[0].date === null, r.json);
+  r = await api(coach, 'POST', '/api/devices/tapex/preview',
+    { csv: 'Athlete,Load (kg)\nDana Device,30' });
+  check('a dateless tapex file previews in coach-dated mode too',
+    r.status === 200 && r.json.needsDate === true && r.json.rows[0].date === null, r.json);
+  check('app JS carries the dateless-import date prompt and the sessionDate commit',
+    appJs.text.includes('dev-session-date') && appJs.text.includes('sessionDate') &&
+    appJs.text.includes('This file has no date column'), 'app.js');
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }
