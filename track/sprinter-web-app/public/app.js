@@ -30,6 +30,7 @@ const state = {
   annEditId: null,
   devTab: 'forcedecks',
   devPreviews: {},
+  devResultDay: null,
   cwWorkouts: [],
   cwEditId: null,
   cwDraft: null,
@@ -136,8 +137,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v50';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v50';
+const APP_VERSION = 'v51';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v51';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -6333,7 +6334,7 @@ async function renderData() {
    ================================================================ */
 const DEVICE_TABS = [
   ['forcedecks', 'ForceDecks'], ['nordbord', 'NordBord'],
-  ['tapex', 'T-APEX'], ['valdapi', 'VALD API'],
+  ['tapex', 'T-APEX'], ['valdapi', 'VALD API'], ['results', 'Results'],
 ];
 const DEVICE_NAMES = { forcedecks: 'ForceDecks', nordbord: 'NordBord', tapex: 'T-APEX' };
 const TAPEX_FIELD_LABELS = {
@@ -6357,10 +6358,12 @@ async function renderDevices() {
   devFlash = '';
   el.querySelectorAll('[data-dev-tab]').forEach(b => b.addEventListener('click', () => {
     state.devTab = b.dataset.devTab;
+    if (state.devTab !== 'results') state.devResultDay = null;
     renderDevices();
   }));
   const panel = $('#devices-panel');
   if (tab === 'valdapi') { renderValdApiPanel(panel); return; }
+  if (tab === 'results') { renderDeviceResults(panel); return; }
   if (tab === 'tapex') paintTapexPanel(panel);
   else panel.innerHTML = deviceImportCardHtml(tab);
   wireDeviceFile(tab);
@@ -6375,7 +6378,7 @@ function deviceImportCardHtml(device) {
   return `
     <div class="card">
       <h2>Import ${esc(name)} results</h2>
-      <p class="muted">${from} Nothing is filed until you review the matches and confirm: rows are matched to the roster by name, any row the file cannot name waits for you to map it by hand below, and anything left unmapped is skipped and counted — never guessed.</p>
+      <p class="muted">${from} Nothing is filed until you review the matches and confirm: rows are matched to the roster by name, any row the file cannot name waits for you to map it by hand below, and anything left unmapped is kept in the Results tab under the name in the file — never guessed, never thrown away.</p>
       <p><input type="file" id="dev-file" accept=".csv,text/csv"></p>
       <div id="dev-preview-slot"></div>
     </div>
@@ -6395,6 +6398,7 @@ function wireDeviceFile(device) {
     try {
       const text = await file.text();
       state.devPreviews[device] = await apiPost('/api/devices/' + device + '/preview', { csv: text });
+      state.devPreviews[device].fileName = file.name;
       paintDevicePreview(device);
     } catch (err) {
       slot.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
@@ -6413,7 +6417,7 @@ function paintDevicePreview(device) {
   const matched = pv.rows.filter(r => r.matchStatus === 'matched').length;
   const unmapped = pv.rows.length - matched;
   slot.innerHTML = `
-    <p><strong>${pv.rows.length + pv.errors.length} rows read</strong> — ${matched} matched to the roster${unmapped ? ' · ' + unmapped + ' to map by hand' : ''}${pv.errors.length ? ' · ' + pv.errors.length + ' could not be read' : ''}.</p>
+    <p><strong>${pv.rows.length + pv.errors.length} rows read</strong> — ${matched} matched to the roster${unmapped ? ' · ' + unmapped + ' to map by hand (left unmapped, they are kept in Results)' : ''}${pv.errors.length ? ' · ' + pv.errors.length + ' could not be read' : ''}.</p>
     ${pv.needsDate ? `<div class="card">
       <p><strong>This file has no date column — what day was this testing?</strong></p>
       <p><label>Testing date <input type="date" id="dev-session-date" value="${esc(pv.today || '')}"></label></p>
@@ -6463,17 +6467,20 @@ function paintDevicePreview(device) {
         const sel = slot.querySelector('[data-dev-map="' + r.rowIndex + '"]');
         pid = sel && sel.value ? sel.value : null;
       }
-      return { profileId: pid, date: r.date, metrics: r.metrics };
+      return { profileId: pid, rawName: r.rawName, date: r.date, metrics: r.metrics };
     });
     out.innerHTML = '<p class="muted">Filing…</p>';
     try {
       const payload = { rows };
       if (sessionDate) payload.sessionDate = sessionDate;
+      if (pv.fileName) payload.fileName = pv.fileName;
       const res = await apiPost('/api/devices/' + device + '/commit', payload);
       state.devPreviews[device] = null;
       devFlash = 'Filed ' + res.filed + ' athlete row' + (res.filed === 1 ? '' : 's')
         + ' (' + res.results + ' results) from the ' + DEVICE_NAMES[device] + ' file'
-        + (res.skipped ? ' · ' + res.skipped + ' skipped — left unmapped or unreadable' : '') + '.';
+        + (res.stored ? ' · ' + res.stored + ' row' + (res.stored === 1 ? '' : 's') + ' kept in Results (unattached)' : '')
+        + (res.kept ? ' · ' + res.kept + ' already in Results' : '')
+        + (res.skipped ? ' · ' + res.skipped + ' skipped — unreadable' : '') + '.';
       renderDevices();
     } catch (err) {
       out.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
@@ -6491,6 +6498,95 @@ async function loadDeviceSummary(device) {
   } catch (err) {
     slot.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
   }
+}
+/* The Results library: every imported device day, with the full
+   table of what its file carried. Attached athletes read straight
+   from their testing history; unattached rows (names the roster
+   could not claim) stay under the file's own spelling until the
+   coach attaches one to an athlete or deletes it. */
+async function renderDeviceResults(panel) {
+  if (state.devResultDay) { paintDeviceResultDay(panel, state.devResultDay); return; }
+  panel.innerHTML = '<div class="card"><h2>Device Results</h2><p class="muted">Loading…</p></div>';
+  let data;
+  try {
+    data = await api('/api/devices/results');
+  } catch (err) {
+    panel.innerHTML = '<div class="card"><p class="error">' + esc(err.message) + '</p></div>';
+    return;
+  }
+  panel.innerHTML = `
+    <div class="card">
+      <h2>Device Results</h2>
+      <p class="muted">Every imported device file lives here, by testing day — including rows that matched nobody on the roster. Open a day for the full table; attach an unattached row to an athlete whenever you are ready and it files into their testing history.</p>
+      ${data.days.length ? data.days.map(d => `
+        <div class="roster-row">
+          <span><strong>${esc(d.deviceName)} — ${esc(d.date)}</strong>${d.sourceFile ? `<br><span class="muted">${esc(d.sourceFile)}</span>` : ''}</span>
+          <span>${d.athletes} athlete${d.athletes === 1 ? '' : 's'}${d.unattached ? ' · ' + d.unattached + ' unattached' : ''} · ${d.results} results
+          <button class="btn secondary" type="button" style="width:auto" data-dev-open-day="${esc(d.id)}">Open</button></span>
+        </div>`).join('')
+      : '<p class="muted">No device sessions imported yet — import a file on the ForceDecks, NordBord, or T-APEX tab and it will live here.</p>'}
+    </div>`;
+  panel.querySelectorAll('[data-dev-open-day]').forEach(b => b.addEventListener('click', () => {
+    state.devResultDay = b.dataset.devOpenDay;
+    renderDevices();
+  }));
+}
+async function paintDeviceResultDay(panel, dayId) {
+  panel.innerHTML = '<div class="card"><p class="muted">Loading…</p></div>';
+  let data;
+  try {
+    data = await api('/api/devices/results/' + encodeURIComponent(dayId));
+  } catch (err) {
+    panel.innerHTML = `<div class="card"><p class="error">${esc(err.message)}</p>
+      <p><button class="btn secondary" type="button" style="width:auto" id="dev-day-back">Back to all days</button></p></div>`;
+    const backErr = $('#dev-day-back');
+    if (backErr) backErr.addEventListener('click', () => { state.devResultDay = null; renderDevices(); });
+    return;
+  }
+  const day = data.day;
+  panel.innerHTML = `
+    <div class="card">
+      <p><button class="btn secondary" type="button" style="width:auto" id="dev-day-back">← All device days</button></p>
+      <h2>${esc(day.deviceName)} — ${esc(day.date)}</h2>
+      <p class="muted">${day.sourceFile ? 'From ' + esc(day.sourceFile) + ' · ' : ''}${data.rows.length} tested ${data.rows.length === 1 ? 'person' : 'people'} · ${data.columns.length} measurements. Attached athletes read straight from their testing history; unattached rows are kept under the name in the file.</p>
+      <div class="table-wrap"><table class="ranked">
+        <thead><tr><th>Name</th>${data.columns.map(c => `<th>${esc(c.name)}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${data.rows.map(row => `<tr>
+          <td><strong>${esc(row.name)}</strong>${row.kind === 'unattached' ? ' <span class="badge plain">Unattached</span>' : ''}</td>
+          ${data.columns.map(c => `<td>${row.values[c.testKey] !== undefined ? esc(fmtNum(row.values[c.testKey])) : '—'}</td>`).join('')}
+          <td>${row.kind === 'unattached' ? `
+            <select data-dev-attach-sel="${esc(row.rowId)}">${profileOptions('', true)}</select>
+            <button class="btn secondary" type="button" style="width:auto" data-dev-attach="${esc(row.rowId)}">Attach</button>
+            <button class="btn secondary" type="button" style="width:auto" data-dev-del-row="${esc(row.rowId)}">Delete</button>` : ''}
+          </td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div id="dev-day-msg"></div>
+    </div>`;
+  $('#dev-day-back').addEventListener('click', () => { state.devResultDay = null; renderDevices(); });
+  const msg = (html) => { const m = $('#dev-day-msg'); if (m) m.innerHTML = html; };
+  panel.querySelectorAll('[data-dev-attach]').forEach(b => b.addEventListener('click', async () => {
+    const rowId = b.dataset.devAttach;
+    const sel = panel.querySelector('[data-dev-attach-sel="' + rowId + '"]');
+    const pid = sel && sel.value ? sel.value : '';
+    if (!pid) { msg('<p class="error">Pick the athlete for this row first.</p>'); return; }
+    try {
+      await apiPost('/api/devices/results/' + encodeURIComponent(dayId) + '/attach', { rowId, profileId: pid });
+      const pr = state.profiles.find(x => x.id === pid);
+      devFlash = 'Attached the row to ' + (pr ? pr.name : 'the athlete') + ' — it is in their testing history now.';
+      renderDevices();
+    } catch (err) { msg('<p class="error">' + esc(err.message) + '</p>'); }
+  }));
+  panel.querySelectorAll('[data-dev-del-row]').forEach(b => b.addEventListener('click', async () => {
+    const rowId = b.dataset.devDelRow;
+    const row = data.rows.find(x => x.rowId === rowId);
+    if (!confirm('Delete the unattached row for ' + (row ? row.name : 'this name') + ' on ' + day.date + '? The numbers go with it.')) return;
+    try {
+      await apiDel('/api/devices/results/' + encodeURIComponent(dayId) + '/rows/' + encodeURIComponent(rowId));
+      devFlash = 'Deleted the unattached row.';
+      renderDevices();
+    } catch (err) { msg('<p class="error">' + esc(err.message) + '</p>'); }
+  }));
 }
 function paintTapexPanel(panel) {
   panel.innerHTML = `

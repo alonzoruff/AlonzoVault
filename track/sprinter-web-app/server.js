@@ -75,6 +75,7 @@ let db = {
   users: [], logs: {}, swaps: {},
   groups: [], profiles: [], overrides: {}, completions: {},
   customTests: [], testDays: [], testResults: {},
+  deviceRows: [],
   customWeeklyMetrics: [], weekly: {},
   concerns: {},
   mediaOverrides: {},
@@ -114,6 +115,10 @@ function migrate() {
   db.customTests = Array.isArray(db.customTests) ? db.customTests : [];
   db.testDays = Array.isArray(db.testDays) ? db.testDays : [];
   db.testResults = db.testResults || {};
+  // Device-import rows that matched no roster athlete: kept under
+  // their test day (name as the file spelled it + metrics under the
+  // file's own column headers) for the Devices > Results library.
+  db.deviceRows = Array.isArray(db.deviceRows) ? db.deviceRows : [];
   db.customWeeklyMetrics = Array.isArray(db.customWeeklyMetrics) ? db.customWeeklyMetrics : [];
   db.weekly = db.weekly || {};
   db.concerns = db.concerns || {};
@@ -2345,8 +2350,10 @@ function deviceTestFor(device, label) {
 }
 /* One test day per device + date, found or created. Repeat imports
    of the same export reuse the day (and upsertResult overwrites the
-   same athlete + test), so importing twice never duplicates. */
-function deviceTestDayFor(device, date, testKeys) {
+   same athlete + test), so importing twice never duplicates. The
+   first import to touch a day also records which file it came from
+   (the Results library shows it); later imports never rewrite it. */
+function deviceTestDayFor(device, date, testKeys, sourceFile) {
   let day = db.testDays.find(d => d.device === device.id && d.date === date);
   if (!day) {
     day = {
@@ -2357,6 +2364,7 @@ function deviceTestDayFor(device, date, testKeys) {
     };
     db.testDays.push(day);
   }
+  if (sourceFile && !day.sourceFile) day.sourceFile = sourceFile;
   for (const k of testKeys) if (!day.testKeys.includes(k)) day.testKeys.push(k);
   return day;
 }
@@ -2370,7 +2378,7 @@ function deviceTestDayFor(device, date, testKeys) {
    (VALD Hub's Results Export has no date column) file under the
    coach-supplied session date. A row with its own date, valid or
    not, is never overridden by the fallback. */
-function fileDeviceRows(device, rows, userId, fallbackDate) {
+function fileDeviceRows(device, rows, userId, fallbackDate, sourceFile) {
   let filed = 0, skipped = 0, results = 0;
   for (const row of Array.isArray(rows) ? rows : []) {
     const r = row && typeof row === 'object' ? row : {};
@@ -2385,7 +2393,7 @@ function fileDeviceRows(device, rows, userId, fallbackDate) {
       .filter(([, v]) => v !== null);
     if (!prof || !date || !entries.length) { skipped++; continue; }
     const tests = entries.map(([label]) => deviceTestFor(device, label));
-    const day = deviceTestDayFor(device, date, tests.map(t => t.key));
+    const day = deviceTestDayFor(device, date, tests.map(t => t.key), sourceFile);
     entries.forEach(([label, v], i) => {
       upsertResult(prof, day, tests[i].key,
         { value: v, weight: null, reps: null, est1rm: null }, userId);
@@ -2394,6 +2402,59 @@ function fileDeviceRows(device, rows, userId, fallbackDate) {
     filed++;
   }
   return { filed, skipped, results };
+}
+/* The metrics of one kept row as a stable signature, for spotting
+   the same file row on a re-import. */
+function deviceRowSignature(metrics) {
+  return JSON.stringify(Object.keys(metrics || {}).sort()
+    .map(k => [k, metrics[k]]));
+}
+/* Rows a device file carried for someone the roster cannot name
+   are KEPT, not dropped: each stores under its test day with the
+   name exactly as the file spelled it and every metric under the
+   file's own column header, and it lives in the Devices > Results
+   library until the coach attaches it to an athlete (which files
+   it through fileDeviceRows, exactly like a hand-mapped row) or
+   deletes it. A row needs its file name to be kept — an unnamed
+   row has nothing to file under and counts as skipped, as do rows
+   with no resolvable date or no numbers. Re-importing the same
+   file for the same device + date keeps nothing twice: a kept row
+   whose name and numbers are already in the library for that day
+   comes back as `kept`, not as a second copy. Date resolution
+   mirrors fileDeviceRows (a row's own date wins; the fallback
+   fills only dateless rows). Returns { stored, kept, skipped }. */
+function storeUnattachedDeviceRows(device, rows, userId, fallbackDate, sourceFile) {
+  let stored = 0, kept = 0, skipped = 0;
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const r = row && typeof row === 'object' ? row : {};
+    const rawName = clean(r.rawName, 120);
+    let date = parseDeviceDate(r.date);
+    if (!date && fallbackDate
+      && (r.date === null || r.date === undefined || String(r.date).trim() === '')) {
+      date = fallbackDate;
+    }
+    const entries = (isPlainObj(r.metrics) ? Object.entries(r.metrics) : [])
+      .map(([label, v]) => [label, num(v)])
+      .filter(([, v]) => v !== null);
+    if (!rawName || !date || !entries.length) { skipped++; continue; }
+    const metrics = {};
+    for (const [label, v] of entries) metrics[label] = v;
+    const tests = entries.map(([label]) => deviceTestFor(device, label));
+    const day = deviceTestDayFor(device, date, tests.map(t => t.key), sourceFile);
+    const norm = normalizePersonName(rawName);
+    const sig = deviceRowSignature(metrics);
+    const dupe = db.deviceRows.some(x => x.testDayId === day.id
+      && normalizePersonName(x.rawName) === norm
+      && deviceRowSignature(x.metrics) === sig);
+    if (dupe) { kept++; continue; }
+    db.deviceRows.push({
+      id: crypto.randomUUID(), testDayId: day.id, device: device.id,
+      rawName, metrics, sourceFile: sourceFile || null,
+      createdAt: new Date().toISOString(), createdBy: userId,
+    });
+    stored++;
+  }
+  return { stored, kept, skipped };
 }
 /* Parse + map a device CSV WITHOUT writing anything: the coach
    reviews the matches, maps the rows the file could not name, and
@@ -2576,7 +2637,7 @@ const BACKUP_ARRAY_KEYS = {
   customWeeklyMetrics: 'key', inventory: 'id', meetResults: 'id',
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
-  announcements: 'id',
+  announcements: 'id', deviceRows: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
@@ -2603,6 +2664,7 @@ function buildBackupData() {
     programs: db.programs, programApplications: db.programApplications,
     announcements: db.announcements,
     floorProgress: db.floorProgress,
+    deviceRows: db.deviceRows,
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -3989,7 +4051,8 @@ async function handleApi(req, res, url) {
      (file the rows the coach confirmed) — because athlete matching
      is exact-only by design: rows the file cannot name wait for the
      coach to map them by hand in the preview, and rows still
-     unmapped at commit are skipped and counted, never guessed. */
+     unmapped at commit are kept in the Results library under the
+     name the file gave them — never guessed at, never dropped. */
   const devicePreviewMatch = p.match(/^\/api\/devices\/([a-z]+)\/preview$/);
   if (devicePreviewMatch && req.method === 'POST') {
     const device = DEVICES[devicePreviewMatch[1]];
@@ -4045,10 +4108,23 @@ async function handleApi(req, res, url) {
         return sendJson(res, 400, { error: 'That session date is in the future — use the day the testing actually happened.' });
       }
     }
-    const out = fileDeviceRows(device, rows, user.id, sessionDate);
-    if (out.filed) saveDb();
+    const fileName = typeof body.fileName === 'string'
+      ? clean(body.fileName, 160) || null : null;
+    /* Rows the coach mapped (or the file matched) file into testing
+       history as always. Rows still carrying no athlete are kept
+       unattached under their test day for the Results library —
+       provided they carry the name the file gave them; a nameless
+       row has nothing to file under and counts as skipped. */
+    const withProfile = rows.filter(r => r && typeof r === 'object' && r.profileId);
+    const noProfile = rows.filter(r => !(r && typeof r === 'object' && r.profileId));
+    const filedOut = fileDeviceRows(device, withProfile, user.id, sessionDate, fileName);
+    const storedOut = storeUnattachedDeviceRows(device, noProfile, user.id, sessionDate, fileName);
+    if (filedOut.filed || storedOut.stored) saveDb();
     return sendJson(res, 200, {
-      ok: true, filed: out.filed, skipped: out.skipped, results: out.results,
+      ok: true, filed: filedOut.filed,
+      skipped: filedOut.skipped + storedOut.skipped,
+      results: filedOut.results,
+      stored: storedOut.stored, kept: storedOut.kept,
     });
   }
   const deviceSummaryMatch = p.match(/^\/api\/devices\/([a-z]+)\/summary$/);
@@ -4068,6 +4144,121 @@ async function handleApi(req, res, url) {
         return { id: d.id, date: d.date, title: d.title, athletes: athletes.size, results: count };
       });
     return sendJson(res, 200, { device: device.id, name: device.name, days });
+  }
+
+  /* ---------- Device Results library ----------
+     Every imported device file lives here, by test day, whether or
+     not its rows named a roster athlete. Attached rows render from
+     the same testResults the athlete's history reads (one source of
+     truth — nothing is copied); unattached rows render from
+     db.deviceRows, keyed by the same device-labeled tests their
+     metrics will file under when the coach attaches them. Days
+     imported before the library existed simply have no unattached
+     rows. Coach-only, like everything in this section. */
+  if (p === '/api/devices/results' && req.method === 'GET') {
+    const days = db.testDays.filter(d => d.device)
+      .slice()
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1
+        : String(b.createdAt || '').localeCompare(String(a.createdAt || ''))))
+      .map(d => {
+        const athletes = new Set();
+        let resultCount = 0;
+        for (const [pid, list] of Object.entries(db.testResults)) {
+          for (const r of list) {
+            if (r.testDayId === d.id) { athletes.add(pid); resultCount++; }
+          }
+        }
+        const unattached = db.deviceRows.filter(x => x.testDayId === d.id).length;
+        const device = DEVICES[d.device];
+        return {
+          id: d.id, device: d.device,
+          deviceName: device ? device.name : d.device,
+          date: d.date, title: d.title, sourceFile: d.sourceFile || null,
+          athletes: athletes.size, results: resultCount,
+          unattached, rows: athletes.size + unattached,
+        };
+      });
+    return sendJson(res, 200, { days });
+  }
+  const deviceDayMatch = p.match(/^\/api\/devices\/results\/([^/]+)$/);
+  if (deviceDayMatch && req.method === 'GET') {
+    const day = db.testDays.find(d => d.id === decodeURIComponent(deviceDayMatch[1]));
+    if (!day || !day.device) return sendJson(res, 404, { error: 'Device test day not found.' });
+    const device = DEVICES[day.device];
+    const colKeys = [];
+    const addCol = (k) => { if (k && !colKeys.includes(k)) colKeys.push(k); };
+    (day.testKeys || []).forEach(addCol);
+    const attachedRows = [];
+    for (const pr of db.profiles) {
+      const values = {};
+      for (const r of db.testResults[pr.id] || []) {
+        if (r.testDayId !== day.id) continue;
+        const v = displayValue(r);
+        if (v === null || v === undefined) continue;
+        values[r.testKey] = v;
+        addCol(r.testKey);
+      }
+      if (Object.keys(values).length) {
+        attachedRows.push({
+          kind: 'athlete', profileId: pr.id,
+          name: pr.firstName + ' ' + pr.lastName, values,
+        });
+      }
+    }
+    attachedRows.sort((a, b) => a.name.localeCompare(b.name));
+    const unattachedRows = db.deviceRows.filter(x => x.testDayId === day.id)
+      .map(x => {
+        const values = {};
+        for (const [label, v] of Object.entries(x.metrics || {})) {
+          const key = deviceTestKey(device, label);
+          addCol(key);
+          values[key] = v;
+        }
+        return { kind: 'unattached', rowId: x.id, name: x.rawName, values };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return sendJson(res, 200, {
+      day: {
+        id: day.id, device: day.device, deviceName: device.name,
+        date: day.date, title: day.title, sourceFile: day.sourceFile || null,
+      },
+      columns: colKeys.map(k => {
+        const t = findTest(k);
+        return { testKey: k, name: t ? t.name : k };
+      }),
+      rows: attachedRows.concat(unattachedRows),
+    });
+  }
+  const deviceAttachMatch = p.match(/^\/api\/devices\/results\/([^/]+)\/attach$/);
+  if (deviceAttachMatch && req.method === 'POST') {
+    const day = db.testDays.find(d => d.id === decodeURIComponent(deviceAttachMatch[1]));
+    if (!day || !day.device) return sendJson(res, 404, { error: 'Device test day not found.' });
+    const body = await readBody(req);
+    const row = db.deviceRows.find(x => x.id === clean(body.rowId, 80) && x.testDayId === day.id);
+    if (!row) return sendJson(res, 404, { error: 'That unattached row is not part of this test day.' });
+    const prof = profileById(clean(body.profileId, 80));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    /* Filing goes through the import path itself (upsert per
+       athlete + day + test), so attaching can never double-file a
+       result the athlete already has for that day. */
+    const out = fileDeviceRows(DEVICES[day.device],
+      [{ profileId: prof.id, date: day.date, metrics: row.metrics }], user.id);
+    if (!out.filed) return sendJson(res, 400, { error: 'That row could not be filed.' });
+    db.deviceRows = db.deviceRows.filter(x => x.id !== row.id);
+    saveDb();
+    return sendJson(res, 200, { ok: true, filed: out.filed, results: out.results });
+  }
+  const deviceRowDelMatch = p.match(/^\/api\/devices\/results\/([^/]+)\/rows\/([^/]+)$/);
+  if (deviceRowDelMatch && req.method === 'DELETE') {
+    const dayId = decodeURIComponent(deviceRowDelMatch[1]);
+    const rowId = decodeURIComponent(deviceRowDelMatch[2]);
+    const before = db.deviceRows.length;
+    db.deviceRows = db.deviceRows.filter(x => !(x.id === rowId && x.testDayId === dayId));
+    if (db.deviceRows.length === before) {
+      return sendJson(res, 404, { error: 'Unattached row not found.' });
+    }
+    saveDb();
+    return sendJson(res, 200, { ok: true });
   }
 
   /* T-APEX quick entry: the device lives on its own tablet with no
@@ -4527,6 +4718,7 @@ async function handleApi(req, res, url) {
     for (const pid of Object.keys(db.testResults)) {
       db.testResults[pid] = db.testResults[pid].filter(r => r.testDayId !== id);
     }
+    db.deviceRows = db.deviceRows.filter(x => x.testDayId !== id);
     saveDb();
     return sendJson(res, 200, { ok: true });
   }

@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v50',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v50"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v51',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v51"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v50'") &&
-    swJs.text.includes("sprinter-app-v50"));
+    appJs.text.includes("const APP_VERSION = 'v51'") &&
+    swJs.text.includes("sprinter-app-v51"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v50"') &&
-    pageHtml.text.includes('Cadets Sprint · App v50') &&
+    pageHtml.text.includes('data-app-version="v51"') &&
+    pageHtml.text.includes('Cadets Sprint · App v51') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -4407,6 +4407,158 @@ async function main() {
     { csv: 'Name,Date (UTC),Max Force Left (N)\nDana Device,10/17/2025,301' });
   check('"Date (UTC)" is recognized as the date column',
     r.status === 200 && r.json.needsDate === false && r.json.rows[0].date === '2025-10-17', r.json);
+
+  /* Device Results library: a file's unmatched rows are KEPT under
+     their test day — the name exactly as the file spelled it and
+     the full metric set — browsable by device + date, attachable
+     to an athlete later (filing through the same upsert, so never
+     twice), deletable, and idempotent on re-import. Only a row
+     that carries its file name (rawName, as the real client sends)
+     can be kept; a nameless row still counts as skipped, which is
+     what every commit above (none of them send rawName) asserted. */
+  const libCsv = [
+    'Name,Date,Max Force Left (N),Max Force Right (N),Impulse (Ns)',
+    'Dana Device,2026-10-27,320,305,1600',
+    'Guest Gary,2026-10-27,275,260,1410',
+    'Guest Gina,2026-10-27,265,250,1380',
+  ].join('\n');
+  r = await api(coach, 'POST', '/api/devices/nordbord/preview', { csv: libCsv });
+  const libPv = r.json;
+  check('library fixture previews one matched + two unmatched rows',
+    r.status === 200 && libPv.rows.length === 3 &&
+    libPv.rows[0].profileId === danaD && libPv.rows[1].profileId === null &&
+    libPv.rows[2].profileId === null, libPv.rows);
+  const libCommitRows = () => libPv.rows.map(x => ({
+    profileId: x.profileId, rawName: x.rawName, date: x.date, metrics: x.metrics,
+  }));
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: libCommitRows(), fileName: 'nordbord-library.csv' });
+  check('commit files the matched row and KEEPS both unmatched rows',
+    r.status === 200 && r.json.filed === 1 && r.json.stored === 2 &&
+    r.json.skipped === 0 && r.json.results === 3, r.json);
+  r = await api(coach, 'GET', '/api/devices/results');
+  const libDay = r.json.days.find(d => d.device === 'nordbord' && d.date === '2026-10-27');
+  check('library lists the day with attached/unattached counts and the source file',
+    !!libDay && libDay.athletes === 1 && libDay.unattached === 2 && libDay.rows === 3 &&
+    libDay.sourceFile === 'nordbord-library.csv' && libDay.results === 3, r.json.days);
+  r = await api(coach, 'GET', '/api/devices/results/' + libDay.id);
+  const libDetail = r.json;
+  const libGary = libDetail.rows.find(x => x.kind === 'unattached' && x.name === 'Guest Gary');
+  const libDanaRow = libDetail.rows.find(x => x.kind === 'athlete' && x.profileId === danaD);
+  check('day table columns are the device-labeled tests',
+    libDetail.columns.some(c => c.testKey === 'nb_max_force_left_n' && c.name === 'NordBord · Max Force Left (N)') &&
+    libDetail.columns.some(c => c.testKey === 'nb_impulse_ns' && c.name === 'NordBord · Impulse (Ns)'),
+    libDetail.columns);
+  check('day table carries the FULL metric set for attached and unattached rows alike',
+    !!libDanaRow && libDanaRow.values.nb_max_force_left_n === 320 &&
+    libDanaRow.values.nb_impulse_ns === 1600 &&
+    !!libGary && libGary.values.nb_max_force_left_n === 275 &&
+    libGary.values.nb_max_force_right_n === 260 && libGary.values.nb_impulse_ns === 1410,
+    libDetail.rows);
+  /* The backup carries the new store; importing it back merges by
+     id and duplicates nothing. */
+  const libBk = JSON.parse((await apiText(coach, '/api/export/backup')).text);
+  check('backup export carries the unattached device rows with their metrics',
+    Array.isArray(libBk.data.deviceRows) && libBk.data.deviceRows.length === 2 &&
+    libBk.data.deviceRows.some(x => x.rawName === 'Guest Gary' && x.testDayId === libDay.id &&
+      x.metrics['Max Force Left (N)'] === 275), libBk.data.deviceRows);
+  r = await api(coach, 'POST', '/api/import/backup', libBk);
+  check('backup import accepts the device rows (merge, no error)', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/devices/results/' + libDay.id);
+  check('the backup merge did not duplicate the unattached rows',
+    r.json.rows.filter(x => x.kind === 'unattached').length === 2, r.json.rows);
+  /* Re-import of the same file: matched overwrite, unattached kept. */
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: libCommitRows(), fileName: 'nordbord-library.csv' });
+  check('re-import stores nothing twice (matched overwrite, unattached kept)',
+    r.status === 200 && r.json.filed === 1 && r.json.stored === 0 && r.json.kept === 2, r.json);
+  r = await api(coach, 'GET', '/api/devices/results/' + libDay.id);
+  check('the library still holds exactly the two unattached rows',
+    r.json.rows.filter(x => x.kind === 'unattached').length === 2 &&
+    r.json.rows.length === 3, r.json.rows);
+  /* Attach: Gary files into Fay's history and leaves the library. */
+  r = await api(coach, 'POST', '/api/devices/results/' + libDay.id + '/attach',
+    { rowId: libGary.rowId, profileId: fayD });
+  check('attach files the unattached row', r.status === 200 && r.json.filed === 1 && r.json.results === 3, r.json);
+  r = await api(coach, 'GET', '/api/results?profileId=' + fayD);
+  check('the attached values are in fay\'s testing history under the device tests',
+    r.json.results.some(x => x.testKey === 'nb_max_force_left_n' && x.value === 275) &&
+    r.json.results.some(x => x.testKey === 'nb_impulse_ns' && x.value === 1410), r.json.results);
+  r = await api(coach, 'GET', '/api/devices/results/' + libDay.id);
+  check('the attached row leaves the unattached set and shows as the athlete',
+    r.json.rows.filter(x => x.kind === 'unattached').length === 1 &&
+    r.json.rows.some(x => x.kind === 'athlete' && x.profileId === fayD &&
+      x.values.nb_max_force_left_n === 275), r.json.rows);
+  r = await api(coach, 'POST', '/api/devices/results/' + libDay.id + '/attach',
+    { rowId: libGary.rowId, profileId: fayD });
+  check('attaching the same row twice is a 404, not a double-file', r.status === 404, r.status);
+  /* Attach onto an athlete who already has results that day: the
+     upsert overwrites in place — the result count cannot grow. */
+  r = await api(coach, 'GET', '/api/devices/results/' + libDay.id);
+  const ginaRowId = (r.json.rows.find(x => x.kind === 'unattached') || {}).rowId;
+  const danaDayCount = (await api(coach, 'GET', '/api/results?profileId=' + danaD)).json.results
+    .filter(x => x.testDayId === libDay.id).length;
+  r = await api(coach, 'POST', '/api/devices/results/' + libDay.id + '/attach',
+    { rowId: ginaRowId, profileId: danaD });
+  check('attaching onto an athlete who already has the day still files',
+    r.status === 200 && r.json.filed === 1, r.json);
+  r = await api(coach, 'GET', '/api/results?profileId=' + danaD);
+  check('dana\'s results for the day were overwritten in place, not doubled',
+    r.json.results.filter(x => x.testDayId === libDay.id).length === danaDayCount &&
+    danaDayCount === 3, r.json.results.filter(x => x.testDayId === libDay.id).length);
+  r = await api(coach, 'GET', '/api/devices/results/' + libDay.id);
+  check('no unattached rows remain on the library day',
+    r.json.rows.filter(x => x.kind === 'unattached').length === 0, r.json.rows);
+  /* Delete: a junk row on its own day, removed and gone. */
+  const hankCsv = ['Name,Date,Max Force Left (N)', 'Guest Hank,2026-10-28,240'].join('\n');
+  r = await api(coach, 'POST', '/api/devices/nordbord/preview', { csv: hankCsv });
+  const hankPv = r.json;
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: hankPv.rows.map(x => ({ profileId: x.profileId, rawName: x.rawName, date: x.date, metrics: x.metrics })) });
+  check('a second unmatched row is kept on its own day',
+    r.status === 200 && r.json.stored === 1 && r.json.filed === 0, r.json);
+  r = await api(coach, 'GET', '/api/devices/results');
+  const hankDay = r.json.days.find(d => d.device === 'nordbord' && d.date === '2026-10-28');
+  r = await api(coach, 'GET', '/api/devices/results/' + hankDay.id);
+  const hankRowId = (r.json.rows.find(x => x.kind === 'unattached') || {}).rowId;
+  check('the kept row is listed on its day', !!hankRowId && r.json.rows.length === 1, r.json.rows);
+  r = await api(coach, 'DELETE', '/api/devices/results/' + hankDay.id + '/rows/' + hankRowId);
+  check('deleting an unattached row works', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/devices/results/' + hankDay.id);
+  check('the deleted row is gone from the table', r.json.rows.length === 0, r.json.rows);
+  r = await api(coach, 'DELETE', '/api/devices/results/' + hankDay.id + '/rows/' + hankRowId);
+  check('deleting it again is a 404', r.status === 404, r.status);
+  /* Backward compatibility: days imported before the library (the
+     ForceDecks day above, committed with no rawName and no file
+     name) list with zero unattached rows and still render. */
+  r = await api(coach, 'GET', '/api/devices/results');
+  const oldFdDay = r.json.days.find(d => d.device === 'forcedecks' && d.date === '2026-10-20');
+  check('days imported before the library list with zero unattached rows',
+    !!oldFdDay && oldFdDay.unattached === 0 && oldFdDay.athletes === 2 &&
+    oldFdDay.sourceFile === null, r.json.days.filter(d => d.device === 'forcedecks'));
+  r = await api(coach, 'GET', '/api/devices/results/' + oldFdDay.id);
+  check('a pre-library day still renders its filed results in the table',
+    r.json.rows.some(x => x.kind === 'athlete' && x.profileId === danaD &&
+      x.values.fd_jump_height_cm === 38.2) &&
+    !r.json.rows.some(x => x.kind === 'unattached'), r.json.rows);
+  /* Access: the library is coach-only, end to end. */
+  r = await api(athlete, 'GET', '/api/devices/results');
+  check('athlete is 403 on the results library list', r.status === 403, r.status);
+  r = await api(null, 'GET', '/api/devices/results');
+  check('results library list without login is 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/devices/results/' + libDay.id);
+  check('athlete is 403 on a library day', r.status === 403, r.status);
+  r = await api(athlete, 'POST', '/api/devices/results/' + libDay.id + '/attach',
+    { rowId: 'x', profileId: fayD });
+  check('athlete is 403 on attach', r.status === 403, r.status);
+  r = await api(athlete, 'DELETE', '/api/devices/results/' + libDay.id + '/rows/x');
+  check('athlete is 403 on unattached-row delete', r.status === 403, r.status);
+  r = await api(coach, 'GET', '/api/devices/results/no-such-day');
+  check('an unknown library day is 404', r.status === 404, r.status);
+  check('app JS carries the Results library wiring',
+    appJs.text.includes('renderDeviceResults') && appJs.text.includes("['results', 'Results']") &&
+    appJs.text.includes('/api/devices/results') && appJs.text.includes('paintDeviceResultDay'),
+    'app.js');
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }
