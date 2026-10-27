@@ -31,6 +31,7 @@ const state = {
   devTab: 'forcedecks',
   devPreviews: {},
   devResultDay: null,
+  devDayView: 'report',
   cwWorkouts: [],
   cwEditId: null,
   cwDraft: null,
@@ -137,8 +138,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v51';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v51';
+const APP_VERSION = 'v52';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v52';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -6528,8 +6529,163 @@ async function renderDeviceResults(panel) {
     </div>`;
   panel.querySelectorAll('[data-dev-open-day]').forEach(b => b.addEventListener('click', () => {
     state.devResultDay = b.dataset.devOpenDay;
+    state.devDayView = 'report';
     renderDevices();
   }));
+}
+/* DEVREPORT-BEGIN */
+/* Pure helpers for the Device Results REPORT view: they turn one
+   day payload (columns + a row's values) into the small model a
+   person's report card renders — L/R pairs with bar widths, the
+   headline single metrics, and the imbalance status chip. No DOM
+   and no formatting in here: the renderer owns esc()/fmtNum().
+   The imbalance bands agree with the AMS device flags, whose line
+   is over 10%: green at 5% or under, amber over 5% up to 10%, red
+   over 10%. Asymmetry values can be signed — magnitude is what
+   bands, exactly as the AMS flag reads them. */
+function devIsImbalanceName(name) {
+  return /imbalance|asymmetr/i.test(String(name || ''));
+}
+function devBandFor(value) {
+  const a = Math.abs(Number(value));
+  if (!Number.isFinite(a)) return null;
+  if (a <= 5) return { key: 'ok', label: 'Balanced' };
+  if (a <= 10) return { key: 'watch', label: 'Watch' };
+  return { key: 'bad', label: 'Imbalanced' };
+}
+function devShortName(full) {
+  const s = String(full || '');
+  const i = s.indexOf('·');
+  return (i >= 0 ? s.slice(i + 1) : s).trim();
+}
+function devPairParts(short) {
+  let s = String(short || '').trim();
+  let unit = '';
+  const um = /\s*(\([^)]*\))\s*$/.exec(s);
+  if (um) { unit = um[1]; s = s.slice(0, um.index).trim(); }
+  let side = null;
+  let base = s;
+  let m = /^(left|l)\s+(.+)$/i.exec(s);
+  if (m) { side = 'L'; base = m[2]; }
+  else if ((m = /^(right|r)\s+(.+)$/i.exec(s))) { side = 'R'; base = m[2]; }
+  else if ((m = /^(.+?)\s+(left|l)$/i.exec(s))) { side = 'L'; base = m[1]; }
+  else if ((m = /^(.+?)\s+(right|r)$/i.exec(s))) { side = 'R'; base = m[1]; }
+  return { side, base: base.trim(), unit };
+}
+function devReportModel(columns, row) {
+  const values = (row && row.values) || {};
+  const entries = [];
+  (columns || []).forEach((c, idx) => {
+    const v = values[c.testKey];
+    if (v === undefined || v === null || v === '') return;
+    const num = Number(v);
+    entries.push({
+      testKey: c.testKey, name: c.name, short: devShortName(c.name),
+      value: Number.isFinite(num) ? num : v, order: idx,
+    });
+  });
+  /* L/R pairs: two entries whose short names differ only by side
+     ("L Max Force (N)" / "R Max Force (N)", "Max Force Left (N)" /
+     "Max Force Right (N)"). A side with no partner stays a single. */
+  const pairGroups = new Map();
+  const singles = [];
+  for (const e of entries) {
+    const parts = devPairParts(e.short);
+    if (!parts.side) { singles.push(e); continue; }
+    const key = parts.base + '|' + parts.unit;
+    if (!pairGroups.has(key)) {
+      pairGroups.set(key, {
+        label: parts.base + (parts.unit ? ' ' + parts.unit : ''),
+        base: parts.base, order: e.order, left: null, right: null,
+      });
+    }
+    const g = pairGroups.get(key);
+    if (parts.side === 'L' && !g.left) g.left = e;
+    else if (parts.side === 'R' && !g.right) g.right = e;
+    else singles.push(e);
+  }
+  const allPairs = [];
+  for (const g of pairGroups.values()) {
+    if (g.left && g.right) allPairs.push(g);
+    else singles.push(g.left || g.right);
+  }
+  const pairScore = (g) => (/max force/i.test(g.base) ? 0
+    : /force/i.test(g.base) ? 1 : /torque/i.test(g.base) ? 2 : 3);
+  allPairs.sort((a, b) => (pairScore(a) - pairScore(b)) || (a.order - b.order));
+  const used = new Set();
+  const pairs = allPairs.slice(0, 3).map(g => {
+    used.add(g.left.testKey); used.add(g.right.testKey);
+    const lv = Number(g.left.value), rv = Number(g.right.value);
+    const max = Math.max(Math.abs(lv), Math.abs(rv));
+    const width = (v) => (max > 0 && Number.isFinite(v)
+      ? Math.max(3, Math.round(Math.abs(v) / max * 100)) : 0);
+    return { label: g.label, left: g.left.value, right: g.right.value, leftWidth: width(lv), rightWidth: width(rv) };
+  });
+  /* Headline singles: imbalance/asymmetry first (they carry the
+     color), then the rest in file order. A handful only — the Full
+     data view keeps everything. */
+  const imbFirst = (e) => (devIsImbalanceName(e.name) ? 0 : 1);
+  const statEntries = singles.slice()
+    .sort((a, b) => (imbFirst(a) - imbFirst(b)) || (a.order - b.order)).slice(0, 4);
+  statEntries.forEach(e => used.add(e.testKey));
+  const stats = statEntries.map(e => ({
+    name: e.short, value: e.value,
+    band: devIsImbalanceName(e.name) ? devBandFor(e.value) : null,
+  }));
+  /* The chip is the person's WORST imbalance/asymmetry value,
+     wherever it sits in their results. */
+  let chip = null;
+  for (const e of entries) {
+    if (!devIsImbalanceName(e.name)) continue;
+    const band = devBandFor(e.value);
+    if (!band) continue;
+    if (!chip || Math.abs(Number(e.value)) > Math.abs(Number(chip.value))) {
+      chip = { key: band.key, label: band.label, value: e.value, name: e.short };
+    }
+  }
+  return { pairs, stats, chip, total: entries.length, shown: used.size, more: entries.length - used.size };
+}
+/* DEVREPORT-END */
+/* The REPORT presentation of a device day: a masthead, a legend,
+   and one clean card per tested person. It renders from the same
+   day payload the Full data table reads — nothing is forked. */
+function deviceReportHtml(data) {
+  const day = data.day;
+  const fmtVal = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? fmtNum(n) : String(v);
+  };
+  const cards = data.rows.map(row => {
+    const m = devReportModel(data.columns, row);
+    const chip = m.chip
+      ? `<span class="dev-chip band-${m.chip.key}">${esc(m.chip.label)} · ${esc(fmtVal(m.chip.value))}</span>` : '';
+    const pairs = m.pairs.map(p => `
+      <div class="dev-pair">
+        <div class="dev-pair-label">${esc(p.label)}</div>
+        <div class="dev-bar-row"><span class="dev-side">L</span><span class="dev-track"><span class="dev-fill dev-fill-l" style="width:${p.leftWidth}%"></span></span><span class="dev-val">${esc(fmtVal(p.left))}</span></div>
+        <div class="dev-bar-row"><span class="dev-side">R</span><span class="dev-track"><span class="dev-fill dev-fill-r" style="width:${p.rightWidth}%"></span></span><span class="dev-val">${esc(fmtVal(p.right))}</span></div>
+      </div>`).join('');
+    const stats = m.stats.length ? `<ul class="dev-stats">${m.stats.map(s => `
+      <li><span>${esc(s.name)}</span><strong${s.band ? ` class="band-text band-${s.band.key}"` : ''}>${s.band ? '<i class="dev-dot"></i>' : ''}${esc(fmtVal(s.value))}</strong></li>`).join('')}</ul>` : '';
+    return `
+    <article class="dev-person${m.chip ? ' band-edge-' + m.chip.key : ''}">
+      <header class="dev-person-head">
+        <h3>${esc(row.name)}${row.kind === 'unattached' ? ' <span class="badge plain">Unattached</span>' : ''}</h3>
+        ${chip}
+      </header>
+      ${pairs}${stats}
+      ${m.more > 0 ? `<p class="muted dev-more">+${m.more} more measurement${m.more === 1 ? '' : 's'} in Full data</p>` : ''}
+    </article>`;
+  }).join('');
+  return `
+  <div class="dev-report">
+    <div class="dev-report-head">
+      <div class="dev-report-title">${esc(day.deviceName)} — ${esc(day.date)}</div>
+      <p class="muted">${day.sourceFile ? 'From ' + esc(day.sourceFile) + ' · ' : ''}${data.rows.length} tested ${data.rows.length === 1 ? 'person' : 'people'}</p>
+      <p class="dev-legend">Imbalance: <i class="dev-dot band-ok"></i> green ≤5% · <i class="dev-dot band-watch"></i> amber 5–10% · <i class="dev-dot band-bad"></i> red over 10%</p>
+    </div>
+    <div class="dev-report-grid">${cards || '<p class="muted">No results on this day yet.</p>'}</div>
+  </div>`;
 }
 async function paintDeviceResultDay(panel, dayId) {
   panel.innerHTML = '<div class="card"><p class="muted">Loading…</p></div>';
@@ -6544,11 +6700,20 @@ async function paintDeviceResultDay(panel, dayId) {
     return;
   }
   const day = data.day;
+  const view = state.devDayView === 'data' ? 'data' : 'report';
   panel.innerHTML = `
-    <div class="card">
+    <div class="card no-print">
       <p><button class="btn secondary" type="button" style="width:auto" id="dev-day-back">← All device days</button></p>
       <h2>${esc(day.deviceName)} — ${esc(day.date)}</h2>
       <p class="muted">${day.sourceFile ? 'From ' + esc(day.sourceFile) + ' · ' : ''}${data.rows.length} tested ${data.rows.length === 1 ? 'person' : 'people'} · ${data.columns.length} measurements. Attached athletes read straight from their testing history; unattached rows are kept under the name in the file.</p>
+      <nav class="seg" aria-label="Day view">
+        <button type="button" class="seg-btn${view === 'report' ? ' active' : ''}" data-dev-view="report">Report</button>
+        <button type="button" class="seg-btn${view === 'data' ? ' active' : ''}" data-dev-view="data">Full data</button>
+      </nav>
+      ${view === 'report' ? '<p><button class="btn primary" type="button" style="width:auto" id="dev-print">Print / Save as PDF</button></p>' : ''}
+    </div>
+    ${view === 'report' ? `<div class="card dev-report-card">${deviceReportHtml(data)}</div>
+    <div id="dev-day-msg"></div>` : `<div class="card">
       <div class="table-wrap"><table class="ranked">
         <thead><tr><th>Name</th>${data.columns.map(c => `<th>${esc(c.name)}</th>`).join('')}<th></th></tr></thead>
         <tbody>${data.rows.map(row => `<tr>
@@ -6562,8 +6727,24 @@ async function paintDeviceResultDay(panel, dayId) {
         </tr>`).join('')}</tbody>
       </table></div>
       <div id="dev-day-msg"></div>
-    </div>`;
+    </div>`}
+`;
   $('#dev-day-back').addEventListener('click', () => { state.devResultDay = null; renderDevices(); });
+  panel.querySelectorAll('[data-dev-view]').forEach(b => b.addEventListener('click', () => {
+    state.devDayView = b.dataset.devView;
+    paintDeviceResultDay(panel, dayId);
+  }));
+  const printBtn = $('#dev-print');
+  if (printBtn) printBtn.addEventListener('click', () => {
+    document.body.classList.add('printing-report');
+    const clear = () => {
+      document.body.classList.remove('printing-report');
+      window.removeEventListener('afterprint', clear);
+    };
+    window.addEventListener('afterprint', clear);
+    window.print();
+    setTimeout(clear, 1500);
+  });
   const msg = (html) => { const m = $('#dev-day-msg'); if (m) m.innerHTML = html; };
   panel.querySelectorAll('[data-dev-attach]').forEach(b => b.addEventListener('click', async () => {
     const rowId = b.dataset.devAttach;

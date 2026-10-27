@@ -1601,3 +1601,62 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .at-summary-text { white-space: pre-wrap; font-size: 14px; background: #fafafa; border: 1px solid var(--line, #d8d8d8); border-radius: var(--radius-sm); padding: 10px 12px; }
 .concern-audit { margin-top: 10px; }
 .concern-audit summary { cursor: pointer; font-weight: 600; }
+
+/* Device Results REPORT (v52): the clean, printable presentation
+   of a device day — a masthead, an imbalance legend, and one card
+   per tested person with paired L/R bars. The band colors agree
+   with the AMS device flags (red over 10%) and every band carries
+   its word (chip / legend), so the report reads in grayscale too. */
+.band-ok { --band: #1e7a34; --band-bg: #e9f7ec; }
+.band-watch { --band: #946400; --band-bg: #fdf3d7; }
+.band-bad { --band: #b3271e; --band-bg: #fdeceb; }
+.band-text { color: var(--band); }
+.dev-report-head { border-top: 5px solid var(--red); padding-top: 12px; margin-bottom: 6px; }
+.dev-report-title { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.dev-report-head p { margin: 4px 0; }
+.dev-legend { font-size: 13px; color: var(--muted); }
+.dev-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--band, #999); margin-right: 3px; }
+.dev-report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-top: 12px; }
+.dev-person { border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; background: #fff; }
+.dev-person.band-edge-ok { border-left-color: #1e7a34; }
+.dev-person.band-edge-watch { border-left-color: #d9a400; }
+.dev-person.band-edge-bad { border-left-color: #b3271e; }
+.dev-person-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.dev-person-head h3 { margin: 0; font-size: 17px; }
+.dev-chip { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--band-bg); color: var(--band); white-space: nowrap; }
+.dev-pair { margin-top: 12px; }
+.dev-pair-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+.dev-bar-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+.dev-side { width: 12px; flex: none; font-weight: 700; color: var(--muted); }
+.dev-track { flex: 1; height: 10px; border-radius: 5px; background: #ececf0; overflow: hidden; }
+.dev-fill { display: block; height: 100%; border-radius: 5px; }
+.dev-fill-l { background: var(--gray); }
+.dev-fill-r { background: var(--red); }
+.dev-val { min-width: 52px; flex: none; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dev-stats { list-style: none; margin: 12px 0 0; padding: 8px 0 0; border-top: 1px solid var(--line); }
+.dev-stats li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 2px 0; }
+.dev-stats li span { color: var(--muted); }
+.dev-stats li strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dev-more { margin: 10px 0 0; font-size: 13px; }
+@media (max-width: 560px) {
+  .dev-report-grid { grid-template-columns: 1fr; }
+}
+/* Print: from the report's Print button (body.printing-report),
+   ONLY the report prints — app chrome, nav and buttons vanish,
+   the page goes white, colors are preserved, and person cards
+   never split across pages. */
+@media print {
+  body.printing-report { background: #fff; }
+  body.printing-report * { visibility: hidden; }
+  body.printing-report .dev-report-card,
+  body.printing-report .dev-report-card * { visibility: visible; }
+  body.printing-report .dev-report-card {
+    position: absolute; left: 0; top: 0; width: 100%;
+    box-shadow: none; border: none; border-radius: 0; margin: 0;
+  }
+  body.printing-report .dev-report-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  body.printing-report .dev-person { break-inside: avoid; border-color: #ccc; }
+  body.printing-report .dev-report,
+  body.printing-report .dev-report * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { margin: 10mm; }
+}

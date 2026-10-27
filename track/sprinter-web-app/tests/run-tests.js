@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v51',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v51"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v52',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v52"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v51'") &&
-    swJs.text.includes("sprinter-app-v51"));
+    appJs.text.includes("const APP_VERSION = 'v52'") &&
+    swJs.text.includes("sprinter-app-v52"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v51"') &&
-    pageHtml.text.includes('Cadets Sprint · App v51') &&
+    pageHtml.text.includes('data-app-version="v52"') &&
+    pageHtml.text.includes('Cadets Sprint · App v52') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -4559,6 +4559,90 @@ async function main() {
     appJs.text.includes('renderDeviceResults') && appJs.text.includes("['results', 'Results']") &&
     appJs.text.includes('/api/devices/results') && appJs.text.includes('paintDeviceResultDay'),
     'app.js');
+
+  /* Device Results REPORT (v52): the day also renders as a clean
+     report — per-person cards, L/R bars, imbalance color bands.
+     The band + card-model logic is pure client code, extracted and
+     exercised here like the other client cores; the end-to-end
+     check runs the model over a real API day payload. */
+  const repMatch = appJs.text.match(/\/\* DEVREPORT-BEGIN \*\/([\s\S]*?)\/\* DEVREPORT-END \*\//);
+  check('device report core is extractable for behavior tests', !!repMatch);
+  if (repMatch) {
+    const repCore = new Function(repMatch[1] +
+      '\nreturn { devBandFor, devReportModel, devIsImbalanceName };')();
+    check('imbalance bands: 3% is green/Balanced, 7% amber/Watch, 12.28% red/Imbalanced',
+      repCore.devBandFor(3).key === 'ok' && repCore.devBandFor(3).label === 'Balanced' &&
+      repCore.devBandFor(7).key === 'watch' && repCore.devBandFor(7).label === 'Watch' &&
+      repCore.devBandFor(12.28).key === 'bad' && repCore.devBandFor(12.28).label === 'Imbalanced',
+      'bands');
+    check('imbalance bands: boundaries sit at 5 and 10, sign is ignored, junk is no band',
+      repCore.devBandFor(5).key === 'ok' && repCore.devBandFor(10).key === 'watch' &&
+      repCore.devBandFor(-12.28).key === 'bad' && repCore.devBandFor('x') === null,
+      'band edges');
+    const repCols = [
+      { testKey: 'nb_l_reps', name: 'NordBord · L Reps' },
+      { testKey: 'nb_r_reps', name: 'NordBord · R Reps' },
+      { testKey: 'nb_l_max_force_n', name: 'NordBord · L Max Force (N)' },
+      { testKey: 'nb_r_max_force_n', name: 'NordBord · R Max Force (N)' },
+      { testKey: 'nb_max_imbalance', name: 'NordBord · Max Imbalance (%)' },
+      { testKey: 'nb_l_max_torque_nm', name: 'NordBord · L Max Torque (Nm)' },
+      { testKey: 'nb_r_max_torque_nm', name: 'NordBord · R Max Torque (Nm)' },
+    ];
+    const ajModel = repCore.devReportModel(repCols, {
+      kind: 'unattached', name: 'Alonzo Ruffin',
+      values: {
+        nb_l_reps: 9, nb_r_reps: 9, nb_l_max_force_n: 384, nb_r_max_force_n: 437.75,
+        nb_max_imbalance: 12.28, nb_l_max_torque_nm: 167.62, nb_r_max_torque_nm: 191.08,
+      },
+    });
+    check('report model pairs L/R metrics with the max-force pair first and scaled bars',
+      ajModel.pairs.length === 3 && ajModel.pairs[0].label === 'Max Force (N)' &&
+      ajModel.pairs[0].left === 384 && ajModel.pairs[0].right === 437.75 &&
+      ajModel.pairs[0].rightWidth === 100 && ajModel.pairs[0].leftWidth === 88,
+      ajModel.pairs);
+    check('report model chips the worst imbalance and leads the stats with it',
+      !!ajModel.chip && ajModel.chip.key === 'bad' && ajModel.chip.label === 'Imbalanced' &&
+      ajModel.chip.value === 12.28 && ajModel.stats.length === 1 &&
+      ajModel.stats[0].name === 'Max Imbalance (%)' && ajModel.stats[0].band.key === 'bad' &&
+      ajModel.more === 0, ajModel);
+    check('report model: a 3% imbalance chips Balanced and a 7% chips Watch',
+      repCore.devReportModel(repCols, { values: { nb_max_imbalance: 3 } }).chip.label === 'Balanced' &&
+      repCore.devReportModel(repCols, { values: { nb_max_imbalance: 7 } }).chip.label === 'Watch',
+      'chips');
+    /* End to end: a real imported day (attached athlete + kept
+       guest, VALD-shaped headers) feeds the model unchanged. */
+    const repCsv = [
+      'Name,Date,L Reps,R Reps,L Max Force (N),R Max Force (N),Max Imbalance (%)',
+      'Dana Device,2026-10-29,9,9,384,437.75,12.28',
+      'Guest Pam,2026-10-29,8,8,300,291,3',
+    ].join('\n');
+    r = await api(coach, 'POST', '/api/devices/nordbord/preview', { csv: repCsv });
+    const repPv = r.json;
+    r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+      { rows: repPv.rows.map(x => ({ profileId: x.profileId, rawName: x.rawName, date: x.date, metrics: x.metrics })), fileName: 'nordbord-report.csv' });
+    check('report fixture commits one filed + one kept row', r.status === 200 && r.json.filed === 1 && r.json.stored === 1, r.json);
+    r = await api(coach, 'GET', '/api/devices/results');
+    const repDay = r.json.days.find(d => d.device === 'nordbord' && d.date === '2026-10-29');
+    r = await api(coach, 'GET', '/api/devices/results/' + repDay.id);
+    const repDana = repCore.devReportModel(r.json.columns, r.json.rows.find(x => x.kind === 'athlete'));
+    const repPam = repCore.devReportModel(r.json.columns, r.json.rows.find(x => x.kind === 'unattached'));
+    check('report over the API payload: attached athlete chips Imbalanced at 12.28%',
+      repDana.chip.key === 'bad' && repDana.chip.value === 12.28 &&
+      repDana.pairs.some(p => p.label === 'Max Force (N)' && p.left === 384 && p.right === 437.75),
+      repDana);
+    check('report over the API payload: unattached guest chips Balanced at 3%',
+      repPam.chip.key === 'ok' && repPam.chip.label === 'Balanced' && repPam.chip.value === 3,
+      repPam);
+  }
+  check('app JS carries the device report wiring (toggle, print, legend)',
+    appJs.text.includes('function deviceReportHtml') && appJs.text.includes('data-dev-view') &&
+    appJs.text.includes('Print / Save as PDF') && appJs.text.includes('red over 10%') &&
+    appJs.text.includes('dev-report-card'), 'app.js');
+  check('styles carry the report and the report-only print rules',
+    stylesCss.text.includes('.dev-report-grid') && stylesCss.text.includes('.dev-person') &&
+    stylesCss.text.includes('@media print') && stylesCss.text.includes('printing-report') &&
+    stylesCss.text.includes('print-color-adjust') && stylesCss.text.includes('break-inside: avoid'),
+    'styles.css');
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }
