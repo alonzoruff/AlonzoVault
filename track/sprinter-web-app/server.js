@@ -411,6 +411,7 @@ function loadContent() {
     guide: read('guide.md'),
     season: read('season.md'),
     videoLibrary: loadVideoLibrary(),
+    raceStrategy: loadRaceStrategy(),
     glossary: loadGlossary(),
     coachEducation: loadCoachEducation(),
     exerciseLibrary: loadExerciseLibrary(),
@@ -429,6 +430,57 @@ function loadVideoLibrary() {
     }
   } catch (_) { /* no video library bundled — that is fine */ }
   return [];
+}
+/* The Race Strategy section (content/race_strategy.json). Same
+   tolerant loading as the glossary: a missing or malformed file
+   means an empty section, never a crashed server. Events missing a
+   display field, a phase (zone, name, at least one cue), or a
+   mistake with its fix are dropped; the pacing lines and race-day
+   note are kept only when usable. */
+function loadRaceStrategy() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'race_strategy.json'), 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.events)) return { intro: null, events: [] };
+    const events = parsed.events.filter(e => e && typeof e === 'object'
+      && typeof e.id === 'string' && e.id.trim()
+      && typeof e.name === 'string' && e.name.trim()
+      && typeof e.tagline === 'string' && e.tagline.trim()
+      && typeof e.raceDay === 'string' && e.raceDay.trim()
+      && Array.isArray(e.phases) && e.phases.length > 0
+      && e.phases.every(ph => ph && typeof ph.zone === 'string' && ph.zone.trim()
+        && typeof ph.name === 'string' && ph.name.trim()
+        && Array.isArray(ph.cues) && ph.cues.length > 0
+        && ph.cues.every(c => typeof c === 'string' && c.trim()))
+      && Array.isArray(e.mistakes) && e.mistakes.length > 0
+      && e.mistakes.every(m => m && typeof m.mistake === 'string' && m.mistake.trim()
+        && typeof m.fix === 'string' && m.fix.trim()))
+      .map(e => {
+        const out = {
+          id: e.id, name: e.name, tagline: e.tagline, raceDay: e.raceDay,
+          phases: e.phases, mistakes: e.mistakes,
+          pacing: (Array.isArray(e.pacing) ? e.pacing : [])
+            .filter(s => typeof s === 'string' && s.trim()),
+        };
+        /* Optional extras an event page may carry: ways to slice
+           the race into segments (view + note), and a practice
+           block (title + items). Kept only when fully well-formed. */
+        if (Array.isArray(e.segments) && e.segments.length > 0
+          && e.segments.every(s => s && typeof s.view === 'string' && s.view.trim()
+            && typeof s.note === 'string' && s.note.trim())) out.segments = e.segments;
+        if (e.practice && typeof e.practice === 'object'
+          && typeof e.practice.title === 'string' && e.practice.title.trim()
+          && Array.isArray(e.practice.items) && e.practice.items.length > 0
+          && e.practice.items.every(s => typeof s === 'string' && s.trim())) out.practice = e.practice;
+        return out;
+      });
+    const intro = (parsed.intro && typeof parsed.intro === 'object'
+      && typeof parsed.intro.title === 'string' && parsed.intro.title.trim()
+      && Array.isArray(parsed.intro.points)
+      && parsed.intro.points.every(s => typeof s === 'string' && s.trim()))
+      ? parsed.intro : null;
+    return { intro, events };
+  } catch (_) { /* no race strategy bundled — that is fine */ }
+  return { intro: null, events: [] };
 }
 /* The Definitions tab glossary (content/glossary.json). Same tolerant
    loading as the video library: a missing or malformed file means an

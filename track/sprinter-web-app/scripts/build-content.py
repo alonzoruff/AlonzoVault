@@ -637,6 +637,23 @@ def exercise_library(movements):
     return out
 
 
+# Race Strategy section: same source-of-truth pattern again. The
+# vault database copy (track/sprinter-workout-database/
+# race_strategy.json) is the one to edit — the intro and one
+# strategy page per event (phases, cues, pacing model, mistakes),
+# written for this program. If the source is ever missing, PRESERVE
+# the bundled copy; a content refresh must never wipe the section out.
+rs_src = os.path.join(DB, "race_strategy.json")
+rs_out = os.path.join(OUT, "race_strategy.json")
+if os.path.exists(rs_src):
+    rs = json.load(open(rs_src))
+    shutil.copy(rs_src, rs_out)
+    print("race strategy:", len(rs.get("events", [])), "events (from source of truth)")
+elif os.path.exists(rs_out):
+    print("race strategy: WARNING — source of truth missing, kept existing bundled copy")
+else:
+    print("race strategy: none found (the app runs fine without it)")
+
 igm_src = os.path.join(DB, "instagram_movements.json")
 igm_out = os.path.join(OUT, "instagram_movements.json")
 if os.path.exists(igm_src):

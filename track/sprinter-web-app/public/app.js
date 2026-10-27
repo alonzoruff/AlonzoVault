@@ -14,6 +14,10 @@ const state = {
   vidQuery: '',
   defCat: 'All',
   defQuery: '',
+  raceEvent: '55-60',
+  calcEvent: '400',
+  calcType: 'balanced',
+  calcTarget: '',
   eduBucket: 'All',
   eduFocus: '',
   eduQuery: '',
@@ -138,8 +142,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v52';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v52';
+const APP_VERSION = 'v53';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v53';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -324,13 +328,13 @@ function md(src) {
    listener below routes them all. */
 const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
-  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train',
+  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', race: 'train', records: 'train', leaderboard: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
   privacy: 'account',
 };
 const GROUP_SUBNAV = {
-  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training'], ['race', 'Race Strategy']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
   coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
@@ -915,6 +919,200 @@ function renderQtr() {
   const qtrs = state.content.sessions.filter(s => s.id.startsWith('QTR-'));
   $('#qtr-list').innerHTML = qtrs.map(sessionRow).join('');
   $('#qtr-doc').innerHTML = md(state.content.framework400);
+}
+
+/* ---------------- race strategy ----------------
+   The section content (intro + one page per event) comes from
+   state.content.raceStrategy; the split calculator below is pure
+   math over one constants table so the model the athlete sees is
+   the model the tests exercise. */
+/* SPLITCALC-BEGIN */
+/* Split models for the Race Strategy calculator. Every constant
+   lives here, on purpose: the numbers are coaching models — ranges
+   a coach adjusts to the athlete — and the result card prints the
+   model it used, so nothing pretends to be a law.
+   400m: the two 200s differ by a planned differential — strength
+   types run it near 1.5, balanced 2.0, speed types near 2.5 (they
+   carry more top speed and fade more; the training goal is pulling
+   the number down). Cross-check is the program predictor: 400
+   potential ≈ average best 200 × 2 + about 4 seconds, and the
+   first-200 goal is the implied 200 base + 1.0 to 1.5.
+   200m: the second 100 is faster than the first — it is reached at
+   full speed while the first carries the start. The total gap is
+   usually 0.4–1.0; the model places the first 100 at half + 0.35.
+   300m: the 200 split takes about 68–70% of the total; the model
+   uses 0.69. */
+const SPLIT_MODELS = {
+  m200: { label: '200m', min: 18, max: 40, firstExtra: 0.35 },
+  m300: { label: '300m', min: 28, max: 60, splitShare: 0.69 },
+  m400: { label: '400m', min: 40, max: 90, predictorPad: 4,
+          differentials: { strength: 1.5, balanced: 2.0, speed: 2.5 } },
+};
+function splitRound2(n) { return Math.round(n * 100) / 100; }
+function splitFmt(n) { return n.toFixed(2); }
+/* Accepts "52", "52.00", or "1:05.5"; anything else is NaN. */
+function parseRaceTime(raw) {
+  const t = String(raw == null ? '' : raw).trim();
+  if (!t) return NaN;
+  const colon = /^(\d{1,2}):([0-5]?\d(?:\.\d+)?)$/.exec(t);
+  if (colon) return Number(colon[1]) * 60 + Number(colon[2]);
+  if (!/^\d+(?:\.\d+)?$/.test(t)) return NaN;
+  return Number(t);
+}
+/* splitsFor('m400', 52, 'balanced') ->
+   { rows: [{label, value}], note, differential, base200, margin }
+   The second piece is always target minus the (rounded) first, so
+   the shown splits always add back up to the target exactly.
+   Out-of-range or unparsable input returns null. */
+function splitsFor(eventKey, target, typeKey) {
+  const m = SPLIT_MODELS[eventKey];
+  if (!m || !Number.isFinite(target) || target < m.min || target > m.max) return null;
+  if (eventKey === 'm200') {
+    const first = splitRound2(target / 2 + m.firstExtra);
+    const second = splitRound2(target - first);
+    return {
+      rows: [{ label: 'First 100', value: first }, { label: 'Second 100', value: second }],
+      note: 'The second 100 is faster than the first — you reach it already at full speed, while the first 100 carries the start. Model: first 100 = half the target + 0.35 (the usual gap between the halves is 0.4–1.0). Your coach adjusts it ±.',
+    };
+  }
+  if (eventKey === 'm300') {
+    const split = splitRound2(target * m.splitShare);
+    const final100 = splitRound2(target - split);
+    return {
+      rows: [{ label: '200 split', value: split }, { label: 'Final 100', value: final100 }],
+      note: 'Model: the 200 split takes 69% of the target (coaches work in a 68–70% band). That split should feel like your 400 first-200 rhythm, a touch quicker — the final 100 is speed endurance.',
+    };
+  }
+  const d = m.differentials[typeKey] || m.differentials.balanced;
+  const first = splitRound2((target - d) / 2);
+  const second = splitRound2(target - first);
+  const base200 = splitRound2((target - m.predictorPad) / 2);
+  const margin = splitRound2(first - base200);
+  return {
+    rows: [{ label: 'First 200', value: first }, { label: 'Second 200', value: second }],
+    differential: d, base200, margin,
+    note: 'Model: the second 200 is planned ' + splitFmt(d) + ' slower than the first (strength type 1.5 · balanced 2.0 · speed type 2.5 — speed types fade more, and the training goal is pulling the number down). '
+      + 'Program cross-check: the predictor (200 best × 2 + about 4) puts the 200 base for this target at ' + splitFmt(base200)
+      + ', so the first 200 sits at base + ' + splitFmt(margin) + ' — the goal window is base + 1.0 to 1.5. Your coach adjusts ±.',
+  };
+}
+/* SPLITCALC-END */
+function raceEventHtml(e) {
+  const phaseRows = e.phases.map(ph => `
+    <div class="rs-phase">
+      <span class="rs-zone">${esc(ph.zone)}</span>
+      <div class="rs-phase-main">
+        <strong>${esc(ph.name)}</strong>
+        <ul>${ph.cues.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
+      </div>
+    </div>`).join('');
+  const pacing = (e.pacing && e.pacing.length)
+    ? `<h3>Pacing</h3><ul class="rs-lines">${e.pacing.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '';
+  const segments = (e.segments && e.segments.length)
+    ? `<h3>Ways to slice the race</h3>
+       <div class="rs-segments">${e.segments.map(s => `
+         <div class="rs-segment"><strong>${esc(s.view)}</strong><span>${esc(s.note)}</span></div>`).join('')}
+       </div>` : '';
+  const practice = e.practice
+    ? `<h3>${esc(e.practice.title)}</h3><ul class="rs-lines">${e.practice.items.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '';
+  const mistakes = e.mistakes.map(m => `
+    <div class="rs-mistake"><strong>${esc(m.mistake)}</strong><span>${esc(m.fix)}</span></div>`).join('');
+  return `
+    <div class="card rs-event">
+      <h2>${esc(e.name)}</h2>
+      <p class="rs-tagline">${esc(e.tagline)}</p>
+      <h3>The race model</h3>
+      ${phaseRows}
+      ${pacing}
+      ${segments}
+      ${practice}
+      <h3>Common mistakes</h3>
+      ${mistakes}
+      <h3>Race day</h3>
+      <p>${esc(e.raceDay)}</p>
+    </div>`;
+}
+function renderRaceStrategy() {
+  const rs = (state.content && state.content.raceStrategy) || { intro: null, events: [] };
+  const introEl = $('#race-intro');
+  if (introEl) {
+    introEl.innerHTML = rs.intro
+      ? `<div class="card rs-intro"><h2>${esc(rs.intro.title)}</h2><ul class="rs-lines">${rs.intro.points.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>`
+      : '';
+  }
+  const events = rs.events || [];
+  if (events.length && !events.some(e => e.id === state.raceEvent)) state.raceEvent = events[0].id;
+  const chipsEl = $('#race-chips');
+  if (chipsEl) {
+    chipsEl.innerHTML = events.map(e =>
+      `<button type="button" class="chip ${e.id === state.raceEvent ? 'active' : ''}" data-race-event="${esc(e.id)}">${esc(e.name)}</button>`).join('');
+  }
+  const detailEl = $('#race-detail');
+  const current = events.find(e => e.id === state.raceEvent);
+  if (detailEl) {
+    detailEl.innerHTML = current ? raceEventHtml(current)
+      : '<p class="muted">The race strategy pages have not loaded.</p>';
+  }
+  renderRaceCalc();
+}
+function renderRaceCalc() {
+  const el = $('#race-calc');
+  if (!el) return;
+  const ev = state.calcEvent;
+  const typeRow = ev === 'm400' ? `
+      <label class="calc-field">Athlete type
+        <select id="calc-type">
+          <option value="strength" ${state.calcType === 'strength' ? 'selected' : ''}>Strength type (400/800)</option>
+          <option value="balanced" ${state.calcType === 'balanced' ? 'selected' : ''}>Balanced</option>
+          <option value="speed" ${state.calcType === 'speed' ? 'selected' : ''}>Speed type (100/200)</option>
+        </select>
+      </label>` : '';
+  el.innerHTML = `
+    <div class="card rs-calc">
+      <h2>Split calculator</h2>
+      <p class="muted">Pick an event, enter a target time, and get the splits the model calls for. The model is printed with the answer — a coach adjusts it, never the other way around.</p>
+      <div class="calc-controls">
+        <label class="calc-field">Event
+          <select id="calc-event">
+            <option value="m200" ${ev === 'm200' ? 'selected' : ''}>200m</option>
+            <option value="m300" ${ev === 'm300' ? 'selected' : ''}>300m</option>
+            <option value="m400" ${ev === 'm400' ? 'selected' : ''}>400m</option>
+          </select>
+        </label>
+        <label class="calc-field">Target time
+          <input id="calc-target" type="text" inputmode="decimal" placeholder="e.g. 52.00 or 1:05.5" value="${esc(state.calcTarget)}">
+        </label>
+        ${typeRow}
+      </div>
+      <div id="calc-result"></div>
+    </div>`;
+  const evSel = $('#calc-event');
+  if (evSel) evSel.addEventListener('change', (e) => { state.calcEvent = e.target.value; renderRaceCalc(); });
+  const typeSel = $('#calc-type');
+  if (typeSel) typeSel.addEventListener('change', (e) => { state.calcType = e.target.value; paintCalcResult(); });
+  const targetInput = $('#calc-target');
+  if (targetInput) targetInput.addEventListener('input', (e) => { state.calcTarget = e.target.value; paintCalcResult(); });
+  paintCalcResult();
+}
+function paintCalcResult() {
+  const out = $('#calc-result');
+  if (!out) return;
+  const m = SPLIT_MODELS[state.calcEvent];
+  const target = parseRaceTime(state.calcTarget);
+  if (String(state.calcTarget || '').trim() === '') {
+    out.innerHTML = '<p class="muted">Enter a target time to see the model splits.</p>';
+    return;
+  }
+  const res = Number.isFinite(target) ? splitsFor(state.calcEvent, target, state.calcType) : null;
+  if (!res) {
+    out.innerHTML = `<p class="error">That does not work for the ${esc(m.label)} — enter a target between ${m.min} and ${m.max} seconds (52.00 or 1:05.5).</p>`;
+    return;
+  }
+  out.innerHTML = `
+    <div class="calc-rows">${res.rows.map(r => `
+      <div class="calc-row"><span>${esc(r.label)}</span><strong>${splitFmt(r.value)}</strong></div>`).join('')}
+    </div>
+    <p class="muted calc-note">${esc(res.note)}</p>`;
 }
 
 /* ---------------- videos ---------------- */
@@ -4780,6 +4978,12 @@ $('#def-chips').addEventListener('click', (e) => {
   state.defCat = chip.dataset.defcat;
   renderDefinitions();
 });
+$('#race-chips').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-race-event]');
+  if (!chip) return;
+  state.raceEvent = chip.dataset.raceEvent;
+  renderRaceStrategy();
+});
 $('#edu-search').addEventListener('input', (e) => { state.eduQuery = e.target.value; renderEducation(); });
 $('#edu-chips').addEventListener('click', (e) => {
   const chip = e.target.closest('[data-edubucket]');
@@ -7665,6 +7869,7 @@ function tvStopTimers() {
   fillWeekJump();
   renderDrills();
   renderQtr();
+  renderRaceStrategy();
   renderVideos();
   renderDefinitions();
   renderExercises();

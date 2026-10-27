@@ -1660,3 +1660,40 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
   body.printing-report .dev-report * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { margin: 10mm; }
 }
+
+/* Race Strategy: event pages (phases, pacing, mistakes) + the
+   split calculator. Cards and chips come from the shared classes;
+   only the phase rows, segment cuts, and calculator need their own. */
+.rs-tagline { font-size: 17px; font-weight: 600; margin: 2px 0 14px; }
+.rs-lines { margin: 6px 0 0; padding-left: 20px; }
+.rs-lines li { margin: 5px 0; line-height: 1.45; }
+.rs-event h3 { margin: 18px 0 8px; }
+.rs-event h3:first-of-type { margin-top: 6px; }
+.rs-phase { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.rs-phase:first-of-type { border-top: none; }
+.rs-zone { flex: none; align-self: flex-start; min-width: 74px; text-align: center;
+  padding: 4px 8px; border-radius: 999px; background: var(--red); color: #fff;
+  font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rs-phase-main strong { font-size: 15.5px; }
+.rs-phase-main ul { margin: 4px 0 0; padding-left: 18px; }
+.rs-phase-main li { margin: 3px 0; line-height: 1.45; }
+.rs-segments { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.rs-segment { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 4px; }
+.rs-segment strong { font-variant-numeric: tabular-nums; }
+.rs-segment span { color: var(--muted); line-height: 1.45; }
+.rs-mistake { border-left: 3px solid var(--red); padding: 6px 0 6px 12px; margin: 10px 0;
+  display: flex; flex-direction: column; gap: 2px; }
+.rs-mistake span { color: var(--muted); line-height: 1.45; }
+.calc-controls { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+.calc-field { display: flex; flex-direction: column; gap: 5px; font-weight: 600; font-size: 13.5px; }
+.calc-field select, .calc-field input { min-width: 170px; }
+.calc-rows { margin-top: 14px; border-top: 1px solid var(--line); }
+.calc-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.calc-row span { color: var(--muted); font-weight: 600; }
+.calc-row strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.calc-note { margin-top: 12px; line-height: 1.5; }
+@media (max-width: 560px) {
+  .rs-phase { flex-direction: column; gap: 6px; }
+  .rs-zone { align-self: flex-start; }
+}

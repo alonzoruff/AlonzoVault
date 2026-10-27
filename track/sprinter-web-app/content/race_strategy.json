@@ -1,0 +1,408 @@
+{
+ "events": [
+  {
+   "id": "55-60",
+   "mistakes": [
+    {
+     "fix": "Stay in the drive and let tall happen on its own. Patience for the first five steps.",
+     "mistake": "Standing straight up out of the blocks"
+    },
+    {
+     "fix": "Push, do not reach. Quickness comes from the ground, under the hip.",
+     "mistake": "Reaching for speed with long, slow steps"
+    },
+    {
+     "fix": "Eyes stay in your lane and you sprint through the line \u2014 every rep, every race.",
+     "mistake": "Easing up before the line"
+    },
+    {
+     "fix": "Drop the shoulders and shake the hands loose behind the blocks. Loose is fast.",
+     "mistake": "Straining: clenched jaw, shoulders up in the ears"
+    }
+   ],
+   "name": "55m / 60m",
+   "pacing": [
+    "No pacing model \u2014 this race is full intent from the gun. If you are saving anything in a 55 or a 60, you have already given it away.",
+    "The 55 ends a step sooner than the 60: even less time to get tall, so the first 20 meters are the whole race."
+   ],
+   "phases": [
+    {
+     "cues": [
+      "Explode on the gun \u2014 the first three steps push the track behind you.",
+      "Chin down, one straight line from head to heel.",
+      "Powerful steps, not quick little ones. Big pushes build speed."
+     ],
+     "name": "React & drive",
+     "zone": "0\u201310m"
+    },
+    {
+     "cues": [
+      "Let the race bring you tall \u2014 rise a little more every step.",
+      "Steps get longer and quicker at the same time.",
+      "Hands cheek to pocket. Nothing crosses the body."
+     ],
+     "name": "Build",
+     "zone": "10\u201325m"
+    },
+    {
+     "cues": [
+      "Tall and front-side: strike under the hip.",
+      "Loose face, loose shoulders \u2014 tension is slow.",
+      "Run through the line. The finish is five meters past it."
+     ],
+     "name": "Top speed, briefly",
+     "zone": "25m \u2013 line"
+    }
+   ],
+   "raceDay": "Early season: attack the start at full intent and let the time be whatever it is. Championship: the same race, cleaner \u2014 no new cues, trust the start you have built.",
+   "tagline": "The whole race is the start. There is no second half to save anything for."
+  },
+  {
+   "id": "100",
+   "mistakes": [
+    {
+     "fix": "Drive patience: the first steps are pushes, and tall shows up around 30m on its own.",
+     "mistake": "Rushing the drive and standing up by 15m"
+    },
+    {
+     "fix": "Strike under the hip. Reaching puts the brakes on with every step.",
+     "mistake": "Overstriding late, reaching with the lower leg"
+    },
+    {
+     "fix": "Drop the shoulders and speed the hands up. The legs follow the hands.",
+     "mistake": "Tightening up at 70m \u2014 the grimace and the shrug"
+    },
+    {
+     "fix": "Run through the line and lean at it, not before it.",
+     "mistake": "Leaning or dipping well before the line"
+    }
+   ],
+   "name": "100m",
+   "pacing": [
+    "There is no even-split 100. The second 50 is faster than the first because you are already moving \u2014 expect it, do not chase it.",
+    "By 30m you should be near 90% of your top speed. The last 40m is about protecting position and form, not finding a new gear."
+   ],
+   "phases": [
+    {
+     "cues": [
+      "Push the ground back \u2014 stay low and let the rise be gradual.",
+      "Powerful steps, not frantic ones. The drive is patient aggression."
+     ],
+     "name": "Drive",
+     "zone": "0\u201330m"
+    },
+    {
+     "cues": [
+      "Come tall naturally. Forcing yourself upright kills the build.",
+      "Full stride now: hands cheek to pocket, strike under the hip."
+     ],
+     "name": "Transition",
+     "zone": "30\u201360m"
+    },
+    {
+     "cues": [
+      "This is your fastest running \u2014 tall, front-side, quick off the ground.",
+      "Relax to stay fast: loose jaw, loose shoulders, fast hands."
+     ],
+     "name": "Max velocity",
+     "zone": "60\u201380m"
+    },
+    {
+     "cues": [
+      "Hold your form while it burns. Do not reach for the line.",
+      "Keep the hips tall and finish through the line, not to it."
+     ],
+     "name": "Speed endurance",
+     "zone": "80\u2013100m"
+    }
+   ],
+   "raceDay": "Early season: run the drive honestly even if the top-end fitness is not there yet. Championship: one cue for the start, one for the finish, and nothing else in your head.",
+   "tagline": "Build it right for 60 meters, then lose the least over the last 40."
+  },
+  {
+   "id": "200",
+   "mistakes": [
+    {
+     "fix": "The bend is where the race is built. Attack it \u2014 the float comes after, at speed.",
+     "mistake": "Jogging the bend to save it for the straight"
+    },
+    {
+     "fix": "First 100 at 95% feel. If the bend felt like a final, the straight will feel like a wall.",
+     "mistake": "Flying out at open-100 pace and dying at 150"
+    },
+    {
+     "fix": "Run the inside of your lane. Every step wide is extra distance you chose to run.",
+     "mistake": "Drifting wide on the bend"
+    },
+    {
+     "fix": "Stay tall and keep the knees coming through. Sitting is slowing.",
+     "mistake": "Sitting back in the last 30m"
+    }
+   ],
+   "name": "200m",
+   "pacing": [
+    "The second 100 should be faster than the first \u2014 you reach it already at full speed instead of from blocks. The split calculator below does the math for your target.",
+    "Run the first 100 hard but controlled, about 95% effort. A first 100 at open-100 pace is a loan the last 50 collects.",
+    "Indoors the 200 is a full lap: run both bends, float the back straight, and attack off the final turn. Lane draw matters more indoors \u2014 race whoever is next to you, not the clock."
+   ],
+   "phases": [
+    {
+     "cues": [
+      "Drive out hard and set your lean into the bend.",
+      "First steps run the curve \u2014 body angled in, pushing along the lane."
+     ],
+     "name": "Drive (the bend)",
+     "zone": "0\u201330m"
+    },
+    {
+     "cues": [
+      "Come tall and carry speed around the bend.",
+      "Float means fast and relaxed \u2014 it is not rest. Let the bend run while you stay loose.",
+      "Be tall and rolling at the top of the turn. That is where the straight gets set up."
+     ],
+     "name": "Build & float",
+     "zone": "30\u2013110m"
+    },
+    {
+     "cues": [
+      "Re-commit off the bend: quicken the arms and go again.",
+      "Hold form as it burns \u2014 knees up, hips tall, hands fast.",
+      "Finish through the line."
+     ],
+     "name": "Finish",
+     "zone": "110\u2013200m"
+    }
+   ],
+   "raceDay": "Early season: learn the float \u2014 most young runners get it wrong both ways, too hot or too sleepy. Championship: attack the bend, trust your fitness on the straight, and race the people next to you.",
+   "tagline": "Attack the bend, float without slowing, finish like a sprinter."
+  },
+  {
+   "id": "300",
+   "mistakes": [
+    {
+     "fix": "If you are sprinting at 150, the last 100 will be a long walk home. Build first, then commit.",
+     "mistake": "Running it like a 200"
+    },
+    {
+     "fix": "Respect the race: the 300 punishes waiting. Be in the race by 150.",
+     "mistake": "Running it like a 400 \u2014 too patient early"
+    },
+    {
+     "fix": "Quicken the arms at 200 and work the bend. That is where the places move.",
+     "mistake": "Letting the race stall on the second bend"
+    },
+    {
+     "fix": "Breathe on a rhythm from the start so the last 100 is run, not survived.",
+     "mistake": "No breathing rhythm, gasping by 200"
+    }
+   ],
+   "name": "300m",
+   "pacing": [
+    "Come through 200 at about 68\u201370% of your total time \u2014 the split calculator below does the math for your target.",
+    "That 200 split should feel like your 400 first-200 rhythm, a touch quicker. If it feels like a 200 race, you have spent too much.",
+    "The final 100 decides it: everybody slows down. The plan is to slow down the least."
+   ],
+   "phases": [
+    {
+     "cues": [
+      "Out like a 200 start \u2014 aggressive and smooth.",
+      "Settle tall by the end of the first bend."
+     ],
+     "name": "Drive",
+     "zone": "0\u201330m"
+    },
+    {
+     "cues": [
+      "Find your 400 rhythm early: tall, relaxed, rolling.",
+      "Breathe in rhythm. Let the race come to you a little here \u2014 without giving anything back."
+     ],
+     "name": "Build & settle",
+     "zone": "30\u2013150m"
+    },
+    {
+     "cues": [
+      "At 200, go again: quicken the arms and work the bend.",
+      "Position matters now \u2014 do not get boxed and do not drift wide."
+     ],
+     "name": "Commit",
+     "zone": "150\u2013250m"
+    },
+    {
+     "cues": [
+      "Speed endurance: hold your form and run through the line.",
+      "The last 50 is form, not feel."
+     ],
+     "name": "Finish",
+     "zone": "250\u2013300m"
+    }
+   ],
+   "raceDay": "Early season: the 300 is a fitness check \u2014 run the model and see where you stand. Championship: the break at 200 decides places, so be positioned before it, not after.",
+   "tagline": "The in-between race: run it like a long 200 with a 400's discipline."
+  },
+  {
+   "id": "400",
+   "mistakes": [
+    {
+     "fix": "The first 200 has a number. Hit the number, not a feeling.",
+     "mistake": "Running a 300 and surviving a 100"
+    },
+    {
+     "fix": "The cruise is controlled speed \u2014 fast and tall. If you can chat, you are losing.",
+     "mistake": "Cruising the back straight at sightseeing pace"
+    },
+    {
+     "fix": "The bend is an attack point, not a rest. Quicken the arms at 200 and work it.",
+     "mistake": "Letting up on the second bend"
+    },
+    {
+     "fix": "Shorten up and speed the hands. Reaching is braking.",
+     "mistake": "Reaching and overstriding in the last 80"
+    },
+    {
+     "fix": "Position is won at 200\u2013300. By the straight, you are spending what you built.",
+     "mistake": "Waiting for the home straight to start racing"
+    }
+   ],
+   "name": "400m",
+   "pacing": [
+    "The program predictor: 400 potential is about your average best 200, doubled, plus roughly 4 seconds. Work backwards from it when you set a target.",
+    "The first 200 sits about 1 to 1.5 seconds over your best 200. Much faster and the last 100 collects the debt; much slower and you have left the race out on the track.",
+    "The second 200 runs about 1.5 to 2.5 seconds slower than the first \u2014 that gap is the differential. Strength types run it closer to 1.5; speed types closer to 2.5, and the training goal is pulling that number down.",
+    "If the second 200 is more than about 3 seconds slower than the first, the first was too hot. That is a pacing error to fix, not a fitness verdict."
+   ],
+   "phases": [
+    {
+     "zone": "0\u201350m",
+     "name": "Drive phase",
+     "cues": [
+      "Out like a sprinter \u2014 build speed aggressively, but smooth. No panic.",
+      "You do not win the 400 in the first 50, but you can lose it there. Get out."
+     ]
+    },
+    {
+     "zone": "50\u2013200m",
+     "name": "Comfortable sprint",
+     "cues": [
+      "Settle into a sprint that feels fast but comfortable \u2014 tall, relaxed, rolling.",
+      "Down the back straight, carry the momentum: loose hands, loose face, quick contacts.",
+      "First 200 target: your average best 200 plus about 1 to 1.5 seconds. That number is the discipline of the race."
+     ]
+    },
+    {
+     "zone": "200\u2013300m",
+     "name": "2nd effort",
+     "cues": [
+      "At 200, make a second effort: quicken the arms and attack the bend.",
+      "This is the deciding third: hold your position and your posture while others tie up."
+     ]
+    },
+    {
+     "zone": "300\u2013400m",
+     "name": "Relax",
+     "cues": [
+      "Relax on purpose while the effort stays full: loose face, fast hands, technique holds.",
+      "Knees coming through, hips tall \u2014 the last 100 is run on form, not on how you feel.",
+      "Commit to the effort and run through the line."
+     ]
+    }
+   ],
+   "raceDay": "Early season: novices get a trial-and-error period in this race \u2014 run the model, tie up, learn, repeat; the splits will tell the truth. Championship: the same four efforts with full trust \u2014 chase position in the 2nd effort, not the clock.",
+   "tagline": "A controlled sprint, run in four efforts: drive, cruise comfortably, go again, then relax and commit.",
+   "segments": [
+    {
+     "view": "100 \u00b7 100 \u00b7 100 \u00b7 100",
+     "note": "The teaching cut \u2014 one 100 for each of the four efforts. The easiest way to hand a young runner the whole race."
+    },
+    {
+     "view": "100 \u00b7 150 \u00b7 150",
+     "note": "Get out for 100, then two long 150s. Built for athletes who lose the middle of the race."
+    },
+    {
+     "view": "50 \u00b7 150 \u00b7 100 \u00b7 100",
+     "note": "Isolates the drive (50), stretches the comfortable sprint (150), then splits the finish into two honest 100s."
+    },
+    {
+     "view": "50 \u00b7 200 \u00b7 150",
+     "note": "Drive, a full 200 of the cruise, then 150 of finish. For athletes learning the back-straight discipline."
+    }
+   ],
+   "practice": {
+    "title": "Find the race at practice",
+    "items": [
+     "Broken 400 at race pace: 200 fast, jog across the field, 200 fast.",
+     "Broken 400 at race pace: 300 fast, jog 100, 100 fast.",
+     "Broken 400 at race pace: 100 fast, jog 100, 300 fast.",
+     "250m simulations \u00d7 3\u20134 \u2014 the closing 250 of the race, rehearsed fresh.",
+     "The named pieces, rehearsed on their own: 100m Push (the get-out), 100m Pace (the cruise rhythm), 50m Power (the finish under fatigue)."
+    ]
+   }
+  },
+  {
+   "id": "relays",
+   "mistakes": [
+    {
+     "fix": "If the baton catches you standing still, the exchange is already lost. Trust the mark and go.",
+     "mistake": "Leaving late on an exchange"
+    },
+    {
+     "fix": "Eyes forward, hand back. Looking back slows you down and moves the target.",
+     "mistake": "Looking back for the baton"
+    },
+    {
+     "fix": "One hand, one motion, practiced a hundred times. Secure first, fast second.",
+     "mistake": "Changing hands or juggling the baton in the zone"
+    },
+    {
+     "fix": "Marks only work at race speed. Every exchange rep that matters is a fast one.",
+     "mistake": "Practicing exchanges at jog speed"
+    }
+   ],
+   "name": "Relays",
+   "pacing": [
+    "Order is strategy: protect a young runner on a middle leg, put racers where position gets decided, and never experiment with the order on championship day.",
+    "Relay legs run faster than open times \u2014 a running start is worth about a second on the 4\u00d7400 legs after the first. Judge legs against relay expectations, not open PRs.",
+    "Check marks are measured in practice and written down. Nobody guesses a mark on meet day."
+   ],
+   "phases": [
+    {
+     "cues": [
+      "Legs: your best starter runs first, dependable hands run the middle, your best finisher anchors.",
+      "Outgoing runner: leave on the check mark and be at near-full speed when the baton arrives. Hand back steady \u2014 never look back.",
+      "Incoming runner: run through the whole zone at full speed. The baton moves to the hand; you do not slow down for it."
+     ],
+     "name": "Blind speed",
+     "zone": "4\u00d7100m"
+    },
+    {
+     "cues": [
+      "Every leg is a 200: attack the bend, float, finish. Run your own race model, not the crowd's.",
+      "Know before the meet whether your exchanges are blind or visual \u2014 and practice that one, at full speed.",
+      "Incoming runner: come in hot and loud. Outgoing runner: leave on time and show a steady hand."
+     ],
+     "name": "Run your 200 model",
+     "zone": "4\u00d7200m"
+    },
+    {
+     "cues": [
+      "The exchange is visual: the receiver watches the baton in, then goes. No blind faith.",
+      "A strong second leg matters \u2014 that is where the break and the fight for position happen.",
+      "Anchor is a race, not a victory lap: run the full 400 model, splits and all."
+     ],
+     "name": "Open exchange, raced legs",
+     "zone": "4\u00d7400m"
+    }
+   ],
+   "raceDay": "Exchanges are decided in practice, all season. Meet day is the same marks, the same order, the same cues \u2014 a championship is the worst day to invent anything.",
+   "tagline": "Races you win in the exchange zone. The running is the easy part."
+  }
+ ],
+ "intro": {
+  "points": [
+   "Set the plan before the meet. Every athlete should leave the warm-up knowing their phases and the one job they own in each phase.",
+   "One or two cues max on race day. A race is not the time to learn five new things \u2014 pick the cue that fixes the biggest leak and let the rest ride.",
+   "After the race, grade the execution before the time. Check the splits against the plan first: a well-run race that comes up short is a fitness problem; a badly-run one is a planning problem.",
+   "The pacing numbers are models, not laws. Speed types and strength types run the same event differently \u2014 adjust the plan to the athlete in front of you."
+  ],
+  "title": "How to use this with your athletes"
+ }
+}

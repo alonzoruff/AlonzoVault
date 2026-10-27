@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v52',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v52"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v53',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v53"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v52'") &&
-    swJs.text.includes("sprinter-app-v52"));
+    appJs.text.includes("const APP_VERSION = 'v53'") &&
+    swJs.text.includes("sprinter-app-v53"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v52"') &&
-    pageHtml.text.includes('Cadets Sprint · App v52') &&
+    pageHtml.text.includes('data-app-version="v53"') &&
+    pageHtml.text.includes('Cadets Sprint · App v53') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -4559,6 +4559,106 @@ async function main() {
     appJs.text.includes('renderDeviceResults') && appJs.text.includes("['results', 'Results']") &&
     appJs.text.includes('/api/devices/results') && appJs.text.includes('paintDeviceResultDay'),
     'app.js');
+
+  /* Race Strategy (v53): a Train section with one strategy page
+     per event (phases + cues, pacing model, mistakes, race-day
+     note) and a split calculator whose pure core is extracted and
+     exercised here, like the DEVREPORT core. The content is
+     performance education only — no private or health data rides
+     in the payload — and it names no coach, per program rule. */
+  const race = contentJson.raceStrategy;
+  check('race strategy serves an intro and event pages',
+    !!race && !!race.intro && typeof race.intro.title === 'string'
+    && Array.isArray(race.intro.points) && race.intro.points.length >= 3
+    && Array.isArray(race.events), race && typeof race);
+  const raceEvents = (race && race.events) || [];
+  check('race strategy has the six event pages in order',
+    raceEvents.map(e => e.id).join(',') === '55-60,100,200,300,400,relays',
+    raceEvents.map(e => e.id));
+  if (raceEvents.length === 6) {
+    check('every race page has a tagline, at least 3 phases with zones and 2+ cues each, 3-5 mistakes with fixes, and a race-day note',
+      raceEvents.every(e => typeof e.tagline === 'string' && e.tagline.trim()
+        && e.phases.length >= 3
+        && e.phases.every(ph => ph.zone.trim() && ph.name.trim() && ph.cues.length >= 2)
+        && e.mistakes.length >= 3 && e.mistakes.length <= 5
+        && e.mistakes.every(m => m.mistake.trim() && m.fix.trim())
+        && typeof e.raceDay === 'string' && e.raceDay.trim()),
+      raceEvents.map(e => e.id));
+    check('the 200, 300 and 400 pages carry pacing lines',
+      ['200', '300', '400'].every(id => {
+        const e = raceEvents.find(x => x.id === id);
+        return e && Array.isArray(e.pacing) && e.pacing.length >= 2;
+      }));
+    const e400 = raceEvents.find(x => x.id === '400');
+    check('the 400 page runs the program execution model (drive, comfortable sprint, 2nd effort, relax)',
+      !!e400 && e400.phases.map(p => p.name).join('|') === 'Drive phase|Comfortable sprint|2nd effort|Relax',
+      e400 && e400.phases.map(p => p.name));
+    check('the 400 page carries the four segment views and the find-the-race practice block',
+      !!e400 && Array.isArray(e400.segments) && e400.segments.length === 4
+      && e400.segments.every(s => s.view.trim() && s.note.trim())
+      && !!e400.practice && e400.practice.items.length === 5
+      && e400.practice.items.some(s => s.includes('250m simulations')),
+      e400 && e400.segments && e400.segments.length);
+  }
+  check('race strategy payload carries no private or health data tokens',
+    !/soreness|check-?in|coachnotes|wellness|password/i.test(JSON.stringify(race || {})));
+  check('race strategy names no coach (program rule)',
+    !/Dunham|Hart/.test(JSON.stringify(race || {})));
+  r = await api(athlete, 'GET', '/api/content');
+  check('an athlete can read the race strategy section',
+    r.status === 200 && !!r.json.raceStrategy
+    && Array.isArray(r.json.raceStrategy.events) && r.json.raceStrategy.events.length === 6,
+    r.status);
+  check('race strategy view markers are in the served page',
+    pageHtml.status === 200 && pageHtml.text.includes('id="view-race"') &&
+    pageHtml.text.includes('data-view="race"') && pageHtml.text.includes('id="race-chips"') &&
+    pageHtml.text.includes('id="race-detail"') && pageHtml.text.includes('id="race-calc"'));
+  check('race strategy nav, render and calculator wiring are in the served JS',
+    appJs.status === 200 && appJs.text.includes("['race', 'Race Strategy']") &&
+    appJs.text.includes('renderRaceStrategy') && appJs.text.includes('data-race-event') &&
+    appJs.text.includes('renderRaceCalc') && appJs.text.includes('calc-target'),
+    'app.js');
+  check('styles carry the race strategy classes',
+    stylesCss.text.includes('.rs-phase') && stylesCss.text.includes('.rs-zone') &&
+    stylesCss.text.includes('.rs-mistake') && stylesCss.text.includes('.calc-row'),
+    'styles.css');
+  const splitMatch = appJs.text.match(/\/\* SPLITCALC-BEGIN \*\/([\s\S]*?)\/\* SPLITCALC-END \*\//);
+  check('split calculator core is extractable for behavior tests', !!splitMatch);
+  if (splitMatch) {
+    const splitCore = new Function(splitMatch[1] +
+      '\nreturn { splitsFor, parseRaceTime };')();
+    const sum = (res) => res.rows.reduce((a, x) => a + x.value, 0);
+    const b52 = splitCore.splitsFor('m400', 52, 'balanced');
+    check('calculator 400: a 52.00 balanced target splits 25.00 / 27.00 and sums to the target',
+      !!b52 && b52.rows[0].value === 25 && b52.rows[1].value === 27
+      && Math.abs(sum(b52) - 52) < 0.001, b52 && b52.rows);
+    check('calculator 400: the differential and predictor cross-check ride along (2.0, base 24.00, margin 1.00)',
+      !!b52 && b52.differential === 2 && b52.base200 === 24 && b52.margin === 1, b52);
+    const sp52 = splitCore.splitsFor('m400', 52, 'speed');
+    const st52 = splitCore.splitsFor('m400', 52, 'strength');
+    check('calculator 400: speed type plans a 2.5 differential, strength type 1.5',
+      !!sp52 && sp52.rows[0].value === 24.75 && sp52.rows[1].value === 27.25 && sp52.differential === 2.5
+      && !!st52 && st52.rows[0].value === 25.25 && st52.rows[1].value === 26.75 && st52.differential === 1.5,
+      [sp52 && sp52.rows, st52 && st52.rows]);
+    const s200 = splitCore.splitsFor('m200', 23);
+    check('calculator 200: a 23.00 target splits 11.85 / 11.15 (second 100 faster) and sums to the target',
+      !!s200 && s200.rows[0].value === 11.85 && s200.rows[1].value === 11.15
+      && Math.abs(sum(s200) - 23) < 0.001, s200 && s200.rows);
+    const s300 = splitCore.splitsFor('m300', 36);
+    check('calculator 300: a 36.00 target gives a 24.84 split and an 11.16 final 100, summing to the target',
+      !!s300 && s300.rows[0].value === 24.84 && s300.rows[1].value === 11.16
+      && Math.abs(sum(s300) - 36) < 0.001, s300 && s300.rows);
+    check('calculator validation: out-of-range and unparsable targets return no splits',
+      splitCore.splitsFor('m400', 30) === null && splitCore.splitsFor('m400', 95) === null
+      && splitCore.splitsFor('m200', 10) === null && splitCore.splitsFor('m300', 90) === null
+      && splitCore.splitsFor('m400', splitCore.parseRaceTime('abc')) === null
+      && Number.isNaN(splitCore.parseRaceTime('abc')),
+      'validation');
+    check('calculator parses m:ss targets (1:05.5 -> 65.5) and the splits still sum',
+      splitCore.parseRaceTime('1:05.5') === 65.5
+      && Math.abs(sum(splitCore.splitsFor('m400', 65.5, 'balanced')) - 65.5) < 0.001,
+      splitCore.parseRaceTime('1:05.5'));
+  }
 
   /* Device Results REPORT (v52): the day also renders as a clean
      report — per-person cards, L/R bars, imbalance color bands.
