@@ -32,7 +32,11 @@
  * The first account registered is the head coach (owner); the owner can
  * invite assistant coaches by email, and an invited email registers
  * with coach access to the same shared team data. Only the owner
- * manages invites, and the owner can never lose coach access. The
+ * manages invites, and the owner can never lose coach access.
+ * Registration is invite-only: past the first account, an email can
+ * sign up only when a coach has already claimed it — a coach invite,
+ * or the linked email on a roster profile; everyone else gets a 403
+ * explaining the app is for SJC track athletes and coaches. The
  * per-account practice log and cross-training swaps are the coach's
  * own notebook and work as they always have.
  */
@@ -2962,6 +2966,26 @@ async function handleApi(req, res, url) {
       return sendJson(res, 409, { error: 'An account with that email already exists. Try logging in.' });
     }
     const firstAccount = db.users.length === 0;
+    /* Invite-only registration: past the owner bootstrap, an email
+       can sign up only when a coach has already claimed it — it is
+       on the coach invite list, or it is the linked email on a
+       roster profile. The gate reads the live stores on every
+       attempt, so a link a coach adds (or removes) takes effect
+       immediately; there is no separate allowlist to maintain. The
+       claims are standing grants, not tickets: a refused attempt
+       changes nothing at all, and a successful sign-up consumes
+       neither the invite (removing it still revokes coach access)
+       nor the roster link (it is the account's binding). */
+    const linkPid = db.athleteLinks[email];
+    const linkProf = linkPid ? profileById(linkPid) : null;
+    // An archived profile is off the roster: its link no longer
+    // claims the email, so archiving closes the path again too.
+    const rosterLinked = !!(linkProf && !linkProf.archived);
+    if (!firstAccount && !db.coachInvites.includes(email) && !rosterLinked) {
+      return sendJson(res, 403, {
+        error: 'This app is invite-only — it\'s for SJC track athletes and coaches. If that\'s you, ask Coach AJ to add your email first, then sign up.',
+      });
+    }
     const user = {
       id: crypto.randomUUID(),
       email,
@@ -2977,8 +3001,7 @@ async function handleApi(req, res, url) {
     };
     // If a coach already linked this email to a roster profile, the
     // new account is born bound to it (daily check-in works at once).
-    const linkPid = db.athleteLinks[email];
-    if (linkPid && profileById(linkPid)) user.profileId = linkPid;
+    if (rosterLinked) user.profileId = linkPid;
     db.users.push(user);
     db.logs[user.id] = [];
     db.swaps[user.id] = {};

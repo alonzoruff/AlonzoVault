@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v53',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v53"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v54',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v54"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -512,9 +512,17 @@ async function main() {
   check('first register is 201', r.status === 201, r.status);
   check('first account is coach', r.json.role === 'coach', r.json.role);
   const coach = cookieOf(r);
+  /* Invite-only (v54): past the owner bootstrap an email registers
+     only when a coach has claimed it. The fixture athlete is claimed
+     via a roster link, registers, and is then unlinked again so the
+     account is exactly what it was before the gate — unlinked. */
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Fixture', lastName: 'Athlete', events: [] });
+  const fixtureProfileId = r.json.profile.id;
+  await api(coach, 'PUT', '/api/profiles/' + fixtureProfileId + '/link', { email: 'athlete@test.com' });
   r = await api(null, 'POST', '/api/register', { email: 'athlete@test.com', password: 'testpass123', ageAttested: true });
   check('second account is athlete', r.json.role === 'athlete', r.json.role);
   const athlete = cookieOf(r);
+  await api(coach, 'DELETE', '/api/profiles/' + fixtureProfileId + '/link');
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123', ageAttested: true });
   check('duplicate email is 409', r.status === 409, r.status);
   r = await api(null, 'POST', '/api/register', { email: 'not-an-email', password: 'testpass123', ageAttested: true });
@@ -1335,13 +1343,18 @@ async function main() {
   r = await api(athlete, 'GET', '/api/me');
   check('revoked account reads athlete again', r.json.role === 'athlete', r.json);
 
-  // Removing a pending invite means a later registration is athlete.
+  // Removing a pending invite closes the path entirely: with no
+  // invite and no roster link, invite-only registration refuses the
+  // sign-up outright (v54) and no account is created.
   r = await api(coach, 'POST', '/api/coach-invites', { email: 'pending@test.com' });
   check('pending invite is added', r.status === 200, r.status);
   r = await api(coach, 'DELETE', '/api/coach-invites/pending@test.com');
   check('pending invite is removed', r.status === 200 && r.json.removedInvite === true, r.json);
   r = await api(null, 'POST', '/api/register', { email: 'pending@test.com', password: 'testpass123', ageAttested: true });
-  check('registering after the invite was revoked is athlete', r.status === 201 && r.json.role === 'athlete', r.json);
+  check('registering after the invite was revoked is refused (invite-only)',
+    r.status === 403 && /invite-only/.test(r.json.error || ''), r.json);
+  r = await api(null, 'POST', '/api/login', { email: 'pending@test.com', password: 'testpass123' });
+  check('the refused registration created no account', r.status === 401, r.status);
   r = await api(coach, 'DELETE', '/api/coach-invites/ghost@test.com');
   check('removing an unknown email is 404', r.status === 404, r.status);
 
@@ -2317,16 +2330,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v53'") &&
-    swJs.text.includes("sprinter-app-v53"));
+    appJs.text.includes("const APP_VERSION = 'v54'") &&
+    swJs.text.includes("sprinter-app-v54"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v53"') &&
-    pageHtml.text.includes('Cadets Sprint · App v53') &&
+    pageHtml.text.includes('data-app-version="v54"') &&
+    pageHtml.text.includes('Cadets Sprint · App v54') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -2475,10 +2488,17 @@ async function main() {
   const wendyP = r.json.profile;
 
   /* Unlinked athlete: browses fine, check-in shows the clear
-     "ask your coach" state (never an error wall). */
+     "ask your coach" state (never an error wall). Invite-only (v54):
+     Will's email is claimed on a throwaway profile so he can
+     register at all, then unlinked — an existing account with no
+     binding, exactly the state this section exercises. */
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Gate', lastName: 'Fixture', events: [] });
+  const willGateP = r.json.profile.id;
+  await api(coach, 'PUT', '/api/profiles/' + willGateP + '/link', { email: 'will@test.com' });
   r = await api(null, 'POST', '/api/register', { email: 'will@test.com', password: 'testpass123', ageAttested: true });
   check('wellness athlete registers as athlete role', r.status === 201 && r.json.role === 'athlete', r.json);
   const will = cookieOf(r);
+  await api(coach, 'DELETE', '/api/profiles/' + willGateP + '/link');
   r = await api(will, 'GET', '/api/checkin/today');
   check('unlinked athlete check-in state is linked:false, not an error',
     r.status === 200 && r.json.linked === false && r.json.checkin === null, r.json);
@@ -2661,8 +2681,14 @@ async function main() {
   check('the TV board payload carries no health data',
     r.status === 200 && Array.isArray(r.json.healthFlags) && r.json.healthFlags.length === 0
     && r.json.wellness === null && Array.isArray(r.json.groups), r.json);
+  /* Invite-only (v54): claim the QA email on a throwaway profile,
+     register, then unlink — a plain athlete account, as before. */
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Gate', lastName: 'Qa', events: [] });
+  const qaGateP = r.json.profile.id;
+  await api(coach, 'PUT', '/api/profiles/' + qaGateP + '/link', { email: 'qa-assistant@test.com' });
   r = await api(null, 'POST', '/api/register', { email: 'qa-assistant@test.com', password: 'testpass123', ageAttested: true });
   const asst = cookieOf(r);
+  await api(coach, 'DELETE', '/api/profiles/' + qaGateP + '/link');
   r = await api(coach, 'GET', '/api/coaches');
   const asstUser = r.json.users.find(u => u.email === 'qa-assistant@test.com');
   const willUser = r.json.users.find(u => u.email === 'will@test.com');
@@ -3177,13 +3203,14 @@ async function main() {
   r = await api(coach, 'PUT', '/api/profiles/' + amyP.id, { status: 'active' });
   check('profile status edit back to active saves', r.status === 200 && r.json.profile.status === 'active', r.json);
 
-  /* Link Amy + Ben so they can check in. */
+  /* Link Amy + Ben so they can check in. Invite-only (v54): the
+     links go on first — the accounts are born bound to them. */
+  await api(coach, 'PUT', '/api/profiles/' + amyP.id + '/link', { email: 'amy@test.com' });
+  await api(coach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
   r = await api(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123', ageAttested: true });
   const amyAcct = cookieOf(r);
   r = await api(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123', ageAttested: true });
   const benAcct = cookieOf(r);
-  await api(coach, 'PUT', '/api/profiles/' + amyP.id + '/link', { email: 'amy@test.com' });
-  await api(coach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
 
   /* Amy: two flagged check-ins, 4 and 5 days ago. */
   r = await api(amyAcct, 'POST', '/api/checkin', { sleep: 5, soreness: 3, energy: 3, date: addDays(reportToday, -4) });
@@ -3605,8 +3632,15 @@ async function main() {
   const bob = cookieOf(r);
   r = await api(null, 'POST', '/api/register', { email: 'uma@test.com', password: 'testpass123', ageAttested: true });
   const uma = cookieOf(r);
+  /* Invite-only (v54): the "unlinked" athlete is claimed on a
+     throwaway profile to register, then unlinked — an account with
+     no binding, the state the feed checks below exercise. */
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Unl', lastName: 'Free', events: [] });
+  const unlGateP = r.json.profile.id;
+  await api(coach, 'PUT', '/api/profiles/' + unlGateP + '/link', { email: 'unl@test.com' });
   r = await api(null, 'POST', '/api/register', { email: 'unl@test.com', password: 'testpass123', ageAttested: true });
   const unl = cookieOf(r);
+  await api(coach, 'DELETE', '/api/profiles/' + unlGateP + '/link');
 
   /* Empty feed + auth gates. */
   r = await api(coach, 'GET', '/api/announcements');
@@ -3797,11 +3831,17 @@ async function main() {
   check('data fixture testing result saves', r.status === 201 || r.status === 200, r.status);
   r = await api(coach, 'POST', '/api/records', { event: '100m', mark: '9.99', name: 'Data Record', year: 2027, meet: 'Data Meet' });
   check('data fixture school record saves', r.status === 201 || r.status === 200, r.status);
+  /* Invite-only (v54): the profile link goes on first and the
+     account is born bound to it. */
+  r = await api(coach, 'PUT', '/api/profiles/' + dataP.id + '/link', { email: 'data@test.com' });
+  check('data fixture profile link is set before the account exists',
+    r.status === 200 && r.json.accountLinked === false, r.json);
   r = await api(null, 'POST', '/api/register', { email: 'data@test.com', password: 'testpass123', ageAttested: true });
   check('data fixture athlete account registers', r.status === 201, r.status);
   const dataUser = cookieOf(r);
-  r = await api(coach, 'PUT', '/api/profiles/' + dataP.id + '/link', { email: 'data@test.com' });
-  check('data fixture account links to the profile', r.status === 200, r.status);
+  r = await api(dataUser, 'GET', '/api/me');
+  check('data fixture account is born bound to the profile',
+    r.status === 200 && r.json.profileId === dataP.id, r.json);
   /* Dated ten days back on purpose: a check-in today would change
      the wellness-today counts the restart block asserts later. */
   const dataCheckinDate = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -4997,10 +5037,168 @@ async function waitForServer(tries = 60) {
           sr.status === 200 && Number.isInteger(sr.json.week) && Array.isArray(sr.json.groups) &&
           sr.json.groups.length === 0, sr.json && sr.json.week);
         sr = await seedApi(null, 'POST', '/api/register', { email: 'second@test.com', password: 'testpass123', ageAttested: true });
-        check('registering a removed seeded invite is athlete', sr.status === 201 && sr.json.role === 'athlete', sr.json);
+        check('registering a removed seeded invite is refused (invite-only)',
+          sr.status === 403 && /invite-only/.test(sr.json.error || ''), sr.json);
+        sr = await seedApi(null, 'POST', '/api/login', { email: 'second@test.com', password: 'testpass123' });
+        check('the refused seeded registration created no account', sr.status === 401, sr.status);
       } finally {
         seedChild.kill('SIGKILL');
         fs.rmSync(SEED_DIR, { recursive: true, force: true });
+      }
+    }
+
+    /* Invite-only registration gate (v54): past the owner
+       bootstrap, an email can register only when a coach has
+       already claimed it — a coach invite, or the linked email on
+       a live (not archived) roster profile. The gate reads those
+       stores live on every attempt, and a refused attempt changes
+       nothing: no account, no consumed invite, no touched link. */
+    {
+      const G_BASE = 'http://127.0.0.1:3227';
+      const gApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+        const res = await fetch(G_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const G_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-gate-'));
+      let gLog = '';
+      const gChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+        env: Object.assign({}, process.env, {
+          PORT: '3227', DATA_DIR: G_DIR, SESSION_SECRET: 'gate-secret',
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      gChild.stdout.on('data', d => { gLog += d; });
+      gChild.stderr.on('data', d => { gLog += d; });
+      const waitG = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(G_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      try {
+        check('gate server starts', await waitG(), gLog);
+
+        /* The owner bootstrap is untouched. */
+        let gr = await gApi(null, 'POST', '/api/register', { email: 'owner@gate.test', password: 'testpass123', ageAttested: true });
+        check('gate store: first account is the owner coach',
+          gr.status === 201 && gr.json.role === 'coach' && gr.json.isOwner === true, gr.json);
+        const gOwner = cookieOf(gr);
+
+        /* An unclaimed email: 403, the plain-words message, and no
+           partial state of any kind. */
+        gr = await gApi(null, 'POST', '/api/register', { email: 'stranger@gate.test', password: 'testpass123', ageAttested: true });
+        check('unclaimed email is refused 403 with the invite-only message',
+          gr.status === 403 && gr.json.error ===
+            "This app is invite-only — it's for SJC track athletes and coaches. If that's you, ask Coach AJ to add your email first, then sign up.",
+          gr.json);
+        gr = await gApi(null, 'POST', '/api/login', { email: 'stranger@gate.test', password: 'testpass123' });
+        check('the refused sign-up created no account (login is 401)', gr.status === 401, gr.status);
+        gr = await gApi(gOwner, 'GET', '/api/coaches');
+        check('the refused sign-up left the user list untouched',
+          (gr.json.users || []).length === 1, gr.json.users && gr.json.users.length);
+
+        /* A roster-linked email registers as an athlete, born
+           bound, and stays isolated from team data. */
+        gr = await gApi(gOwner, 'POST', '/api/profiles', { firstName: 'Gail', lastName: 'Gate', events: ['sprinter'] });
+        const gailP = gr.json.profile;
+        gr = await gApi(gOwner, 'PUT', '/api/profiles/' + gailP.id + '/link', { email: '  Gail@Gate.Test ' });
+        check('gate fixtures: roster link set (email normalized)', gr.status === 200, gr.json);
+        gr = await gApi(null, 'POST', '/api/register', { email: 'gail@gate.test', password: 'testpass123' });
+        check('a claimed email still needs the 13+ attestation', gr.status === 400, gr.status);
+        gr = await gApi(null, 'POST', '/api/register', { email: 'gail@gate.test', password: 'testpass123', ageAttested: true });
+        check('roster-linked email registers as an athlete, born bound',
+          gr.status === 201 && gr.json.role === 'athlete' && gr.json.profileId === gailP.id, gr.json);
+        const gail = cookieOf(gr);
+        gr = await gApi(gail, 'GET', '/api/groups');
+        check('the gated athlete is still isolated from team data (403)', gr.status === 403, gr.status);
+        gr = await gApi(null, 'POST', '/api/login', { email: 'gail@gate.test', password: 'testpass123' });
+        check('the gated athlete can log in afterwards', gr.status === 200 && gr.json.email === 'gail@gate.test', gr.json);
+
+        /* A coach-invited email registers as a coach. The invite is
+           a standing grant, not a ticket: it is NOT consumed — it
+           stays on the list, and removing it still revokes the
+           account's coach access, exactly as before the gate. */
+        gr = await gApi(gOwner, 'POST', '/api/coach-invites', { email: 'pal@gate.test' });
+        check('gate fixtures: coach invite added', gr.status === 200, gr.json);
+        gr = await gApi(null, 'POST', '/api/register', { email: 'pal@gate.test', password: 'testpass123', ageAttested: true });
+        check('coach-invited email registers as a coach', gr.status === 201 && gr.json.role === 'coach', gr.json);
+        const pal = cookieOf(gr);
+        gr = await gApi(gOwner, 'GET', '/api/coach-invites');
+        check('the invite is a standing grant — still listed after registration',
+          (gr.json.invites || []).includes('pal@gate.test'), gr.json.invites);
+        gr = await gApi(gOwner, 'DELETE', '/api/coach-invites/pal@gate.test');
+        check('removing the invite still revokes the coach access',
+          gr.status === 200 && gr.json.downgraded === true, gr.json);
+        gr = await gApi(pal, 'GET', '/api/me');
+        check('the revoked coach reads athlete again', gr.json.role === 'athlete', gr.json);
+
+        /* A refused attempt consumes nothing: an invited email that
+           fails the age gate keeps its invite and registers later. */
+        await gApi(gOwner, 'POST', '/api/coach-invites', { email: 'kim@gate.test' });
+        gr = await gApi(null, 'POST', '/api/register', { email: 'kim@gate.test', password: 'testpass123' });
+        check('an unattested attempt by an invited email stops at the age gate', gr.status === 400, gr.status);
+        gr = await gApi(gOwner, 'GET', '/api/coach-invites');
+        check('the refused attempt did not consume the invite',
+          (gr.json.invites || []).includes('kim@gate.test'), gr.json.invites);
+        gr = await gApi(null, 'POST', '/api/register', { email: 'kim@gate.test', password: 'testpass123', ageAttested: true });
+        check('the invited email registers once it attests', gr.status === 201 && gr.json.role === 'coach', gr.json);
+
+        /* The gate reads live data: a link added after boot opens
+           the path immediately. */
+        gr = await gApi(gOwner, 'POST', '/api/profiles', { firstName: 'Leo', lastName: 'Late', events: [] });
+        const leoP = gr.json.profile;
+        await gApi(gOwner, 'PUT', '/api/profiles/' + leoP.id + '/link', { email: 'leo@gate.test' });
+        gr = await gApi(null, 'POST', '/api/register', { email: 'leo@gate.test', password: 'testpass123', ageAttested: true });
+        check('a roster link added after boot lets the email register immediately',
+          gr.status === 201 && gr.json.role === 'athlete' && gr.json.profileId === leoP.id, gr.json);
+
+        /* Removing the link closes the path again. */
+        gr = await gApi(gOwner, 'POST', '/api/profiles', { firstName: 'Ned', lastName: 'Next', events: [] });
+        const nedP = gr.json.profile;
+        await gApi(gOwner, 'PUT', '/api/profiles/' + nedP.id + '/link', { email: 'ned@gate.test' });
+        await gApi(gOwner, 'DELETE', '/api/profiles/' + nedP.id + '/link');
+        gr = await gApi(null, 'POST', '/api/register', { email: 'ned@gate.test', password: 'testpass123', ageAttested: true });
+        check('once the roster link is removed the email is refused again', gr.status === 403, gr.status);
+
+        /* Archiving the profile (the app's delete) closes it too. */
+        gr = await gApi(gOwner, 'POST', '/api/profiles', { firstName: 'Ora', lastName: 'Old', events: [] });
+        const oraP = gr.json.profile;
+        await gApi(gOwner, 'PUT', '/api/profiles/' + oraP.id + '/link', { email: 'ora@gate.test' });
+        await gApi(gOwner, 'DELETE', '/api/profiles/' + oraP.id);
+        gr = await gApi(null, 'POST', '/api/register', { email: 'ora@gate.test', password: 'testpass123', ageAttested: true });
+        check('archiving the profile closes its email path too', gr.status === 403, gr.status);
+
+        /* Existing accounts are untouched: the gate is
+           registration-only. */
+        gr = await gApi(null, 'POST', '/api/login', { email: 'owner@gate.test', password: 'testpass123' });
+        check('existing accounts still sign in (gate is registration-only)',
+          gr.status === 200 && gr.json.isOwner === true, gr.json);
+
+        /* Served copy carries the model in plain words. */
+        const gJsRes = await fetch(G_BASE + '/app.js');
+        const gJsText = await gJsRes.text();
+        check('register form copy states the invite-only model',
+          gJsRes.status === 200 && gJsText.includes('This app is invite-only'), gJsRes.status);
+        check('coach invites card carries the registration model line',
+          gJsText.includes('Registration is invite-only: athletes register with the email on their roster profile'),
+          gJsRes.status);
+      } finally {
+        gChild.kill('SIGKILL');
+        fs.rmSync(G_DIR, { recursive: true, force: true });
       }
     }
 
@@ -5067,8 +5265,25 @@ async function waitForServer(tries = 60) {
         let dr = await dApi(null, 'POST', '/api/register', { email: 'dcoach@test.com', password: 'testpass123', ageAttested: true });
         check('digest store: first account is coach', dr.status === 201 && dr.json.role === 'coach', dr.json);
         const dCoach = cookieOf(dr);
+
+        /* Invite-only (v54): the roster + links exist before the
+           athlete accounts — they register born bound. */
+        dr = await dApi(dCoach, 'POST', '/api/groups', { name: 'Digest Group' });
+        const dGroup = dr.json.group;
+        dr = await dApi(dCoach, 'POST', '/api/profiles', { firstName: 'Amy', lastName: 'Ace', groupId: dGroup.id, events: ['sprinter'] });
+        const amyP = dr.json.profile;
+        dr = await dApi(dCoach, 'POST', '/api/profiles', { firstName: 'Ben', lastName: 'Bolt', groupId: dGroup.id, events: ['sprinter'] });
+        const benP = dr.json.profile;
+        dr = await dApi(dCoach, 'PUT', '/api/profiles/' + amyP.id + '/link', { email: 'amy@test.com' });
+        check('digest fixtures: amy link waits for her account',
+          dr.status === 200 && dr.json.accountLinked === false, dr.json);
+        await dApi(dCoach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
+
         dr = await dApi(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123', ageAttested: true });
         const dAmy = cookieOf(dr);
+        dr = await dApi(dAmy, 'GET', '/api/me');
+        check('digest fixtures: amy is born bound to her profile',
+          dr.status === 200 && dr.json.profileId === amyP.id, dr.json);
         dr = await dApi(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123', ageAttested: true });
         const dBen = cookieOf(dr);
 
@@ -5080,16 +5295,6 @@ async function waitForServer(tries = 60) {
         check('digest rejects an impossible week date', dr.status === 400, dr.status);
         dr = await dApi(dCoach, 'GET', '/api/digest?week=banana');
         check('digest rejects a non-date week', dr.status === 400, dr.status);
-
-        dr = await dApi(dCoach, 'POST', '/api/groups', { name: 'Digest Group' });
-        const dGroup = dr.json.group;
-        dr = await dApi(dCoach, 'POST', '/api/profiles', { firstName: 'Amy', lastName: 'Ace', groupId: dGroup.id, events: ['sprinter'] });
-        const amyP = dr.json.profile;
-        dr = await dApi(dCoach, 'POST', '/api/profiles', { firstName: 'Ben', lastName: 'Bolt', groupId: dGroup.id, events: ['sprinter'] });
-        const benP = dr.json.profile;
-        dr = await dApi(dCoach, 'PUT', '/api/profiles/' + amyP.id + '/link', { email: 'amy@test.com' });
-        check('digest fixtures: amy linked to her profile', dr.status === 200 && dr.json.accountLinked === true, dr.json);
-        await dApi(dCoach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
 
         /* --- check-ins, in the last completed week --- */
         const todayS = dFmt(new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })));
@@ -5325,14 +5530,22 @@ async function waitForServer(tries = 60) {
           lbTvCode.length > 500 && !lbTvCode.toLowerCase().includes('leaderboard') &&
           !lbTvCode.includes('/api/leaderboard'), lbTvCode.length);
 
-        /* Accounts: the coach, then two athletes linked below. */
+        /* Accounts: the coach, then two athletes linked below.
+           Invite-only (v54): each athlete email is claimed on a
+           throwaway profile to register, then unlinked — the real
+           roster links further down bind the accounts as before. */
         let lr = await lbApi(null, 'POST', '/api/register', { email: 'lcoach@test.com', password: 'testpass123', ageAttested: true });
         check('leaderboard store: first account is coach', lr.status === 201 && lr.json.role === 'coach', lr.json);
         const lbCoach = cookieOf(lr);
+        const lbGate = (await lbApi(lbCoach, 'POST', '/api/profiles', { firstName: 'Gate', lastName: 'Fixture', events: [] })).json.profile;
+        await lbApi(lbCoach, 'PUT', '/api/profiles/' + lbGate.id + '/link', { email: 'lia@test.com' });
         lr = await lbApi(null, 'POST', '/api/register', { email: 'lia@test.com', password: 'testpass123', ageAttested: true });
         const lbLia = cookieOf(lr);
+        await lbApi(lbCoach, 'DELETE', '/api/profiles/' + lbGate.id + '/link');
+        await lbApi(lbCoach, 'PUT', '/api/profiles/' + lbGate.id + '/link', { email: 'max@test.com' });
         lr = await lbApi(null, 'POST', '/api/register', { email: 'max@test.com', password: 'testpass123', ageAttested: true });
         const lbMax = cookieOf(lr);
+        await lbApi(lbCoach, 'DELETE', '/api/profiles/' + lbGate.id + '/link');
 
         /* Auth + the empty state + the read-only surface. */
         lr = await lbApi(null, 'GET', '/api/leaderboard');
@@ -5631,12 +5844,25 @@ async function waitForServer(tries = 60) {
       let pr = await plApi(null, 'POST', '/api/register', { email: 'plcoach@test.com', password: 'testpass123', ageAttested: true });
       check('pct store: first account is the coach', pr.status === 201 && pr.json.role === 'coach', pr.json);
       const plCoach = cookieOf(pr);
-      pr = await plApi(null, 'POST', '/api/register', { email: 'esther@test.com', password: 'testpass123', ageAttested: true });
+      /* Invite-only (v54): claim each athlete email on a throwaway
+         profile to register, then unlink — plain athlete accounts,
+         bound later by this section's own roster links. */
+      const plGate = (await plApi(plCoach, 'POST', '/api/profiles', { firstName: 'Gate', lastName: 'Fixture', events: [] })).json.profile;
+      const plRegister = async (email) => {
+        await plApi(plCoach, 'PUT', '/api/profiles/' + plGate.id + '/link', { email });
+        const rr = await plApi(null, 'POST', '/api/register', { email, password: 'testpass123', ageAttested: true });
+        await plApi(plCoach, 'DELETE', '/api/profiles/' + plGate.id + '/link');
+        return rr;
+      };
+      pr = await plRegister('esther@test.com');
       const plEsther = cookieOf(pr);
-      pr = await plApi(null, 'POST', '/api/register', { email: 'mia@test.com', password: 'testpass123', ageAttested: true });
+      pr = await plRegister('mia@test.com');
       const plMia = cookieOf(pr);
-      pr = await plApi(null, 'POST', '/api/register', { email: 'solo@test.com', password: 'testpass123', ageAttested: true });
+      pr = await plRegister('solo@test.com');
       const plSolo = cookieOf(pr);
+      /* Archive the throwaway profile: the load chart walks the
+         whole active roster and it must not gain a row. */
+      await plApi(plCoach, 'DELETE', '/api/profiles/' + plGate.id);
 
       pr = await plApi(plCoach, 'POST', '/api/groups', { name: 'PL Sprinters' });
       const plGroupA = pr.json.group;
@@ -5933,8 +6159,17 @@ async function waitForServer(tries = 60) {
       let wr = await wrApi(null, 'POST', '/api/register', { email: 'wrcoach@test.com', password: 'testpass123', ageAttested: true });
       check('weight-room store: first account is the coach', wr.status === 201 && wr.json.role === 'coach', wr.json);
       const wrCoach = cookieOf(wr);
+      /* Invite-only (v54): claim the athlete email on a throwaway
+         profile to register, then unlink — an unlinked athlete
+         account, as this section has always used. */
+      const wrGate = (await wrApi(wrCoach, 'POST', '/api/profiles', { firstName: 'Gate', lastName: 'Fixture', events: [] })).json.profile;
+      await wrApi(wrCoach, 'PUT', '/api/profiles/' + wrGate.id + '/link', { email: 'wrathlete@test.com' });
       wr = await wrApi(null, 'POST', '/api/register', { email: 'wrathlete@test.com', password: 'testpass123', ageAttested: true });
       const wrAthlete = cookieOf(wr);
+      await wrApi(wrCoach, 'DELETE', '/api/profiles/' + wrGate.id + '/link');
+      /* Archive the throwaway profile too: the floor view and the
+         load chart walk the active roster, and it must not appear. */
+      await wrApi(wrCoach, 'DELETE', '/api/profiles/' + wrGate.id);
 
       wr = await wrApi(wrCoach, 'POST', '/api/groups', { name: 'WR Sprinters' });
       const wrGroupA = wr.json.group;
@@ -6199,8 +6434,13 @@ async function waitForServer(tries = 60) {
       check('reports-library server starts', await waitRp(), rpLog);
       let rp = await rpApi(null, 'POST', '/api/register', { email: 'rpcoach@test.com', password: 'testpass123', ageAttested: true });
       const rpCoach = cookieOf(rp);
+      /* Invite-only (v54): claim the athlete email on a throwaway
+         profile to register, then unlink — a plain athlete account. */
+      const rpGate = (await rpApi(rpCoach, 'POST', '/api/profiles', { firstName: 'Gate', lastName: 'Fixture', events: [] })).json.profile;
+      await rpApi(rpCoach, 'PUT', '/api/profiles/' + rpGate.id + '/link', { email: 'rpathlete@test.com' });
       rp = await rpApi(null, 'POST', '/api/register', { email: 'rpathlete@test.com', password: 'testpass123', ageAttested: true });
       const rpAthlete = cookieOf(rp);
+      await rpApi(rpCoach, 'DELETE', '/api/profiles/' + rpGate.id + '/link');
 
       /* Served wiring: the three new reports + the CSV download. */
       const rpJs = await rpText(null, '/app.js');
@@ -6478,8 +6718,14 @@ async function waitForServer(tries = 60) {
       check('registration with the attestation succeeds; first account is the coach',
         cp.status === 201 && cp.json.role === 'coach', cp.json);
       const cpCoach = cookieOf(cp);
+      /* Invite-only (v54): each athlete email is claimed on a
+         throwaway profile to register, then unlinked — the roster
+         fixtures below bind the accounts to their real profiles. */
+      const cpGate = (await cpApi(cpCoach, 'POST', '/api/profiles', { firstName: 'Gate', lastName: 'Fixture' })).json.profile;
       const mkAthlete = async (email) => {
+        await cpApi(cpCoach, 'PUT', '/api/profiles/' + cpGate.id + '/link', { email });
         const rr = await cpApi(null, 'POST', '/api/register', { email, password: 'testpass123', ageAttested: true });
+        await cpApi(cpCoach, 'DELETE', '/api/profiles/' + cpGate.id + '/link');
         return cookieOf(rr);
       };
       const cpHal = await mkAthlete('hal@test.com');

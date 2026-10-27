@@ -142,8 +142,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v53';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v53';
+const APP_VERSION = 'v54';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v54';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -1530,7 +1530,7 @@ function renderAccount() {
       </form>
       <form id="register-form" class="card">
         <h2>Create an account</h2>
-        <p class="muted">Free. Athletes: use your school email — your account is how your coach links you for the daily check-in, and it holds your practice log and cross-training swaps. Coach accounts unlock the coach tools.</p>
+        <p class="muted">This app is invite-only — it's for SJC track athletes and coaches. Athletes: sign up with the email your coach added to your roster profile (your school email) — that is how your account links you for the daily check-in, and it holds your practice log and cross-training swaps. Coaches: sign up with the email the head coach invited.</p>
         <label>Email <input type="email" id="rg-email" required autocomplete="email"></label>
         <label>Password (8+ characters) <input type="password" id="rg-pass" required autocomplete="new-password" minlength="8"></label>
         <label class="check-line"><input type="checkbox" id="rg-age" required> I am 13 or older</label>
@@ -2686,7 +2686,8 @@ async function renderCoachInvites() {
     const coachEmails = new Set(coaches.map(u => u.email));
     const pending = (data.invites || []).filter(e => !coachEmails.has(e));
     let html = `<div class="card"><h3>Assistant coaches</h3>
-      <p class="muted">An invited coach shares full access to this team's data — roster, testing, weekly numbers, and health concerns. Invite by email; when they create an account with that email, they land as a coach.</p>`;
+      <p class="muted">An invited coach shares full access to this team's data — roster, testing, weekly numbers, and health concerns. Invite by email; when they create an account with that email, they land as a coach.</p>
+      <p class="muted">Registration is invite-only: athletes register with the email on their roster profile; coaches register with an invited email.</p>`;
     if (isOwner) {
       html += `<form id="invite-form">
         <label>Email <input type="email" id="invite-email" required autocomplete="email" placeholder="assistant@school.edu"></label>
