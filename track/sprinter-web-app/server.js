@@ -2292,6 +2292,16 @@ function matchProfileByName(rawName) {
 
 const DEVICE_NAME_HEADERS = ['name', 'athlete', 'athlete name', 'player', 'player name', 'full name'];
 const DEVICE_DATE_HEADERS = ['date', 'test date', 'session date', 'date tested'];
+/* Which normalized headers name the session date: one of the exact
+   synonyms, optionally followed by a qualifier word — VALD Hub's
+   summary export heads its date column "Date UTC", and "Date (UTC)"
+   normalizes to the same "date utc". A header starting "date of"
+   is a date ABOUT something else (Date of Birth, Date of Injury),
+   never the session date, so that family is excluded first. */
+function isDeviceDateHeader(norm) {
+  if (norm.startsWith('date of ')) return false;
+  return DEVICE_DATE_HEADERS.some(s => norm === s || norm.startsWith(s + ' '));
+}
 const DEVICE_UNITS = ['cm', 'mm', 'm', 's', 'ms', 'n', 'kg', 'lb', 'lbs', '%', 'w', 'reps', 'hz', 'in'];
 function normalizeHeader(h) {
   return String(h || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -2406,7 +2416,7 @@ function previewDeviceCsv(device, csvText) {
      the coach what day the testing happened, and the commit files
      all rows under that one supplied date. A file WITH a date
      column keeps per-row dates, exactly as before. */
-  const dateIdx = norm.findIndex(h => DEVICE_DATE_HEADERS.includes(h));
+  const dateIdx = norm.findIndex(isDeviceDateHeader);
   const hasDates = dateIdx >= 0;
   /* Metric columns: every other column that carries at least one
      number somewhere in the file — recognized VALD headers and

@@ -136,8 +136,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v49';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v49';
+const APP_VERSION = 'v50';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v50';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }

@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v49',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v49"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v50',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v50"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2317,16 +2317,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v49'") &&
-    swJs.text.includes("sprinter-app-v49"));
+    appJs.text.includes("const APP_VERSION = 'v50'") &&
+    swJs.text.includes("sprinter-app-v50"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v49"') &&
-    pageHtml.text.includes('Cadets Sprint · App v49') &&
+    pageHtml.text.includes('data-app-version="v50"') &&
+    pageHtml.text.includes('Cadets Sprint · App v50') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -4363,6 +4363,50 @@ async function main() {
   check('app JS carries the dateless-import date prompt and the sessionDate commit',
     appJs.text.includes('dev-session-date') && appJs.text.includes('sessionDate') &&
     appJs.text.includes('This file has no date column'), 'app.js');
+
+  /* The real VALD summary-export layout (AJ's own file, Oct 2026):
+     dates DO exist, headed "Date UTC" with M/D/YYYY values, next to
+     Time UTC / Device / Test text columns, an ExternalId column, and
+     unicode metric headers like (N⋅s). Recognizing the qualified
+     date header files these under the file's own dates — no prompt. */
+  const nbReal = [
+    'Name,ExternalId,Date UTC,Time UTC,Device,Test,L Max Force (N),R Max Force (N),Max Imbalance (%),L Max Impulse 50ms (N⋅s)',
+    'Dana Device,,10/16/2025,3:59 PM,NordBord-1335,Nordic,384,437.75,12.28,',
+    'Evan Device,,10/16/2025,4:02 PM,NordBord-1335,Nordic,350,355,1.43,120.5',
+  ].join('\n');
+  r = await api(coach, 'POST', '/api/devices/nordbord/preview', { csv: nbReal });
+  const nbRealPv = r.json;
+  check('real VALD layout: "Date UTC" is the date column — no coach prompt',
+    r.status === 200 && nbRealPv.needsDate === false && nbRealPv.rows.length === 2 &&
+    nbRealPv.rows.every(x => x.date === '2025-10-16'), nbRealPv);
+  check('real VALD layout: Time/Device/Test/ExternalId columns are not metrics; the numbers are',
+    !!nbRealPv.rows[0] && nbRealPv.rows[0].metrics['L Max Force (N)'] === 384 &&
+    nbRealPv.rows[0].metrics['R Max Force (N)'] === 437.75 &&
+    nbRealPv.rows[0].metrics['Max Imbalance (%)'] === 12.28 &&
+    nbRealPv.rows[0].metrics['Time UTC'] === undefined &&
+    nbRealPv.rows[0].metrics['Device'] === undefined &&
+    nbRealPv.rows[0].metrics['Test'] === undefined &&
+    nbRealPv.rows[0].metrics['ExternalId'] === undefined, nbRealPv.rows);
+  check('real VALD layout: a unicode (N⋅s) metric header is captured under its own name',
+    !!nbRealPv.rows[1] && nbRealPv.rows[1].metrics['L Max Impulse 50ms (N⋅s)'] === 120.5,
+    nbRealPv.rows && nbRealPv.rows[1] && nbRealPv.rows[1].metrics);
+  r = await api(coach, 'POST', '/api/devices/nordbord/commit',
+    { rows: nbRealPv.rows.map(x => ({ profileId: x.profileId, date: x.date, metrics: x.metrics })) });
+  check('real VALD layout commits under the file dates with no sessionDate sent',
+    r.status === 200 && r.json.filed === 2 && r.json.skipped === 0, r.json);
+  r = await api(coach, 'GET', '/api/devices/nordbord/summary');
+  check('the real-layout session lands on its own file date (2025-10-16)',
+    r.json.days.some(d => d.date === '2025-10-16' && d.athletes === 2), r.json.days);
+  /* "Date of Birth" must never be mistaken for the session date. */
+  r = await api(coach, 'POST', '/api/devices/nordbord/preview',
+    { csv: 'Name,Date of Birth,Max Force Left (N)\nDana Device,3/4/2011,300' });
+  check('"Date of Birth" is not a session-date column (coach-dated mode instead)',
+    r.status === 200 && r.json.needsDate === true && r.json.rows[0].date === null, r.json);
+  /* The parenthesized qualifier form normalizes to the same match. */
+  r = await api(coach, 'POST', '/api/devices/nordbord/preview',
+    { csv: 'Name,Date (UTC),Max Force Left (N)\nDana Device,10/17/2025,301' });
+  check('"Date (UTC)" is recognized as the date column',
+    r.status === 200 && r.json.needsDate === false && r.json.rows[0].date === '2025-10-17', r.json);
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }
