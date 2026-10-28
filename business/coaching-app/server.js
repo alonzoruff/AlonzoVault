@@ -88,8 +88,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v6',
-  cache: 'ruffin-performance-v6',
+  version: 'v7',
+  cache: 'ruffin-performance-v7',
 };
 
 /* ------------------------------------------------------------------ */
@@ -138,6 +138,7 @@ let db = {
   coachNotes: {},
   announcements: [],
   memberLogs: [],
+  formChecks: [],
   floorProgress: {},
 };
 
@@ -270,6 +271,10 @@ function migrate() {
   // in AMS and can delete one for moderation, never edit). Training
   // data only — a log never files a health concern.
   db.memberLogs = Array.isArray(db.memberLogs) ? db.memberLogs : [];
+  // Member form checks: one flat list of { id, profileId, videoUrl,
+  // note, context, status ('pending'|'replied'), reply, createdAt,
+  // updatedAt } — a member submits a video for a coach to review.
+  db.formChecks = Array.isArray(db.formChecks) ? db.formChecks : [];
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     // The first account is the head coach (owner). Stores written
@@ -1786,6 +1791,90 @@ function memberLogSummaryFor(profileId, today) {
   return { total: logs.length, lastLogDate, last7Count, weekCount };
 }
 /* ------------------------------------------------------------------ */
+/* Member form checks (member video -> coach queue -> in-app reply)    */
+/* ------------------------------------------------------------------ */
+/* A member uploads a video of a drill, a lift, or a session (the
+   file itself goes browser -> Cloudinary, exactly like a coach demo
+   video) and submits its URL here with a short note. The request
+   sits in the coach queue until a coach replies in the app; the
+   member reads that reply on their own list. A form check belongs
+   to a roster PROFILE (profileId), is written only from the account
+   linked to that profile, and is read back only by that member and
+   by coaches. There is no membership tier field anywhere in this
+   store, so the weekly cadence is a counter plus copy, never a
+   gate: submissions are always accepted, and weekCount simply says
+   how many a member has sent in the current Mon-Sun week so the
+   member sees the rhythm and the coach can prioritize by eye. */
+function publicFormCheck(fc) {
+  return {
+    id: fc.id, profileId: fc.profileId,
+    videoUrl: fc.videoUrl || '',
+    note: fc.note || '', context: fc.context || '',
+    status: fc.status === 'replied' ? 'replied' : 'pending',
+    reply: (fc.reply && typeof fc.reply === 'object' && !Array.isArray(fc.reply))
+      ? { text: fc.reply.text || '', at: fc.reply.at || null } : null,
+    createdAt: fc.createdAt, updatedAt: fc.updatedAt,
+  };
+}
+/* One profile's form checks, newest first. */
+function formChecksFor(profileId) {
+  return db.formChecks
+    .filter(fc => fc.profileId === profileId)
+    .slice()
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+    .map(publicFormCheck);
+}
+/* The calendar day a form check was submitted, in the same
+   New York day shape todayStr() uses, so the week window lines up
+   with every other weekly count in the app. */
+function formCheckDate(fc) {
+  const d = new Date(fc.createdAt);
+  return Number.isNaN(d.getTime()) ? '' : NY_TODAY_FMT.format(d);
+}
+/* How many form checks one member has submitted in the current
+   Mon-Sun week (the app's weekly convention, as the weekly tracker
+   and the member-log summary use it). */
+function formCheckWeekCount(profileId, today) {
+  const mon = mondayOf(today);
+  const sun = mon ? addDaysStr(mon, 6) : today;
+  let n = 0;
+  for (const fc of db.formChecks) {
+    if (fc.profileId !== profileId) continue;
+    const d = formCheckDate(fc);
+    if (d && d >= mon && d <= sun) n++;
+  }
+  return n;
+}
+/* A submitted video URL is accepted only under the exact rule the
+   demo-media path uses (uploadEntry): an https URL on
+   res.cloudinary.com under this account's cloud. Anything else —
+   http, a different cloud, a foreign host, not a URL at all — is
+   not a form-check video. */
+function formCheckVideoUrl(raw) {
+  if (typeof raw !== 'string') return null;
+  const entry = uploadEntry(raw.trim(), '');
+  return entry ? entry.url : null;
+}
+function validateFormCheck(body) {
+  const videoUrl = formCheckVideoUrl(body.videoUrl);
+  if (!videoUrl) {
+    return { error: 'That video link is not an uploaded video — upload your video first, then send the form check.' };
+  }
+  if (typeof body.note === 'string' && body.note.length > 500) {
+    return { error: 'Keep the note to 500 characters or less.' };
+  }
+  if (typeof body.context === 'string' && body.context.length > 120) {
+    return { error: 'Keep the context to 120 characters or less.' };
+  }
+  return {
+    fields: {
+      videoUrl,
+      note: clean(body.note, 500),
+      context: clean(body.context, 120),
+    },
+  };
+}
+/* ------------------------------------------------------------------ */
 /* Member intake (structured intake + waiver + parent consent)         */
 /* ------------------------------------------------------------------ */
 /* One form a linked member completes once (and can update): their
@@ -2886,7 +2975,7 @@ const BACKUP_ARRAY_KEYS = {
   customWeeklyMetrics: 'key', inventory: 'id', meetResults: 'id',
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
-  announcements: 'id', memberLogs: 'id',
+  announcements: 'id', memberLogs: 'id', formChecks: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
@@ -2913,6 +3002,7 @@ function buildBackupData() {
     customWorkoutsSeeded: db.customWorkoutsSeeded === true,
     programs: db.programs, programApplications: db.programApplications,
     announcements: db.announcements, memberLogs: db.memberLogs,
+    formChecks: db.formChecks,
     floorProgress: db.floorProgress,
   };
 }
@@ -3667,6 +3757,64 @@ async function handleApi(req, res, url) {
       athleteName: prof.firstName + ' ' + prof.lastName,
       tests: speedReportFor(prof.id),
       nextTestDate: nextTestDateInfo(),
+    });
+  }
+
+  /* ---------- member form checks (member-entered, own only) ----------
+     A member submits a video they uploaded (browser -> Cloudinary,
+     the demo-video path) for a coach to review, and reads the
+     coach's reply here. The profile always comes from the caller's
+     own link binding, never from the request, so a member can only
+     ever read or write their own form checks — another member's
+     request is invisible by construction. Unlinked accounts get
+     the 403 notLinked wall, the same as the Speed Report. Nothing
+     from this payload goes to the TV board, the leaderboard, or
+     any public surface. The weekly cadence is a counter, not a
+     gate: every valid submission is accepted, and weekCount says
+     how many the member has sent this Mon-Sun week. */
+  if (p === '/api/my/form-checks' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can send a form check.',
+        notLinked: true,
+      });
+    }
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      formChecks: formChecksFor(prof.id),
+      weekCount: formCheckWeekCount(prof.id, todayStr()),
+    });
+  }
+
+  if (p === '/api/my/form-checks' && req.method === 'POST') {
+    const prof = linkedProfileFor(user);
+    if (prof && prof.archived) {
+      return sendJson(res, 403, {
+        error: 'This roster profile is archived. Ask your coach to restore it before sending a form check.',
+        notLinked: false,
+      });
+    }
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can send a form check.',
+        notLinked: true,
+      });
+    }
+    const body = await readBody(req);
+    const v = validateFormCheck(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const now = new Date().toISOString();
+    const fc = Object.assign(
+      { id: crypto.randomUUID(), profileId: prof.id, status: 'pending', reply: null, createdAt: now, updatedAt: now },
+      v.fields
+    );
+    db.formChecks.push(fc);
+    saveDb();
+    return sendJson(res, 201, {
+      ok: true, formCheck: publicFormCheck(fc),
+      weekCount: formCheckWeekCount(prof.id, todayStr()),
     });
   }
 
@@ -4568,6 +4716,63 @@ async function handleApi(req, res, url) {
     const idx = db.memberLogs.findIndex(l => l.id === logId && l.athleteId === prof.id);
     if (idx < 0) return sendJson(res, 404, { error: 'Log not found.' });
     db.memberLogs.splice(idx, 1);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---------- member form checks (the coach queue) ----------
+     Coach-only by the gate above. The queue is every member's
+     requests, pending first and then oldest first, each row
+     carrying that member's weekCount so the coach can prioritize
+     by eye. A coach replies in the app (a reply can be updated by
+     posting again) and can delete a request for moderation — the
+     member-log moderation precedent — but a coach never creates a
+     form check: the request is the member's own. */
+  if (p === '/api/form-checks' && req.method === 'GET') {
+    const today = todayStr();
+    const queue = db.formChecks.slice()
+      .sort((a, b) => {
+        const rank = (fc) => (fc.status === 'replied' ? 1 : 0);
+        return rank(a) - rank(b)
+          || (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0);
+      })
+      .map(fc => {
+        const prof = profileById(fc.profileId);
+        const g = prof && prof.groupId ? groupById(prof.groupId) : null;
+        return Object.assign({}, publicFormCheck(fc), {
+          memberName: prof ? (prof.firstName + ' ' + prof.lastName).trim() : '',
+          profile: prof ? {
+            id: prof.id, firstName: prof.firstName, lastName: prof.lastName,
+            name: (prof.firstName + ' ' + prof.lastName).trim(),
+            groupId: prof.groupId || null, groupName: g ? g.name : null,
+          } : null,
+          weekCount: formCheckWeekCount(fc.profileId, today),
+        });
+      });
+    return sendJson(res, 200, {
+      formChecks: queue,
+      pendingCount: queue.filter(fc => fc.status !== 'replied').length,
+    });
+  }
+  const formCheckReplyMatch = p.match(/^\/api\/form-checks\/([^/]+)\/reply$/);
+  if (formCheckReplyMatch && req.method === 'POST') {
+    const fc = db.formChecks.find(x => x.id === decodeURIComponent(formCheckReplyMatch[1]));
+    if (!fc) return sendJson(res, 404, { error: 'Form check not found.' });
+    const body = await readBody(req);
+    const text = clean(body.text, 2000);
+    if (!text) return sendJson(res, 400, { error: 'Write the reply first.' });
+    const now = new Date().toISOString();
+    fc.reply = { text, at: now };
+    fc.status = 'replied';
+    fc.updatedAt = now;
+    saveDb();
+    return sendJson(res, 200, { ok: true, formCheck: publicFormCheck(fc) });
+  }
+  const formCheckMatch = p.match(/^\/api\/form-checks\/([^/]+)$/);
+  if (formCheckMatch && req.method === 'DELETE') {
+    const idx = db.formChecks.findIndex(x => x.id === decodeURIComponent(formCheckMatch[1]));
+    if (idx < 0) return sendJson(res, 404, { error: 'Form check not found.' });
+    db.formChecks.splice(idx, 1);
     saveDb();
     return sendJson(res, 200, { ok: true });
   }

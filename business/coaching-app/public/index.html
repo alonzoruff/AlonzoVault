@@ -215,6 +215,7 @@
       <button type="button" class="menu-item" data-view="calendar">Team Calendar <span>The whole month at a glance: every group's sessions, meets, and test days</span></button>
       <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
       <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, attention flags, and the full picture — wellness, testing, meets, attendance, health, goals, and private coach notes</span></button>
+      <button type="button" class="menu-item" data-view="formcheckqueue">Form Checks <span>Videos members sent for review — watch, reply in the app, and clear the queue</span></button>
       <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book — present, late, excused, absent — and every athlete's record</span></button>
       <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
       <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
@@ -285,6 +286,7 @@
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <p class="view-sub muted">Your private practice log. Save what you actually ran, so you can look back at it — only you can see it.</p>
     <div id="member-logs-slot"></div>
+    <div id="form-checks-slot"></div>
     <div id="checkin-history"></div>
     <div id="log-gate"></div>
     <div id="log-main" hidden>
@@ -794,6 +796,15 @@
     <div class="subnav-slot"></div>
     <p class="view-sub muted">The member-management home: the whole roster with status and attention flags, and one page per member — wellness, testing, meet results, attendance, health, goals, and private coach notes. Coaches only.</p>
     <div id="ams-main"></div>
+  </section>
+
+  <!-- FORM CHECK QUEUE (coach) -->
+  <section id="view-formcheckqueue" class="view">
+    <h1>Form Checks</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Videos members sent for a form check, oldest waiting first. Watch each one, write your reply in the app, and the member sees it on their own list. Coaches only.</p>
+    <div id="formcheckqueue-main"></div>
   </section>
 
   <!-- CLUB RECORDS -->

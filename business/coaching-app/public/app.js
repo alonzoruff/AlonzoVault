@@ -327,12 +327,12 @@ const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -427,7 +427,7 @@ function showView(name) {
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'weightroom') enterWeightRoom(); else exitWeightRoom();
-  if (name === 'home' || name === 'log') { renderCheckin(); renderMemberLogs(); }
+  if (name === 'home' || name === 'log') { renderCheckin(); renderMemberLogs(); renderFormChecks(); }
   if (name === 'home' || name === 'account') renderMemberIntake();
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
@@ -440,6 +440,7 @@ function showView(name) {
   if (name === 'wellness') renderWellness();
   if (name === 'attendance') renderAttendance();
   if (name === 'ams') renderAms();
+  if (name === 'formcheckqueue') renderCoachFormChecks();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
   if (name === 'digest') renderDigest();
@@ -1694,6 +1695,183 @@ function paintMemberLogEditor() {
       renderMemberLogs();
     } catch (err) { alert(err.message); }
   });
+}
+
+/* ---------------- member form checks ----------------
+   A member sends a video of a drill, a lift, or a session to their
+   coach for a form check: the file uploads browser -> Cloudinary
+   with the same helper and the same constraints as a coach demo
+   video (video files only, up to 100 MB, progress shown), then the
+   saved URL goes to the server with a short note and context. The
+   server binds every read and write to the member's own linked
+   profile, so this UI only ever handles the caller's own requests,
+   and the coach's reply reads back here. The weekly rhythm is
+   copy plus a counter, never a block: standard membership includes
+   one form check per week, Membership + Coaching members get
+   priority review within 48 hours, and extra submissions still
+   join the queue. */
+let fcSelectedFile = null;
+function formCheckVideoHtml(fc) {
+  return mediaPlayerHtml({ type: 'upload', url: fc.videoUrl, embedUrl: fc.videoUrl, title: fc.context || 'Form check video' });
+}
+function formCheckStatusBadge(fc) {
+  return fc.status === 'replied'
+    ? '<span class="badge low">Replied</span>'
+    : '<span class="badge plain">Waiting for coach</span>';
+}
+function formCheckDateLine(fc) {
+  const d = String(fc.createdAt || '').slice(0, 10);
+  return d ? fmtDate(parseDate(d)) : '';
+}
+async function renderFormChecks() {
+  const slot = $('#form-checks-slot');
+  if (!slot) return;
+  if (!isAthleteUser()) { slot.innerHTML = ''; return; }
+  let data;
+  try {
+    data = await api('/api/my/form-checks');
+    state.formChecksData = data;
+  } catch (err) {
+    if (/not linked/i.test(err.message || '')) {
+      slot.innerHTML = `<div class="card">
+        <h2>Form Checks</h2>
+        <p><strong>Ask your coach to link your account.</strong></p>
+        <p class="muted">Once your coach links this email (${esc(state.user.email)}) to your name on the member roster, you can send a video here for a form check — and read your coach's reply in the app.</p>
+      </div>`;
+      return;
+    }
+    slot.innerHTML = `<div class="card"><h2>Form Checks</h2><p class="error">Could not load your form checks: ${esc(err.message)}</p><button class="btn secondary" id="fc-retry" type="button">Retry</button></div>`;
+    const rb = slot.querySelector('#fc-retry');
+    if (rb) rb.addEventListener('click', renderFormChecks);
+    return;
+  }
+  paintFormChecks(data);
+}
+function paintFormChecks(data) {
+  const slot = $('#form-checks-slot');
+  if (!slot) return;
+  const checks = data.formChecks || [];
+  const weekCount = data.weekCount || 0;
+  slot.innerHTML = `<div class="card">
+    <h2>Form Checks</h2>
+    <p class="muted">Send your coach a short video of a drill, a lift, or a session, and get a reply right here in the app. Standard membership includes one form check per week; Membership + Coaching members get priority review within 48 hours.</p>
+    <p class="checkin-streak">${weekCount} form check${weekCount === 1 ? '' : 's'} sent this week</p>
+    ${weekCount >= 1 ? '<p class="muted">You have already sent your form check for this week — extra submissions join the queue and may be reviewed the following week.</p>' : ''}
+    ${state.fcMsg ? `<p class="muted">${esc(state.fcMsg)}</p>` : ''}
+    <label>Your video
+      <input type="file" id="fc-file" accept="video/*"></label>
+    <p class="muted" id="fc-upload-status">A video file up to 100 MB — it uploads first, then your coach can watch it right in the app.</p>
+    <label>What is this? (optional) <input type="text" id="fc-context" maxlength="120" placeholder="e.g. Block starts, Tuesday session"></label>
+    <label>Note for your coach (optional) <input type="text" id="fc-note" maxlength="500" placeholder="e.g. Watch my first step — does my shin angle look right?"></label>
+    <p class="error" id="fc-err"></p>
+    <button class="btn primary" id="fc-submit" type="button" style="width:auto">Send form check</button>
+    ${checks.length ? checks.map(fc => `
+    <div class="roster-row" style="display:block">
+      <p><strong>${esc(fc.context || 'Form check')}</strong> · ${esc(formCheckDateLine(fc))} ${formCheckStatusBadge(fc)}</p>
+      ${formCheckVideoHtml(fc)}
+      ${fc.note ? `<p class="muted">Your note: ${esc(fc.note)}</p>` : ''}
+      ${fc.reply ? `<p><strong>Coach reply:</strong> ${esc(fc.reply.text)}</p>` : '<p class="muted">No reply yet — your coach reviews the queue in order.</p>'}
+    </div>`).join('') : '<p class="muted">No form checks sent yet — your first one takes under a minute.</p>'}
+  </div>`;
+  const fileInput = $('#fc-file');
+  if (fileInput) fileInput.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+    const errEl = $('#fc-err');
+    const status = $('#fc-upload-status');
+    fcSelectedFile = null;
+    if (!file) return;
+    if (file.type && !file.type.startsWith('video/')) {
+      if (errEl) errEl.textContent = 'That file is not a video.';
+      fileInput.value = '';
+      return;
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      if (errEl) errEl.textContent = 'That video is over 100 MB — trim it or export a smaller file.';
+      fileInput.value = '';
+      return;
+    }
+    if (errEl) errEl.textContent = '';
+    fcSelectedFile = file;
+    if (status) status.textContent = file.name + ' — ready to send (up to 100 MB).';
+  });
+  const submitBtn = $('#fc-submit');
+  if (submitBtn) submitBtn.addEventListener('click', async () => {
+    const errEl = $('#fc-err');
+    const status = $('#fc-upload-status');
+    if (!fcSelectedFile) {
+      if (errEl) errEl.textContent = 'Pick a video first.';
+      return;
+    }
+    try {
+      const secureUrl = await uploadDemoVideo(fcSelectedFile, (pct) => {
+        if (status) status.textContent = 'Uploading… ' + pct + '%';
+      });
+      await apiPost('/api/my/form-checks', {
+        videoUrl: secureUrl,
+        context: $('#fc-context').value,
+        note: $('#fc-note').value,
+      });
+      fcSelectedFile = null;
+      state.fcMsg = 'Sent — your coach can see it in the form check queue. ✓';
+      renderFormChecks();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message;
+      if (status) status.textContent = 'A video file up to 100 MB — it uploads first, then your coach can watch it right in the app.';
+    }
+  });
+}
+
+/* ---------------- coach form check queue ----------------
+   Every member's form checks in one queue: pending first, oldest
+   waiting first (the server orders it), each row with the member's
+   name, the video playable in place, their note, and how many they
+   have sent this week so the coach can prioritize by eye. The
+   coach replies in the app — the member reads the reply on their
+   own list — and can delete a request for moderation. Coaches
+   never create a form check: the request is the member's own. */
+async function renderCoachFormChecks() {
+  const el = $('#formcheckqueue-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The form check queue lives here.'); return; }
+  let data;
+  try {
+    data = await api('/api/form-checks');
+  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const checks = data.formChecks || [];
+  const pending = data.pendingCount || 0;
+  el.innerHTML = `<div class="card">
+    <h2>Form check queue ${pending ? `<span class="badge plain">${pending} waiting</span>` : ''}</h2>
+    <p class="muted">Pending first, oldest waiting first. Standard membership includes one form check per week; Membership + Coaching members get priority review within 48 hours — each row shows how many that member has sent this week.</p>
+    ${checks.length ? checks.map(fc => `
+    <div class="roster-row" style="display:block" data-fc-row="${fc.id}">
+      <p><strong>${esc(fc.memberName || 'Member')}</strong> · ${esc(formCheckDateLine(fc))} ${formCheckStatusBadge(fc)}</p>
+      <p class="muted">${fc.weekCount || 0} form check${(fc.weekCount || 0) === 1 ? '' : 's'} sent this week${fc.context ? ' · ' + esc(fc.context) : ''}</p>
+      ${formCheckVideoHtml(fc)}
+      ${fc.note ? `<p class="muted">Member note: ${esc(fc.note)}</p>` : ''}
+      <label>Your reply <textarea class="fc-reply-text" rows="3" maxlength="2000" placeholder="What to fix, what looked good, what to try next">${fc.reply ? esc(fc.reply.text) : ''}</textarea></label>
+      <p>
+        <button class="btn primary" data-fc-reply="${fc.id}" type="button" style="width:auto">${fc.reply ? 'Update reply' : 'Save reply'}</button>
+        <button class="btn secondary" data-fc-del="${fc.id}" type="button" style="width:auto">Delete</button>
+      </p>
+    </div>`).join('') : '<p class="muted">No form checks yet — when a member sends a video, it lands here.</p>'}
+  </div>`;
+  el.querySelectorAll('[data-fc-reply]').forEach(b => b.addEventListener('click', async () => {
+    const row = b.closest('[data-fc-row]');
+    const ta = row ? row.querySelector('.fc-reply-text') : null;
+    const text = ta ? ta.value.trim() : '';
+    if (!text) { alert('Write the reply first.'); return; }
+    try {
+      await apiPost('/api/form-checks/' + encodeURIComponent(b.dataset.fcReply) + '/reply', { text });
+      renderCoachFormChecks();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-fc-del]').forEach(b => b.addEventListener('click', async () => {
+    if (!window.confirm('Delete this form check?')) return;
+    try {
+      await apiDel('/api/form-checks/' + encodeURIComponent(b.dataset.fcDel));
+      renderCoachFormChecks();
+    } catch (err) { alert(err.message); }
+  }));
 }
 
 /* ---------------- member intake (intake + waiver + consent) ----------------

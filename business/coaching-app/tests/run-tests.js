@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v6 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v6"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v7 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v7"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v6'") &&
-    swJs.text.includes("ruffin-performance-v6"));
+    appJs.text.includes("const APP_VERSION = 'v7'") &&
+    swJs.text.includes("ruffin-performance-v7"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v6"') &&
-    pageHtml.text.includes('Ruffin Performance · App v6') &&
+    pageHtml.text.includes('data-app-version="v7"') &&
+    pageHtml.text.includes('Ruffin Performance · App v7') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -4958,6 +4958,190 @@ async function main() {
       pr.intake.parentName === 'Pat Intake' && pr.intake.parentConsent === true) &&
     !('users' in bk3.data), bk3.data.profiles && bk3.data.profiles.length);
 
+  /* ---------------- member form checks (Build v7) ----------------
+     A member submits an uploaded video (browser -> Cloudinary, so
+     the API takes the saved URL and validates it with the exact
+     demo-media rule: https on res.cloudinary.com under this
+     account's cloud), the coach works the queue and replies in the
+     app, and the member reads the reply on their own list. The
+     weekly cadence is a counter plus copy — there is no tier field
+     anywhere in the store, so submissions are never blocked.
+       Fern  — linked member: URL validation, happy path, an
+               over-cadence second submission, the coach reply.
+       Blair — linked member: sees none of Fern's requests and
+               cannot use the coach queue paths.
+       Una   — registered but NOT linked (403 notLinked). */
+  check('form check slots are in the served page',
+    pageHtml.text.includes('id="form-checks-slot"') && pageHtml.text.includes('id="view-formcheckqueue"') &&
+    pageHtml.text.includes('id="formcheckqueue-main"') && pageHtml.text.includes('data-view="formcheckqueue"'));
+  check('form check wiring is in the served JS',
+    appJs.text.includes('renderFormChecks') && appJs.text.includes('renderCoachFormChecks') &&
+    appJs.text.includes('/api/my/form-checks') && appJs.text.includes('/api/form-checks') &&
+    appJs.text.includes("['formcheckqueue', 'Form Checks']") &&
+    appJs.text.includes('one form check per week') &&
+    appJs.text.includes('Membership + Coaching members get priority review within 48 hours') &&
+    appJs.text.includes('Waiting for coach') && appJs.text.includes('sent this week') &&
+    appJs.text.includes('uploadDemoVideo'));
+  {
+    const fcTvStart = appJs.text.indexOf('TV BOARD');
+    const fcTvEnd = appJs.text.indexOf('/* ---------------- boot', fcTvStart);
+    const fcTvCode = appJs.text.slice(fcTvStart, fcTvEnd).toLowerCase();
+    check('TV render path has no form check references',
+      fcTvStart >= 0 && fcTvEnd > fcTvStart && !fcTvCode.includes('formcheck') &&
+      !fcTvCode.includes('form-check') && !fcTvCode.includes('form check'), fcTvCode.length);
+  }
+
+  r = await api(coach, 'POST', '/api/groups', { name: 'Form Check Squad' });
+  const fcGroup = r.json.group;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Fern', lastName: 'Formcheck', groupId: fcGroup.id, events: ['sprinter'] });
+  const fernP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Blair', lastName: 'Formcheck', groupId: fcGroup.id, events: ['sprinter'] });
+  const blairP = r.json.profile;
+  for (const em of ['fern-fc@test.com', 'blair-fc@test.com', 'una-fc@test.com']) {
+    await api(coach, 'POST', '/api/client-invites', { email: em });
+  }
+  const fern = await regMember('fern-fc@test.com');
+  const blair = await regMember('blair-fc@test.com');
+  const unaFc = await regMember('una-fc@test.com');
+  await api(coach, 'PUT', '/api/profiles/' + fernP.id + '/link', { email: 'fern-fc@test.com' });
+  await api(coach, 'PUT', '/api/profiles/' + blairP.id + '/link', { email: 'blair-fc@test.com' });
+  check('form check fixtures: two members linked, Una deliberately not',
+    !!fernP.id && !!blairP.id && !!fern && !!blair && !!unaFc);
+
+  const FC_URL_1 = 'https://res.cloudinary.com/l8qblw99/video/upload/fc-fern-1.mp4';
+  const FC_URL_2 = 'https://res.cloudinary.com/l8qblw99/video/upload/fc-fern-2.mp4';
+
+  /* Auth + linking walls. */
+  r = await api(null, 'GET', '/api/my/form-checks');
+  check('my form checks without login is 401', r.status === 401, r.status);
+  r = await api(null, 'POST', '/api/my/form-checks', { videoUrl: FC_URL_1 });
+  check('form check create without login is 401', r.status === 401, r.status);
+  r = await api(null, 'GET', '/api/form-checks');
+  check('coach form check queue without login is 401', r.status === 401, r.status);
+  r = await api(unaFc, 'GET', '/api/my/form-checks');
+  check('unlinked member cannot read form checks (403, notLinked)',
+    r.status === 403 && r.json.notLinked === true, r.json);
+  r = await api(unaFc, 'POST', '/api/my/form-checks', { videoUrl: FC_URL_1 });
+  check('unlinked member cannot submit a form check (403, notLinked)',
+    r.status === 403 && r.json.notLinked === true, r.json);
+  r = await api(coach, 'POST', '/api/my/form-checks', { videoUrl: FC_URL_1 });
+  check('a coach cannot submit a member form check (no linked profile)',
+    r.status === 403 && r.json.notLinked === true, r.json);
+
+  /* URL validation: http, the wrong cloud, and a foreign host are
+     all 400, and nothing is stored for any of them. */
+  for (const [label, badUrl] of [
+    ['http, not https', 'http://res.cloudinary.com/l8qblw99/video/upload/fc-fern-1.mp4'],
+    ['wrong cloud', 'https://res.cloudinary.com/someone-else/video/upload/fc-fern-1.mp4'],
+    ['foreign host', 'https://videos.example.com/l8qblw99/video/upload/fc-fern-1.mp4'],
+    ['not a URL at all', 'fc-fern-1.mp4'],
+  ]) {
+    r = await api(fern, 'POST', '/api/my/form-checks', { videoUrl: badUrl, note: 'bad: ' + label });
+    check('form check URL validation 400: ' + label, r.status === 400, r.status);
+  }
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('failed form check validations stored nothing',
+    r.status === 200 && r.json.formChecks.length === 0 && r.json.weekCount === 0, r.json);
+
+  /* Happy path: submit, read back, land in the coach queue. */
+  r = await api(fern, 'POST', '/api/my/form-checks', { videoUrl: FC_URL_1, note: 'Watch my shin angle on the first step', context: 'Block starts' });
+  check('form check create is 201, pending, bound to the caller profile',
+    r.status === 201 && !!r.json.formCheck && r.json.formCheck.status === 'pending' &&
+    r.json.formCheck.reply === null && r.json.formCheck.profileId === fernP.id &&
+    r.json.formCheck.videoUrl === FC_URL_1 && r.json.formCheck.context === 'Block starts' &&
+    r.json.weekCount === 1, r.json);
+  const fcFirstId = r.json.formCheck.id;
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('the member reads their own form check back with weekCount 1',
+    r.status === 200 && r.json.linked === true && r.json.weekCount === 1 &&
+    r.json.formChecks.length === 1 && r.json.formChecks[0].id === fcFirstId &&
+    r.json.formChecks[0].status === 'pending', r.json);
+  r = await api(blair, 'GET', '/api/my/form-checks');
+  check('another member\'s list never contains the first member\'s form check',
+    r.status === 200 && r.json.weekCount === 0 &&
+    !r.json.formChecks.some(fc => fc.id === fcFirstId), r.json.formChecks);
+
+  /* Over-cadence: the second submission this week is accepted —
+     the cadence is a counter, never a block. */
+  r = await api(fern, 'POST', '/api/my/form-checks', { videoUrl: FC_URL_2, note: 'Second one this week', context: 'Max velocity' });
+  check('an over-cadence second form check is still accepted (201, weekCount 2)',
+    r.status === 201 && r.json.weekCount === 2, r.json);
+  const fcSecondId = r.json.formCheck.id;
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('two submissions this week count 2, newest first',
+    r.status === 200 && r.json.weekCount === 2 && r.json.formChecks.length === 2 &&
+    r.json.formChecks[0].id === fcSecondId && r.json.formChecks[1].id === fcFirstId, r.json);
+
+  /* The coach queue: membership + ordering + per-member counts. */
+  r = await api(blair, 'GET', '/api/form-checks');
+  check('a member cannot read the coach form check queue', r.status === 403, r.status);
+  r = await api(coach, 'GET', '/api/form-checks');
+  check('coach queue lists both requests pending, oldest first, with member name and weekCount',
+    r.status === 200 && r.json.pendingCount === 2 && r.json.formChecks.length === 2 &&
+    r.json.formChecks[0].id === fcFirstId && r.json.formChecks[1].id === fcSecondId &&
+    r.json.formChecks.every(fc => fc.memberName === 'Fern Formcheck' &&
+      fc.profile && fc.profile.id === fernP.id && fc.weekCount === 2), r.json);
+
+  /* Replies: members cannot reply; a coach reply lands on the
+     member's own list and can be updated. */
+  r = await api(blair, 'POST', '/api/form-checks/' + fcFirstId + '/reply', { text: 'Sneaking in a reply' });
+  check('a member cannot reply through the coach path', r.status === 403, r.status);
+  r = await api(coach, 'POST', '/api/form-checks/' + fcFirstId + '/reply', { text: '   ' });
+  check('an empty coach reply is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/form-checks/nope/reply', { text: 'Hello?' });
+  check('a reply to an unknown form check is 404', r.status === 404, r.status);
+  r = await api(coach, 'POST', '/api/form-checks/' + fcFirstId + '/reply', { text: 'Drive the shin forward and keep the hips tall.' });
+  check('coach reply saves and flips the status to replied',
+    r.status === 200 && r.json.formCheck.status === 'replied' &&
+    r.json.formCheck.reply.text === 'Drive the shin forward and keep the hips tall.' &&
+    typeof r.json.formCheck.reply.at === 'string', r.json);
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  const fernFirst = r.json.formChecks.find(fc => fc.id === fcFirstId);
+  check('the member sees the coach reply and the replied status',
+    r.status === 200 && !!fernFirst && fernFirst.status === 'replied' &&
+    fernFirst.reply.text === 'Drive the shin forward and keep the hips tall.' &&
+    r.json.formChecks.find(fc => fc.id === fcSecondId).status === 'pending', r.json.formChecks);
+  r = await api(blair, 'GET', '/api/my/form-checks');
+  check('the reply never leaks into another member\'s list',
+    r.status === 200 && r.json.formChecks.length === 0, r.json.formChecks);
+  r = await api(coach, 'GET', '/api/form-checks');
+  check('the queue reorders after a reply: pending first, then replied',
+    r.status === 200 && r.json.pendingCount === 1 &&
+    r.json.formChecks[0].id === fcSecondId && r.json.formChecks[1].id === fcFirstId, r.json);
+  r = await api(coach, 'POST', '/api/form-checks/' + fcFirstId + '/reply', { text: 'Updated: drive the shin forward, hips tall, eyes up.' });
+  check('the coach can update an existing reply', r.status === 200 &&
+    r.json.formCheck.reply.text === 'Updated: drive the shin forward, hips tall, eyes up.', r.json);
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('the member sees the updated reply',
+    r.json.formChecks.find(fc => fc.id === fcFirstId).reply.text === 'Updated: drive the shin forward, hips tall, eyes up.',
+    r.json.formChecks);
+
+  /* Moderation delete: coach-only, exactly once. */
+  r = await api(blair, 'DELETE', '/api/form-checks/' + fcSecondId);
+  check('a member cannot delete through the coach path', r.status === 403, r.status);
+  r = await api(coach, 'DELETE', '/api/form-checks/' + fcSecondId);
+  check('coach deletes a form check for moderation', r.status === 200, r.status);
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('the moderated form check is gone from the member\'s list (weekCount drops to 1)',
+    r.status === 200 && r.json.formChecks.length === 1 &&
+    r.json.formChecks[0].id === fcFirstId && r.json.weekCount === 1, r.json);
+  r = await api(coach, 'DELETE', '/api/form-checks/' + fcSecondId);
+  check('deleting the same form check twice is 404', r.status === 404, r.status);
+
+  /* Leaderboard stays clean, and the backup carries form checks
+     bound to their profiles (member data, not login data). */
+  r = await api(fern, 'GET', '/api/leaderboard');
+  check('leaderboard payload carries no form check data',
+    r.status === 200 && !JSON.stringify(r.json).includes(fcFirstId) &&
+    !JSON.stringify(r.json).includes('formCheck'), r.status);
+  const bkFc = JSON.parse((await apiText(coach, '/api/export/backup')).text);
+  check('backup carries the form checks with their profile binding',
+    Array.isArray(bkFc.data.formChecks) &&
+    bkFc.data.formChecks.some(fc => fc.id === fcFirstId && fc.profileId === fernP.id &&
+      fc.status === 'replied' && fc.reply && fc.reply.text.startsWith('Updated:')) &&
+    !bkFc.data.formChecks.some(fc => fc.id === fcSecondId) &&
+    !('users' in bkFc.data), bkFc.data.formChecks && bkFc.data.formChecks.length);
+
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }
 
@@ -7052,6 +7236,105 @@ async function waitForServer(tries = 60) {
     } finally {
       srChild.kill('SIGKILL');
       fs.rmSync(SR_DIR, { recursive: true, force: true });
+    }
+  }
+
+  /* Form check weekCount boundary (Build v7): two submissions in
+     the current Mon-Sun week count 2; a submission dated in the
+     PREVIOUS week does not. The old record is planted straight
+     into the store file between restarts (the API stamps
+     createdAt itself, so there is no other honest way to make an
+     old submission), then the restarted server must still count
+     only this week's two — on both the member list and the coach
+     queue. Runs its own server/port/data dir. */
+  {
+    const FC_BASE = 'http://127.0.0.1:3226';
+    const fcApi = async (cookie, method, p, body) => {
+      const headers = {};
+      if (cookie) headers.cookie = cookie;
+      let data;
+      if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+      const res = await fetch(FC_BASE + p, { method, headers, body: data });
+      let json = null;
+      try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+      let setCookie = [];
+      try { setCookie = res.headers.getSetCookie(); } catch (_) {
+        const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+      }
+      return { status: res.status, json, setCookie };
+    };
+    const FC_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-formchecks-'));
+    let fcLog = '';
+    const startFc = () => {
+      const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+        env: Object.assign({}, process.env, {
+          PORT: '3226', DATA_DIR: FC_DIR, SESSION_SECRET: 'formcheck-secret',
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      c.stdout.on('data', d => { fcLog += d; });
+      c.stderr.on('data', d => { fcLog += d; });
+      return c;
+    };
+    const waitFc = async () => {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(FC_BASE + '/api/content');
+          if (res.status === 200) return true;
+        } catch (_) { /* not up yet */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    let fcChild = startFc();
+    try {
+      check('form-check week server starts', await waitFc(), fcLog);
+      let fr = await fcApi(null, 'POST', '/api/register', { email: 'fc-week-coach@test.com', password: 'testpass123' });
+      const fcCoach = cookieOf(fr);
+      fr = await fcApi(fcCoach, 'POST', '/api/groups', { name: 'Week Squad' });
+      const fcGrp = fr.json.group;
+      fr = await fcApi(fcCoach, 'POST', '/api/profiles', { firstName: 'Wren', lastName: 'Week', groupId: fcGrp.id, events: ['sprinter'] });
+      const wrenP = fr.json.profile;
+      await fcApi(fcCoach, 'POST', '/api/client-invites', { email: 'wren-week@test.com' });
+      fr = await fcApi(null, 'POST', '/api/register', { email: 'wren-week@test.com', password: 'testpass123' });
+      const wren = cookieOf(fr);
+      await fcApi(fcCoach, 'PUT', '/api/profiles/' + wrenP.id + '/link', { email: 'wren-week@test.com' });
+      const FCW_URL = 'https://res.cloudinary.com/l8qblw99/video/upload/fc-wren.mp4';
+      fr = await fcApi(wren, 'POST', '/api/my/form-checks', { videoUrl: FCW_URL, context: 'This week one' });
+      check('week fixture: first submission this week saves', fr.status === 201, fr.status);
+      fr = await fcApi(wren, 'POST', '/api/my/form-checks', { videoUrl: FCW_URL, context: 'This week two' });
+      check('week fixture: second submission this week saves', fr.status === 201, fr.status);
+      fr = await fcApi(wren, 'GET', '/api/my/form-checks');
+      check('weekCount before the old record: 2 submissions, count 2',
+        fr.status === 200 && fr.json.weekCount === 2 && fr.json.formChecks.length === 2, fr.json);
+      /* Plant last week's submission directly in the store file. */
+      fcChild.kill('SIGKILL');
+      await new Promise(r => setTimeout(r, 300));
+      const fcDbPath = path.join(FC_DIR, 'db.json');
+      const fcDb = JSON.parse(fs.readFileSync(fcDbPath, 'utf8'));
+      const monday = new Date();
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      const lastSunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 1, 12, 0, 0);
+      fcDb.formChecks.push({
+        id: 'fc-old-week', profileId: wrenP.id, videoUrl: FCW_URL,
+        note: 'From last week', context: 'Last week', status: 'pending', reply: null,
+        createdAt: lastSunday.toISOString(), updatedAt: lastSunday.toISOString(),
+      });
+      fs.writeFileSync(fcDbPath, JSON.stringify(fcDb, null, 1));
+      fcChild = startFc();
+      check('form-check week server restarts with the planted old record', await waitFc(), fcLog);
+      fr = await fcApi(wren, 'GET', '/api/my/form-checks');
+      check('an older submission does not count: 3 listed, weekCount still 2',
+        fr.status === 200 && fr.json.formChecks.length === 3 && fr.json.weekCount === 2 &&
+        fr.json.formChecks.some(fc => fc.id === 'fc-old-week'), fr.json);
+      fr = await fcApi(fcCoach, 'GET', '/api/form-checks');
+      const wrenRow = (fr.json.formChecks || []).find(fc => fc.id === 'fc-old-week');
+      check('the coach queue weekCount for that member is also 2 (not 3)',
+        fr.status === 200 && !!wrenRow && wrenRow.weekCount === 2 &&
+        fr.json.formChecks.every(fc => fc.weekCount === 2), fr.json.formChecks);
+    } finally {
+      fcChild.kill('SIGKILL');
+      fs.rmSync(FC_DIR, { recursive: true, force: true });
     }
   }
 
