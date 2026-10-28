@@ -1623,3 +1623,20 @@ body.logged-out .primary-nav { display: none !important; }
 .wr-step { padding: 7px 10px; border-left: 3px solid transparent; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 15.5px; }
 .wr-step.done { color: var(--muted); }
 .wr-step.current { border-left-color: var(--scarlet); background: rgba(201, 204, 212, .1); font-size: 16.5px; }
+
+/* Speed Report (member-facing): PR cards a member shows a parent —
+   the best mark big, the baseline beneath it, a plain-language
+   change line, and a small sparkline trend. Print keeps the cards
+   whole so the report prints clean. */
+.sr-grid { display: grid; gap: var(--card-gap); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-items: start; }
+.sr-card { margin-bottom: 0; }
+.sr-best { font-size: 30px; font-weight: 800; margin: 2px 0; letter-spacing: -.01em; }
+.sr-spark { width: 100%; height: 44px; display: block; margin: 8px 0 4px; }
+.sr-line { stroke: var(--red); stroke-width: 2; }
+.sr-dot { fill: var(--red); }
+.sr-series { list-style: none; margin: 8px 0 0; padding: 0; }
+.sr-series li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); font-size: 14px; }
+@media print {
+  .sr-card { break-inside: avoid; }
+  .sr-grid { grid-template-columns: 1fr 1fr; }
+}

@@ -87,6 +87,7 @@ const state = {
   intakeData: null,
   intakeEditing: false,
   intakeMsg: '',
+  speedReportData: null,
   profiles: [],
   pfGroup: '',
   pfEvent: '',
@@ -324,12 +325,12 @@ function md(src) {
    listener below routes them all. */
 const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
-  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train',
+  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
 };
 const GROUP_SUBNAV = {
-  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
   coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
@@ -446,6 +447,7 @@ function showView(name) {
   if (name === 'meetday') renderMeetDay();
   if (name === 'records') renderRecords();
   if (name === 'leaderboard') renderLeaderboard();
+  if (name === 'speedreport') renderSpeedReport();
   if (name === 'custom') renderCustomWorkouts();
   if (name === 'programs') renderPrograms();
   if (name === 'calendar') renderCalendar();
@@ -1854,6 +1856,110 @@ async function renderMemberIntake() {
       renderMemberIntake();
     } catch (err) { $('#in-err').textContent = err.message; }
   });
+}
+
+/* ---------------- Speed Report (member-facing) ----------------
+   The report a member shows a parent: their own core-test PRs
+   against their own baseline (their earliest recorded result),
+   the change since baseline in plain up/down language, a simple
+   trend per core test, and the next test date when one is coming.
+   The server binds the payload to the caller's own linked profile
+   (/api/my/speed-report), so this UI only ever handles the
+   caller's own numbers. No chart library — the trend is a small
+   inline sparkline drawn from the series the server sends. */
+function srDisplay(t, point) {
+  if (!point) return '—';
+  return fmtNum(point.display) + ' ' + t.unit;
+}
+function srChangeText(t) {
+  const c = t.changeSinceBaseline;
+  if (!c || !t.baseline || !t.latest) return '';
+  if (c.improvement === 0) return 'Same as baseline';
+  const amt = fmtNum(Math.abs(c.improvement)) + (t.unit === 'sec' ? 's' : ' ' + t.unit);
+  if (t.better === 'lower') {
+    return c.improved ? amt + ' faster than baseline' : amt + ' slower than baseline';
+  }
+  if (t.unit === 'in') {
+    return c.improved ? amt + ' higher than baseline' : amt + ' lower than baseline';
+  }
+  return c.improved ? amt + ' better than baseline' : amt + ' below baseline';
+}
+function srSparkline(t) {
+  const pts = (t.series || []).filter(s => s.display !== null && s.display !== undefined);
+  if (pts.length < 2) return '';
+  const eff = pts.map(s => (t.better === 'lower' ? -s.display : s.display));
+  const lo = Math.min.apply(null, eff), hi = Math.max.apply(null, eff);
+  const span = (hi - lo) || 1;
+  const W = 220, H = 44, PAD = 6;
+  const coords = pts.map((s, i) => {
+    const x = PAD + (W - 2 * PAD) * (pts.length === 1 ? 0.5 : i / (pts.length - 1));
+    const y = H - PAD - (H - 2 * PAD) * ((eff[i] - lo) / span);
+    return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+  });
+  const line = coords.map(c => c.join(',')).join(' ');
+  const dots = coords.map((c, i) => `<circle cx="${c[0]}" cy="${c[1]}" r="3" class="sr-dot"><title>${esc(pts[i].date)}: ${esc(fmtNum(pts[i].display))} ${esc(t.unit)}</title></circle>`).join('');
+  return `<svg class="sr-spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trend for ${esc(t.name)}"><polyline points="${line}" class="sr-line" fill="none"/>${dots}</svg>`;
+}
+function srCardHtml(t) {
+  if (!t.best) {
+    return `<div class="card sr-card">
+      <h3>${esc(t.name)}</h3>
+      <p class="sr-best muted">Not tested yet</p>
+      <p class="muted">Your baseline for this test is set at your first testing session.</p>
+    </div>`;
+  }
+  const change = srChangeText(t);
+  const seriesList = (t.series || []).length > 1
+    ? `<ul class="sr-series">${t.series.map(s => `<li><span>${esc(fmtDate(parseDate(s.date)))}</span><strong>${esc(fmtNum(s.display))} ${esc(t.unit)}</strong></li>`).join('')}</ul>`
+    : '';
+  return `<div class="card sr-card">
+    <h3>${esc(t.name)}</h3>
+    <p class="sr-best">${esc(srDisplay(t, t.best))}</p>
+    <p class="muted">Personal best${t.best && t.best.date ? ' · ' + esc(fmtDate(parseDate(t.best.date))) : ''}</p>
+    <p>Baseline: <strong>${esc(srDisplay(t, t.baseline))}</strong>${t.baseline && t.baseline.date ? ` <span class="muted">(${esc(fmtDate(parseDate(t.baseline.date)))})</span>` : ''}</p>
+    ${t.latest ? `<p>Latest: <strong>${esc(srDisplay(t, t.latest))}</strong>${t.latest.date ? ` <span class="muted">(${esc(fmtDate(parseDate(t.latest.date)))})</span>` : ''}</p>` : ''}
+    ${change ? `<p class="delta ${t.changeSinceBaseline && t.changeSinceBaseline.improvement > 0 ? 'good' : (t.changeSinceBaseline && t.changeSinceBaseline.improvement < 0 ? 'bad' : 'flat')}">${esc(change)}</p>` : ''}
+    ${srSparkline(t)}
+    ${seriesList}
+  </div>`;
+}
+async function renderSpeedReport() {
+  const el = $('#speedreport-main');
+  if (!el) return;
+  if (!isAthleteUser()) {
+    el.innerHTML = `<div class="card"><h2>Speed Report</h2><p class="muted">This is a member's own report — members sign in with their own account to see their baseline, their bests, and how far they have come.</p></div>`;
+    return;
+  }
+  let data;
+  try {
+    data = await api('/api/my/speed-report');
+    state.speedReportData = data;
+  } catch (err) {
+    el.innerHTML = `<div class="card"><h2>Speed Report</h2><p class="error">Could not load your Speed Report: ${esc(err.message)}</p><button class="btn secondary" id="sr-retry" type="button">Retry</button></div>`;
+    const rb = el.querySelector('#sr-retry');
+    if (rb) rb.addEventListener('click', renderSpeedReport);
+    return;
+  }
+  const core = (data.tests || []).filter(t => t.core);
+  const others = (data.tests || []).filter(t => !t.core);
+  const anyResults = (data.tests || []).some(t => t.best);
+  const next = data.nextTestDate;
+  const nextHtml = next
+    ? `<div class="card sr-next"><h2>Next test: ${esc(fmtDate(parseDate(next.date)))}</h2>${next.title ? `<p class="muted">${esc(next.title)}</p>` : ''}${next.testNames && next.testNames.length ? `<p class="muted">Testing: ${esc(next.testNames.join(', '))}</p>` : ''}</div>`
+    : '';
+  if (!anyResults) {
+    el.innerHTML = `${nextHtml}<div class="card">
+      <h2>Your Speed Report starts with baseline testing</h2>
+      <p>Baseline testing happens in week 1: your coach times your 40-Yard Dash and measures your Vertical Jump and Broad Jump. Those first marks become your baseline — every test after that is measured against them, so you (and your family) can see exactly how far you have come.</p>
+      <p class="muted">No results on file yet. Once your baseline is recorded, your personal bests and your progress will show up here.</p>
+    </div>
+    <div class="sr-grid">${core.map(srCardHtml).join('')}</div>`;
+    return;
+  }
+  el.innerHTML = `${nextHtml}
+    <p class="muted">Measured speed, not promised speed — your personal bests against your own baseline, from the tests your coach has recorded for you.</p>
+    <div class="sr-grid">${core.map(srCardHtml).join('')}</div>
+    ${others.length ? `<h2>More tests</h2><div class="sr-grid">${others.map(srCardHtml).join('')}</div>` : ''}`;
 }
 
 /* Reports → Health: the check-in aggregates block. Shows the
@@ -3361,6 +3467,19 @@ async function renderTesting() {
       <button class="btn primary" type="submit">Create test day</button>
       <p class="error" id="td-err"></p>
     </form>
+    <form class="card" id="baseline-form">
+      <h2>Baseline Testing Kit</h2>
+      <p class="muted">One click creates a test day titled “Baseline” with exactly the three core tests — 40-Yard Dash, Vertical Jump, Broad Jump — and lands you in the rapid-entry flow for it. A member's baseline is their earliest result, so this is the day every Speed Report measures from. Pick a group to land on that group's grid; if a Baseline day already exists for the date, you are taken to it instead of a duplicate.</p>
+      <div class="filter-row">
+        <label>Date <input type="date" id="bl-date" value="${todayStr()}" required></label>
+        <label>Group <select id="bl-group">
+          <option value="">All members</option>
+          ${state.groups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}
+        </select></label>
+      </div>
+      <button class="btn primary" type="submit">Create baseline test day</button>
+      <p class="error" id="bl-err"></p>
+    </form>
     <form class="card" id="customtest-form">
       <h2>Add a custom test</h2>
       <div class="filter-row">
@@ -3429,6 +3548,27 @@ async function renderTesting() {
       state.testDayId = data.testDay.id;
       renderTesting();
     } catch (err) { $('#td-err').textContent = err.message; }
+  });
+  const blForm = $('#baseline-form');
+  if (blForm) blForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const date = $('#bl-date').value;
+    const groupId = $('#bl-group').value;
+    const CORE_KEYS = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+    try {
+      const existing = days.find(d => d.date === date && d.title === 'Baseline' &&
+        Array.isArray(d.testKeys) && d.testKeys.length === CORE_KEYS.length &&
+        CORE_KEYS.every(k => d.testKeys.includes(k)));
+      if (groupId) state.gridGroupId = groupId;
+      if (existing) {
+        state.testDayId = existing.id;
+        renderTesting();
+        return;
+      }
+      const data = await apiPost('/api/test-days', { date, title: 'Baseline', testKeys: CORE_KEYS });
+      state.testDayId = data.testDay.id;
+      renderTesting();
+    } catch (err) { $('#bl-err').textContent = err.message; }
   });
   $('#customtest-form').addEventListener('submit', async (e) => {
     e.preventDefault();

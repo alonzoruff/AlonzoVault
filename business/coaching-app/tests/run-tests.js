@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v5 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v5"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v6 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v6"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -742,7 +742,7 @@ async function main() {
 
   /* ---------------- testing tracker ---------------- */
   r = await api(coach, 'GET', '/api/tests');
-  check('battery has 8 preloaded tests', r.json.tests.length === 8, r.json.tests.length);
+  check('battery has 9 preloaded tests', r.json.tests.length === 9, r.json.tests.length);
   check('battery includes hang clean', r.json.tests.some(t => t.key === 'hang-clean'));
   r = await api(coach, 'POST', '/api/tests', { name: 'Medicine Ball Throw', unit: 'ft' });
   check('custom test create is 201', r.status === 201 && r.json.test.custom === true, r.json);
@@ -1055,7 +1055,7 @@ async function main() {
   check('coverage shape: 1 yours, 24 placeholders, and only demo-less tests are none',
     cov.summary.yours === 1 && cov.summary.placeholder === 24 &&
     cov.rows.filter(x => x.status === 'none')
-      .every(x => covTests.some(t => t.key === x.id && t.custom)), cov.summary);
+      .every(x => x.id === 'forty-yard-dash' || covTests.some(t => t.key === x.id && t.custom)), cov.summary);
   const covCustomTest = covTests.find(t => t.custom);
   check('a test with no demo classifies as none',
     !!covCustomTest && !!covRow(covCustomTest.key) && covRow(covCustomTest.key).status === 'none',
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v5'") &&
-    swJs.text.includes("ruffin-performance-v5"));
+    appJs.text.includes("const APP_VERSION = 'v6'") &&
+    swJs.text.includes("ruffin-performance-v6"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v5"') &&
-    pageHtml.text.includes('Ruffin Performance · App v5') &&
+    pageHtml.text.includes('data-app-version="v6"') &&
+    pageHtml.text.includes('Ruffin Performance · App v6') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -4732,6 +4732,32 @@ async function main() {
       !inTvCode.includes('/api/my/intake'), inTvCode.length);
   }
 
+  /* ---------------- baseline kit + Speed Report (Build v6) wiring ----------------
+     The member-facing view, the coach kit card, and the TV wall:
+     nothing about the report may enter the TV render slice. */
+  check('speed report view is in the served page',
+    pageHtml.text.includes('id="view-speedreport"') && pageHtml.text.includes('id="speedreport-main"') &&
+    pageHtml.text.includes('data-view="speedreport"'));
+  check('speed report wiring is in the served JS',
+    appJs.text.includes('renderSpeedReport') && appJs.text.includes('/api/my/speed-report') &&
+    appJs.text.includes("['speedreport', 'Speed Report']") &&
+    appJs.text.includes('Baseline testing happens in week 1') &&
+    appJs.text.includes('faster than baseline') && appJs.text.includes('higher than baseline') &&
+    appJs.text.includes('Next test:'));
+  check('baseline kit wiring is in the Testing view JS',
+    appJs.text.includes('Baseline Testing Kit') && appJs.text.includes('id="baseline-form"') &&
+    appJs.text.includes("title: 'Baseline'") &&
+    appJs.text.includes("'forty-yard-dash', 'vertical-jump', 'broad-jump'"));
+  {
+    const srTvStart = appJs.text.indexOf('TV BOARD');
+    const srTvEnd = appJs.text.indexOf('/* ---------------- boot', srTvStart);
+    const srTvCode = appJs.text.slice(srTvStart, srTvEnd).toLowerCase();
+    check('TV render path has no speed report references',
+      srTvStart >= 0 && srTvEnd > srTvStart && !srTvCode.includes('speedreport') &&
+      !srTvCode.includes('speed-report') && !srTvCode.includes('speed report') &&
+      !srTvCode.includes('baselinetestingkit'), srTvCode.length);
+  }
+
   /* Fixtures: squad, accounts, links. */
   r = await api(coach, 'POST', '/api/groups', { name: 'Intake Squad' });
   const intakeGroup = r.json.group;
@@ -6598,10 +6624,12 @@ async function waitForServer(tries = 60) {
       rp = await rpApi(null, 'GET', '/api/reports/completion-trend');
       check('completion trend without login is 401', rp.status === 401, rp.status);
 
-      /* ---- assessment before any custom test: no Speed section ---- */
+      /* ---- assessment before any custom test: the 40-Yard Dash
+         (Build v6) is the battery's own timed test, so Speed leads ---- */
       rp = await rpApi(rpCoach, 'GET', '/api/reports/assessment');
-      check('assessment: with no timed test in the battery, only Power and Strength appear',
-        rp.status === 200 && (rp.json.qualities || []).map(q => q.quality).join(',') === 'power,strength',
+      check('assessment: the preloaded 40-Yard Dash gives a Speed section before any custom test',
+        rp.status === 200 && (rp.json.qualities || []).map(q => q.quality).join(',') === 'speed,power,strength' &&
+        ((rp.json.qualities || []).find(q => q.quality === 'speed') || { tests: [] }).tests.map(t => t.key).join(',') === 'forty-yard-dash',
         rp.json.qualities);
 
       /* ---- testing fixtures across two periods ---- */
@@ -6689,8 +6717,8 @@ async function waitForServer(tries = 60) {
       const qSpeed = quals.find(q => q.quality === 'speed') || { tests: [], rows: [] };
       const qPower = quals.find(q => q.quality === 'power') || { tests: [], averages: {} };
       const qStrength = quals.find(q => q.quality === 'strength') || { tests: [], averages: {}, counts: {} };
-      check('assessment: the timed custom test is the Speed section; jumps are Power; the five lifts are Strength',
-        qSpeed.tests.map(t => t.key).join(',') === flyT.key &&
+      check('assessment: the 40-Yard Dash plus the timed custom test are the Speed section; jumps are Power; the five lifts are Strength',
+        qSpeed.tests.map(t => t.key).join(',') === 'forty-yard-dash,' + flyT.key &&
         qPower.tests.map(t => t.key).join(',') === 'vertical-jump,broad-jump' &&
         qStrength.tests.map(t => t.key).join(',') === 'back-squat,trap-bar-deadlift,bench-press,hang-clean,power-clean',
         quals.map(q => q.tests.map(t => t.key)));
@@ -6732,6 +6760,298 @@ async function waitForServer(tries = 60) {
     } finally {
       rpChild.kill('SIGKILL');
       fs.rmSync(RP_DIR, { recursive: true, force: true });
+    }
+  }
+
+  /* ==================== v6: Baseline Testing Kit + Speed Report ==================== */
+  /* Own isolated store; every fixture date is computed from the
+     real (New York) today, so the math and the next-test derivation
+     are exact on any run date. Sara improves, then slips a little;
+     Ben's latest 40 is SLOWER than his baseline — the direction
+     cases the report's signed improvement exists for. */
+  {
+    const SR_BASE = 'http://127.0.0.1:3225';
+    const srApi = async (cookie, method, p, body) => {
+      const headers = {};
+      if (cookie) headers.cookie = cookie;
+      let data;
+      if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+      const res = await fetch(SR_BASE + p, { method, headers, body: data });
+      let json = null;
+      try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+      let setCookie = [];
+      try { setCookie = res.headers.getSetCookie(); } catch (_) {
+        const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+      }
+      return { status: res.status, json, setCookie };
+    };
+    const srText = async (cookie, p) => {
+      const res = await fetch(SR_BASE + p, { headers: cookie ? { cookie } : {} });
+      return { status: res.status, text: await res.text() };
+    };
+    const SR_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-speedreport-'));
+    let srLog = '';
+    const srChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, {
+        PORT: '3225', DATA_DIR: SR_DIR, SESSION_SECRET: 'speedreport-secret',
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    srChild.stdout.on('data', d => { srLog += d; });
+    srChild.stderr.on('data', d => { srLog += d; });
+    const waitSr = async () => {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(SR_BASE + '/api/content');
+          if (res.status === 200) return true;
+        } catch (_) { /* not up yet */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    try {
+      check('speed-report server starts', await waitSr(), srLog);
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+      const addD = (ds, n) => {
+        const [y, m, d] = ds.split('-').map(Number);
+        return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+      };
+      const D1 = addD(today, -14), D2 = addD(today, -7), D3 = addD(today, -1);
+      const FUT = addD(today, 10);
+      const CORE = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+
+      let sr = await srApi(null, 'POST', '/api/register', { email: 'srcoach@test.com', password: 'testpass123' });
+      const srCoach = cookieOf(sr);
+      for (const em of ['sara-sr@test.com', 'ben-sr@test.com', 'una-sr@test.com']) {
+        await srApi(srCoach, 'POST', '/api/client-invites', { email: em });
+      }
+      const regSr = async (em) => cookieOf(await srApi(null, 'POST', '/api/register', { email: em, password: 'testpass123' }));
+      const sara = await regSr('sara-sr@test.com');
+      const ben = await regSr('ben-sr@test.com');
+      const unaSr = await regSr('una-sr@test.com');
+      sr = await srApi(srCoach, 'POST', '/api/groups', { name: 'Speed Squad' });
+      const srGroup = sr.json.group.id;
+      sr = await srApi(srCoach, 'POST', '/api/profiles', { firstName: 'Sara', lastName: 'Speed', groupId: srGroup, events: ['sprinter'] });
+      const saraP = sr.json.profile.id;
+      sr = await srApi(srCoach, 'POST', '/api/profiles', { firstName: 'Ben', lastName: 'Speed', groupId: srGroup, events: ['sprinter'] });
+      const benP = sr.json.profile.id;
+      await srApi(srCoach, 'PUT', '/api/profiles/' + saraP + '/link', { email: 'sara-sr@test.com' });
+      await srApi(srCoach, 'PUT', '/api/profiles/' + benP + '/link', { email: 'ben-sr@test.com' });
+      check('speed-report fixtures: two members linked, Una deliberately not',
+        !!saraP && !!benP && !!sara && !!ben && !!unaSr);
+
+      /* ---- the 40-Yard Dash in the battery ---- */
+      sr = await srApi(srCoach, 'GET', '/api/tests');
+      const forty = (sr.json.tests || []).find(t => t.key === 'forty-yard-dash') || {};
+      check('40-yard dash is in the battery: sec, lower-is-better, not a lift',
+        forty.name === '40-Yard Dash' && forty.unit === 'sec' && forty.better === 'lower' &&
+        forty.kind !== 'lift', forty);
+      sr = await srApi(srCoach, 'POST', '/api/test-days', { date: D1, title: 'Speed Day 1', testKeys: CORE });
+      const srDay1 = sr.json.testDay.id;
+      sr = await srApi(srCoach, 'POST', '/api/results', { profileId: saraP, testDayId: srDay1, testKey: 'forty-yard-dash', value: 0 });
+      check('a 40 time of zero is refused like any other timed measure', sr.status === 400, sr.status);
+      sr = await srApi(srCoach, 'POST', '/api/results', { profileId: saraP, testDayId: srDay1, testKey: 'forty-yard-dash', value: 5.0 });
+      check('a 40 time validates as a timed test (value stored, no est. 1RM)',
+        sr.status === 201 && sr.json.result.value === 5.0 &&
+        (sr.json.result.est1rm === null || sr.json.result.est1rm === undefined), sr.json);
+
+      /* ---- empty report + the plan fallback for next test ----
+         No future test day exists yet, so nextTestDate must be the
+         season plan's own TEST day inside the 90-day scan — or null
+         exactly when that scan finds none (late-season runs). */
+      const weeksJson = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'content', 'weeks.json'), 'utf8'));
+      const planExpect = (() => {
+        const end = weeksJson[weeksJson.length - 1].end;
+        const keys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+        for (let i = 0; i <= 90; i++) {
+          const date = addD(today, i);
+          if (date > end) break;
+          const wk = weeksJson.find(w => date >= w.start && date <= w.end);
+          if (!wk) continue;
+          const dow = (new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7;
+          if (/\bTEST\b/i.test(String(wk[keys[dow]] || ''))) return date;
+        }
+        return null;
+      })();
+      sr = await srApi(ben, 'GET', '/api/my/speed-report');
+      const emptyTests = sr.json.tests || [];
+      check('a member with no results gets an empty-but-valid report (core tests first, baselines null)',
+        sr.status === 200 && sr.json.linked === true &&
+        emptyTests.length === 3 && emptyTests.map(t => t.testKey).join(',') === CORE.join(',') &&
+        emptyTests.every(t => t.baseline === null && t.best === null && t.latest === null &&
+          t.changeSinceBaseline === null && Array.isArray(t.series) && t.series.length === 0),
+        sr.json);
+      check('next test date falls back to the season plan TEST day (null exactly when the scan finds none)',
+        (sr.json.nextTestDate ? sr.json.nextTestDate.date : null) === planExpect,
+        { got: sr.json.nextTestDate, planExpect });
+
+      /* ---- auth + isolation walls ---- */
+      sr = await srApi(null, 'GET', '/api/my/speed-report');
+      check('speed report without login is 401', sr.status === 401, sr.status);
+      sr = await srApi(unaSr, 'GET', '/api/my/speed-report');
+      check('unlinked member is 403 with notLinked on the speed report',
+        sr.status === 403 && sr.json.notLinked === true, sr.json);
+      sr = await srApi(srCoach, 'GET', '/api/my/speed-report');
+      check('a coach has no speed report of their own (403, notLinked)',
+        sr.status === 403 && sr.json.notLinked === true, sr.json);
+      sr = await srApi(sara, 'GET', '/api/test-days');
+      check('athlete is 403 on coach test-days', sr.status === 403, sr.status);
+      sr = await srApi(sara, 'POST', '/api/test-days', { date: D1, title: 'Sneaky', testKeys: CORE });
+      check('athlete is 403 creating a test day', sr.status === 403, sr.status);
+      sr = await srApi(sara, 'GET', '/api/results');
+      check('athlete is 403 on coach results', sr.status === 403, sr.status);
+
+      /* ---- results fixtures across three past days ---- */
+      const bulk = (day, entries) => srApi(srCoach, 'POST', '/api/results/bulk', { testDayId: day, entries });
+      sr = await bulk(srDay1, [
+        { profileId: saraP, testKey: 'vertical-jump', value: 20 },
+        { profileId: saraP, testKey: 'broad-jump', value: 80 },
+        { profileId: benP, testKey: 'forty-yard-dash', value: 5.2 },
+        { profileId: benP, testKey: 'vertical-jump', value: 18 },
+      ]);
+      check('speed fixtures: day 1 grid saves 4 more results', sr.status === 200 && sr.json.saved === 4, sr.json);
+      sr = await srApi(srCoach, 'POST', '/api/test-days', { date: D2, title: 'Speed Day 2', testKeys: CORE });
+      const srDay2 = sr.json.testDay.id;
+      sr = await bulk(srDay2, [
+        { profileId: saraP, testKey: 'forty-yard-dash', value: 4.88 },
+        { profileId: saraP, testKey: 'vertical-jump', value: 22 },
+        { profileId: saraP, testKey: 'broad-jump', value: 84 },
+      ]);
+      check('speed fixtures: day 2 grid saves 3 results', sr.status === 200 && sr.json.saved === 3, sr.json);
+      sr = await srApi(srCoach, 'POST', '/api/test-days', { date: D3, title: 'Speed Day 3', testKeys: CORE });
+      const srDay3 = sr.json.testDay.id;
+      sr = await bulk(srDay3, [
+        { profileId: saraP, testKey: 'forty-yard-dash', value: 4.95 },
+        { profileId: saraP, testKey: 'vertical-jump', value: 21 },
+        { profileId: saraP, testKey: 'broad-jump', value: 84 },
+        { profileId: benP, testKey: 'forty-yard-dash', value: 5.32 },
+      ]);
+      check('speed fixtures: day 3 grid saves 4 results', sr.status === 200 && sr.json.saved === 4, sr.json);
+
+      /* ---- the math: Sara ---- */
+      sr = await srApi(sara, 'GET', '/api/my/speed-report');
+      const sTests = sr.json.tests || [];
+      const sForty = sTests.find(t => t.testKey === 'forty-yard-dash') || {};
+      const sVert = sTests.find(t => t.testKey === 'vertical-jump') || {};
+      const sBroad = sTests.find(t => t.testKey === 'broad-jump') || {};
+      check('speed report: core tests are featured first, in core order',
+        sTests.slice(0, 3).map(t => t.testKey).join(',') === CORE.join(','), sTests.map(t => t.testKey));
+      check('speed report (40): baseline is the EARLIEST result, best respects lower-is-better, latest is the last day',
+        !!sForty.baseline && sForty.baseline.value === 5 && sForty.baseline.date === D1 &&
+        !!sForty.best && sForty.best.value === 4.88 && sForty.best.date === D2 &&
+        !!sForty.latest && sForty.latest.value === 4.95 && sForty.latest.date === D3,
+        sForty);
+      check('speed report (40): a faster latest is a positive improvement (absolute -0.05, percent -1, improvement +0.05)',
+        !!sForty.changeSinceBaseline && sForty.changeSinceBaseline.absolute === -0.05 &&
+        sForty.changeSinceBaseline.percent === -1 &&
+        sForty.changeSinceBaseline.improvement === 0.05 &&
+        sForty.changeSinceBaseline.improvementPercent === 1 &&
+        sForty.changeSinceBaseline.improved === true, sForty.changeSinceBaseline);
+      check('speed report (vertical): baseline 20, best 22, latest 21, change +1 (+5%) improved',
+        !!sVert.baseline && sVert.baseline.value === 20 &&
+        !!sVert.best && sVert.best.value === 22 &&
+        !!sVert.latest && sVert.latest.value === 21 &&
+        !!sVert.changeSinceBaseline && sVert.changeSinceBaseline.absolute === 1 &&
+        sVert.changeSinceBaseline.percent === 5 && sVert.changeSinceBaseline.improved === true,
+        sVert);
+      check('speed report: the series is chronological with dates and values',
+        (sForty.series || []).map(p => p.date).join(',') === [D1, D2, D3].join(',') &&
+        (sForty.series || []).map(p => p.display).join(',') === '5,4.88,4.95' &&
+        !!sBroad.best && sBroad.best.value === 84, sForty.series);
+
+      /* ---- the math: Ben (slower latest) + isolation ---- */
+      sr = await srApi(ben, 'GET', '/api/my/speed-report');
+      const bForty = (sr.json.tests || []).find(t => t.testKey === 'forty-yard-dash') || {};
+      const bVert = (sr.json.tests || []).find(t => t.testKey === 'vertical-jump') || {};
+      check('speed report (40, slower latest): baseline 5.2 stays the best, latest 5.32 reads NOT improved',
+        !!bForty.baseline && bForty.baseline.value === 5.2 &&
+        !!bForty.best && bForty.best.value === 5.2 &&
+        !!bForty.latest && bForty.latest.value === 5.32 &&
+        !!bForty.changeSinceBaseline && bForty.changeSinceBaseline.absolute === 0.12 &&
+        bForty.changeSinceBaseline.improvement === -0.12 &&
+        bForty.changeSinceBaseline.improvementPercent === -2.31 &&
+        bForty.changeSinceBaseline.improved === false, bForty);
+      check('speed report: a single result is baseline, best and latest at once, with a zero change',
+        !!bVert.baseline && bVert.baseline.value === 18 && !!bVert.best && bVert.best.value === 18 &&
+        !!bVert.latest && bVert.latest.value === 18 &&
+        !!bVert.changeSinceBaseline && bVert.changeSinceBaseline.absolute === 0 &&
+        bVert.changeSinceBaseline.improved === false, bVert);
+      check('isolation: Ben\u2019s report contains only Ben\u2019s numbers (no 4.88 anywhere)',
+        sr.status === 200 && !JSON.stringify(sr.json).includes('4.88') &&
+        !JSON.stringify(sr.json).includes('Sara'), sr.json.athleteName);
+      sr = await srApi(sara, 'GET', '/api/my/speed-report?profileId=' + benP);
+      check('isolation: Sara asking with Ben\u2019s profileId still gets only Sara\u2019s report',
+        sr.status === 200 && sr.json.profileId === saraP &&
+        !JSON.stringify(sr.json.tests).includes('5.32'), sr.json.profileId);
+      sr = await srApi(sara, 'GET', '/api/leaderboard');
+      check('leaderboard payload carries no speed-report fields (no baseline, no change block)',
+        sr.status === 200 && !JSON.stringify(sr.json).includes('changeSinceBaseline') &&
+        !JSON.stringify(sr.json).includes('baseline'), sr.status);
+
+      /* ---- the 40 lands in the Speed quality of the assessment ---- */
+      sr = await srApi(srCoach, 'GET', '/api/reports/assessment');
+      const srQuals = sr.json.qualities || [];
+      const srSpeed = srQuals.find(q => q.quality === 'speed') || { tests: [], rows: [] };
+      const srSpeedSara = (srSpeed.rows || []).find(x => x.profileId === saraP) || { marks: {} };
+      check('assessment: the 40-Yard Dash is a Speed-quality test with Sara\u2019s best 4.88',
+        srQuals.map(q => q.quality).join(',') === 'speed,power,strength' &&
+        srSpeed.tests.map(t => t.key).join(',') === 'forty-yard-dash' &&
+        srSpeedSara.marks['forty-yard-dash'] === 4.88, srSpeed);
+
+      /* ---- Baseline Testing Kit: one day, exactly the core tests ----
+         The kit's create is the existing POST /api/test-days with
+         title Baseline + the core keys (the client wires the group
+         pick to the grid scope); re-running the client's own
+         existing-day predicate must find this day, not a dupe. */
+      sr = await srApi(srCoach, 'POST', '/api/test-days', { date: today, title: 'Baseline', testKeys: CORE });
+      check('baseline kit creates the Baseline test day with exactly the three core tests',
+        sr.status === 201 && sr.json.testDay.title === 'Baseline' && sr.json.testDay.date === today &&
+        JSON.stringify(sr.json.testDay.testKeys) === JSON.stringify(CORE), sr.json);
+      const kitDayId = sr.json.testDay.id;
+      sr = await srApi(srCoach, 'GET', '/api/test-days');
+      const kitDays = (sr.json.testDays || []).filter(d => d.date === today && d.title === 'Baseline' &&
+        Array.isArray(d.testKeys) && d.testKeys.length === CORE.length && CORE.every(k => d.testKeys.includes(k)));
+      check('baseline kit: the client existing-day predicate finds exactly one Baseline day for the date (no dupe needed)',
+        kitDays.length === 1 && kitDays[0].id === kitDayId, kitDays.length);
+      sr = await srApi(sara, 'GET', '/api/my/speed-report');
+      check('next test date: the Baseline day today is next, with its core tests named',
+        !!sr.json.nextTestDate && sr.json.nextTestDate.date === today &&
+        JSON.stringify(sr.json.nextTestDate.testKeys) === JSON.stringify(CORE) &&
+        sr.json.nextTestDate.testNames.includes('40-Yard Dash'), sr.json.nextTestDate);
+      check('the kit day alone changes no numbers (Sara\u2019s 40 baseline is still Day 1)',
+        !!((sr.json.tests || []).find(t => t.testKey === 'forty-yard-dash') || {}).baseline &&
+        ((sr.json.tests || []).find(t => t.testKey === 'forty-yard-dash') || {}).baseline.value === 5,
+        (sr.json.tests || []).map(t => t.testKey));
+
+      /* ---- next test date from a future test day ---- */
+      sr = await srApi(srCoach, 'POST', '/api/test-days', { date: FUT, title: 'Future Testing', testKeys: ['vertical-jump'] });
+      const futDayId = sr.json.testDay.id;
+      sr = await srApi(srCoach, 'DELETE', '/api/test-days/' + kitDayId);
+      check('baseline kit day deletes cleanly for the next-date check', sr.status === 200, sr.status);
+      sr = await srApi(ben, 'GET', '/api/my/speed-report');
+      check('next test date comes from the earliest future test day, with its tests',
+        !!sr.json.nextTestDate && sr.json.nextTestDate.date === FUT &&
+        JSON.stringify(sr.json.nextTestDate.testKeys) === JSON.stringify(['vertical-jump']) &&
+        JSON.stringify(sr.json.nextTestDate.testNames) === JSON.stringify(['Vertical Jump']),
+        sr.json.nextTestDate);
+      sr = await srApi(srCoach, 'DELETE', '/api/test-days/' + futDayId);
+      sr = await srApi(ben, 'GET', '/api/my/speed-report');
+      check('with no future test day left, next test date is the plan fallback again (null exactly when the scan finds none)',
+        (sr.json.nextTestDate ? sr.json.nextTestDate.date : null) === planExpect,
+        { got: sr.json.nextTestDate, planExpect });
+
+      /* ---- TV slice safety, from the served bundle ---- */
+      const srJs = await srText(null, '/app.js');
+      const srTvStart = srJs.text.indexOf('TV BOARD');
+      const srTvEnd = srJs.text.indexOf('/* ---------------- boot', srTvStart);
+      const srTvCode = srJs.text.slice(srTvStart, srTvEnd).toLowerCase();
+      check('TV render path has no speed report references (served bundle)',
+        srTvStart >= 0 && srTvEnd > srTvStart && !srTvCode.includes('speedreport') &&
+        !srTvCode.includes('speed-report') && !srTvCode.includes('/api/my/speed-report'),
+        srTvCode.length);
+    } finally {
+      srChild.kill('SIGKILL');
+      fs.rmSync(SR_DIR, { recursive: true, force: true });
     }
   }
 

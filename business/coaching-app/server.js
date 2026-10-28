@@ -88,8 +88,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v5',
-  cache: 'ruffin-performance-v5',
+  version: 'v6',
+  cache: 'ruffin-performance-v6',
 };
 
 /* ------------------------------------------------------------------ */
@@ -542,6 +542,7 @@ const DEFAULT_TESTS = [
   { key: 'bench-press', name: 'Bench Press', unit: 'lb', kind: 'lift', custom: false },
   { key: 'hang-clean', name: 'Hang Clean', unit: 'lb', kind: 'lift', custom: false },
   { key: 'power-clean', name: 'Power Clean', unit: 'lb', kind: 'lift', custom: false },
+  { key: 'forty-yard-dash', name: '40-Yard Dash', unit: 'sec', kind: 'measure', better: 'lower', custom: false },
   { key: 'vertical-jump', name: 'Vertical Jump', unit: 'in', kind: 'measure', custom: false },
   { key: 'broad-jump', name: 'Broad Jump', unit: 'in', kind: 'measure', custom: false },
   { key: 'pull-ups', name: 'Pull-ups', unit: 'reps', kind: 'reps', custom: false },
@@ -2115,6 +2116,110 @@ function testingHistoryFor(profileId) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Speed Report (member-facing) + Baseline Testing Kit                 */
+/* ------------------------------------------------------------------ */
+/* The three core tests every Speed Report leads with, in report
+   order. The Baseline Testing Kit is the coach flow that creates a
+   test day carrying exactly these three; a member's baseline for a
+   test is their EARLIEST recorded result for it. */
+const CORE_TEST_KEYS = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+const BASELINE_TEST_KEYS = CORE_TEST_KEYS.slice();
+function speedReportPoint(point) {
+  return point ? { value: point.display, display: point.display, date: point.date } : null;
+}
+/* One test's Speed Report entry, built from testingHistoryFor so a
+   "best" here can never disagree with a best anywhere else. The
+   change block compares the LATEST result with the baseline (the
+   earliest): absolute and percent are the signed raw change
+   (latest - baseline), while improvement / improvementPercent are
+   the same movement read in the test's own better-direction —
+   positive always means better, so for the 40 a drop in time is a
+   positive improvement and a slower latest reads improved:false.
+   The client never has to guess at direction. */
+function speedReportTestEntry(test, hist) {
+  const h = hist || null;
+  const series = h ? h.series : [];
+  const better = test.better || 'higher';
+  const baselinePt = series.length ? series[0] : null;
+  const latestPt = series.length ? series[series.length - 1] : null;
+  const bestPt = h && h.best !== null && h.best !== undefined
+    ? (series.find(s => s.display === h.best) || null) : null;
+  let change = null;
+  if (baselinePt && latestPt) {
+    const absolute = round2(latestPt.display - baselinePt.display);
+    const improvement = round2(better === 'lower'
+      ? baselinePt.display - latestPt.display
+      : latestPt.display - baselinePt.display);
+    change = {
+      absolute,
+      percent: baselinePt.display ? round2(absolute / Math.abs(baselinePt.display) * 100) : null,
+      improvement,
+      improvementPercent: baselinePt.display ? round2(improvement / Math.abs(baselinePt.display) * 100) : null,
+      improved: improvement > 0,
+    };
+  }
+  return {
+    testKey: test.key, name: test.name, unit: test.unit, kind: test.kind, better,
+    core: CORE_TEST_KEYS.includes(test.key),
+    baseline: speedReportPoint(baselinePt),
+    best: speedReportPoint(bestPt),
+    latest: speedReportPoint(latestPt),
+    changeSinceBaseline: change,
+    series: series.map(s => ({ date: s.date, value: s.display, display: s.display })),
+  };
+}
+/* A member's whole Speed Report: the three core tests first (always
+   present, nulls where untested), then every other test the member
+   has any result for, in testingHistoryFor's order. */
+function speedReportFor(profileId) {
+  const hist = testingHistoryFor(profileId);
+  const byKey = new Map(hist.map(h => [h.testKey, h]));
+  const tests = [];
+  const seen = new Set();
+  for (const key of CORE_TEST_KEYS) {
+    const t = findTest(key);
+    if (!t) continue;
+    seen.add(key);
+    tests.push(speedReportTestEntry(t, byKey.get(key) || null));
+  }
+  for (const h of hist) {
+    if (seen.has(h.testKey)) continue;
+    const t = findTest(h.testKey);
+    if (t) tests.push(speedReportTestEntry(t, h));
+  }
+  return tests;
+}
+/* The next test date, derived — no stored field exists. The
+   earliest recorded test day on or after today wins; when none is
+   recorded yet, the season plan is scanned forward from today for a
+   TEST day (planDayFor's own detection), capped at 90 days, and the
+   day is kept inside the season's real weeks so the plan's edge
+   clamping can never invent a date past the season's end. */
+function nextTestDateInfo() {
+  const today = todayStr();
+  const upcoming = db.testDays.filter(d => d.date >= today)
+    .slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (upcoming.length) {
+    const d = upcoming[0];
+    return {
+      date: d.date, title: d.title || '',
+      testKeys: Array.isArray(d.testKeys) ? d.testKeys.slice() : [],
+      testNames: (Array.isArray(d.testKeys) ? d.testKeys : [])
+        .map(k => { const t = findTest(k); return t ? t.name : k; }),
+    };
+  }
+  const weeks = CONTENT.weeks || [];
+  const seasonEnd = weeks.length ? weeks[weeks.length - 1].end : today;
+  for (let i = 0; i <= 90; i++) {
+    const date = addDaysStr(today, i);
+    if (!date || date > seasonEnd) break;
+    const plan = planDayFor(date);
+    if (plan && plan.isTest) return { date, title: '', testKeys: [], testNames: [] };
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
 /* Percentage loading (% of a tested max)                              */
 /* ------------------------------------------------------------------ */
 /* The tests a % prescription can point at: every lift-kind test in
@@ -3535,6 +3640,33 @@ async function handleApi(req, res, url) {
     saveDb();
     return sendJson(res, existing ? 200 : 201, {
       ok: true, intake: publicIntake(intake), completed: true,
+    });
+  }
+
+  /* ---------- member Speed Report (member-facing, own numbers only) ----------
+     The parent-facing progress report: the member's own testing
+     history read as baseline (earliest result) vs best vs latest,
+     with the change since baseline already read in each test's
+     better-direction. The profile always comes from the caller's
+     own link binding, never from the request, so a member can only
+     ever see their own report — another member's numbers are
+     unreachable by construction. Unlinked accounts get the same
+     403 notLinked wall as the intake write. Nothing from this
+     payload goes to the TV board, the leaderboard, or any public
+     surface: it is served only here, to the linked member. */
+  if (p === '/api/my/speed-report' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can see your Speed Report.',
+        notLinked: true,
+      });
+    }
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      tests: speedReportFor(prof.id),
+      nextTestDate: nextTestDateInfo(),
     });
   }
 
