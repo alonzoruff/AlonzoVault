@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v4 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v4"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v5 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v5"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v4'") &&
-    swJs.text.includes("ruffin-performance-v4"));
+    appJs.text.includes("const APP_VERSION = 'v5'") &&
+    swJs.text.includes("ruffin-performance-v5"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v4"') &&
-    pageHtml.text.includes('Ruffin Performance · App v4') &&
+    pageHtml.text.includes('data-app-version="v5"') &&
+    pageHtml.text.includes('Ruffin Performance · App v5') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -3273,10 +3273,12 @@ async function main() {
        Amy — 2 flagged check-ins 4-5 days ago (Readiness fires),
              none in the last 3 days (No check-in fires), 2 absences
              in 14 days (Attendance fires), 1 open concern (Health
-             fires): all four flags.
+             fires), and linked with no intake on file (Intake
+             needed fires, appended last): all five flags.
        Ben — exactly 1 flagged check-in yesterday (Readiness does
              NOT fire), 1 absence (Attendance does NOT fire), one
-             cleared concern (Health does NOT fire): zero flags.
+             cleared concern (Health does NOT fire): his only flag
+             is Intake needed (linked, no intake on file yet).
        Cid — unlinked with no check-ins at all: NO No check-in flag
              (unlinked athletes get the neutral Not linked state). */
   check('ams view is in the served page',
@@ -3391,8 +3393,8 @@ async function main() {
   check('ams roster: Amy row shape (status, link, group)',
     !!amyRow && amyRow.status === 'active' && amyRow.linked === true &&
     amyRow.profile.linkedEmail === 'amy@test.com' && amyRow.profile.groupName === 'AMS Squad', amyRow);
-  check('ams flags: Amy earns all four flags, in order',
-    JSON.stringify(flagKeys(amyRow)) === JSON.stringify(['readiness', 'no-checkin', 'attendance', 'health']),
+  check('ams flags: Amy earns all five flags, in order (intake needed appended last)',
+    JSON.stringify(flagKeys(amyRow)) === JSON.stringify(['readiness', 'no-checkin', 'attendance', 'health', 'intake-needed']),
     flagKeys(amyRow));
   const amyFlag = (k) => amyRow.flags.find(f => f.key === k);
   check('ams flags: readiness carries its count (2 flagged check-ins)',
@@ -3404,8 +3406,8 @@ async function main() {
   check('ams flags: health carries its count (1 open concern)',
     amyFlag('health').count === 1 && amyFlag('health').detail.includes('1 open concern'), amyFlag('health'));
   const benRow = amsRow(benP.id);
-  check('ams flags: exactly 1 flagged check-in / 1 absence / a cleared concern = NO flags for Ben',
-    !!benRow && benRow.flags.length === 0, benRow && benRow.flags);
+  check('ams flags: exactly 1 flagged check-in / 1 absence / a cleared concern = no data flags for Ben (only Intake needed, as a linked member with no intake)',
+    !!benRow && JSON.stringify(flagKeys(benRow)) === JSON.stringify(['intake-needed']), benRow && benRow.flags);
   const cidRow = amsRow(cidP.id);
   check('ams flags: unlinked Cid gets no No check-in flag (neutral Not linked instead)',
     !!cidRow && cidRow.linked === false && cidRow.flags.length === 0, cidRow);
@@ -3419,7 +3421,8 @@ async function main() {
   r = await api(coach, 'GET', '/api/ams/athlete/' + benP.id);
   check('ams athlete page: header block',
     r.status === 200 && r.json.profile.name === 'Ben Ams' && r.json.status === 'active' &&
-    r.json.linked === true && r.json.linkedEmail === 'ben@test.com' && r.json.flags.length === 0, r.json.profile);
+    r.json.linked === true && r.json.linkedEmail === 'ben@test.com' && r.json.flags.length === 1 &&
+    r.json.flags[0].key === 'intake-needed', r.json.profile);
   check('ams athlete page: wellness window (1 check-in, averages, 1 flagged day)',
     r.json.wellness.recent.length === 1 && r.json.wellness.summary.days === 1 &&
     r.json.wellness.summary.avgSleep === 5.5 && r.json.wellness.summary.flaggedDays === 1 &&
@@ -3447,7 +3450,7 @@ async function main() {
   r = await api(coach, 'GET', '/api/ams/athlete/' + amyP.id);
   check('ams athlete page: Amy wellness trend (2 check-ins, both flagged)',
     r.status === 200 && r.json.wellness.summary.days === 2 && r.json.wellness.summary.flaggedDays === 2 &&
-    r.json.wellness.summary.avgSleep === 6.5 && r.json.flags.length === 4, r.json.wellness.summary);
+    r.json.wellness.summary.avgSleep === 6.5 && r.json.flags.length === 5, r.json.wellness.summary);
 
   /* Coach notes: CRUD + validation. */
   const NOTE_TEXT = 'AMS private note — check on the hamstring before Friday.';
@@ -4699,6 +4702,235 @@ async function main() {
     bk2.data.memberLogs.some(l => l.athleteId === loganP.id && l.title === 'ACC-01 · Block starts and short drives') &&
     bk2.data.memberLogs.some(l => l.id === lenaNewLogId) &&
     !('users' in bk2.data), bk2.data.memberLogs && bk2.data.memberLogs.length);
+
+  /* ---------------- member intake (Build v5) ----------------
+     Structured intake + waiver + parent consent. The intake lives
+     on the linked member's roster profile and is written only from
+     that member's own account: the endpoint resolves the profile
+     from the caller's link, never from the request, so another
+     member's intake is invisible by construction. Coaches read it
+     in AMS (profile page + the Intake needed roster flag).
+       Ivy  — linked adult: validation, then a happy-path intake
+              (with a smuggled profileId for Milo in the body —
+              it must land on Ivy, and only Ivy).
+       Milo — linked minor: rejected without parent consent, then
+              a happy-path intake with parent name/consent/sign.
+       Una  — registered but NOT linked (every write is 403). */
+  check('member intake slots are in the served page',
+    pageHtml.text.includes('id="intake-slot"') && pageHtml.text.includes('id="intake-main"'));
+  check('member intake wiring is in the served JS',
+    appJs.text.includes('renderMemberIntake') && appJs.text.includes('/api/my/intake') &&
+    appJs.text.includes('Finish your member intake') && appJs.text.includes('Member intake') &&
+    appJs.text.includes('not medical care'));
+  {
+    const inTvStart = appJs.text.indexOf('TV BOARD');
+    const inTvEnd = appJs.text.indexOf('/* ---------------- boot', inTvStart);
+    const inTvCode = appJs.text.slice(inTvStart, inTvEnd).toLowerCase();
+    check('TV render path has no intake, waiver or consent references',
+      inTvStart >= 0 && inTvEnd > inTvStart && !inTvCode.includes('intake') &&
+      !inTvCode.includes('waiver') && !inTvCode.includes('consent') &&
+      !inTvCode.includes('/api/my/intake'), inTvCode.length);
+  }
+
+  /* Fixtures: squad, accounts, links. */
+  r = await api(coach, 'POST', '/api/groups', { name: 'Intake Squad' });
+  const intakeGroup = r.json.group;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Ivy', lastName: 'Intake', groupId: intakeGroup.id, events: ['sprinter'] });
+  const ivyP = r.json.profile;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Milo', lastName: 'Intake', groupId: intakeGroup.id, events: ['sprinter'] });
+  const miloP = r.json.profile;
+  for (const em of ['ivy-intake@test.com', 'milo-intake@test.com', 'una-intake@test.com']) {
+    await api(coach, 'POST', '/api/client-invites', { email: em });
+  }
+  const ivy = await regMember('ivy-intake@test.com');
+  const milo = await regMember('milo-intake@test.com');
+  const una = await regMember('una-intake@test.com');
+  await api(coach, 'PUT', '/api/profiles/' + ivyP.id + '/link', { email: 'ivy-intake@test.com' });
+  await api(coach, 'PUT', '/api/profiles/' + miloP.id + '/link', { email: 'milo-intake@test.com' });
+  check('intake fixtures: two members linked, Una deliberately not',
+    !!ivyP.id && !!miloP.id && !!ivy && !!milo && !!una);
+
+  const adultBody = {
+    goals: 'Get faster over 60 metres and lift twice a week',
+    sports: ['Track and field'], equipmentAccess: ['full-gym'],
+    trainingAge: 4, hasInjury: true,
+    injuryDetail: 'Left ankle sprain last spring, cleared to train',
+    isAdult: true, waiverAccepted: true, waiverSignature: 'Ivy Intake',
+  };
+  const minorBody = {
+    goals: 'Make the travel team and stay healthy',
+    sports: 'Track and field', equipmentAccess: ['dumbbells-only', 'track-only'],
+    trainingAge: 2, hasInjury: false, injuryDetail: '',
+    isAdult: false, waiverAccepted: true, waiverSignature: 'Milo Intake',
+    parentName: 'Pat Intake', parentConsent: true, parentSignature: 'Pat Intake',
+  };
+
+  /* Auth + the unlinked wall. */
+  r = await api(null, 'GET', '/api/my/intake');
+  check('intake without login is 401', r.status === 401, r.status);
+  r = await api(null, 'POST', '/api/my/intake', adultBody);
+  check('intake create without login is 401', r.status === 401, r.status);
+  r = await api(una, 'GET', '/api/my/intake');
+  check('unlinked member reads the clear not-linked intake state',
+    r.status === 200 && r.json.linked === false && r.json.intake === null &&
+    r.json.completed === false, r.json);
+  r = await api(una, 'POST', '/api/my/intake', adultBody);
+  check('unlinked member cannot submit an intake (403, notLinked)',
+    r.status === 403 && r.json.notLinked === true, r.json);
+  r = await api(coach, 'POST', '/api/my/intake', adultBody);
+  check('a coach cannot submit a member intake (no linked profile)',
+    r.status === 403 && r.json.notLinked === true, r.json);
+
+  /* Before completion: own empty state + the roster flag. */
+  r = await api(ivy, 'GET', '/api/my/intake');
+  check('linked member with no intake reads a clean empty state',
+    r.status === 200 && r.json.linked === true && r.json.intake === null &&
+    r.json.completed === false, r.json);
+  r = await api(coach, 'GET', '/api/ams/roster');
+  const intakeRow = (pid) => (r.json.athletes || []).find(a => a.profile.id === pid);
+  check('ams flags: a linked member with no intake earns Intake needed',
+    !!intakeRow(ivyP.id) &&
+    intakeRow(ivyP.id).flags.some(f => f.key === 'intake-needed' && f.label === 'Intake needed') &&
+    intakeRow(miloP.id).flags.some(f => f.key === 'intake-needed'),
+    intakeRow(ivyP.id) && intakeRow(ivyP.id).flags);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + ivyP.id);
+  check('ams page before intake: profile intake is null and the flag shows',
+    r.status === 200 && r.json.profile.intake === null &&
+    r.json.profile.intakeCompleted === false &&
+    r.json.flags.some(f => f.key === 'intake-needed'), r.json.profile);
+
+  /* Validation: clean 400s, nothing half-saved. */
+  const badIntakes = [
+    [{}, 'empty body'],
+    [{ ...adultBody, goals: '' }, 'missing goals'],
+    [{ ...adultBody, goals: '   ' }, 'blank goals'],
+    [{ ...adultBody, sports: [] }, 'no sports'],
+    [{ ...adultBody, equipmentAccess: [] }, 'no equipment access'],
+    [{ ...adultBody, equipmentAccess: ['sauna'] }, 'unknown equipment access'],
+    [{ ...adultBody, trainingAge: undefined }, 'missing training age'],
+    [{ ...adultBody, trainingAge: -1 }, 'training age below range'],
+    [{ ...adultBody, trainingAge: 2.5 }, 'training age not whole'],
+    [{ ...adultBody, hasInjury: undefined }, 'injury question unanswered'],
+    [{ ...adultBody, hasInjury: true, injuryDetail: '' }, 'injury yes without a detail note'],
+    [{ ...adultBody, isAdult: undefined }, 'age question unanswered'],
+    [{ ...adultBody, waiverAccepted: false }, 'waiver not accepted'],
+    [{ ...adultBody, waiverSignature: '' }, 'waiver accepted but not signed'],
+    [{ ...minorBody, parentName: '' }, 'minor without a parent name'],
+    [{ ...minorBody, parentConsent: false }, 'minor without parent consent'],
+    [{ ...minorBody, parentSignature: '' }, 'minor without a parent signature'],
+  ];
+  for (const [body, label] of badIntakes) {
+    const who = label.startsWith('minor') ? milo : ivy;
+    r = await api(who, 'POST', '/api/my/intake', body);
+    check('intake validation 400: ' + label, r.status === 400, r.status);
+  }
+  r = await api(ivy, 'GET', '/api/my/intake');
+  check('failed intake validations saved nothing for Ivy',
+    r.status === 200 && r.json.completed === false && r.json.intake === null, r.json);
+  r = await api(milo, 'GET', '/api/my/intake');
+  check('failed intake validations saved nothing for Milo',
+    r.status === 200 && r.json.completed === false && r.json.intake === null, r.json);
+
+  /* Happy path, adult: a profileId for MILO rides in the body —
+     the write must still land on Ivy alone (the profile comes
+     from the caller's link, never from the request). */
+  r = await api(ivy, 'POST', '/api/my/intake', { ...adultBody, profileId: miloP.id });
+  check('adult intake create is 201 and round-trips every field',
+    r.status === 201 && r.json.completed === true && !!r.json.intake &&
+    r.json.intake.goals === adultBody.goals &&
+    JSON.stringify(r.json.intake.sports) === JSON.stringify(['Track and field']) &&
+    JSON.stringify(r.json.intake.equipmentAccess) === JSON.stringify(['full-gym']) &&
+    r.json.intake.trainingAge === 4 && r.json.intake.hasInjury === true &&
+    r.json.intake.injuryDetail === adultBody.injuryDetail &&
+    r.json.intake.isAdult === true, r.json);
+  check('waiver acceptance is server-stamped with its version',
+    !!r.json.intake && r.json.intake.waiverAccepted === true &&
+    r.json.intake.waiverSignature === 'Ivy Intake' &&
+    r.json.intake.waiverVersion === 'v1' &&
+    typeof r.json.intake.waiverAcceptedAt === 'string' &&
+    !Number.isNaN(Date.parse(r.json.intake.waiverAcceptedAt)) &&
+    r.json.intake.completedAt === r.json.intake.waiverAcceptedAt &&
+    r.json.intake.parentConsent === false && r.json.intake.parentName === '',
+    r.json.intake);
+  r = await api(milo, 'GET', '/api/my/intake');
+  check('the smuggled profileId wrote nothing for Milo',
+    r.status === 200 && r.json.completed === false && r.json.intake === null, r.json);
+  r = await api(ivy, 'GET', '/api/my/intake');
+  check('Ivy reads her own completed intake back',
+    r.status === 200 && r.json.completed === true &&
+    r.json.intake.goals === adultBody.goals &&
+    r.json.intake.waiverSignature === 'Ivy Intake', r.json);
+
+  /* The flag clears for Ivy, stays for Milo; the coach sees it. */
+  r = await api(coach, 'GET', '/api/ams/roster');
+  check('ams flags: a completed intake clears Intake needed (Milo still flagged)',
+    !!intakeRow(ivyP.id) && !intakeRow(ivyP.id).flags.some(f => f.key === 'intake-needed') &&
+    intakeRow(miloP.id).flags.some(f => f.key === 'intake-needed'),
+    intakeRow(ivyP.id) && intakeRow(ivyP.id).flags);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + ivyP.id);
+  check('ams page shows the submitted intake to the coach',
+    r.status === 200 && !!r.json.profile.intake &&
+    r.json.profile.intake.goals === adultBody.goals &&
+    r.json.profile.intake.waiverSignature === 'Ivy Intake' &&
+    !!r.json.profile.intake.waiverAcceptedAt &&
+    r.json.profile.intakeCompleted === true &&
+    !r.json.flags.some(f => f.key === 'intake-needed'), r.json.profile);
+  r = await api(coach, 'GET', '/api/profiles');
+  check('coach profile list carries the intake on the profile',
+    (r.json.profiles || []).some(pr => pr.id === ivyP.id && !!pr.intake &&
+      pr.intake.trainingAge === 4), r.json.profiles && r.json.profiles.length);
+
+  /* Intake is member + coach only: it never leaks to the board. */
+  r = await api(ivy, 'GET', '/api/leaderboard');
+  check('leaderboard payload carries no intake data',
+    r.status === 200 && !JSON.stringify(r.json).includes(adultBody.goals) &&
+    !JSON.stringify(r.json).includes('Ivy Intake'), r.status);
+
+  /* Happy path, minor: sports as a plain string, parent consent
+     stored with its own server-stamped time. */
+  r = await api(milo, 'POST', '/api/my/intake', minorBody);
+  check('minor intake create is 201 with the parent consent stored',
+    r.status === 201 && r.json.completed === true && !!r.json.intake &&
+    r.json.intake.isAdult === false &&
+    JSON.stringify(r.json.intake.sports) === JSON.stringify(['Track and field']) &&
+    JSON.stringify(r.json.intake.equipmentAccess) === JSON.stringify(['dumbbells-only', 'track-only']) &&
+    r.json.intake.parentName === 'Pat Intake' &&
+    r.json.intake.parentConsent === true &&
+    r.json.intake.parentSignature === 'Pat Intake' &&
+    typeof r.json.intake.parentConsentAt === 'string' &&
+    !Number.isNaN(Date.parse(r.json.intake.parentConsentAt)), r.json);
+
+  /* Isolation: each member reads only their own, even when they
+     ask for the other's by query string. */
+  r = await api(milo, 'GET', '/api/my/intake?profileId=' + ivyP.id);
+  check('Milo asking with Ivy\u2019s profileId still gets only Milo\u2019s intake',
+    r.status === 200 && r.json.intake.goals === minorBody.goals &&
+    r.json.intake.waiverSignature === 'Milo Intake', r.json);
+  r = await api(ivy, 'GET', '/api/my/intake');
+  check('Ivy\u2019s list still holds none of Milo\u2019s intake',
+    r.status === 200 && r.json.intake.goals === adultBody.goals &&
+    r.json.intake.parentName === '', r.json.intake);
+
+  /* Update: a PUT re-submission edits the member's own intake and
+     keeps the original completion stamp. */
+  const ivyCompletedAt = r.json.intake.completedAt;
+  r = await api(ivy, 'PUT', '/api/my/intake', { ...adultBody, goals: 'Get faster over 60 metres and stay injury-free' });
+  check('intake update via PUT saves the new goals',
+    r.status === 200 && r.json.intake.goals === 'Get faster over 60 metres and stay injury-free' &&
+    r.json.intake.completedAt === ivyCompletedAt, r.json.intake);
+  r = await api(ivy, 'GET', '/api/my/intake');
+  check('the updated intake reads back', r.json.intake.goals === 'Get faster over 60 metres and stay injury-free', r.json.intake);
+
+  /* The backup carries intakes, because they live on profiles. */
+  const bk3 = JSON.parse((await apiText(coach, '/api/export/backup')).text);
+  check('backup carries the intakes on their profiles',
+    Array.isArray(bk3.data.profiles) &&
+    bk3.data.profiles.some(pr => pr.id === ivyP.id && !!pr.intake &&
+      pr.intake.goals === 'Get faster over 60 metres and stay injury-free' &&
+      !!pr.intake.waiverAcceptedAt) &&
+    bk3.data.profiles.some(pr => pr.id === miloP.id && !!pr.intake &&
+      pr.intake.parentName === 'Pat Intake' && pr.intake.parentConsent === true) &&
+    !('users' in bk3.data), bk3.data.profiles && bk3.data.profiles.length);
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }

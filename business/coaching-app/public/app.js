@@ -84,6 +84,9 @@ const state = {
   memberLogsData: null,
   memberLogEdit: null,
   mlMsg: '',
+  intakeData: null,
+  intakeEditing: false,
+  intakeMsg: '',
   profiles: [],
   pfGroup: '',
   pfEvent: '',
@@ -424,6 +427,7 @@ function showView(name) {
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'weightroom') enterWeightRoom(); else exitWeightRoom();
   if (name === 'home' || name === 'log') { renderCheckin(); renderMemberLogs(); }
+  if (name === 'home' || name === 'account') renderMemberIntake();
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
   if (name === 'coach') renderCoach();
@@ -1319,6 +1323,7 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
+  renderMemberIntake();
   renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderWellness(); renderAnnouncements(); renderCustomWorkouts();
   renderPrograms(); renderCalendar();
   renderWarmupCards();
@@ -1689,6 +1694,168 @@ function paintMemberLogEditor() {
   });
 }
 
+/* ---------------- member intake (intake + waiver + consent) ----------------
+   The one form a member completes for their coach: goals, sports,
+   equipment access, training age, an injury-history screen, and
+   the waiver — with a parent or guardian's consent and signature
+   added when the member is under 18. The server binds every read
+   and write to the member's own linked profile, so this UI only
+   ever handles the caller's own intake. Coaches read it in AMS.
+   The Today card is only a prompt; the form itself lives in the
+   member's Account area, where the member forms live. */
+const MEMBER_EQUIPMENT_OPTIONS = [
+  ['full-gym', 'Full gym'],
+  ['dumbbells-only', 'Dumbbells only'],
+  ['track-only', 'Track only'],
+  ['minimal', 'Minimal / no equipment'],
+];
+function equipmentLabel(v) {
+  const hit = MEMBER_EQUIPMENT_OPTIONS.find(([val]) => val === v);
+  return hit ? hit[1] : v;
+}
+const WAIVER_LINES = [
+  'Training with Ruffin Performance involves speed and strength training. Like any physical training, it carries an inherent risk of injury, including strains, sprains, and other injuries.',
+  'This is coaching. It is not medical care, physical therapy, or medical advice.',
+  'If you are injured, in pain, or have a medical concern, stop and tell your coach. Your coach will refer you to a medical professional. Coaches do not diagnose or treat injuries.',
+  'By signing, you say you understand these risks, you will follow your coach\u2019s instructions, and you will report pain or an injury promptly.',
+  'For a member under 18, a parent or guardian must also read this, agree to it, and sign below.',
+];
+function intakeSummaryHtml(t) {
+  const equip = (t.equipmentAccess || []).map(equipmentLabel).join(', ') || '—';
+  const when = t.waiverAcceptedAt ? fmtDate(parseDate(String(t.waiverAcceptedAt).slice(0, 10))) : '';
+  return `<p>Goals: ${esc(t.goals)}</p>
+    <p>Sport(s): ${esc((t.sports || []).join(', ') || '—')}</p>
+    <p>Equipment access: ${esc(equip)}</p>
+    <p>Training age: ${t.trainingAge == null ? '—' : esc(String(t.trainingAge)) + ' year' + (t.trainingAge === 1 ? '' : 's')}</p>
+    <p>Injury in the last 12 months, or anything your coach should know: ${t.hasInjury ? 'Yes' : 'No'}${t.injuryDetail ? ' — ' + esc(t.injuryDetail) : ''}</p>
+    <p>Age: ${t.isAdult ? '18 or older' : 'Under 18'}</p>
+    <p>Waiver accepted${when ? ' on ' + esc(when) : ''} — signed by ${esc(t.waiverSignature)} (waiver version ${esc(t.waiverVersion || 'v1')})</p>
+    ${!t.isAdult && t.parentName ? `<p>Parent or guardian: ${esc(t.parentName)} — agreed and signed by ${esc(t.parentSignature)}${t.parentConsentAt ? ' on ' + esc(fmtDate(parseDate(String(t.parentConsentAt).slice(0, 10)))) : ''}</p>` : ''}`;
+}
+async function renderMemberIntake() {
+  const todaySlot = $('#intake-slot');
+  const acctSlot = $('#intake-main');
+  if (!isAthleteUser()) {
+    if (todaySlot) todaySlot.innerHTML = '';
+    if (acctSlot) acctSlot.innerHTML = '';
+    return;
+  }
+  let data;
+  try {
+    data = await api('/api/my/intake');
+    state.intakeData = data;
+  } catch (err) {
+    if (todaySlot) todaySlot.innerHTML = '';
+    if (acctSlot) acctSlot.innerHTML = `<div class="card"><h2>Member intake</h2><p class="error">Could not load your intake: ${esc(err.message)}</p><button class="btn secondary" id="in-retry" type="button">Retry</button></div>`;
+    const rb = acctSlot && acctSlot.querySelector('#in-retry');
+    if (rb) rb.addEventListener('click', renderMemberIntake);
+    return;
+  }
+  /* Today: a clear prompt until the intake is done, then nothing. */
+  if (todaySlot) {
+    if (data.linked && !data.completed) {
+      todaySlot.innerHTML = `<div class="card">
+        <h2>Finish your member intake</h2>
+        <p>Your coach needs your intake and waiver before training — goals, equipment, injury history, and a signed waiver. It takes a few minutes, once.</p>
+        <button class="btn primary" id="in-today-open" type="button">Complete your intake</button>
+      </div>`;
+      const ob = $('#in-today-open');
+      if (ob) ob.addEventListener('click', () => { state.intakeEditing = true; showView('account'); });
+    } else {
+      todaySlot.innerHTML = '';
+    }
+  }
+  if (!acctSlot) return;
+  if (!data.linked) {
+    acctSlot.innerHTML = `<div class="card">
+      <h2>Member intake</h2>
+      <p><strong>Ask your coach to link your account.</strong></p>
+      <p class="muted">Once your coach links this email (${esc(state.user.email)}) to your name on the member roster, you can complete your intake and waiver here.</p>
+    </div>`;
+    return;
+  }
+  const t = data.intake;
+  if (data.completed && t && !state.intakeEditing) {
+    acctSlot.innerHTML = `<div class="card">
+      <h2>Member intake <span class="badge low">DONE</span></h2>
+      ${intakeSummaryHtml(t)}
+      ${state.intakeMsg ? `<p class="muted">${esc(state.intakeMsg)}</p>` : ''}
+      <button class="btn secondary" id="in-edit" type="button">Update intake</button>
+    </div>`;
+    const eb = $('#in-edit');
+    if (eb) eb.addEventListener('click', () => { state.intakeEditing = true; renderMemberIntake(); });
+    return;
+  }
+  const f = t || {};
+  acctSlot.innerHTML = `<div class="card">
+    <h2>Member intake</h2>
+    <p class="muted">Tell your coach what you are training for and what you have access to, answer the injury screen honestly, then read and sign the waiver.</p>
+    <label>Your goals <textarea id="in-goals" rows="3" maxlength="1000" placeholder="What do you want out of training?">${esc(f.goals || '')}</textarea></label>
+    <label>Sport(s) <input type="text" id="in-sports" maxlength="200" value="${esc((f.sports || []).join(', '))}" placeholder="e.g. Track and field, Basketball"></label>
+    <div class="ci-label">Equipment access</div>
+    ${MEMBER_EQUIPMENT_OPTIONS.map(([val, label]) => `<label class="check-line"><input type="checkbox" data-in-equip value="${val}" ${(f.equipmentAccess || []).includes(val) ? 'checked' : ''}> ${label}</label>`).join('')}
+    <label>Training age — years you have been training <input type="number" id="in-age" min="0" max="70" step="1" value="${f.trainingAge == null ? '' : esc(String(f.trainingAge))}" placeholder="e.g. 3"></label>
+    <label>Have you had an injury in the last 12 months, or is there anything your coach should know?
+      <select id="in-injury">
+        <option value="">— pick one —</option>
+        <option value="no" ${t && !f.hasInjury ? 'selected' : ''}>No</option>
+        <option value="yes" ${t && f.hasInjury ? 'selected' : ''}>Yes</option>
+      </select></label>
+    <div id="in-injury-wrap" ${t && f.hasInjury ? '' : 'hidden'}>
+      <label>Short note for your coach <input type="text" id="in-injury-detail" maxlength="1000" value="${esc(f.injuryDetail || '')}" placeholder="What happened, and where things stand now"></label>
+    </div>
+    <label>Are you 18 or older?
+      <select id="in-adult">
+        <option value="">— pick one —</option>
+        <option value="yes" ${t && f.isAdult ? 'selected' : ''}>Yes, I am 18 or older</option>
+        <option value="no" ${t && !f.isAdult ? 'selected' : ''}>No, I am under 18</option>
+      </select></label>
+    <h3>Waiver</h3>
+    ${WAIVER_LINES.map(line => `<p class="muted">${esc(line)}</p>`).join('')}
+    <label class="check-line"><input type="checkbox" id="in-waiver-accept" ${t && f.waiverAccepted ? 'checked' : ''}> I have read the waiver and I agree to it</label>
+    <label>Type your full name to sign <input type="text" id="in-waiver-sign" maxlength="120" value="${esc(t ? f.waiverSignature || '' : '')}" placeholder="Your full name"></label>
+    <div id="in-parent-wrap" ${t && !f.isAdult ? '' : 'hidden'}>
+      <h3>Parent or guardian — for members under 18</h3>
+      <label>Parent or guardian full name <input type="text" id="in-parent-name" maxlength="120" value="${esc(f.parentName || '')}"></label>
+      <label class="check-line"><input type="checkbox" id="in-parent-consent" ${t && f.parentConsent ? 'checked' : ''}> I am this member\u2019s parent or guardian, I have read the waiver, and I agree to it</label>
+      <label>Parent or guardian — type your full name to sign <input type="text" id="in-parent-sign" maxlength="120" value="${esc(t ? f.parentSignature || '' : '')}"></label>
+    </div>
+    <button class="btn primary" id="in-save" type="button">Save intake</button>
+    <p class="error" id="in-err"></p>
+    ${state.intakeMsg ? `<p class="muted">${esc(state.intakeMsg)}</p>` : ''}
+  </div>`;
+  $('#in-injury').addEventListener('change', (e) => {
+    $('#in-injury-wrap').hidden = e.target.value !== 'yes';
+  });
+  $('#in-adult').addEventListener('change', (e) => {
+    $('#in-parent-wrap').hidden = e.target.value !== 'no';
+  });
+  $('#in-save').addEventListener('click', async () => {
+    const isAdultSel = $('#in-adult').value;
+    const injurySel = $('#in-injury').value;
+    const payload = {
+      goals: $('#in-goals').value,
+      sports: $('#in-sports').value.split(',').map(s => s.trim()).filter(Boolean),
+      equipmentAccess: Array.from(acctSlot.querySelectorAll('[data-in-equip]:checked')).map(x => x.value),
+      trainingAge: $('#in-age').value === '' ? null : parseInt($('#in-age').value, 10),
+      hasInjury: injurySel === '' ? undefined : injurySel === 'yes',
+      injuryDetail: injurySel === 'yes' ? $('#in-injury-detail').value : '',
+      isAdult: isAdultSel === '' ? undefined : isAdultSel === 'yes',
+      waiverAccepted: $('#in-waiver-accept').checked,
+      waiverSignature: $('#in-waiver-sign').value,
+      parentName: $('#in-parent-name') ? $('#in-parent-name').value : '',
+      parentConsent: $('#in-parent-consent') ? $('#in-parent-consent').checked : false,
+      parentSignature: $('#in-parent-sign') ? $('#in-parent-sign').value : '',
+    };
+    try {
+      await apiPost('/api/my/intake', payload);
+      state.intakeEditing = false;
+      state.intakeMsg = 'Saved — your coach can see it. Thank you.';
+      renderMemberIntake();
+    } catch (err) { $('#in-err').textContent = err.message; }
+  });
+}
+
 /* Reports → Health: the check-in aggregates block. Shows the
    participation-by-week bars and the team-average trend when
    check-ins exist; a clean "not yet" line when they don't. */
@@ -1926,7 +2093,7 @@ async function renderAms() {
           ${Object.keys(AMS_STATUS_LABELS).map(s => `<option value="${s}" ${state.amsStatus === s ? 'selected' : ''}>${AMS_STATUS_LABELS[s]}</option>`).join('')}
         </select></label>
       </div>
-      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Attendance = 2+ absences in the last 14 days · Health = an open aches &amp; pains concern · No logs this week = a linked member who has logged workouts before but none in the last 7 days · plus the device flags from the latest ForceDecks / NordBord sessions (imbalance, asymmetry, jump drop-off). Tap an athlete for their full page.</p>
+      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Attendance = 2+ absences in the last 14 days · Health = an open aches &amp; pains concern · No logs this week = a linked member who has logged workouts before but none in the last 7 days · Intake needed = a linked member who has not completed their intake and waiver · plus the device flags from the latest ForceDecks / NordBord sessions (imbalance, asymmetry, jump drop-off). Tap an athlete for their full page.</p>
       <div id="ams-table"></div>
     </div>`;
   const paintTable = () => {
@@ -2005,6 +2172,10 @@ async function renderAmsProfile(el, profileId) {
         </select></label>
       </div>
       <p>Attention: ${amsFlagBadges(d.flags)}</p>
+    </div>
+    <div class="card">
+      <h2>Member intake</h2>
+      ${p.intake ? intakeSummaryHtml(p.intake) : '<p class="muted">No intake on file yet. A linked member completes their intake and waiver in their Account area — until then this member carries the Intake needed flag.</p>'}
     </div>
     <div class="card">
       <h2>Wellness — last 14 days</h2>

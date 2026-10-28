@@ -88,8 +88,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v4',
-  cache: 'ruffin-performance-v4',
+  version: 'v5',
+  cache: 'ruffin-performance-v5',
 };
 
 /* ------------------------------------------------------------------ */
@@ -1560,6 +1560,13 @@ function publicProfile(pr) {
     events: pr.events || [], topAthlete: !!pr.topAthlete, archived: !!pr.archived,
     status: PROFILE_STATUSES.includes(pr.status) ? pr.status : 'active',
     linkedEmail: linkedEmailForProfile(pr.id),
+    /* The member's structured intake (goals, equipment, injury
+       screen, waiver + parent consent where they apply), or null
+       when they have not completed one. This shape is only ever
+       served below the coach gate or to the member themselves via
+       /api/my/intake — never on a public or leaderboard payload. */
+    intake: publicIntake(pr.intake),
+    intakeCompleted: hasCompletedIntake(pr),
   };
 }
 function publicUser(u) {
@@ -1777,6 +1784,146 @@ function memberLogSummaryFor(profileId, today) {
   }
   return { total: logs.length, lastLogDate, last7Count, weekCount };
 }
+/* ------------------------------------------------------------------ */
+/* Member intake (structured intake + waiver + parent consent)         */
+/* ------------------------------------------------------------------ */
+/* One form a linked member completes once (and can update): their
+   goals, sport(s), equipment access, training age, an injury-history
+   screen, and the liability waiver — typed full name as signature,
+   with the server stamping when it was accepted and which waiver
+   version was shown. Members under 18 also need a parent or
+   guardian's name, consent, and typed signature. The intake lives
+   on the roster PROFILE (profile.intake), so it rides along with
+   profiles in a backup, and it is served only to the member
+   themselves (via /api/my/intake, bound to their own link) and to
+   coaches (via publicProfile below the coach gate). */
+const INTAKE_WAIVER_VERSION = 'v1';
+const INTAKE_EQUIPMENT = ['full-gym', 'dumbbells-only', 'track-only', 'minimal'];
+/* The wire shape of one stored intake; anything malformed in the
+   store reads as its empty field, and a non-object reads as null. */
+function publicIntake(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  return {
+    goals: raw.goals || '',
+    sports: Array.isArray(raw.sports) ? raw.sports.slice() : [],
+    equipmentAccess: Array.isArray(raw.equipmentAccess) ? raw.equipmentAccess.slice() : [],
+    trainingAge: raw.trainingAge != null ? raw.trainingAge : null,
+    hasInjury: !!raw.hasInjury,
+    injuryDetail: raw.injuryDetail || '',
+    isAdult: raw.isAdult === true,
+    waiverAccepted: !!raw.waiverAccepted,
+    waiverSignature: raw.waiverSignature || '',
+    waiverVersion: raw.waiverVersion || '',
+    waiverAcceptedAt: raw.waiverAcceptedAt || null,
+    parentName: raw.parentName || '',
+    parentConsent: !!raw.parentConsent,
+    parentSignature: raw.parentSignature || '',
+    parentConsentAt: raw.parentConsentAt || null,
+    completedAt: raw.completedAt || null,
+    updatedAt: raw.updatedAt || null,
+  };
+}
+function hasCompletedIntake(pr) {
+  return !!(pr && pr.intake && typeof pr.intake === 'object'
+    && pr.intake.completedAt && pr.intake.waiverAccepted);
+}
+/* The intake write-path rules, in one place: goals and at least one
+   sport are required, equipment must be one of the known access
+   levels, training age is a whole number of years, the injury
+   question needs a yes or no (and a short note when yes), the
+   waiver must be accepted and signed with a typed full name, and a
+   member under 18 needs a parent or guardian's name, consent, and
+   typed signature too. Returns { fields } or { error }. The
+   timestamps and the waiver version are the server's, stamped by
+   the endpoint — never taken from the request. */
+function validateIntake(body) {
+  if (typeof body.goals === 'string' && body.goals.length > 1000) {
+    return { error: 'Keep your goals to 1000 characters or less.' };
+  }
+  const goals = clean(body.goals, 1000);
+  if (!goals) return { error: 'Tell us your goals — a sentence or two is fine.' };
+  let sportsRaw = [];
+  if (typeof body.sports === 'string') sportsRaw = body.sports.split(',');
+  else if (Array.isArray(body.sports)) sportsRaw = body.sports;
+  const sports = [];
+  for (const s of sportsRaw) {
+    const v = clean(s, 40);
+    if (v && !sports.includes(v)) sports.push(v);
+  }
+  if (!sports.length) return { error: 'Add your sport or sports.' };
+  if (sports.length > 6) return { error: 'List at most 6 sports.' };
+  let equipRaw = [];
+  if (typeof body.equipmentAccess === 'string') equipRaw = [body.equipmentAccess];
+  else if (Array.isArray(body.equipmentAccess)) equipRaw = body.equipmentAccess;
+  const equipmentAccess = [];
+  for (const e of equipRaw) {
+    const v = clean(e, 40);
+    if (v && !equipmentAccess.includes(v)) equipmentAccess.push(v);
+  }
+  if (!equipmentAccess.length
+    || equipmentAccess.some(e => !INTAKE_EQUIPMENT.includes(e))) {
+    return { error: 'Pick the equipment access that fits: full gym, dumbbells only, track only, or minimal.' };
+  }
+  const trainingAge = num(body.trainingAge);
+  if (trainingAge === null || !Number.isInteger(trainingAge)
+    || trainingAge < 0 || trainingAge > 70) {
+    return { error: 'Training age must be a whole number of years, 0 or more.' };
+  }
+  if (typeof body.hasInjury !== 'boolean') {
+    return { error: 'Answer the injury question — yes or no.' };
+  }
+  if (typeof body.injuryDetail === 'string' && body.injuryDetail.length > 1000) {
+    return { error: 'Keep the injury note to 1000 characters or less.' };
+  }
+  const injuryDetail = clean(body.injuryDetail, 1000);
+  if (body.hasInjury && !injuryDetail) {
+    return { error: 'Add a short note about the injury, or anything your coach should know.' };
+  }
+  if (typeof body.isAdult !== 'boolean') {
+    return { error: 'Say whether you are 18 or older.' };
+  }
+  if (body.waiverAccepted !== true) {
+    return { error: 'You need to accept the waiver to continue.' };
+  }
+  if (typeof body.waiverSignature === 'string' && body.waiverSignature.length > 120) {
+    return { error: 'Keep the waiver signature to 120 characters or less.' };
+  }
+  const waiverSignature = clean(body.waiverSignature, 120);
+  if (!waiverSignature) {
+    return { error: 'Type your full name to sign the waiver.' };
+  }
+  let parentName = '', parentSignature = '';
+  if (!body.isAdult) {
+    if (typeof body.parentName === 'string' && body.parentName.length > 120) {
+      return { error: 'Keep the parent or guardian name to 120 characters or less.' };
+    }
+    parentName = clean(body.parentName, 120);
+    if (!parentName) {
+      return { error: 'A parent or guardian name is required for members under 18.' };
+    }
+    if (body.parentConsent !== true) {
+      return { error: 'A parent or guardian needs to agree to the waiver for members under 18.' };
+    }
+    if (typeof body.parentSignature === 'string' && body.parentSignature.length > 120) {
+      return { error: 'Keep the parent or guardian signature to 120 characters or less.' };
+    }
+    parentSignature = clean(body.parentSignature, 120);
+    if (!parentSignature) {
+      return { error: 'A parent or guardian needs to type their full name to sign.' };
+    }
+  }
+  return {
+    fields: {
+      goals, sports, equipmentAccess, trainingAge,
+      hasInjury: body.hasInjury, injuryDetail,
+      isAdult: body.isAdult,
+      waiverAccepted: true, waiverSignature,
+      waiverVersion: INTAKE_WAIVER_VERSION,
+      parentName, parentConsent: !body.isAdult, parentSignature,
+    },
+  };
+}
+
 /* The write-path rules, in one place (create + edit share them, so
    an edit can never smuggle in a value a create would reject):
    a real date, not in the future, not more than 30 days back; a
@@ -2119,6 +2266,9 @@ function qualityForTest(t) {
      workout ever but none in the last 7 days. Members who have
      never logged are never flagged — quiet only means something
      against a habit that existed.
+   - Intake needed: a LINKED member with no completed intake
+     (structured intake + waiver, plus parent consent for a minor).
+     Unlinked members never earn it — they cannot submit one yet.
    Plus three device flags from the athlete's latest ForceDecks /
    NordBord sessions — NordBord imbalance (>10% left/right max
    force apart), ForceDecks asymmetry (an 'asym' metric over 10),
@@ -2249,6 +2399,18 @@ function amsFlagsFor(pr, today) {
         break;
       }
     }
+  }
+  /* Intake needed: a LINKED member who has not completed their
+     structured intake (goals, injury screen, waiver — plus parent
+     consent for a minor). Unlinked members never earn this flag,
+     for the same reason they never earn No check-in: they cannot
+     submit an intake until a coach links their account. Appended
+     last so the established flag order above never shifts. */
+  if (linkedEmailForProfile(pr.id) && !hasCompletedIntake(pr)) {
+    flags.push({
+      key: 'intake-needed', label: 'Intake needed', count: null,
+      detail: 'Linked member has not completed their intake and waiver yet',
+    });
   }
   return flags;
 }
@@ -3319,6 +3481,60 @@ async function handleApi(req, res, url) {
       linked: true, profileId: prof.id,
       athleteName: prof.firstName + ' ' + prof.lastName,
       workouts,
+    });
+  }
+
+  /* ---------- member intake (member-entered, own record only) ----------
+     The structured intake + waiver (+ parent consent for a minor).
+     The profile always comes from the caller's own link binding,
+     never from the request — a profile id in the body or query is
+     ignored — so a member can only ever read or write their own
+     intake, and another member's intake is invisible by
+     construction. Unlinked accounts read the clear not-linked
+     state (the member-logs pattern) and cannot submit: 403 with
+     notLinked, the same wall as the check-in and the logs. */
+  if (p === '/api/my/intake' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    if (!prof) {
+      return sendJson(res, 200, { linked: false, intake: null, completed: false });
+    }
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      intake: publicIntake(prof.intake),
+      completed: hasCompletedIntake(prof),
+    });
+  }
+
+  if (p === '/api/my/intake' && (req.method === 'POST' || req.method === 'PUT')) {
+    const prof = linkedProfileFor(user);
+    if (prof && prof.archived) {
+      return sendJson(res, 403, {
+        error: 'This roster profile is archived. Ask your coach to restore it before completing your intake.',
+        notLinked: false,
+      });
+    }
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can complete your intake.',
+        notLinked: true,
+      });
+    }
+    const body = await readBody(req);
+    const v = validateIntake(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const now = new Date().toISOString();
+    const existing = hasCompletedIntake(prof) ? prof.intake : null;
+    const intake = Object.assign({}, v.fields, {
+      waiverAcceptedAt: now,
+      parentConsentAt: v.fields.isAdult ? null : now,
+      completedAt: existing && existing.completedAt ? existing.completedAt : now,
+      updatedAt: now,
+    });
+    prof.intake = intake;
+    saveDb();
+    return sendJson(res, existing ? 200 : 201, {
+      ok: true, intake: publicIntake(intake), completed: true,
     });
   }
 
