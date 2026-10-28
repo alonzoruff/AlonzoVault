@@ -1569,6 +1569,29 @@ body.logged-out .primary-nav { display: none !important; }
   .landing-tiers { grid-template-columns: 1fr; }
   .landing-hero h1 { font-size: 28px; }
 }
+.landing-headline { font-size: 27px; font-weight: 800; line-height: 1.2; color: var(--ink); max-width: 560px; margin: 4px auto 10px; }
+.landing-proof { font-size: 16px; font-weight: 700; color: var(--red); margin: 0 auto 6px; }
+
+/* ---- This Week member home card (v8) ----
+   The Mon–Sun strip: seven equal cells on the card's dark panel,
+   today outlined in the silver accent, completions badged. */
+.tw-card h2 { margin-top: 2px; }
+.tw-today { font-size: 16px; }
+.tw-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 10px 0 12px; }
+.tw-day {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: #1a1b1f; padding: 8px 4px; text-align: center;
+  display: flex; flex-direction: column; gap: 2px; align-items: center;
+}
+.tw-day.today { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
+.tw-dow { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
+.tw-date { font-size: 16px; font-weight: 800; color: var(--ink); }
+.tw-code { font-size: 11.5px; font-weight: 600; color: var(--ink); }
+.tw-mark { min-height: 18px; }
+@media (max-width: 620px) {
+  .tw-code { font-size: 10px; }
+  .tw-date { font-size: 14px; }
+}
 
 /* ---- Cosmetic pass: demo thumbnails + shared-surface polish ----
    Rows for drills, tests and sessions show a thumbnail when the

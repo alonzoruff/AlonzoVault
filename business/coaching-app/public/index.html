@@ -55,28 +55,42 @@
     <div class="landing-hero">
       <img class="landing-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
       <h1>__BRAND_NAME__</h1>
-      <p class="landing-promise">Speed &amp; strength coaching for sprinters and power athletes — your program, your coach's demo videos, and your progress, all in one app.</p>
+      <p class="landing-headline">Measured speed, not promised speed.</p>
+      <p class="landing-promise">A coaching portal for athletes training from a distance: your program and your coach's demo library, form checks with your coach's replies, daily health &amp; readiness check-ins, and a Speed Report that shows exactly how far you have come — everything you need, in one app, from afar.</p>
+      <p class="landing-proof">A real coach watches every rep.</p>
       <button class="btn primary landing-signin" type="button" data-goto="account">Member sign in</button>
       <p class="muted landing-pilot-note">Founding pilot — membership is invite-only while we launch.</p>
     </div>
 
     <div class="card landing-card">
-      <h2>What members get</h2>
+      <h2>The Measured Speed Loop</h2>
+      <ol class="landing-list">
+        <li><strong>Tested at intake.</strong> Your first week starts with baseline testing — 40-yard dash, vertical jump, broad jump — so every number after it has something honest to be measured against.</li>
+        <li><strong>Coached weekly.</strong> Your program, your demos, your form checks, and your daily check-ins, reviewed by your coach every week.</li>
+        <li><strong>Re-tested each block.</strong> At the end of every training block you test again, on the same tests, the same way.</li>
+        <li><strong>Your Speed Report.</strong> Baseline, personal bests, and the change since day one — a report you can hold, and show a parent.</li>
+      </ol>
+    </div>
+
+    <div class="card landing-card">
+      <h2>What's inside the portal</h2>
       <ul class="landing-list">
-        <li><strong>A program built for you</strong> — your training week in the app, set by your coach and adjusted as you progress. Not a generic PDF.</li>
-        <li><strong>Coach demo videos</strong> — every movement shown by your coach, so you always know exactly how it should look.</li>
-        <li><strong>Testing &amp; progress tracking</strong> — sprint times, jumps, and lifts, measured and charted against your own history.</li>
-        <li><strong>Weekly check-ins</strong> — sleep, soreness, and energy in under 20 seconds, reviewed by your coach before your next session.</li>
-        <li><strong>Form checks</strong> — send a video of a sprint or a lift and get coaching back on your technique.</li>
+        <li><strong>The library</strong> — your training sessions and a demo library filmed by your coach himself, so every drill and lift looks the way your coach teaches it. Not stock video of strangers.</li>
+        <li><strong>Your program, delivered from afar</strong> — your training week in the app, set by your coach, with lifting loads calculated from your own tested maxes as you progress.</li>
+        <li><strong>Form checks</strong> — send a video of a sprint or a lift and get your coach's reply right in the app. One form check per week is included with Membership; extra submissions join the queue. Membership + Coaching members get priority review within 48 hours.</li>
+        <li><strong>Health &amp; readiness tracking</strong> — a daily check-in on sleep, soreness, and energy takes 20 seconds. Your coach sees the flags before your next session, so training adjusts to how you actually feel.</li>
+        <li><strong>Your own log</strong> — record what you ran and lifted, with effort and notes, so nothing you do away from your coach is invisible to him.</li>
+        <li><strong>The Speed Report</strong> — your tests over time: baseline vs. best vs. latest, updated at every re-test.</li>
       </ul>
     </div>
 
     <div class="card landing-card">
       <h2>How it works</h2>
       <ol class="landing-list">
-        <li><strong>Get invited.</strong> Membership opens by invitation during the founding pilot — your coach invites your email, you create your account, you're in.</li>
-        <li><strong>Get your program.</strong> Your coach builds your training week in the app, matched to your sport, your season, and your equipment.</li>
-        <li><strong>Train and check in.</strong> Follow the workouts, watch the demos, log your check-in — your coach reviews, tests, and adjusts as the numbers move.</li>
+        <li><strong>Get invited.</strong> Membership opens by invitation during the founding pilot — your coach invites your email, you create your account with that email, you're in. Want a founding pilot seat? Ask your coach to put your email on the invite list.</li>
+        <li><strong>Intake &amp; baseline.</strong> Complete your intake (minors: a parent or guardian signs off), then test your baseline in week one.</li>
+        <li><strong>Train, log, check in.</strong> Follow your week, watch the demos, log your work, check in daily — your coach reviews, replies, and adjusts as the numbers move.</li>
+        <li><strong>Re-test &amp; report.</strong> Each block ends with a re-test and an updated Speed Report.</li>
       </ol>
     </div>
 
@@ -89,9 +103,9 @@
           <ul class="landing-list">
             <li>Your program in the app, updated by your coach</li>
             <li>Full coach demo video library</li>
-            <li>Testing &amp; progress tracking</li>
-            <li>Weekly check-in review</li>
-            <li>One form check per week</li>
+            <li>Testing, re-testing &amp; your Speed Report</li>
+            <li>Daily check-in review by your coach</li>
+            <li>One form check per week (extras join the queue)</li>
           </ul>
         </div>
         <div class="landing-tier">
@@ -104,7 +118,7 @@
           </ul>
         </div>
       </div>
-      <p class="muted">Founding pilot members start at <strong>$49/mo</strong>, locked for six months — pilot membership is invite-only while we launch.</p>
+      <p class="muted">Founding pilot members start at <strong>$49/mo</strong>, locked for six months — pilot membership is invite-only while we launch. Joining starts with an invitation from your coach; there is no public sign-up.</p>
     </div>
 
     <div class="card landing-card">
@@ -161,6 +175,7 @@
     </div>
     <div class="hero-caption"><h1>Today</h1><p>Practice plan, check-in &amp; team news</p></div>
     </div>
+    <div id="thisweek-slot"></div>
     <div id="checkin-slot"></div>
     <div id="memberlog-slot"></div>
     <div id="intake-slot"></div>

@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v7 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v7"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v8 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v8"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v7'") &&
-    swJs.text.includes("ruffin-performance-v7"));
+    appJs.text.includes("const APP_VERSION = 'v8'") &&
+    swJs.text.includes("ruffin-performance-v8"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v7"') &&
-    pageHtml.text.includes('Ruffin Performance · App v7') &&
+    pageHtml.text.includes('data-app-version="v8"') &&
+    pageHtml.text.includes('Ruffin Performance · App v8') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -5141,6 +5141,152 @@ async function main() {
       fc.status === 'replied' && fc.reply && fc.reply.text.startsWith('Updated:')) &&
     !bkFc.data.formChecks.some(fc => fc.id === fcSecondId) &&
     !('users' in bkFc.data), bkFc.data.formChecks && bkFc.data.formChecks.length);
+
+  /* ---------------- member "This Week" home + landing rewrite (Build v8) ----------------
+     /api/my/week assembles the member's home card from data that
+     already exists: today's assignment + the Mon–Sun strip from
+     resolveAssignment, the check-in streak + latest readiness
+     snapshot (publicCheckin — the same flags the coach sees), the
+     next test date, a Speed Report teaser, the intake flag, and
+     the latest form-check status — all bound to the caller's own
+     linked profile. The landing rewrite carries the confirmed
+     headline and the Measured Speed Loop, tiers as information
+     only, joining by invitation only.
+       Wren  — linked member with the full week of data.
+       Blair — linked member (form-check fixtures) with none of it:
+               every Wren field must read as her own empty state.
+       Una   — registered but NOT linked (clear not-linked state). */
+  check('this-week slot is in the served page', pageHtml.text.includes('id="thisweek-slot"'));
+  check('this-week wiring is in the served JS',
+    appJs.text.includes('renderThisWeek') && appJs.text.includes('/api/my/week') &&
+    appJs.text.includes('See your Speed Report') && appJs.text.includes('check-in streak'));
+  {
+    const twTvStart = appJs.text.indexOf('TV BOARD');
+    const twTvEnd = appJs.text.indexOf('/* ---------------- boot', twTvStart);
+    const twTvCode = appJs.text.slice(twTvStart, twTvEnd).toLowerCase();
+    check('TV render path has no this-week / my-week references',
+      twTvStart >= 0 && twTvEnd > twTvStart && !twTvCode.includes('my/week') &&
+      !twTvCode.includes('thisweek') && !twTvCode.includes('this week'), twTvCode.length);
+  }
+  check('landing leads with the confirmed headline and the proof line',
+    pageHtml.text.includes('Measured speed, not promised speed') &&
+    pageHtml.text.includes('A real coach watches every rep'));
+  check('landing presents the Measured Speed Loop and the portal contents',
+    pageHtml.text.includes('The Measured Speed Loop') &&
+    pageHtml.text.includes('Tested at intake') && pageHtml.text.includes('Coached weekly') &&
+    pageHtml.text.includes('Re-tested each block') && pageHtml.text.includes('Speed Report') &&
+    pageHtml.text.includes('Health &amp; readiness tracking') &&
+    pageHtml.text.includes('filmed by your coach himself'));
+  check('landing tiers describe what the app actually does (cadence as copy + queue, no invented enforcement)',
+    pageHtml.text.includes('One form check per week (extras join the queue)') &&
+    pageHtml.text.includes('Priority form checks (48-hour turnaround)') &&
+    pageHtml.text.includes('no public sign-up'));
+
+  const twToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+  const twAddD = (ds, n) => {
+    const [y, m, d] = ds.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  };
+  r = await api(coach, 'POST', '/api/groups', { name: 'This Week Squad' });
+  const twGroup = r.json.group;
+  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Wren', lastName: 'Week', groupId: twGroup.id, events: ['sprinter'] });
+  const wrenP = r.json.profile;
+  await api(coach, 'POST', '/api/client-invites', { email: 'wren-week@test.com' });
+  const wren = await regMember('wren-week@test.com');
+  await api(coach, 'PUT', '/api/profiles/' + wrenP.id + '/link', { email: 'wren-week@test.com' });
+  check('this-week fixtures: Wren registered and linked', !!wrenP.id && !!wren);
+
+  r = await api(wren, 'POST', '/api/my/intake', {
+    goals: 'Get faster and stay healthy all season',
+    sports: ['Track and field'], equipmentAccess: ['full-gym'],
+    trainingAge: 3, hasInjury: false, injuryDetail: '',
+    isAdult: true, waiverAccepted: true, waiverSignature: 'Wren Week',
+  });
+  check('Wren completes intake (the This Week reminder must clear)', r.status === 201, r.status);
+  /* Wren's check-ins land on the three days ENDING YESTERDAY, never
+     today: the post-restart wellness aggregate further down counts
+     today's check-ins across the whole roster and expects its own
+     fixtures only. The streak helper counts a run ending yesterday
+     the same as one ending today, so the streak is still 3. */
+  r = await api(wren, 'POST', '/api/checkin', { date: twAddD(twToday, -3), sleep: 8, soreness: 2, energy: 4 });
+  check('Wren check-in three days ago saves', r.status === 200 || r.status === 201, r.status);
+  r = await api(wren, 'POST', '/api/checkin', { date: twAddD(twToday, -2), sleep: 7.5, soreness: 2, energy: 4 });
+  check('Wren check-in two days ago saves', r.status === 200 || r.status === 201, r.status);
+  r = await api(wren, 'POST', '/api/checkin', { date: twAddD(twToday, -1), sleep: 5.5, soreness: 3, energy: 3 });
+  check('Wren check-in yesterday saves (short sleep — the readiness flag)', r.status === 200 || r.status === 201, r.status);
+  r = await api(coach, 'POST', '/api/assignments/override', { groupId: twGroup.id, date: twToday, sessionId: 'SE-02' });
+  check('coach override sets Wren\'s session for today', r.status === 200 && r.json.assignment.sessionId === 'SE-02', r.json);
+  r = await api(coach, 'POST', '/api/completions', { profileId: wrenP.id, date: twToday, marks: 'done' });
+  check('coach marks Wren\'s today complete', r.status === 200 || r.status === 201, r.status);
+  const TW_CORE = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+  r = await api(coach, 'POST', '/api/test-days', { date: twAddD(twToday, -14), title: 'TW Baseline', testKeys: TW_CORE });
+  const twDay1 = r.json.testDay.id;
+  await api(coach, 'POST', '/api/results', { profileId: wrenP.id, testDayId: twDay1, testKey: 'forty-yard-dash', value: 5.0 });
+  await api(coach, 'POST', '/api/results', { profileId: wrenP.id, testDayId: twDay1, testKey: 'vertical-jump', value: 24 });
+  r = await api(coach, 'POST', '/api/test-days', { date: twAddD(twToday, -7), title: 'TW Retest', testKeys: TW_CORE });
+  const twDay2 = r.json.testDay.id;
+  await api(coach, 'POST', '/api/results', { profileId: wrenP.id, testDayId: twDay2, testKey: 'forty-yard-dash', value: 4.88 });
+  const twFuture = twAddD(twToday, 10);
+  r = await api(coach, 'POST', '/api/test-days', { date: twFuture, title: 'TW Re-test Day', testKeys: TW_CORE });
+  check('Wren testing fixtures land (baseline, retest, future day)', !!twDay1 && !!twDay2 && r.status === 201, r.status);
+  r = await api(wren, 'POST', '/api/my/form-checks', { videoUrl: 'https://res.cloudinary.com/l8qblw99/video/upload/fc-wren-1.mp4', context: 'This week check' });
+  const wrenFcId = r.json.formCheck && r.json.formCheck.id;
+  check('Wren sends a form check for the This Week status line', r.status === 201 && !!wrenFcId, r.status);
+
+  r = await api(null, 'GET', '/api/my/week');
+  check('this-week without login is 401', r.status === 401, r.status);
+  r = await api(unaFc, 'GET', '/api/my/week');
+  check('unlinked member reads the clear not-linked this-week state',
+    r.status === 200 && r.json.linked === false, r.json);
+  r = await api(coach, 'GET', '/api/my/week');
+  check('a coach account (no linked profile) reads the not-linked state too',
+    r.status === 200 && r.json.linked === false, r.json);
+
+  r = await api(wren, 'GET', '/api/my/week');
+  const tw = r.json || {};
+  check('this-week payload is bound to Wren and dated today (NY)',
+    r.status === 200 && tw.linked === true && tw.profileId === wrenP.id && tw.date === twToday, tw.date);
+  check('today\'s assignment is the coach override',
+    !!tw.todayAssignment && tw.todayAssignment.sessionId === 'SE-02', tw.todayAssignment);
+  check('the week strip is Mon–Sun with exactly one today, and today is marked complete',
+    Array.isArray(tw.week) && tw.week.length === 7 &&
+    tw.week[0].dayKey === 'mon' && tw.week[6].dayKey === 'sun' &&
+    tw.week.filter(d => d.isToday).length === 1 &&
+    tw.week.find(d => d.isToday).date === twToday &&
+    tw.week.find(d => d.isToday).completed === true &&
+    tw.week.every(d => typeof d.completed === 'boolean') &&
+    tw.week.filter(d => d.completed).length === 1, tw.week);
+  check('check-in streak counts the three consecutive days ending yesterday (today not yet checked in)',
+    tw.checkinStreak === 3 && tw.checkedInToday === false, tw.checkinStreak);
+  check('readiness snapshot is the latest check-in with the shared flag rules',
+    !!tw.latestCheckin && tw.latestCheckin.date === twAddD(twToday, -1) &&
+    tw.latestCheckin.sleep === 5.5 && tw.latestCheckin.flags.includes('low-sleep'), tw.latestCheckin);
+  check('intake flag reads completed for Wren', tw.intakeCompleted === true, tw.intakeCompleted);
+  check('speed teaser is the most recently tested event with best + change vs baseline',
+    !!tw.speedTeaser && tw.speedTeaser.testKey === 'forty-yard-dash' &&
+    !!tw.speedTeaser.best && tw.speedTeaser.best.display === 4.88 &&
+    !!tw.speedTeaser.changeSinceBaseline && tw.speedTeaser.changeSinceBaseline.improvement === 0.12,
+    tw.speedTeaser);
+  check('next test date is the earliest upcoming test day, inside the fixture window',
+    !!tw.nextTestDate && tw.nextTestDate.date >= twToday && tw.nextTestDate.date <= twFuture, tw.nextTestDate);
+  check('form-check status line carries Wren\'s pending request and counts',
+    !!tw.formCheck && !!tw.formCheck.latest && tw.formCheck.latest.id === wrenFcId &&
+    tw.formCheck.latest.status === 'pending' && tw.formCheck.pendingCount === 1 &&
+    tw.formCheck.weekCount === 1, tw.formCheck);
+
+  r = await api(blair, 'GET', '/api/my/week');
+  const bw = r.json || {};
+  check('Blair\'s this-week is her own empty state — nothing of Wren\'s leaks',
+    r.status === 200 && bw.linked === true && bw.speedTeaser === null &&
+    bw.latestCheckin === null && bw.checkinStreak === 0 && bw.checkedInToday === false &&
+    bw.intakeCompleted === false && !!bw.formCheck && bw.formCheck.latest === null &&
+    bw.formCheck.weekCount === 0 &&
+    !JSON.stringify(bw).includes(wrenFcId) && !JSON.stringify(bw).includes('4.88') &&
+    !JSON.stringify(bw).includes('Wren'), bw);
+  r = await api(blair, 'GET', '/api/leaderboard');
+  check('leaderboard payload carries no this-week/readiness data',
+    r.status === 200 && !JSON.stringify(r.json).includes('latestCheckin') &&
+    !JSON.stringify(r.json).includes('checkinStreak') && !JSON.stringify(r.json).includes(wrenFcId), r.status);
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }

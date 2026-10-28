@@ -428,6 +428,7 @@ function showView(name) {
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'weightroom') enterWeightRoom(); else exitWeightRoom();
   if (name === 'home' || name === 'log') { renderCheckin(); renderMemberLogs(); renderFormChecks(); }
+  if (name === 'home') renderThisWeek();
   if (name === 'home' || name === 'account') renderMemberIntake();
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
@@ -1440,6 +1441,7 @@ async function renderCheckin() {
           });
           state.ciMsg = 'Saved — your coaches can see it. ✓';
           await renderCheckin();
+          renderThisWeek();
         } catch (err) { alert(err.message); }
       });
     }
@@ -1695,6 +1697,94 @@ function paintMemberLogEditor() {
       renderMemberLogs();
     } catch (err) { alert(err.message); }
   });
+}
+
+/* ---------------- member "This Week" home card ----------------
+   The member's week at a glance, assembled server-side from their
+   own data only (/api/my/week): today's assigned session, the
+   Mon–Sun strip with completions, the check-in streak and latest
+   readiness snapshot (the server's own flags — the same ones the
+   check-in card shows), the next test date, a Speed Report teaser
+   (most recently tested event, best + change vs baseline, with a
+   jump to the full report), the intake reminder while intake is
+   incomplete, and the latest form-check status. Coaches and
+   signed-out visitors get nothing here — the coach's own Today
+   summary lives further down the home view. */
+async function renderThisWeek() {
+  const slot = $('#thisweek-slot');
+  if (!slot) return;
+  if (!isAthleteUser()) { slot.innerHTML = ''; return; }
+  let data;
+  try { data = await api('/api/my/week'); } catch (_) { slot.innerHTML = ''; return; }
+  if (!data.linked) {
+    slot.innerHTML = `<div class="card">
+      <h2>This Week</h2>
+      <p><strong>Ask your coach to link your account.</strong></p>
+      <p class="muted">Once your coach links this email (${esc(state.user.email)}) to your name on the member roster, this card becomes your week at a glance — today's session, your check-in streak and readiness, your next test date, and your latest progress.</p>
+    </div>`;
+    return;
+  }
+  const todayLine = data.todayAssignment
+    ? `<p class="tw-today">Today: <strong>${esc(data.todayAssignment.sessionId)} · ${esc(data.todayAssignment.sessionName)}</strong>${data.todayAssignment.note ? ` <span class="muted">— ${esc(data.todayAssignment.note)}</span>` : ''}</p>`
+    : (data.todayIsOff
+      ? '<p class="tw-today">Today is a <strong>rest day</strong> in the plan — recover well.</p>'
+      : '<p class="tw-today muted">No session assigned for today — your week is below, and your full plan is in the season view.</p>');
+  const weekHtml = `<div class="tw-week">${(data.week || []).map(d => `
+    <div class="tw-day${d.isToday ? ' today' : ''}">
+      <span class="tw-dow">${esc((DAY_NAMES[d.dayKey] || d.dayKey).slice(0, 3))}</span>
+      <span class="tw-date">${esc(String(parseDate(d.date).getDate()))}</span>
+      <span class="tw-code">${d.sessionId ? esc(d.sessionId) : (d.isOff ? 'Rest' : '—')}</span>
+      <span class="tw-mark">${d.completed ? '<span class="badge low">Done</span>' : ''}</span>
+    </div>`).join('')}</div>`;
+  const lc = data.latestCheckin;
+  const streakHtml = data.checkinStreak > 0
+    ? `<p class="checkin-streak">${data.checkinStreak}-day check-in streak</p>`
+    : '<p class="muted">No check-in streak yet — today\'s check-in, right below, starts one.</p>';
+  const readinessHtml = lc
+    ? `<p>Latest check-in (${esc(fmtDate(parseDate(lc.date)))}): slept <strong>${esc(String(lc.sleep))}h</strong> · soreness <strong>${esc(String(lc.soreness))}/5</strong> · energy <strong>${esc(String(lc.energy))}/5</strong> ${lc.flags && lc.flags.length
+      ? lc.flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ')
+      : '<span class="badge low">ALL CLEAR</span>'}</p>
+       ${data.checkedInToday ? '' : '<p class="muted">You have not checked in today yet — it takes 20 seconds, right below.</p>'}`
+    : '<p class="muted">No check-ins yet — your daily check-in (sleep, soreness, energy) is how your coach tracks your readiness from afar.</p>';
+  const next = data.nextTestDate;
+  const nextHtml = next
+    ? `<p>Next test day: <strong>${esc(fmtDate(parseDate(next.date)))}</strong>${next.title ? ` <span class="muted">· ${esc(next.title)}</span>` : ''}${next.testNames && next.testNames.length ? `<br><span class="muted">Testing: ${esc(next.testNames.join(', '))}</span>` : ''}</p>`
+    : '';
+  const t = data.speedTeaser;
+  const teaserChange = t ? srChangeText(t) : '';
+  const teaserHtml = t
+    ? `<p>Latest progress — <strong>${esc(t.name)}</strong>: best <strong>${esc(srDisplay(t, t.best))}</strong>${teaserChange ? ` · ${esc(teaserChange)}` : ''}</p>
+       <button class="btn secondary" id="tw-speed" type="button">See your Speed Report</button>`
+    : '<p class="muted">Your Speed Report starts with baseline testing — your first test day sets the numbers everything else is measured against.</p>';
+  const intakeHtml = data.intakeCompleted
+    ? ''
+    : `<p><strong>Finish your intake.</strong> Your coach needs your intake (and a parent or guardian sign-off if you are under 18) before your program is final — it is right below on this page.</p>
+       <button class="btn secondary" id="tw-intake" type="button">Go to my intake</button>`;
+  const fc = data.formCheck && data.formCheck.latest;
+  const fcHtml = fc
+    ? `<p>Latest form check: ${formCheckStatusBadge(fc)} <span class="muted">${esc(fc.context || 'Form check')} · ${esc(formCheckDateLine(fc))}${data.formCheck.pendingCount > 1 ? ` · ${data.formCheck.pendingCount} waiting in the queue` : ''}</span></p>
+       <button class="btn secondary" id="tw-formcheck" type="button">Open form checks</button>`
+    : '<p class="muted">No form checks sent yet — film a sprint or a lift and send it from My Log for your coach\'s eyes on your technique.</p>';
+  slot.innerHTML = `<div class="card tw-card">
+    <h2>This Week</h2>
+    ${todayLine}
+    ${weekHtml}
+    ${streakHtml}
+    ${readinessHtml}
+    ${nextHtml}
+    ${teaserHtml}
+    ${intakeHtml}
+    ${fcHtml}
+  </div>`;
+  const spBtn = $('#tw-speed');
+  if (spBtn) spBtn.addEventListener('click', () => showView('speedreport'));
+  const inBtn = $('#tw-intake');
+  if (inBtn) inBtn.addEventListener('click', () => {
+    const el = document.getElementById('intake-slot');
+    if (el) el.scrollIntoView({ block: 'start' });
+  });
+  const fcBtn = $('#tw-formcheck');
+  if (fcBtn) fcBtn.addEventListener('click', () => showView('log'));
 }
 
 /* ---------------- member form checks ----------------

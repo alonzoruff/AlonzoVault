@@ -88,8 +88,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v7',
-  cache: 'ruffin-performance-v7',
+  version: 'v8',
+  cache: 'ruffin-performance-v8',
 };
 
 /* ------------------------------------------------------------------ */
@@ -3815,6 +3815,72 @@ async function handleApi(req, res, url) {
     return sendJson(res, 201, {
       ok: true, formCheck: publicFormCheck(fc),
       weekCount: formCheckWeekCount(prof.id, todayStr()),
+    });
+  }
+
+  /* ---------- member "This Week" home (member-facing, own data only) ----------
+     One assembled payload for the member's home card: today's
+     assigned session, the Mon–Sun week at a glance, the check-in
+     streak and the latest readiness snapshot (publicCheckin's own
+     shape, so the flag rules are the same ones the check-in card
+     and the coach Wellness view read — no new health metric is
+     invented here), the next test date, a Speed Report teaser (the
+     member's most recently tested event, from the same
+     speedReportFor the full report reads), the intake completion
+     flag, and the latest form-check status. Every piece is bound
+     to the caller's own linked profile, never to anything in the
+     request, so another member's week is unreachable by
+     construction. Nothing here goes to the TV board, the
+     leaderboard, or any public surface. Unlinked accounts read the
+     clear not-linked state (the member-logs pattern) so the home
+     card can prompt instead of erroring. */
+  if (p === '/api/my/week' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    if (!prof) return sendJson(res, 200, { linked: false });
+    const today = todayStr();
+    const a = resolveAssignment(prof.groupId, today);
+    const mon = mondayOf(today);
+    const week = [];
+    for (let i = 0; i < 7; i++) {
+      const ds = addDaysStr(mon, i);
+      const wa = resolveAssignment(prof.groupId, ds);
+      week.push({
+        date: ds, dayKey: DAY_KEYS[i],
+        sessionId: wa.sessionId, sessionName: wa.sessionName || '',
+        isOff: !!wa.isOff, isToday: ds === today,
+        completed: !!completionFor(prof.id, ds),
+      });
+    }
+    const byDate = db.checkins[prof.id] || {};
+    const checkinDates = Object.keys(byDate).filter(d => d <= today).sort();
+    const latestCheckin = checkinDates.length
+      ? publicCheckin(byDate[checkinDates[checkinDates.length - 1]]) : null;
+    let speedTeaser = null;
+    for (const t of speedReportFor(prof.id)) {
+      if (!t.latest) continue;
+      if (!speedTeaser || t.latest.date > speedTeaser.latest.date) speedTeaser = t;
+    }
+    const checks = formChecksFor(prof.id);
+    return sendJson(res, 200, {
+      linked: true, profileId: prof.id,
+      athleteName: prof.firstName + ' ' + prof.lastName,
+      date: today,
+      todayAssignment: a.sessionId
+        ? { date: today, sessionId: a.sessionId, sessionName: a.sessionName, codes: a.codes, note: a.note || '' }
+        : null,
+      todayIsOff: !!a.isOff,
+      week,
+      checkinStreak: checkinStreak(prof.id),
+      checkedInToday: !!byDate[today],
+      latestCheckin,
+      nextTestDate: nextTestDateInfo(),
+      speedTeaser,
+      intakeCompleted: hasCompletedIntake(prof),
+      formCheck: {
+        latest: checks.length ? checks[0] : null,
+        pendingCount: checks.filter(fc => fc.status === 'pending').length,
+        weekCount: formCheckWeekCount(prof.id, today),
+      },
     });
   }
 
