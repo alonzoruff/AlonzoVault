@@ -1546,13 +1546,75 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
    carries its own Member sign in button, and the Account view holds
    the forms. ================================================================ */
 body.logged-out .primary-nav { display: none !important; }
-.landing-hero { text-align: center; padding: 26px 6px 8px; }
-.landing-logo { height: 72px; width: auto; }
-.landing-hero h1 { font-size: 34px; margin: 12px 0 8px; letter-spacing: .01em; }
-.landing-promise { font-size: 17px; color: var(--ink); max-width: 560px; margin: 0 auto 16px; }
-.landing-hero .btn.primary { display: flex; max-width: 340px; margin: 14px auto 10px; }
-.landing-pilot-note { font-size: 13.5px; }
+#view-landing { --landing-accent: #d6f36a; --landing-accent-ink: #11130a; }
+.landing-hero {
+  position: relative; overflow: hidden; text-align: left;
+  min-height: 620px; margin: -16px -16px 0; padding: 52px 48px;
+  display: flex; align-items: center;
+  background:
+    linear-gradient(90deg, rgba(5, 5, 6, .97) 0%, rgba(5, 5, 6, .91) 36%, rgba(5, 5, 6, .52) 61%, rgba(5, 5, 6, .12) 82%),
+    linear-gradient(0deg, rgba(5, 5, 6, .58) 0%, rgba(5, 5, 6, 0) 48%),
+    url('/assets/hero-sprinter.jpg') 72% center / cover no-repeat #09090b;
+  border-bottom: 1px solid var(--line);
+}
+.landing-hero-content { position: relative; z-index: 1; width: min(610px, 100%); }
+.landing-brandmark { display: flex; align-items: center; gap: 12px; }
+.landing-logo {
+  height: 48px; width: 48px; object-fit: contain;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, .45));
+}
+.landing-wordmark {
+  font-size: 17px; font-weight: 900; line-height: 1.1;
+  letter-spacing: .09em; text-transform: uppercase; color: #fff;
+}
+.landing-eyebrow {
+  margin: 58px 0 16px; color: var(--landing-accent);
+  font-size: 12px; font-weight: 900; letter-spacing: .2em;
+}
+.landing-hero h1 {
+  max-width: 600px; margin: 0 0 22px; color: #fff;
+  font-size: clamp(42px, 7vw, 64px); font-weight: 900;
+  line-height: .98; letter-spacing: -.035em;
+}
+.landing-subline {
+  max-width: 520px; margin: 0 0 30px; padding-left: 15px;
+  border-left: 3px solid var(--landing-accent);
+  color: #f2f3f5; font-size: 20px; line-height: 1.35;
+}
+.landing-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.landing-hero .btn { width: auto; min-height: 50px; padding: 12px 20px; }
+.landing-hero .landing-cta {
+  background: var(--landing-accent); border-color: var(--landing-accent);
+  color: var(--landing-accent-ink); font-weight: 900;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+}
+@media (hover: hover) {
+  .landing-hero .landing-cta:hover { background: #e2ff7d; border-color: #e2ff7d; }
+  .landing-hero .landing-signin:hover { border-color: #fff; }
+}
+.landing-hero .landing-signin {
+  background: rgba(9, 9, 11, .72); border-color: rgba(255, 255, 255, .55); color: #fff;
+}
+.landing-pilot-note { margin: 18px 0 0; color: #c9ccd1; font-size: 13.5px; }
+.landing-measures {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+  margin: 0 -16px 18px; background: var(--line); border-bottom: 1px solid var(--line);
+}
+.landing-measure {
+  min-height: 118px; padding: 22px; background: #101114;
+  display: flex; flex-direction: column; justify-content: center; gap: 7px;
+}
+.landing-measure-label {
+  color: var(--landing-accent); font-size: 11.5px; font-weight: 900;
+  letter-spacing: .16em; text-transform: uppercase;
+}
+.landing-measure-value { color: #fff; font-size: 29px; font-weight: 900; line-height: 1; }
 .landing-card h2 { margin-top: 2px; }
+.landing-section { position: relative; overflow: hidden; }
+.landing-section-number {
+  display: block; margin-bottom: 8px; color: var(--landing-accent);
+  font-size: 42px; font-weight: 900; line-height: .95; letter-spacing: -.03em;
+}
 .landing-list { margin: 6px 0 4px; padding-left: 20px; }
 .landing-list li { margin: 6px 0; font-size: 15px; }
 .landing-tiers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
@@ -1565,12 +1627,28 @@ body.logged-out .primary-nav { display: none !important; }
 .landing-price span { font-size: 15px; font-weight: 600; color: var(--muted); }
 .landing-tier .landing-list { padding-left: 18px; }
 .landing-tier .landing-list li { font-size: 14px; }
+.landing-footer-strip {
+  margin: 18px -16px -40px; padding: 18px 22px;
+  background: #101114; border-top: 1px solid var(--line);
+  color: #fff; font-size: 15px; font-weight: 750; text-align: center;
+}
 @media (max-width: 620px) {
   .landing-tiers { grid-template-columns: 1fr; }
-  .landing-hero h1 { font-size: 28px; }
+  .landing-hero {
+    min-height: 640px; padding: 38px 24px; align-items: flex-end;
+    background:
+      linear-gradient(0deg, rgba(5, 5, 6, .97) 0%, rgba(5, 5, 6, .88) 48%, rgba(5, 5, 6, .28) 78%),
+      linear-gradient(90deg, rgba(5, 5, 6, .5) 0%, rgba(5, 5, 6, 0) 72%),
+      url('/assets/hero-sprinter.jpg') 72% center / cover no-repeat #09090b;
+  }
+  .landing-eyebrow { margin-top: 42px; }
+  .landing-hero h1 { font-size: 43px; }
+  .landing-subline { font-size: 18px; }
+  .landing-actions { align-items: stretch; flex-direction: column; }
+  .landing-hero .btn { width: 100%; }
+  .landing-measures { grid-template-columns: 1fr; }
+  .landing-measure { min-height: 88px; }
 }
-.landing-headline { font-size: 27px; font-weight: 800; line-height: 1.2; color: var(--ink); max-width: 560px; margin: 4px auto 10px; }
-.landing-proof { font-size: 16px; font-weight: 700; color: var(--red); margin: 0 auto 6px; }
 
 /* ---- This Week member home card (v8) ----
    The Mon–Sun strip: seven equal cells on the card's dark panel,

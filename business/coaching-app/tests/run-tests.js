@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v8 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v8"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v9 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v9"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v8'") &&
-    swJs.text.includes("ruffin-performance-v8"));
+    appJs.text.includes("const APP_VERSION = 'v9'") &&
+    swJs.text.includes("ruffin-performance-v9"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v8"') &&
-    pageHtml.text.includes('Ruffin Performance · App v8') &&
+    pageHtml.text.includes('data-app-version="v9"') &&
+    pageHtml.text.includes('Ruffin Performance · App v9') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -5168,9 +5168,26 @@ async function main() {
       twTvStart >= 0 && twTvEnd > twTvStart && !twTvCode.includes('my/week') &&
       !twTvCode.includes('thisweek') && !twTvCode.includes('this week'), twTvCode.length);
   }
-  check('landing leads with the confirmed headline and the proof line',
-    pageHtml.text.includes('Measured speed, not promised speed') &&
-    pageHtml.text.includes('A real coach watches every rep'));
+  check('landing leads with the Canva headline, measured-speed subline and invitation CTA',
+    pageHtml.text.includes('Speed development, built on evidence.') &&
+    pageHtml.text.includes('Measured speed, not promised speed.') &&
+    pageHtml.text.includes('SPEED · POWER · DATA') &&
+    pageHtml.text.includes('Request an Invitation'));
+  check('landing carries the Canva measure panels, numbered sections and footer strip',
+    pageHtml.text.includes('landing-measure-label">Acceleration') &&
+    pageHtml.text.includes('landing-measure-value">10m') &&
+    pageHtml.text.includes('landing-measure-label">Max Velocity') &&
+    pageHtml.text.includes('landing-measure-value">Fly 10') &&
+    pageHtml.text.includes('landing-measure-label">Progress') &&
+    pageHtml.text.includes('landing-measure-value">Retest') &&
+    pageHtml.text.includes('landing-section-number" aria-hidden="true">01') &&
+    pageHtml.text.includes('landing-section-number" aria-hidden="true">02') &&
+    pageHtml.text.includes('landing-section-number" aria-hidden="true">03') &&
+    pageHtml.text.includes('Memberships from $99/month. Baseline speed assessment included with every membership.'));
+  check('landing photo hero and lime accent stay scoped to the landing',
+    stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
+    stylesCss.text.includes('--landing-accent: #d6f36a') &&
+    stylesCss.text.includes('.landing-hero .landing-cta'));
   check('landing presents the Measured Speed Loop and the portal contents',
     pageHtml.text.includes('The Measured Speed Loop') &&
     pageHtml.text.includes('Tested at intake') && pageHtml.text.includes('Coached weekly') &&

@@ -53,16 +53,39 @@
   <!-- LANDING (the logged-out home: AJ's own membership, invite-only pilot) -->
   <section id="view-landing" class="view active">
     <div class="landing-hero">
-      <img class="landing-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
-      <h1>__BRAND_NAME__</h1>
-      <p class="landing-headline">Measured speed, not promised speed.</p>
-      <p class="landing-promise">A coaching portal for athletes training from a distance: your program and your coach's demo library, form checks with your coach's replies, daily health &amp; readiness check-ins, and a Speed Report that shows exactly how far you have come — everything you need, in one app, from afar.</p>
-      <p class="landing-proof">A real coach watches every rep.</p>
-      <button class="btn primary landing-signin" type="button" data-goto="account">Member sign in</button>
-      <p class="muted landing-pilot-note">Founding pilot — membership is invite-only while we launch.</p>
+      <div class="landing-hero-content">
+        <div class="landing-brandmark">
+          <img class="landing-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
+          <span class="landing-wordmark">__BRAND_NAME__</span>
+        </div>
+        <p class="landing-eyebrow">SPEED · POWER · DATA</p>
+        <h1>Speed development, built on evidence.</h1>
+        <p class="landing-subline">Measured speed, not promised speed.</p>
+        <div class="landing-actions">
+          <button class="btn landing-cta" type="button" data-goto="account">Request an Invitation</button>
+          <button class="btn landing-signin" type="button" data-goto="account">Member sign in</button>
+        </div>
+        <p class="landing-pilot-note">Founding pilot — membership is invite-only while we launch.</p>
+      </div>
     </div>
 
-    <div class="card landing-card">
+    <div class="landing-measures" aria-label="What we measure">
+      <div class="landing-measure">
+        <span class="landing-measure-label">Acceleration</span>
+        <span class="landing-measure-value">10m</span>
+      </div>
+      <div class="landing-measure">
+        <span class="landing-measure-label">Max Velocity</span>
+        <span class="landing-measure-value">Fly 10</span>
+      </div>
+      <div class="landing-measure">
+        <span class="landing-measure-label">Progress</span>
+        <span class="landing-measure-value">Retest</span>
+      </div>
+    </div>
+
+    <div class="card landing-card landing-section">
+      <span class="landing-section-number" aria-hidden="true">01</span>
       <h2>The Measured Speed Loop</h2>
       <ol class="landing-list">
         <li><strong>Tested at intake.</strong> Your first week starts with baseline testing — 40-yard dash, vertical jump, broad jump — so every number after it has something honest to be measured against.</li>
@@ -72,7 +95,8 @@
       </ol>
     </div>
 
-    <div class="card landing-card">
+    <div class="card landing-card landing-section">
+      <span class="landing-section-number" aria-hidden="true">02</span>
       <h2>What's inside the portal</h2>
       <ul class="landing-list">
         <li><strong>The library</strong> — your training sessions and a demo library filmed by your coach himself, so every drill and lift looks the way your coach teaches it. Not stock video of strangers.</li>
@@ -84,7 +108,8 @@
       </ul>
     </div>
 
-    <div class="card landing-card">
+    <div class="card landing-card landing-section">
+      <span class="landing-section-number" aria-hidden="true">03</span>
       <h2>How it works</h2>
       <ol class="landing-list">
         <li><strong>Get invited.</strong> Membership opens by invitation during the founding pilot — your coach invites your email, you create your account with that email, you're in. Want a founding pilot seat? Ask your coach to put your email on the invite list.</li>
@@ -126,6 +151,8 @@
       <p><strong>Alonzo “AJ” Ruffin</strong> is a Maryland/DC-area sprint coach. His coaching runs on a simple system: train fast on high days, recover on low days, measure everything — the same high-low structure, testing framework, and workout library that power this app.</p>
       <p class="muted">Connected with <a href="https://accelerateyourgame.com" target="_blank" rel="noopener">Accelerate Your Game</a> — speed &amp; conditioning in Maryland.</p>
     </div>
+
+    <p class="landing-footer-strip">Memberships from $99/month. Baseline speed assessment included with every membership.</p>
   </section>
 
   <!-- TODAY -->
