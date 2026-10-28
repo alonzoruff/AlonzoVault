@@ -445,8 +445,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v54',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v54"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v55',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v55"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2330,16 +2330,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v54'") &&
-    swJs.text.includes("sprinter-app-v54"));
+    appJs.text.includes("const APP_VERSION = 'v55'") &&
+    swJs.text.includes("sprinter-app-v55"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v54"') &&
-    pageHtml.text.includes('Cadets Sprint · App v54') &&
+    pageHtml.text.includes('data-app-version="v55"') &&
+    pageHtml.text.includes('Cadets Sprint · App v55') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -4783,6 +4783,239 @@ async function main() {
     stylesCss.text.includes('@media print') && stylesCss.text.includes('printing-report') &&
     stylesCss.text.includes('print-color-adjust') && stylesCss.text.includes('break-inside: avoid'),
     'styles.css');
+
+  /* Library Home (v55): one searchable home for everything an
+     athlete can learn from — a client-side index over the public
+     content (its pure core extracted and exercised here against
+     the real catalogs), topic shelves whose counts come from the
+     topic map in the payload, learning paths whose every step
+     resolves to a real catalog item, per-account path progress
+     with isolation, the Coach's Corner clips (coach writes, every
+     signed-in user reads), and tap-a-term definitions on the
+     reading surfaces — never on the TV board. */
+  const libTopics = contentJson.libraryTopics;
+  check('library topic map serves six topics and seven nutrition topics',
+    !!libTopics && Array.isArray(libTopics.topics) && libTopics.topics.length === 6 &&
+    libTopics.topics.map(t => t.id).join(',') === 'technique,racing,lifting,fueling,recovery,meetday' &&
+    Array.isArray(libTopics.nutritionTopics) && libTopics.nutritionTopics.length === 7,
+    libTopics && libTopics.topics && libTopics.topics.length);
+  const libPaths = contentJson.learningPaths;
+  check('learning paths serve the three paths',
+    Array.isArray(libPaths) && libPaths.length === 3 &&
+    libPaths.map(p => p.id).join(',') === 'new-sprinter,400-runner,meet-week' &&
+    libPaths.every(p => p.title.trim() && p.steps.length >= 6 &&
+      p.steps.every(s => s.why.trim())),
+    Array.isArray(libPaths) && libPaths.map(p => p.id));
+  /* Every step resolves against the live catalogs — the same
+     validation the content build runs, repeated here so a steps
+     edit can never ship pointing at nothing. */
+  const pathCatalogs = {
+    video: new Set((contentJson.videoLibrary || []).map(v => v.id)),
+    definition: new Set((contentJson.glossary || []).map(e => e.term)),
+    race: new Set(((contentJson.raceStrategy || {}).events || []).map(e => e.id)),
+    exercise: new Set((contentJson.exerciseLibrary || []).map(m => m.name)),
+    nutrition: new Set((libTopics.nutritionTopics || []).map(t => t.id)),
+  };
+  check('every learning path step resolves to a real catalog item',
+    Array.isArray(libPaths) && libPaths.every(p => p.steps.every(s =>
+      pathCatalogs[s.type] && pathCatalogs[s.type].has(s.ref))),
+    Array.isArray(libPaths) && libPaths.flatMap(p => p.steps
+      .filter(s => !(pathCatalogs[s.type] && pathCatalogs[s.type].has(s.ref)))
+      .map(s => p.id + ':' + s.type + ':' + s.ref)));
+  check('the nutrition topics all have article anchors on the served page',
+    (libTopics.nutritionTopics || []).every(t => pageHtml.text.includes('id="nu-' + t.id + '"')));
+  const libMatch = appJs.text.match(/\/\* LIBCORE-BEGIN \*\/([\s\S]*?)\/\* LIBCORE-END \*\//);
+  check('library index core is extractable for behavior tests', !!libMatch);
+  if (libMatch) {
+    const libCore = new Function(libMatch[1] +
+      '\nreturn { buildLibraryIndex, searchLibraryIndex, libTopicCounts };')();
+    const idx = libCore.buildLibraryIndex(contentJson, libTopics, []);
+    check('library index covers the whole public library (401 items with no clips)',
+      idx.length === 401 &&
+      idx.filter(i => i.type === 'video').length === 102 &&
+      idx.filter(i => i.type === 'definition').length === 138 &&
+      idx.filter(i => i.type === 'exercise').length === 85 &&
+      idx.filter(i => i.type === 'race').length === 27 &&
+      idx.filter(i => i.type === 'drill').length === 17 &&
+      idx.filter(i => i.type === 'nutrition').length === 7 &&
+      idx.filter(i => i.type === 'education').length === 23,
+      idx.length);
+    const counts = libCore.libTopicCounts(idx);
+    check('topic shelf counts are computed from the topic map',
+      counts.technique === 134 && counts.racing === 70 && counts.lifting === 108 &&
+      counts.fueling === 7 && counts.recovery === 75 && counts.meetday === 66,
+      counts);
+    const sAcc = libCore.searchLibraryIndex(idx, 'acceleration');
+    check('library search finds a known definition (Acceleration)',
+      sAcc.some(i => i.key === 'definition:Acceleration'), sAcc.length);
+    const sBlocks = libCore.searchLibraryIndex(idx, 'block start');
+    check('library search finds a known video (block starts)',
+      sBlocks.some(i => i.type === 'video' && i.ref === 'VID-047'),
+      sBlocks.map(i => i.key).slice(0, 6));
+    const s400 = libCore.searchLibraryIndex(idx, '2nd effort');
+    check('library search finds the 400 strategy page by a phase name',
+      s400.some(i => i.key === 'race:400'), s400.map(i => i.key));
+    const sNordic = libCore.searchLibraryIndex(idx, 'nordic');
+    check('library search finds a movement across types (video + definition + exercise)',
+      sNordic.some(i => i.key === 'video:VID-038') &&
+      sNordic.some(i => i.key === 'definition:Nordic Hamstring Curl') &&
+      sNordic.some(i => i.key === 'exercise:Nordic Hamstring Curl'),
+      sNordic.map(i => i.key));
+    check('library search requires every query word',
+      libCore.searchLibraryIndex(idx, 'acceleration zebra').length === 0 &&
+      libCore.searchLibraryIndex(idx, '').length === 0);
+    const clipIdx = libCore.buildLibraryIndex(contentJson, libTopics,
+      [{ id: 'clip-x', title: 'Blocks talk', topic: 'technique', description: 'Set and go.' }]);
+    check('coach clips join the index under their topic',
+      clipIdx.length === 402 &&
+      libCore.searchLibraryIndex(clipIdx, 'blocks talk').some(i => i.key === 'clip:clip-x') &&
+      libCore.libTopicCounts(clipIdx).technique === 135,
+      clipIdx.length);
+  }
+  check('library home view markers are in the served page',
+    pageHtml.text.includes('id="view-libraryhome"') && pageHtml.text.includes('data-view="libraryhome"') &&
+    pageHtml.text.includes('id="libhome-search"') && pageHtml.text.includes('id="libhome-shelves"') &&
+    pageHtml.text.includes('id="libhome-paths"') && pageHtml.text.includes('id="libhome-corner"'));
+  check('library home nav, render and deep-link wiring are in the served JS',
+    appJs.text.includes("['libraryhome', 'Library']") && appJs.text.includes('function renderLibraryHome') &&
+    appJs.text.includes('function openLibraryItem') && appJs.text.includes('data-lib-open') &&
+    appJs.text.includes('data-path-toggle') && appJs.text.includes('/api/paths/progress') &&
+    appJs.text.includes('/api/coach-clips'), 'app.js');
+  check('coach corner empty state copy is in the served JS',
+    appJs.text.includes('Coach AJ is filming the first clips — check back soon.'));
+  check('styles carry the library home classes',
+    stylesCss.text.includes('.lib-shelf') && stylesCss.text.includes('.lib-card') &&
+    stylesCss.text.includes('.lib-path-bar') && stylesCss.text.includes('.lib-clip') &&
+    stylesCss.text.includes('.lib-flash'), 'styles.css');
+
+  /* Path progress: per-account, isolated, validated server-side. */
+  r = await api(null, 'GET', '/api/paths/progress');
+  check('path progress without login is 401', r.status === 401, r.status);
+  r = await api(will, 'GET', '/api/paths/progress');
+  check('an athlete starts with empty path progress',
+    r.status === 200 && !!r.json.progress && Object.keys(r.json.progress).length === 0, r.json);
+  r = await api(will, 'PUT', '/api/paths/progress', { pathId: 'new-sprinter', step: 'definition:Acceleration', done: true });
+  check('checking off a real step saves', r.status === 200 &&
+    JSON.stringify(r.json.progress['new-sprinter']) === '["definition:Acceleration"]', r.json);
+  r = await api(will, 'PUT', '/api/paths/progress', { pathId: 'new-sprinter', step: 'video:VID-999', done: true });
+  check('a step that is not in the path is refused', r.status === 400, r.status);
+  r = await api(will, 'PUT', '/api/paths/progress', { pathId: 'no-such-path', step: 'definition:Acceleration', done: true });
+  check('an unknown path is 404', r.status === 404, r.status);
+  r = await api(athlete, 'GET', '/api/paths/progress');
+  check('another athlete cannot see the first athlete\'s progress',
+    r.status === 200 && Object.keys(r.json.progress || {}).length === 0, r.json);
+  r = await api(will, 'PUT', '/api/paths/progress', { pathId: 'new-sprinter', step: 'definition:Acceleration', done: false });
+  check('unchecking a step removes it', r.status === 200 &&
+    (r.json.progress['new-sprinter'] || []).length === 0, r.json);
+  r = await api(will, 'PUT', '/api/paths/progress', { pathId: 'new-sprinter', step: 'definition:Acceleration', done: true });
+  /* The coach reads the same athlete's completion on the AMS
+     profile — computed from the account bound to the profile. */
+  await api(coach, 'PUT', '/api/profiles/' + willP.id + '/link', { email: 'will@test.com' });
+  r = await api(coach, 'GET', '/api/ams/athlete/' + willP.id);
+  check('AMS profile carries per-path completion for the linked athlete',
+    r.status === 200 && Array.isArray(r.json.learningPaths) && r.json.learningPaths.length === 3 &&
+    r.json.learningPaths.find(x => x.id === 'new-sprinter').done === 1 &&
+    r.json.learningPaths.find(x => x.id === 'new-sprinter').pct === 14 &&
+    r.json.learningPaths.find(x => x.id === '400-runner').done === 0,
+    r.json.learningPaths);
+  r = await api(athlete, 'GET', '/api/ams/athlete/' + willP.id);
+  check('an athlete cannot read the AMS learning path summary', r.status === 403, r.status);
+
+  /* Coach's Corner clips: coach CRUD, signed-in reads, strict
+     Cloudinary validation, nothing off-account. */
+  r = await api(null, 'GET', '/api/coach-clips');
+  check('coach clips without login are 401', r.status === 401, r.status);
+  r = await api(athlete, 'GET', '/api/coach-clips');
+  check('the corner starts empty for athletes', r.status === 200 &&
+    Array.isArray(r.json.clips) && r.json.clips.length === 0, r.json);
+  r = await api(athlete, 'POST', '/api/coach-clips',
+    { title: 'Sneaky', topic: 'technique', url: 'https://res.cloudinary.com/l8qblw99/video/upload/v1/x.mp4' });
+  check('an athlete cannot create a clip', r.status === 403, r.status);
+  r = await api(coach, 'POST', '/api/coach-clips',
+    { title: 'Off account', topic: 'technique', url: 'https://res.cloudinary.com/othercloud/video/upload/v1/x.mp4' });
+  check('a clip from another Cloudinary account is refused', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/coach-clips',
+    { title: 'Off site', topic: 'technique', url: 'https://www.youtube.com/watch?v=IeZS646X44M' });
+  check('a non-Cloudinary clip URL is refused', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/coach-clips',
+    { title: 'Bad topic', topic: 'not-a-topic', url: 'https://res.cloudinary.com/l8qblw99/video/upload/v1/x.mp4' });
+  check('a clip with an unknown topic is refused', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/coach-clips',
+    { title: 'How we set the blocks', topic: 'technique',
+      url: 'https://res.cloudinary.com/l8qblw99/video/upload/v1234/corner/blocks-talk.mp4',
+      description: 'Set, breathe, go.' });
+  check('the coach creates a clip and the public id derives from the URL',
+    r.status === 201 && r.json.clip.publicId === 'corner/blocks-talk' &&
+    r.json.clip.createdBy === 'coach@test.com' && r.json.clip.topic === 'technique', r.json);
+  const clipId = r.json.clip.id;
+  r = await api(athlete, 'GET', '/api/coach-clips');
+  check('athletes read the corner (title + topic + url, no write fields needed)',
+    r.status === 200 && r.json.clips.length === 1 && r.json.clips[0].id === clipId &&
+    r.json.clips[0].title === 'How we set the blocks', r.json.clips);
+  r = await api(athlete, 'DELETE', '/api/coach-clips/' + clipId);
+  check('an athlete cannot delete a clip', r.status === 403, r.status);
+  r = await api(coach, 'PUT', '/api/coach-clips/' + clipId,
+    { title: 'How we set the blocks (updated)', topic: 'meetday' });
+  check('the coach edits a clip in place (url kept, topic moved)',
+    r.status === 200 && r.json.clip.title.includes('(updated)') &&
+    r.json.clip.topic === 'meetday' && r.json.clip.publicId === 'corner/blocks-talk', r.json);
+  r = await api(coach, 'DELETE', '/api/coach-clips/' + clipId);
+  check('the coach deletes the clip', r.status === 200 && r.json.ok === true, r.json);
+  r = await api(coach, 'GET', '/api/coach-clips');
+  check('the corner is empty again after the delete',
+    r.status === 200 && r.json.clips.length === 0, r.json);
+  /* The backup carries clips and progress with the team data. */
+  await api(coach, 'POST', '/api/coach-clips',
+    { title: 'Backup check clip', topic: 'racing',
+      url: 'https://res.cloudinary.com/l8qblw99/video/upload/v9/backup-check.mp4' });
+  const libBk2 = JSON.parse((await apiText(coach, '/api/export/backup')).text);
+  check('backup carries coachClips and pathProgress',
+    Array.isArray(libBk2.data.coachClips) &&
+    libBk2.data.coachClips.some(cl => cl.title === 'Backup check clip') &&
+    !!libBk2.data.pathProgress && typeof libBk2.data.pathProgress === 'object' &&
+    Object.values(libBk2.data.pathProgress).some(pp => Array.isArray(pp['new-sprinter']) &&
+      pp['new-sprinter'].includes('definition:Acceleration')),
+    Object.keys(libBk2.data));
+
+  /* Tap-a-term: the pure decorator, exercised directly. */
+  const termMatch = appJs.text.match(/\/\* TERM-BEGIN \*\/([\s\S]*?)\/\* TERM-END \*\//);
+  check('tap-a-term core is extractable for behavior tests', !!termMatch);
+  if (termMatch) {
+    const termCore = new Function(termMatch[1] + '\nreturn { decorateTerms };')();
+    const gloss = contentJson.glossary;
+    const d1 = termCore.decorateTerms(
+      '<p>Work on acceleration and Acceleration again, plus maximum velocity work.</p>', gloss);
+    check('tap-a-term marks the first occurrence of each term only, case-insensitive',
+      d1.includes('data-term="Acceleration"') && d1.includes('data-term="Maximum Velocity"') &&
+      (d1.match(/term-pop/g) || []).length === 2, d1);
+    const d2 = termCore.decorateTerms(
+      '<p>Read the <a href="/x">acceleration guide</a>, press <button type="button">Acceleration</button>, then run acceleration.</p>', gloss);
+    check('tap-a-term never decorates inside links or buttons',
+      (d2.match(/term-pop/g) || []).length === 1 && d2.includes('then run <button'), d2);
+    const d3 = termCore.decorateTerms(
+      '<p>Speed endurance repeats build special endurance.</p>', gloss);
+    check('tap-a-term prefers the longest overlapping term',
+      d3.includes('data-term="Speed Endurance"') && d3.includes('data-term="Special Endurance"'), d3);
+    check('tap-a-term leaves term-free prose untouched',
+      termCore.decorateTerms('<p>Jog two laps and grab water.</p>', gloss) ===
+      '<p>Jog two laps and grab water.</p>');
+  }
+  check('tap-a-term wiring: popover + reading surfaces decorated, in the served JS',
+    appJs.text.includes('function decorateTerms') && appJs.text.includes('function openTermPop') &&
+    appJs.text.includes('id="term-pop"') === false && pageHtml.text.includes('id="term-pop"') &&
+    appJs.text.includes('View in Library'), 'app.js');
+  check('styles carry the tap-a-term rules',
+    stylesCss.text.includes('.term-pop') && stylesCss.text.includes('.term-popover') &&
+    stylesCss.text.includes('dotted'), 'styles.css');
+  /* TV purity: the board's own code segment carries no library or
+     tap-a-term code, and the board payload stays health/private
+     free as pinned earlier — the library surfaces never reach it. */
+  const tvSegStart = appJs.text.indexOf('async function renderTvBoard');
+  const tvSegEnd = appJs.text.indexOf('function enterTvBoard');
+  const tvSeg = tvSegStart >= 0 && tvSegEnd > tvSegStart ? appJs.text.slice(tvSegStart, tvSegEnd) : '';
+  check('TV board segment carries no decorateTerms or library code',
+    !!tvSeg && !tvSeg.includes('decorateTerms') && !tvSeg.includes('libhome') &&
+    !tvSeg.includes('term-pop') && !tvSeg.includes('coachClips'), tvSeg.slice(0, 80));
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }

@@ -15,6 +15,15 @@ const state = {
   defCat: 'All',
   defQuery: '',
   raceEvent: '55-60',
+  libHomeQuery: '',
+  libHomeTopic: 'All',
+  libHomeType: 'All',
+  libHomeIndex: null,
+  libPathsProgress: {},
+  libPathsLoaded: false,
+  libClips: [],
+  libClipsLoaded: false,
+  libClipEditId: null,
   calcEvent: '400',
   calcType: 'balanced',
   calcTarget: '',
@@ -142,8 +151,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v54';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v54';
+const APP_VERSION = 'v55';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v55';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -329,13 +338,13 @@ function md(src) {
 const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', race: 'train', records: 'train', leaderboard: 'train',
-  videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
+  libraryhome: 'learn', videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
   privacy: 'account',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training'], ['race', 'Race Strategy']],
-  learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
+  learn: [['libraryhome', 'Library'], ['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
   coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
@@ -419,6 +428,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNavMenus(); });
 
 function showView(name) {
+  closeTermPop();
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const area = VIEW_AREA[name] || 'home';
   $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
@@ -457,6 +467,7 @@ function showView(name) {
   if (name === 'devices') renderDevices();
   if (name === 'coverage') renderCoverage();
   if (name === 'exercises') renderExercises();
+  if (name === 'libraryhome') renderLibraryHome();
   if (name === 'privacy') renderPrivacy();
   window.scrollTo(0, 0);
 }
@@ -516,7 +527,7 @@ function sessionStructureHtml(s) {
   return s.structure.map(b => `
     <h3>${esc(b.block)}</h3>
     ${b.meta ? `<p class="muted">${esc(b.meta)}</p>` : ''}
-    <ul class="nu-list">${(b.lines || []).map(l => `<li>${esc(l)}</li>`).join('')}</ul>`).join('');
+    <ul class="nu-list">${(b.lines || []).map(l => `<li>${decorateText(l)}</li>`).join('')}</ul>`).join('');
 }
 function sessionDetailHtml(s) {
   const row = (k, v) => v ? `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
@@ -537,7 +548,7 @@ function sessionDetailHtml(s) {
       ${row('Level', s.level)}
       ${row('Before next hard day', s.min_hours_before_next_high ? 'wait ' + s.min_hours_before_next_high + ' h' : '')}
     </dl>
-    <h3>Coaching cues</h3><p>${esc(s.coaching_cues)}</p>
+    <h3>Coaching cues</h3><p>${decorateText(s.coaching_cues)}</p>
     ${sessionStructureHtml(s)}
     <p class="muted">Source: ${esc(s.source)}</p>
     ${s.source_url ? `<p class="muted">From Instagram: <a href="${esc(s.source_url)}" target="_blank" rel="noopener">@${esc(s.source_username || '')}</a></p>` : ''}
@@ -904,7 +915,7 @@ function renderDrills() {
   $('#drill-list').innerHTML = Object.keys(byCat).map(cat => `
     <h2>${esc(catName[cat] || cat)}</h2>
     ${LANE_DIVIDER}
-    ${byCat[cat].map(d => `<div class="card drill-card">
+    ${byCat[cat].map(d => `<div class="card drill-card" data-drill="${esc(d.id)}">
       ${thumbHtml(d.id)}
       <div class="drill-main">
         <strong>${esc(d.id.replace('DRL-', 'Drill '))} · ${esc(d.name)}</strong>
@@ -918,7 +929,7 @@ function renderDrills() {
 function renderQtr() {
   const qtrs = state.content.sessions.filter(s => s.id.startsWith('QTR-'));
   $('#qtr-list').innerHTML = qtrs.map(sessionRow).join('');
-  $('#qtr-doc').innerHTML = md(state.content.framework400);
+  $('#qtr-doc').innerHTML = decorateTerms(md(state.content.framework400), state.content.glossary || []);
 }
 
 /* ---------------- race strategy ----------------
@@ -1002,25 +1013,25 @@ function raceEventHtml(e) {
     <div class="rs-phase">
       <span class="rs-zone">${esc(ph.zone)}</span>
       <div class="rs-phase-main">
-        <strong>${esc(ph.name)}</strong>
-        <ul>${ph.cues.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
+        <strong>${decorateText(ph.name)}</strong>
+        <ul>${ph.cues.map(c => `<li>${decorateText(c)}</li>`).join('')}</ul>
       </div>
     </div>`).join('');
   const pacing = (e.pacing && e.pacing.length)
-    ? `<h3>Pacing</h3><ul class="rs-lines">${e.pacing.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '';
+    ? `<h3>Pacing</h3><ul class="rs-lines">${e.pacing.map(s => `<li>${decorateText(s)}</li>`).join('')}</ul>` : '';
   const segments = (e.segments && e.segments.length)
     ? `<h3>Ways to slice the race</h3>
        <div class="rs-segments">${e.segments.map(s => `
-         <div class="rs-segment"><strong>${esc(s.view)}</strong><span>${esc(s.note)}</span></div>`).join('')}
+         <div class="rs-segment"><strong>${esc(s.view)}</strong><span>${decorateText(s.note)}</span></div>`).join('')}
        </div>` : '';
   const practice = e.practice
-    ? `<h3>${esc(e.practice.title)}</h3><ul class="rs-lines">${e.practice.items.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '';
+    ? `<h3>${esc(e.practice.title)}</h3><ul class="rs-lines">${e.practice.items.map(s => `<li>${decorateText(s)}</li>`).join('')}</ul>` : '';
   const mistakes = e.mistakes.map(m => `
-    <div class="rs-mistake"><strong>${esc(m.mistake)}</strong><span>${esc(m.fix)}</span></div>`).join('');
+    <div class="rs-mistake"><strong>${decorateText(m.mistake)}</strong><span>${decorateText(m.fix)}</span></div>`).join('');
   return `
     <div class="card rs-event">
       <h2>${esc(e.name)}</h2>
-      <p class="rs-tagline">${esc(e.tagline)}</p>
+      <p class="rs-tagline">${decorateText(e.tagline)}</p>
       <h3>The race model</h3>
       ${phaseRows}
       ${pacing}
@@ -1029,7 +1040,7 @@ function raceEventHtml(e) {
       <h3>Common mistakes</h3>
       ${mistakes}
       <h3>Race day</h3>
-      <p>${esc(e.raceDay)}</p>
+      <p>${decorateText(e.raceDay)}</p>
     </div>`;
 }
 function renderRaceStrategy() {
@@ -1037,7 +1048,7 @@ function renderRaceStrategy() {
   const introEl = $('#race-intro');
   if (introEl) {
     introEl.innerHTML = rs.intro
-      ? `<div class="card rs-intro"><h2>${esc(rs.intro.title)}</h2><ul class="rs-lines">${rs.intro.points.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>`
+      ? `<div class="card rs-intro"><h2>${esc(rs.intro.title)}</h2><ul class="rs-lines">${rs.intro.points.map(s => `<li>${decorateText(s)}</li>`).join('')}</ul></div>`
       : '';
   }
   const events = rs.events || [];
@@ -1115,6 +1126,573 @@ function paintCalcResult() {
     <p class="muted calc-note">${esc(res.note)}</p>`;
 }
 
+/* ---------------- library home ----------------
+   One home for everything an athlete can learn from: a search
+   index over the public content (videos, definitions, exercises,
+   race strategy pages and their phases, warm-up drills, the
+   Nutrition topics, the program sections, Coach's Corner clips,
+   coach education), topic shelves from the topic map in the
+   content payload, learning paths with per-account check-offs,
+   and the Coach's Corner itself. The index core is pure — it is
+   extracted by the test suite and exercised against the real
+   catalogs — and it is built ONLY from what the signed-in role
+   already receives in the content payload, so it can never
+   surface anything the role could not already open. */
+/* LIBCORE-BEGIN */
+const LIB_TYPE_ORDER = ['race', 'video', 'definition', 'exercise', 'drill', 'nutrition', 'clip', 'section', 'education'];
+const LIB_TYPE_LABELS = {
+  race: 'Race Strategy', video: 'Video', definition: 'Definition',
+  exercise: 'Exercise', drill: 'Warm-Up Drill', nutrition: 'Nutrition',
+  clip: "Coach's Corner", section: 'Section', education: 'Coach Education',
+};
+function libItemKey(type, ref) { return type + ':' + ref; }
+function buildLibraryIndex(content, cfg, clips) {
+  const c = content || {};
+  const conf = cfg || {};
+  const assign = conf.assign || {};
+  const items = [];
+  const push = (type, ref, title, sub, topics, view, extra) => {
+    items.push({
+      key: libItemKey(type, ref), type, typeLabel: LIB_TYPE_LABELS[type] || type,
+      ref, title, sub: sub || '', topics: Array.isArray(topics) ? topics.slice() : [],
+      view,
+      text: (title + ' ' + (sub || '') + ' ' + (extra || '')).toLowerCase(),
+    });
+  };
+  const topicNames = {};
+  for (const t of conf.topics || []) topicNames[t.id] = t.name;
+  const withTopicNames = (topics, extra) =>
+    (extra || '') + ' ' + (topics || []).map(id => topicNames[id] || id).join(' ');
+  for (const e of c.raceStrategy && Array.isArray(c.raceStrategy.events) ? c.raceStrategy.events : []) {
+    const topics = (assign.raceEvent || {})[e.id] || [];
+    push('race', e.id, e.name + ' race strategy', e.tagline, topics, 'race',
+      withTopicNames(topics, e.phases.map(ph => ph.name + ' ' + ph.zone).join(' ')));
+    for (const ph of e.phases) {
+      push('race', e.id, e.name + ' — ' + ph.name, 'Race Strategy · ' + e.name + ' · ' + ph.zone,
+        topics, 'race', withTopicNames(topics, ph.cues.join(' ')));
+    }
+  }
+  for (const v of c.videoLibrary || []) {
+    const topics = (assign.videoCategory || {})[v.category] || [];
+    push('video', v.id, v.title, v.movement + ' · ' + v.category, topics, 'videos',
+      withTopicNames(topics, v.source + ' ' + v.note));
+  }
+  for (const e of c.glossary || []) {
+    const topics = (assign.definitionCategory || {})[e.category] || [];
+    push('definition', e.term, e.term, 'Definition · ' + e.category, topics, 'definitions',
+      withTopicNames(topics, e.definition + ' ' + (e.cues || '')));
+  }
+  for (const m of c.exerciseLibrary || []) {
+    const topics = (assign.exerciseCategory || {})[m.category] || [];
+    push('exercise', m.name, m.name, m.category + ' · trains ' + m.trains, topics, 'exercises',
+      withTopicNames(topics, m.equipment + ' ' + m.cues));
+  }
+  for (const d of c.drills || []) {
+    const topics = (assign.drillCategory || {})[d.category] || [];
+    push('drill', d.id, d.name, 'Warm-Up Drill · ' + d.distance_or_reps, topics, 'drills',
+      withTopicNames(topics, d.coaching_cue));
+  }
+  for (const t of conf.nutritionTopics || []) {
+    push('nutrition', t.id, t.title, 'Nutrition', t.topics || [], 'nutrition',
+      withTopicNames(t.topics || [], 'food fueling eat meal snack'));
+  }
+  for (const clip of clips || []) {
+    if (!clip || typeof clip.title !== 'string') continue;
+    const topics = clip.topic ? [clip.topic] : [];
+    push('clip', clip.id, clip.title, "Coach's Corner clip", topics, 'libraryhome',
+      withTopicNames(topics, clip.description || ''));
+  }
+  const sectionTopics = assign.section || {};
+  push('section', 'qtr', '400m Training', 'The full 400m framework and the QTR sessions',
+    sectionTopics.qtr || [], 'qtr', 'framework quarter sessions');
+  push('section', 'cards', 'Warm-Up Cards', 'The three printed cards: light day, speed day, circuit day',
+    sectionTopics.cards || [], 'cards', 'warm-up cards print');
+  for (const e of c.coachEducation || []) {
+    push('education', e.name, e.name, e.provider + ' · ' + e.bucket, [], 'education',
+      e.focus + ' ' + e.format + ' ' + e.location + ' ' + e.notes);
+  }
+  return items;
+}
+/* Every query word must appear somewhere in the item's text —
+   title, sub, topic names, and the item's own content words. */
+function searchLibraryIndex(index, query) {
+  const tokens = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+  return (index || []).filter(it => tokens.every(tok => it.text.includes(tok)));
+}
+function libTopicCounts(index) {
+  const counts = {};
+  for (const it of index || []) {
+    for (const t of it.topics) counts[t] = (counts[t] || 0) + 1;
+  }
+  return counts;
+}
+/* LIBCORE-END */
+
+function libraryIndex() {
+  if (!state.libHomeIndex) {
+    const c = state.content || {};
+    state.libHomeIndex = buildLibraryIndex(c, c.libraryTopics || {}, state.libClips);
+  }
+  return state.libHomeIndex;
+}
+function libTopicName(id) {
+  const cfg = (state.content && state.content.libraryTopics) || {};
+  const t = (cfg.topics || []).find(x => x.id === id);
+  return t ? t.name : id;
+}
+function flashLibEl(el) {
+  if (!el) return;
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.add('lib-flash');
+  setTimeout(() => el.classList.remove('lib-flash'), 1800);
+}
+/* Deep-link one library item to its home section: set the
+   section's own filters so the item is on screen, switch views,
+   then scroll to the item and flash it. Each section keeps its own
+   open mechanics — this only drives them. */
+function openLibraryItem(key) {
+  const item = libraryIndex().find(it => it.key === key);
+  if (!item) return;
+  closeTermPop();
+  const c = state.content || {};
+  if (item.type === 'video') {
+    const v = (c.videoLibrary || []).find(x => x.id === item.ref);
+    state.vidCat = v ? v.category : 'All';
+    state.vidQuery = '';
+    const s = $('#vid-search'); if (s) s.value = '';
+    showView('videos');
+    renderVideos();
+    requestAnimationFrame(() => flashLibEl(document.querySelector('[data-vid="' + CSS.escape(item.ref) + '"]')));
+  } else if (item.type === 'definition') {
+    state.defCat = 'All';
+    state.defQuery = item.ref;
+    const s = $('#def-search'); if (s) s.value = item.ref;
+    showView('definitions');
+    renderDefinitions();
+    requestAnimationFrame(() => flashLibEl(document.querySelector('[data-defterm="' + CSS.escape(item.ref) + '"]')));
+  } else if (item.type === 'exercise') {
+    clearExerciseFilters();
+    state.exQuery = item.ref;
+    const s = $('#ex-search'); if (s) s.value = item.ref;
+    showView('exercises');
+    renderExercises();
+    requestAnimationFrame(() => flashLibEl(document.querySelector('[data-exname="' + CSS.escape(item.ref) + '"]')));
+  } else if (item.type === 'race') {
+    state.raceEvent = item.ref;
+    showView('race');
+    renderRaceStrategy();
+    requestAnimationFrame(() => flashLibEl($('#race-detail .rs-event')));
+  } else if (item.type === 'drill') {
+    showView('drills');
+    renderDrills();
+    requestAnimationFrame(() => flashLibEl(document.querySelector('[data-drill="' + CSS.escape(item.ref) + '"]')));
+  } else if (item.type === 'nutrition') {
+    showView('nutrition');
+    requestAnimationFrame(() => flashLibEl(document.getElementById('nu-' + item.ref)));
+  } else if (item.type === 'education') {
+    state.eduBucket = 'All';
+    state.eduFocus = '';
+    state.eduQuery = item.ref;
+    const s = $('#edu-search'); if (s) s.value = item.ref;
+    const f = $('#edu-focus'); if (f) f.value = '';
+    showView('education');
+    renderEducation();
+    requestAnimationFrame(() => flashLibEl(document.querySelector('[data-eduname="' + CSS.escape(item.ref) + '"]')));
+  } else if (item.type === 'clip') {
+    showView('libraryhome');
+    requestAnimationFrame(() => flashLibEl(document.querySelector('[data-clip="' + CSS.escape(item.ref) + '"]')));
+  } else {
+    showView(item.view);
+  }
+}
+function libItemRowHtml(it) {
+  return `<button type="button" class="lib-result" data-lib-open="${esc(it.key)}">
+    <span class="badge plain">${esc(it.typeLabel)}</span>
+    <span class="lib-result-main"><strong>${esc(it.title)}</strong>${it.sub ? `<span class="muted">${esc(it.sub)}</span>` : ''}</span>
+  </button>`;
+}
+function renderLibraryHome() {
+  const view = $('#view-libraryhome');
+  if (!view || !state.content) return;
+  const index = libraryIndex();
+  const cfg = state.content.libraryTopics || { topics: [] };
+  const countEl = $('#libhome-count');
+  if (countEl) countEl.textContent = index.length + ' resources in the library — videos, definitions, exercises, race strategy, drills, nutrition, clips, and more.';
+  /* Search results replace the browse area while a query is live. */
+  const q = (state.libHomeQuery || '').trim();
+  const resultsEl = $('#libhome-results');
+  const shelvesEl = $('#libhome-shelves');
+  const typeChipsEl = $('#libhome-type-chips');
+  const browseEl = $('#libhome-browse');
+  if (q) {
+    const hits = searchLibraryIndex(index, q);
+    const groups = LIB_TYPE_ORDER
+      .map(t => ({ type: t, label: LIB_TYPE_LABELS[t], rows: hits.filter(it => it.type === t) }))
+      .filter(g => g.rows.length);
+    const groupsHtml = groups.map(g => {
+      const more = g.rows.length > 8
+        ? `<p class="muted">…and ${g.rows.length - 8} more — open the ${esc(g.label)} section to see them all.</p>` : '';
+      return `<h3>${esc(g.label)} (${g.rows.length})</h3>`
+        + g.rows.slice(0, 8).map(libItemRowHtml).join('') + more;
+    }).join('');
+    resultsEl.innerHTML = `<div class="card">
+      <h2>${hits.length} result${hits.length === 1 ? '' : 's'} for “${esc(q)}”</h2>
+      ${groups.length ? groupsHtml : '<p class="muted">Nothing in the library matches. Try a shorter word — a drill, a lift, or a term.</p>'}
+    </div>`;
+    shelvesEl.innerHTML = '';
+    typeChipsEl.innerHTML = '';
+    browseEl.innerHTML = '';
+  } else {
+    resultsEl.innerHTML = '';
+    /* Topic shelves: counts computed from the real index. */
+    const counts = libTopicCounts(index);
+    shelvesEl.innerHTML = (cfg.topics || []).map(t => {
+      const preview = index.filter(it => it.topics.includes(t.id)).slice(0, 3);
+      return `<button type="button" class="lib-shelf ${state.libHomeTopic === t.id ? 'active' : ''}" data-lib-topic="${esc(t.id)}">
+        <strong>${esc(t.name)}</strong>
+        <span class="lib-shelf-count">${counts[t.id] || 0} resources</span>
+        <span class="lib-shelf-blurb">${esc(t.blurb || '')}</span>
+        ${preview.length ? `<span class="lib-shelf-preview">${preview.map(it => esc(it.title)).join(' · ')}</span>` : ''}
+      </button>`;
+    }).join('');
+    /* Type chips, over the topic-filtered set. */
+    const topicSet = state.libHomeTopic === 'All' ? index : index.filter(it => it.topics.includes(state.libHomeTopic));
+    const typeCounts = {};
+    for (const it of topicSet) typeCounts[it.type] = (typeCounts[it.type] || 0) + 1;
+    typeChipsEl.innerHTML =
+      `<button type="button" class="chip ${state.libHomeType === 'All' ? 'active' : ''}" data-lib-type="All">All types (${topicSet.length})</button>` +
+      LIB_TYPE_ORDER.filter(t => typeCounts[t]).map(t =>
+        `<button type="button" class="chip ${state.libHomeType === t ? 'active' : ''}" data-lib-type="${t}">${esc(LIB_TYPE_LABELS[t])} (${typeCounts[t]})</button>`).join('') +
+      (state.libHomeTopic !== 'All' ? `<button type="button" class="chip" data-lib-topic="All">✕ Clear topic: ${esc(libTopicName(state.libHomeTopic))}</button>` : '');
+    const rows = topicSet.filter(it => state.libHomeType === 'All' || it.type === state.libHomeType);
+    const shown = rows.slice(0, 120);
+    browseEl.innerHTML = shown.length
+      ? shown.map(it => `<button type="button" class="lib-card" data-lib-open="${esc(it.key)}">
+          <span class="badge plain">${esc(it.typeLabel)}</span>
+          <strong>${esc(it.title)}</strong>
+          ${it.sub ? `<span class="muted">${esc(it.sub)}</span>` : ''}
+          ${it.topics.length ? `<span class="lib-card-topics">${it.topics.map(id => esc(libTopicName(id))).join(' · ')}</span>` : ''}
+        </button>`).join('')
+        + (rows.length > shown.length ? `<p class="muted">Showing the first ${shown.length} of ${rows.length} — search or pick a type to narrow it down.</p>` : '')
+      : '<p class="muted">Nothing on this shelf yet.</p>';
+  }
+  renderLibPaths();
+  renderLibCorner();
+  renderLibClipAdmin();
+  if (state.user && !state.libPathsLoaded) {
+    state.libPathsLoaded = true;
+    loadPathProgress().then(() => renderLibPaths());
+  }
+  if (!state.libClipsLoaded) {
+    state.libClipsLoaded = true;
+    loadCoachClips().then(() => {
+      renderLibCorner();
+      renderLibClipAdmin();
+      renderLibraryHomeShelvesOnly();
+    });
+  }
+}
+/* After clips land, the index changes (clips are indexed): drop the
+   cached index and repaint just the search/shelf/browse painters by
+   re-running the home render's top half through renderLibraryHome —
+   guarded so the clips fetch cannot loop (libClipsLoaded is set). */
+function renderLibraryHomeShelvesOnly() {
+  state.libHomeIndex = null;
+  const view = $('#view-libraryhome');
+  if (view && view.classList.contains('active')) renderLibraryHome();
+}
+async function loadPathProgress() {
+  if (!state.user) { state.libPathsProgress = {}; return; }
+  try {
+    const d = await api('/api/paths/progress');
+    state.libPathsProgress = d.progress || {};
+  } catch (_) { /* progress is a nicety; the paths still read fine */ }
+}
+async function loadCoachClips() {
+  try {
+    const d = await api('/api/coach-clips');
+    state.libClips = d.clips || [];
+  } catch (_) { state.libClips = []; }
+  state.libHomeIndex = null;
+}
+function libPathDoneSet(pathId) {
+  return new Set(state.libPathsProgress[pathId] || []);
+}
+function renderLibPaths() {
+  const el = $('#libhome-paths');
+  if (!el) return;
+  const paths = (state.content && state.content.learningPaths) || [];
+  if (!paths.length) { el.innerHTML = '<p class="muted">The learning paths have not loaded.</p>'; return; }
+  const index = libraryIndex();
+  const byKey = new Map(index.map(it => [it.key, it]));
+  el.innerHTML = paths.map(p => {
+    const doneSet = libPathDoneSet(p.id);
+    const total = p.steps.length;
+    const done = p.steps.filter(s => doneSet.has(libItemKey(s.type, s.ref))).length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return `<div class="card lib-path">
+      <div class="lib-path-head">
+        <div><h3>${esc(p.title)}</h3><p class="muted">${esc(p.promise || '')}</p></div>
+        ${state.user ? `<div class="lib-path-progress"><div class="lib-path-bar"><div class="lib-path-fill" style="width:${pct}%"></div></div><span class="muted">${done} of ${total} steps · ${pct}%</span></div>` : '<p class="muted">Log in to check steps off and save your progress.</p>'}
+      </div>
+      <ol class="lib-path-steps">
+        ${p.steps.map((s, i) => {
+          const key = libItemKey(s.type, s.ref);
+          const it = byKey.get(key);
+          const isDone = doneSet.has(key);
+          return `<li class="lib-path-step ${isDone ? 'done' : ''}">
+            ${state.user ? `<input type="checkbox" class="lib-path-check" data-path-toggle="${esc(p.id)}" data-path-step="${esc(key)}" ${isDone ? 'checked' : ''} aria-label="Mark step ${i + 1} done">` : `<span class="lib-path-num">${i + 1}</span>`}
+            <span class="lib-path-step-main">
+              <strong>${esc(it ? it.title : s.ref)}</strong>
+              <span class="muted">${esc(s.why)}</span>
+            </span>
+            <button type="button" class="btn secondary" data-lib-open="${esc(key)}">Open</button>
+          </li>`;
+        }).join('')}
+      </ol>
+    </div>`;
+  }).join('');
+}
+function renderLibCorner() {
+  const el = $('#libhome-corner');
+  if (!el) return;
+  const clips = state.libClips || [];
+  if (!clips.length) {
+    el.innerHTML = '<div class="card"><p class="muted" style="margin:0">Coach AJ is filming the first clips — check back soon.</p></div>';
+    return;
+  }
+  el.innerHTML = `<div class="libhome-grid">${clips.map(cl => `
+    <article class="lib-clip" data-clip="${esc(cl.id)}">
+      <video class="media-video" src="${esc(cl.url)}" controls playsinline preload="metadata"></video>
+      <div class="lib-clip-body">
+        <strong>${esc(cl.title)}</strong>
+        <span class="badge plain">${esc(libTopicName(cl.topic))}</span>
+        ${cl.description ? `<p class="muted">${esc(cl.description)}</p>` : ''}
+        ${isCoachUser() ? `<div class="filter-row">
+          <button type="button" class="btn secondary" data-clip-edit="${esc(cl.id)}">Edit</button>
+          <button type="button" class="btn danger" data-clip-del="${esc(cl.id)}">Delete</button>
+        </div>` : ''}
+      </div>
+    </article>`).join('')}</div>`;
+}
+/* The clip manager: coaches only, rendered into the Library under
+   the Corner. Uploads ride the same unsigned Cloudinary flow as
+   the demo editor; a pasted delivery URL from the coach's own
+   account works too (the server validates both). */
+function renderLibClipAdmin() {
+  const el = $('#libhome-clips-admin');
+  if (!el) return;
+  if (!isCoachUser()) { el.innerHTML = ''; return; }
+  const cfg = (state.content && state.content.libraryTopics) || { topics: [] };
+  const editing = state.libClipEditId
+    ? (state.libClips || []).find(cl => cl.id === state.libClipEditId) : null;
+  if (state.libClipEditId && !editing) state.libClipEditId = null;
+  el.innerHTML = `<div class="card">
+    <h3>${editing ? 'Edit clip' : 'Add a clip'} <span class="badge plain">COACHES ONLY</span></h3>
+    <label>Title <input type="text" id="clip-title" maxlength="120" value="${editing ? esc(editing.title) : ''}" placeholder="e.g. How we set the blocks"></label>
+    <label>Topic <select id="clip-topic">
+      ${(cfg.topics || []).map(t => `<option value="${esc(t.id)}" ${editing && editing.topic === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+    </select></label>
+    <label>Clip link — a delivery URL from your Cloudinary account
+      <input type="url" id="clip-url" value="${editing ? esc(editing.url) : ''}" placeholder="https://res.cloudinary.com/…/video/upload/…"></label>
+    <label>Or upload the video <input type="file" id="clip-file" accept="video/*"></label>
+    <p class="muted" id="clip-upload-status">Uploads go straight to your Cloudinary (up to 100 MB) and fill the link in for you.</p>
+    <label>One-line description <input type="text" id="clip-desc" maxlength="500" value="${editing ? esc(editing.description || '') : ''}" placeholder="What does this clip answer?"></label>
+    <div class="filter-row">
+      <button type="button" class="btn primary" id="clip-save" style="width:auto">${editing ? 'Save changes' : 'Add clip'}</button>
+      ${editing ? '<button type="button" class="btn secondary" id="clip-cancel" style="width:auto">Cancel edit</button>' : ''}
+    </div>
+    <p class="error" id="clip-err"></p>
+  </div>`;
+  const fileInput = $('#clip-file');
+  if (fileInput) fileInput.addEventListener('change', async () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    const status = $('#clip-upload-status');
+    const err = $('#clip-err');
+    if (err) err.textContent = '';
+    try {
+      const url = await uploadDemoVideo(f, (pct) => { if (status) status.textContent = 'Uploading… ' + pct + '%'; });
+      const urlInput = $('#clip-url');
+      if (urlInput) urlInput.value = url;
+      if (status) status.textContent = 'Uploaded — the link is filled in. Add the title and topic, then save.';
+    } catch (e) {
+      if (err) err.textContent = e.message;
+      if (status) status.textContent = 'Uploads go straight to your Cloudinary (up to 100 MB) and fill the link in for you.';
+    }
+  });
+  const saveBtn = $('#clip-save');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const err = $('#clip-err');
+    const payload = {
+      title: $('#clip-title').value,
+      topic: $('#clip-topic').value,
+      url: $('#clip-url').value,
+      description: $('#clip-desc').value,
+    };
+    try {
+      if (state.libClipEditId) {
+        await apiPut('/api/coach-clips/' + encodeURIComponent(state.libClipEditId), payload);
+        state.libClipEditId = null;
+      } else {
+        await apiPost('/api/coach-clips', payload);
+      }
+      await loadCoachClips();
+      renderLibCorner();
+      renderLibClipAdmin();
+      renderLibraryHomeShelvesOnly();
+    } catch (e) { if (err) err.textContent = e.message; }
+  });
+  const cancelBtn = $('#clip-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { state.libClipEditId = null; renderLibClipAdmin(); });
+}
+document.addEventListener('click', (e) => {
+  const openBtn = e.target.closest('[data-lib-open]');
+  if (openBtn) { openLibraryItem(openBtn.dataset.libOpen); return; }
+  const shelf = e.target.closest('[data-lib-topic]');
+  if (shelf) {
+    state.libHomeTopic = shelf.dataset.libTopic;
+    renderLibraryHome();
+    const b = $('#libhome-browse');
+    if (b) b.scrollIntoView({ block: 'start' });
+    return;
+  }
+  const typeChip = e.target.closest('[data-lib-type]');
+  if (typeChip) { state.libHomeType = typeChip.dataset.libType; renderLibraryHome(); return; }
+  const editBtn = e.target.closest('[data-clip-edit]');
+  if (editBtn) { state.libClipEditId = editBtn.dataset.clipEdit; renderLibClipAdmin(); return; }
+  const delBtn = e.target.closest('[data-clip-del]');
+  if (delBtn) {
+    if (!window.confirm('Delete this clip?')) return;
+    apiDel('/api/coach-clips/' + encodeURIComponent(delBtn.dataset.clipDel))
+      .then(async () => {
+        if (state.libClipEditId === delBtn.dataset.clipDel) state.libClipEditId = null;
+        await loadCoachClips();
+        renderLibCorner();
+        renderLibClipAdmin();
+      })
+      .catch((err) => alert(err.message));
+  }
+});
+document.addEventListener('change', async (e) => {
+  const box = e.target.closest('[data-path-toggle]');
+  if (!box) return;
+  const pathId = box.dataset.pathToggle;
+  const step = box.dataset.pathStep;
+  try {
+    const d = await apiPut('/api/paths/progress', { pathId, step, done: box.checked });
+    state.libPathsProgress = d.progress || {};
+  } catch (err) {
+    box.checked = !box.checked;
+    alert(err.message);
+    return;
+  }
+  renderLibPaths();
+});
+
+/* ---------------- tap-a-term definitions ----------------
+   Reading surfaces get glossary terms marked in place: a dotted
+   underline; a tap opens the definition in a small popover with a
+   jump into the Library. The decorator is pure string work (the
+   suite extracts and exercises it): it decorates TEXT only — never
+   inside links, buttons, inputs, or form controls — marks only the
+   FIRST occurrence of each term per rendered block, and prefers
+   the longest term when terms overlap ("Speed Endurance" beats
+   "Endurance"). The TV board and the Weight Room floor never call
+   it: their renderers build their own strings, and this function
+   is only ever invoked by the reading-surface renderers below. */
+/* TERM-BEGIN */
+const TERM_SKIP_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'script', 'style', 'code', 'pre', 'option']);
+let _termCache = null;
+function termEscAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+function termMatcherFor(entries) {
+  if (_termCache && _termCache.entries === entries) return _termCache;
+  const byLower = new Map();
+  for (const e of entries || []) {
+    if (!e || typeof e.term !== 'string' || !e.term.trim()) continue;
+    const key = e.term.toLowerCase();
+    if (!byLower.has(key)) byLower.set(key, e);
+  }
+  const terms = Array.from(byLower.values()).map(e => e.term)
+    .sort((a, b) => b.length - a.length);
+  let re = null;
+  if (terms.length) {
+    const alt = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    re = new RegExp('(?<![A-Za-z0-9])(' + alt + ')(?![A-Za-z0-9])', 'gi');
+  }
+  _termCache = { entries, byLower, re };
+  return _termCache;
+}
+function decorateTerms(html, entries) {
+  const m = termMatcherFor(entries || []);
+  if (!m.re || !html) return html;
+  const used = new Set();
+  const parts = String(html).split(/(<!--[\s\S]*?-->|<[^>]*>)/g);
+  let skipDepth = 0;
+  return parts.map(part => {
+    if (!part) return part;
+    if (part.startsWith('<')) {
+      const tagMatch = /^<\/?\s*([A-Za-z][A-Za-z0-9]*)/.exec(part);
+      if (tagMatch) {
+        const name = tagMatch[1].toLowerCase();
+        if (TERM_SKIP_TAGS.has(name)) {
+          if (/^<\//.test(part)) skipDepth = Math.max(0, skipDepth - 1);
+          else if (!/\/>$/.test(part)) skipDepth++;
+        }
+      }
+      return part;
+    }
+    if (skipDepth > 0) return part;
+    return part.replace(m.re, (match) => {
+      const key = match.toLowerCase();
+      if (used.has(key)) return match;
+      const entry = m.byLower.get(key);
+      if (!entry) return match;
+      used.add(key);
+      return '<button type="button" class="term-pop" data-term="' + termEscAttr(entry.term) + '">' + match + '</button>';
+    });
+  }).join('');
+}
+/* TERM-END */
+function decorateText(s) {
+  return decorateTerms(esc(s), (state.content && state.content.glossary) || []);
+}
+function closeTermPop() {
+  const pop = $('#term-pop');
+  if (pop) { pop.hidden = true; pop.innerHTML = ''; }
+}
+function openTermPop(btn) {
+  const pop = $('#term-pop');
+  if (!pop) return;
+  const gloss = (state.content && state.content.glossary) || [];
+  const entry = gloss.find(e => e.term.toLowerCase() === String(btn.dataset.term || '').toLowerCase());
+  if (!entry) return;
+  pop.innerHTML = `
+    <div class="term-pop-head"><strong>${esc(entry.term)}</strong>
+      <button type="button" class="btn secondary" id="term-pop-close" style="padding:2px 10px">Close</button></div>
+    <p>${esc(entry.definition)}</p>
+    ${entry.cues ? `<p class="def-cue"><strong>Cue:</strong> ${esc(entry.cues)}</p>` : ''}
+    <button type="button" class="btn primary" data-lib-open="${esc(libItemKey('definition', entry.term))}">View in Library</button>`;
+  pop.hidden = false;
+  const rect = btn.getBoundingClientRect();
+  const width = Math.min(340, window.innerWidth - 24);
+  pop.style.width = width + 'px';
+  pop.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)) + 'px';
+  const below = rect.bottom + 8;
+  pop.style.top = (below + 190 < window.innerHeight ? below : Math.max(12, rect.top - 198)) + 'px';
+  const closeBtn = $('#term-pop-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeTermPop);
+}
+document.addEventListener('click', (e) => {
+  const termBtn = e.target.closest('.term-pop');
+  if (termBtn) { openTermPop(termBtn); return; }
+  if (!e.target.closest('#term-pop')) closeTermPop();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTermPop(); });
+
 /* ---------------- videos ---------------- */
 const VID_CATEGORIES = ['Warm-Ups & Drills', 'Lifts & Weight Room', 'Sprint Mechanics & Speed',
   'Plyometrics', 'Hip Mobility & Strength', 'Core & Trunk', 'Recovery & Mobility'];
@@ -1130,7 +1708,7 @@ function videoCardHtml(v) {
          <span class="vid-play" aria-hidden="true">▶</span>
        </div>`
     : '';
-  return `<article class="vid-card">
+  return `<article class="vid-card" data-vid="${esc(v.id)}">
     ${thumb}
     <div class="vid-body">
       <div class="vid-movement">${esc(v.movement)}</div>
@@ -1172,7 +1750,7 @@ const DEF_CATEGORIES = ['Types of Running', 'Sprint Drills & Warm-Up', 'Lifts & 
   'Plyometrics & Power', 'Mobility, Activation & Core', 'Program Terms'];
 function defCardHtml(e) {
   const cue = e.cues ? `<p class="def-cue"><strong>Cue:</strong> ${esc(e.cues)}</p>` : '';
-  return `<article class="def-card">
+  return `<article class="def-card" data-defterm="${esc(e.term)}">
     <div class="def-head">
       <h3 class="def-term">${esc(e.term)}</h3>
       <span class="def-cat">${esc(e.category)}</span>
@@ -1247,7 +1825,7 @@ function exCardHtml(m) {
   const more = count > 1
     ? ` <span class="muted">(+${count - 1} more ${count === 2 ? 'source' : 'sources'})</span>`
     : '';
-  return `<article class="def-card">
+  return `<article class="def-card" data-exname="${esc(m.name)}">
     <div class="def-head">
       <h3 class="def-term">${esc(m.name)}</h3>
     </div>
@@ -1325,7 +1903,7 @@ function clearExerciseFilters() {
 /* ---------------- coach education ---------------- */
 const EDU_BUCKETS = ['Local (DC Metro)', 'National (U.S.)', 'Online'];
 function eduCardHtml(e) {
-  return `<article class="edu-card">
+  return `<article class="edu-card" data-eduname="${esc(e.name)}">
     <div class="def-head">
       <h3 class="def-term">${esc(e.name)}</h3>
       <span class="def-cat">${esc(e.bucket)}</span>
@@ -2068,6 +2646,13 @@ async function renderAmsProfile(el, profileId) {
           <span><strong>${esc(g.eventName)}</strong> — target ${esc(g.targetText)}${g.current ? ' · PR ' + esc(g.current.mark) : ''}</span>
           <span>${g.achieved ? '<span class="badge done">ACHIEVED</span>' : (g.progressPct == null ? '<span class="muted">No marks yet</span>' : `<span class="badge plain">${g.progressPct}%</span>`)}</span>
         </div>`).join('') : '<p class="muted">No goals set yet — add them in Goals.</p>'}
+    </div>
+    <div class="card">
+      <h2>Learning paths</h2>
+      ${(d.learningPaths || []).length ? d.learningPaths.map(lp => `
+        <div class="roster-row"><span>${esc(lp.title)}</span><span class="muted">${lp.done} of ${lp.total} steps · ${lp.pct}%</span></div>`).join('')
+        : '<p class="muted">No learning paths loaded.</p>'}
+      ${d.linked ? '' : '<p class="muted">Progress starts counting once this athlete\'s account is linked and they check steps off in the Library.</p>'}
     </div>
     <div class="card">
       <h2>Coach notes <span class="badge plain">COACHES ONLY</span></h2>
@@ -4237,10 +4822,10 @@ function renderRunnerStep() {
       ${runner.plan && runner.plan.workoutId ? '<button class="btn secondary" id="runner-loadchart" type="button">Load chart — every athlete\'s weight</button>' : ''}` : '';
     main.innerHTML = head + `
       <p class="runner-where">Block ${step.block + 1} of ${step.blocks} · Round ${step.round} of ${step.rounds}</p>
-      <h2 class="runner-ex-name">${esc(step.name)}</h2>
+      <h2 class="runner-ex-name">${decorateText(step.name)}</h2>
       <p class="runner-ex-reps">× ${esc(repsLabel(step.reps))}</p>
       ${loadHtml}
-      <p class="runner-next">${nextText}</p>
+      <p class="runner-next">${decorateTerms(nextText, (state.content && state.content.glossary) || [])}</p>
       ${demo ? `<div class="runner-demo"><button class="btn secondary" id="runner-demo-btn" type="button">▶ Watch demo</button><div id="runner-demo-slot"></div></div>` : ''}
       <div class="runner-controls">
         <button class="btn runner-btn secondary" id="runner-back" type="button" ${runner.idx === 0 ? 'disabled' : ''}>← Back</button>
@@ -4269,7 +4854,7 @@ function renderRunnerStep() {
       <p class="runner-where">Block ${step.block + 1} of ${step.blocks} · ${step.kind === 'round' ? 'Round ' + step.afterRound + ' done' : 'Block done — nice work'}</p>
       <h2 class="runner-rest-label">REST</h2>
       <p class="runner-count" id="runner-count">${fmtCountdown(step.seconds)}</p>
-      <p class="runner-next">${nextText}</p>
+      <p class="runner-next">${decorateTerms(nextText, (state.content && state.content.glossary) || [])}</p>
       <div class="runner-controls">
         <button class="btn runner-btn secondary" id="runner-back" type="button">← Back</button>
         <button class="btn runner-btn secondary" id="runner-pause" type="button">Pause</button>
@@ -4965,6 +5550,7 @@ function paintCalendar() {
 
 /* ---------------- wiring ---------------- */
 $('#lib-search').addEventListener('input', (e) => { state.libQuery = e.target.value; renderLibrary(); });
+$('#libhome-search').addEventListener('input', (e) => { state.libHomeQuery = e.target.value; renderLibraryHome(); });
 $('#vid-search').addEventListener('input', (e) => { state.vidQuery = e.target.value; renderVideos(); });
 $('#vid-chips').addEventListener('click', (e) => {
   const chip = e.target.closest('[data-vidcat]');
@@ -7875,8 +8461,13 @@ function tvStopTimers() {
   renderDefinitions();
   renderExercises();
   renderEducation();
-  $('#guide-doc').innerHTML = md(state.content.guide);
-  $('#season-doc').innerHTML = md(state.content.season);
+  $('#guide-doc').innerHTML = decorateTerms(md(state.content.guide), state.content.glossary || []);
+  $('#season-doc').innerHTML = decorateTerms(md(state.content.season), state.content.glossary || []);
+  /* The Nutrition page is static HTML in the shell: decorate its
+     prose once, here at boot, with the same tap-a-term treatment
+     the rendered reading surfaces get. */
+  const nuView = document.querySelector('#view-nutrition');
+  if (nuView) nuView.innerHTML = decorateTerms(nuView.innerHTML, state.content.glossary || []);
   $('#log-date').value = todayStr();
   try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
   try { state.wuOverrides = (await api('/api/warmup-cards')).cards || {}; } catch (_) { state.wuOverrides = {}; }

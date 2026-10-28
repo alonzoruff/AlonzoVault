@@ -80,6 +80,8 @@ let db = {
   groups: [], profiles: [], overrides: {}, completions: {},
   customTests: [], testDays: [], testResults: {},
   deviceRows: [],
+  coachClips: [],
+  pathProgress: {},
   customWeeklyMetrics: [], weekly: {},
   concerns: {},
   mediaOverrides: {},
@@ -123,6 +125,16 @@ function migrate() {
   // their test day (name as the file spelled it + metrics under the
   // file's own column headers) for the Devices > Results library.
   db.deviceRows = Array.isArray(db.deviceRows) ? db.deviceRows : [];
+  // Coach's Corner clips (Library Home): the coach's own short
+  // videos, { id, title, topic, url, publicId, description,
+  // createdAt, createdBy }. Public program content — every signed-in
+  // user reads them; only coaches write.
+  db.coachClips = Array.isArray(db.coachClips) ? db.coachClips : [];
+  // Learning-path progress: { userId: { pathId: [stepKey, ...] } } —
+  // the steps one account has checked off, keyed by the account so
+  // an athlete's progress is theirs alone.
+  db.pathProgress = (db.pathProgress && typeof db.pathProgress === 'object' && !Array.isArray(db.pathProgress))
+    ? db.pathProgress : {};
   db.customWeeklyMetrics = Array.isArray(db.customWeeklyMetrics) ? db.customWeeklyMetrics : [];
   db.weekly = db.weekly || {};
   db.concerns = db.concerns || {};
@@ -419,6 +431,8 @@ function loadContent() {
     glossary: loadGlossary(),
     coachEducation: loadCoachEducation(),
     exerciseLibrary: loadExerciseLibrary(),
+    learningPaths: loadLearningPaths(),
+    libraryTopics: loadLibraryTopics(),
   };
 }
 /* The Videos section library (content/video_library.json). Loaded
@@ -486,6 +500,96 @@ function loadRaceStrategy() {
   } catch (_) { /* no race strategy bundled — that is fine */ }
   return { intro: null, events: [] };
 }
+/* The Library Home topic map (content/library_topics.json): the six
+   athlete-facing topics, which content categories and sections sit
+   on which shelf, and the Nutrition page's topic list (the Nutrition
+   page itself is static HTML; its article anchors are nu-<id>).
+   Same tolerant loading as the glossary: a missing or malformed
+   file means no shelves, never a crashed server. Topic ids an
+   assignment names but the topic list never defines are dropped,
+   so a shelf can never point at a topic that does not exist. */
+function loadLibraryTopics() {
+  const empty = { topics: [], assign: {}, nutritionTopics: [] };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'library_topics.json'), 'utf8'));
+    if (!parsed || typeof parsed !== 'object') return empty;
+    const topics = (Array.isArray(parsed.topics) ? parsed.topics : [])
+      .filter(t => t && typeof t.id === 'string' && t.id.trim()
+        && typeof t.name === 'string' && t.name.trim())
+      .map(t => ({ id: t.id.trim(), name: t.name.trim(), blurb: typeof t.blurb === 'string' ? t.blurb : '' }));
+    const known = new Set(topics.map(t => t.id));
+    const cleanAssignMap = (m) => {
+      const out = {};
+      if (m && typeof m === 'object' && !Array.isArray(m)) {
+        for (const [k, v] of Object.entries(m)) {
+          if (Array.isArray(v)) out[k] = v.filter(id => known.has(id));
+        }
+      }
+      return out;
+    };
+    const assign = {};
+    const rawAssign = (parsed.assign && typeof parsed.assign === 'object' && !Array.isArray(parsed.assign))
+      ? parsed.assign : {};
+    for (const group of ['videoCategory', 'definitionCategory', 'exerciseCategory', 'drillCategory', 'raceEvent', 'section']) {
+      assign[group] = cleanAssignMap(rawAssign[group]);
+    }
+    const nutritionTopics = (Array.isArray(parsed.nutritionTopics) ? parsed.nutritionTopics : [])
+      .filter(t => t && typeof t.id === 'string' && t.id.trim()
+        && typeof t.title === 'string' && t.title.trim())
+      .map(t => ({
+        id: t.id.trim(), title: t.title.trim(),
+        topics: (Array.isArray(t.topics) ? t.topics : []).filter(id => known.has(id)),
+      }));
+    return { topics, assign, nutritionTopics };
+  } catch (_) { /* no topic map bundled — that is fine */ }
+  return empty;
+}
+/* The Library Home learning paths (content/learning_paths.json):
+   ordered steps through the real catalogs. Same tolerant loading:
+   a path without an id, a title, or at least one well-formed step
+   is dropped; a step is { type, ref, why } where type is one of
+   video / definition / race / exercise / nutrition and ref names
+   the item in that catalog (the content build validates that every
+   ref resolves; the loader only checks shape). */
+const PATH_STEP_TYPES = ['video', 'definition', 'race', 'exercise', 'nutrition'];
+function loadLearningPaths() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'learning_paths.json'), 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.paths)) return [];
+    return parsed.paths.filter(p => p && typeof p === 'object'
+      && typeof p.id === 'string' && p.id.trim()
+      && typeof p.title === 'string' && p.title.trim()
+      && Array.isArray(p.steps) && p.steps.length > 0
+      && p.steps.every(s => s && typeof s === 'object'
+        && PATH_STEP_TYPES.includes(s.type)
+        && typeof s.ref === 'string' && s.ref.trim()
+        && typeof s.why === 'string' && s.why.trim()))
+      .map(p => ({
+        id: p.id.trim(), title: p.title.trim(),
+        promise: typeof p.promise === 'string' ? p.promise : '',
+        steps: p.steps.map(s => ({ type: s.type, ref: s.ref.trim(), why: s.why.trim() })),
+      }));
+  } catch (_) { /* no learning paths bundled — that is fine */ }
+  return [];
+}
+/* One step's identity inside a path: its type + catalog ref. The
+   same string keys the athlete's saved progress, so a step stays
+   checked when the path is reordered. */
+function pathStepKey(step) { return step.type + ':' + step.ref; }
+/* Per-path completion for one account, in path order: how many of
+   the path's steps that account has checked off. Reads only the
+   caller's own progress record — the AMS reads a profile's linked
+   account through this same helper, never anyone else's. */
+function learningPathSummariesFor(userId) {
+  const mine = (userId && db.pathProgress[userId]) || {};
+  return CONTENT.learningPaths.map(p => {
+    const doneKeys = new Set(Array.isArray(mine[p.id]) ? mine[p.id] : []);
+    const total = p.steps.length;
+    const done = p.steps.filter(s => doneKeys.has(pathStepKey(s))).length;
+    return { id: p.id, title: p.title, total, done, pct: total ? Math.round((done / total) * 100) : 0 };
+  });
+}
+
 /* The Definitions tab glossary (content/glossary.json). Same tolerant
    loading as the video library: a missing or malformed file means an
    empty glossary, never a crashed server. Entries without a term,
@@ -1225,6 +1329,50 @@ function uploadEntry(url, title) {
   if (u.protocol !== 'https:' || u.hostname !== 'res.cloudinary.com') return null;
   if (!u.pathname.startsWith('/' + VIDEO_UPLOAD.cloudName + '/')) return null;
   return { type: 'upload', url, embedUrl: url, title: clean(title, 120) };
+}
+/* Coach's Corner clips ride on the same Cloudinary account as the
+   demo uploads: a clip URL is accepted ONLY as an https video
+   delivery URL on res.cloudinary.com under this cloud — the same
+   rule uploadEntry enforces — and the public id is derived from
+   the URL path (cloud prefix, delivery type, and version segment
+   stripped, extension dropped) so the record carries the asset's
+   real identity in the coach's library. */
+function clipPublicIdFromUrl(url) {
+  if (!uploadEntry(url, '')) return null;
+  let u;
+  try { u = new URL(url); } catch (_) { return null; }
+  const prefix = '/' + VIDEO_UPLOAD.cloudName + '/video/upload/';
+  if (!u.pathname.startsWith(prefix)) return null;
+  let rest = u.pathname.slice(prefix.length);
+  rest = rest.replace(/^v\d+\//, '');
+  rest = rest.replace(/\.[A-Za-z0-9]{2,5}$/, '');
+  try { rest = decodeURIComponent(rest); } catch (_) { /* keep raw */ }
+  return rest || null;
+}
+function publicClip(c) {
+  return {
+    id: c.id, title: c.title, topic: c.topic, url: c.url,
+    publicId: c.publicId, description: c.description,
+    createdAt: c.createdAt, createdBy: c.createdBy,
+  };
+}
+/* Validate a clip write (create or edit): title present, topic one
+   of the Library topic ids, url a real clip URL on the coach's own
+   Cloudinary account. Returns { fields } or { error }. */
+function validateClipFields(body, base) {
+  const title = clean(body.title !== undefined ? body.title : (base && base.title), 120);
+  if (!title) return { error: 'Give the clip a title.' };
+  const topic = clean(body.topic !== undefined ? body.topic : (base && base.topic), 40);
+  if (!CONTENT.libraryTopics.topics.some(t => t.id === topic)) {
+    return { error: 'Pick one of the Library topics for the clip.' };
+  }
+  const url = clean(body.url !== undefined ? body.url : (base && base.url), 1000);
+  const publicId = clipPublicIdFromUrl(url);
+  if (!publicId) {
+    return { error: 'That is not a video from your Cloudinary account. Upload the clip or paste one of its delivery URLs.' };
+  }
+  const description = clean(body.description !== undefined ? body.description : (base && base.description), 500);
+  return { fields: { title, topic, url, publicId, description } };
 }
 function loadMediaBase() {
   try {
@@ -2693,14 +2841,14 @@ const BACKUP_ARRAY_KEYS = {
   customWeeklyMetrics: 'key', inventory: 'id', meetResults: 'id',
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
-  announcements: 'id', deviceRows: 'id',
+  announcements: 'id', deviceRows: 'id', coachClips: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
 const BACKUP_OBJECT_KEYS = [
   'overrides', 'completions', 'testResults', 'weekly', 'concerns',
   'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
-  'attendance', 'coachNotes', 'floorProgress',
+  'attendance', 'coachNotes', 'floorProgress', 'pathProgress',
 ];
 function buildBackupData() {
   return {
@@ -2721,6 +2869,8 @@ function buildBackupData() {
     announcements: db.announcements,
     floorProgress: db.floorProgress,
     deviceRows: db.deviceRows,
+    coachClips: db.coachClips,
+    pathProgress: db.pathProgress,
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -3302,6 +3452,46 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, data);
   }
 
+  /* ---------- Library Home: learning paths + Coach's Corner ----------
+     Library content is program education, readable by every
+     signed-in user. Path progress is per-account: an account reads
+     and writes ONLY its own record (the user id always comes from
+     the session, never from the request), so one athlete's
+     check-offs can never be read or changed by another. Clip writes
+     are coach-only and live below the coach gate. */
+  if (p === '/api/paths/progress' && req.method === 'GET') {
+    return sendJson(res, 200, { progress: db.pathProgress[user.id] || {} });
+  }
+
+  if (p === '/api/paths/progress' && req.method === 'PUT') {
+    const body = await readBody(req);
+    const path = CONTENT.learningPaths.find(x => x.id === clean(body.pathId, 60));
+    if (!path) return sendJson(res, 404, { error: 'Unknown learning path.' });
+    const stepKey = clean(body.step, 300);
+    if (!path.steps.some(s => pathStepKey(s) === stepKey)) {
+      return sendJson(res, 400, { error: 'That step is not part of this path.' });
+    }
+    if (typeof body.done !== 'boolean') {
+      return sendJson(res, 400, { error: 'Say whether the step is done (true) or not (false).' });
+    }
+    db.pathProgress[user.id] = db.pathProgress[user.id] || {};
+    const cur = new Set(Array.isArray(db.pathProgress[user.id][path.id])
+      ? db.pathProgress[user.id][path.id] : []);
+    if (body.done) cur.add(stepKey); else cur.delete(stepKey);
+    /* Store in path order, so the record reads the way the path does. */
+    db.pathProgress[user.id][path.id] = path.steps
+      .map(pathStepKey).filter(k => cur.has(k));
+    saveDb();
+    return sendJson(res, 200, { progress: db.pathProgress[user.id] });
+  }
+
+  if (p === '/api/coach-clips' && req.method === 'GET') {
+    const clips = db.coachClips.slice()
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(publicClip);
+    return sendJson(res, 200, { clips });
+  }
+
   /* ================================================================ */
   /* TEAM DATA — coaches only from here. Athlete-role accounts and    */
   /* anyone else get a 403 on every endpoint below.                   */
@@ -3310,6 +3500,43 @@ async function handleApi(req, res, url) {
     return sendJson(res, 403, { error: 'Coaches only. Athletes do not use this system — the coach records everything.' });
   }
   const coachOnly = () => sendJson(res, 403, { error: 'Coaches only.' });
+
+  /* ---------- Coach's Corner clips (coach writes) ----------
+     Reads live above the gate (every signed-in user); writes are
+     coach-only like everything in this section. The clip manager in
+     the Library is the only writer. */
+  if (p === '/api/coach-clips' && req.method === 'POST') {
+    const body = await readBody(req);
+    const v = validateClipFields(body, null);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const clip = Object.assign({
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      createdBy: user.email,
+    }, v.fields);
+    db.coachClips.push(clip);
+    saveDb();
+    return sendJson(res, 201, { clip: publicClip(clip) });
+  }
+  const clipMatch = p.match(/^\/api\/coach-clips\/([^/]+)$/);
+  if (clipMatch && req.method === 'PUT') {
+    const clip = db.coachClips.find(c => c.id === decodeURIComponent(clipMatch[1]));
+    if (!clip) return sendJson(res, 404, { error: 'Clip not found.' });
+    const body = await readBody(req);
+    const v = validateClipFields(body, clip);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    Object.assign(clip, v.fields);
+    saveDb();
+    return sendJson(res, 200, { clip: publicClip(clip) });
+  }
+  if (clipMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(clipMatch[1]);
+    const next = db.coachClips.filter(c => c.id !== id);
+    if (next.length === db.coachClips.length) return sendJson(res, 404, { error: 'Clip not found.' });
+    db.coachClips = next;
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
 
   /* ---------- coach accounts ---------- */
   if (p === '/api/coaches' && req.method === 'GET') {
@@ -4052,6 +4279,12 @@ async function handleApi(req, res, url) {
     const notes = (db.coachNotes[prof.id] || []).slice()
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .map(publicCoachNote);
+    /* Learning-path completion for this athlete: read from the
+       account bound to this profile (never from the profile id —
+       progress belongs to accounts). No linked account, no
+       progress: every path reads zero. */
+    const boundUser = db.users.find(u => u.profileId === prof.id) || null;
+    const learningPaths = learningPathSummariesFor(boundUser ? boundUser.id : null);
     const pub = publicProfile(prof);
     return sendJson(res, 200, {
       profile: pub,
@@ -4068,6 +4301,7 @@ async function handleApi(req, res, url) {
       attendance,
       health: { counts: healthCounts, concerns },
       goals: goalsForProfile(prof.id),
+      learningPaths,
       notes,
     });
   }

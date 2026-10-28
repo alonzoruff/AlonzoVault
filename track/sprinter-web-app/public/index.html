@@ -126,6 +126,7 @@
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <p class="view-sub muted">Watch how it is done, look up any word, and fuel the work.</p>
     <div class="menu-list">
+      <button type="button" class="menu-item" data-view="libraryhome">Library <span>The whole library in one place — search everything, follow a learning path, watch Coach's Corner</span></button>
       <button type="button" class="menu-item" data-view="videos">Videos <span>Watch a demo of any drill or lift</span></button>
       <button type="button" class="menu-item" data-view="definitions">Definitions <span>Every term in plain language, with the coaching cue</span></button>
       <button type="button" class="menu-item" data-view="exercises">Exercise Library <span>Movements saved from Instagram, with cues and sources</span></button>
@@ -166,6 +167,7 @@
       <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
       <button type="button" class="menu-item" data-view="devices">Devices <span>ForceDecks, NordBord, and T-APEX: import each device's results file and they land in every athlete's testing history, labeled by device</span></button>
       <button type="button" class="menu-item" data-view="coverage">Demo Coverage <span>The filming map: every drill and test marked — your video, a placeholder, or still to film</span></button>
+      <button type="button" class="menu-item" data-view="libraryhome">Coach's Corner <span>Your short clips for the athletes — filmed and managed in the Library</span></button>
       <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access — under Account</span></button>
     </div>
   </section>
@@ -432,7 +434,7 @@
     <p class="view-sub muted">What to eat and when — on practice days, meet days, and lifting days.</p>
     <p class="muted">Fueling education for Cadet sprinters — principles, plates, and timing. No diet plans and no calorie counting: eat to match the work, protein at every meal, and never train on empty. Ranges below are general education guidelines for hard-training athletes, in the coach's words.</p>
 
-    <article class="nu-card nu-scarlet">
+    <article class="nu-card nu-scarlet" id="nu-daily-fueling">
       <h2>1 · Daily Fueling for Sprinters</h2>
       <p class="nu-sub">The everyday plate — and how it changes with the training day.</p>
       <ul class="nu-list">
@@ -445,7 +447,7 @@
       </ul>
     </article>
 
-    <article class="nu-card nu-gold">
+    <article class="nu-card nu-gold" id="nu-before-practice">
       <h2>2 · Before Practice / Before a Meet</h2>
       <p class="nu-sub">The timing ladder — the closer to go-time, the smaller and simpler the food.</p>
       <ul class="nu-list">
@@ -458,7 +460,7 @@
       </ul>
     </article>
 
-    <article class="nu-card nu-green">
+    <article class="nu-card nu-green" id="nu-recovery-fueling">
       <h2>3 · Recovery Fueling</h2>
       <p class="nu-sub">What happens after the session decides how ready you are for the next one.</p>
       <ul class="nu-list">
@@ -471,7 +473,7 @@
       </ul>
     </article>
 
-    <article class="nu-card nu-steel">
+    <article class="nu-card nu-steel" id="nu-hydration">
       <h2>4 · Hydration</h2>
       <p class="nu-sub">Start hydrated, sip through the work, replace what you lost.</p>
       <ul class="nu-list">
@@ -485,7 +487,7 @@
       </ul>
     </article>
 
-    <article class="nu-card nu-scarlet">
+    <article class="nu-card nu-scarlet" id="nu-meet-day-timeline">
       <h2>5 · Meet Day Timeline</h2>
       <p class="nu-sub">A race-day run-through, wake-up to the ride home.</p>
       <ul class="nu-list">
@@ -498,7 +500,7 @@
       </ul>
     </article>
 
-    <article class="nu-card nu-slate">
+    <article class="nu-card nu-slate" id="nu-weight-room-fueling">
       <h2>6 · Weight Room Day Fueling</h2>
       <p class="nu-sub">Strength and testing days — fueling for the build.</p>
       <ul class="nu-list">
@@ -510,7 +512,7 @@
       </ul>
     </article>
 
-    <article class="nu-card nu-note">
+    <article class="nu-card nu-note" id="nu-supplements">
       <h2>Supplements — the honest version</h2>
       <ul class="nu-list">
         <li><strong>Food first, always.</strong> No supplement fixes skipped meals, low carbs on hard days, or short sleep — and those three move performance more than anything in a tub.</li>
@@ -519,6 +521,30 @@
         <li><strong>The proven stack is boring:</strong> breakfast, carbs around training, protein at meals, water, and sleep.</li>
       </ul>
     </article>
+  </section>
+
+  <!-- LIBRARY HOME -->
+  <section id="view-libraryhome" class="view">
+    <h1>Library</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Everything you can learn from, in one place — search it all, browse by topic, follow a learning path, and watch Coach's Corner.</p>
+    <div class="filters card">
+      <input id="libhome-search" type="search" placeholder="Search the whole library (try “acceleration”, “nordic”, “taper”, “hydration”)">
+      <p id="libhome-count" class="muted"></p>
+    </div>
+    <div id="libhome-results"></div>
+    <h2>Browse by topic</h2>
+    <div id="libhome-shelves" class="libhome-shelves"></div>
+    <div class="chip-row" id="libhome-type-chips"></div>
+    <div id="libhome-browse" class="libhome-grid"></div>
+    <h2>Learning paths</h2>
+    <p class="muted">Short, ordered routes through the library — each step is one thing to watch, read, or learn, with the reason it is there. Check steps off as you finish them; your progress saves to your account.</p>
+    <div id="libhome-paths"></div>
+    <h2>Coach's Corner</h2>
+    <p class="muted">Short clips from your coach — the answers to the questions that come up every season.</p>
+    <div id="libhome-corner"></div>
+    <div id="libhome-clips-admin"></div>
   </section>
 
   <!-- VIDEOS -->
@@ -915,6 +941,8 @@
   <button type="button" data-view="coachhub" class="tab coach-tab" hidden><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4.5" width="12" height="17" rx="2"/><path d="M9.5 4.5V3h5v1.5M9.3 13.2l2 2 3.6-3.8"/></svg></span><span class="tab-label">Coach</span></button>
 </nav>
 
+<div id="term-pop" class="term-popover" hidden></div>
+
 <div id="media-modal" class="media-modal" hidden>
   <div class="media-box card">
     <div class="media-head">
@@ -930,7 +958,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v54">Cadets Sprint · App v54</div>
+  <div class="app-version" data-app-version="v55">Cadets Sprint · App v55</div>
 </footer>
 
 <script src="/app.js"></script>

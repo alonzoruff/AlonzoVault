@@ -1697,3 +1697,50 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
   .rs-phase { flex-direction: column; gap: 6px; }
   .rs-zone { align-self: flex-start; }
 }
+
+/* ---------------- library home (v55) ---------------- */
+.libhome-shelves { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.lib-shelf { text-align: left; background: var(--card, #fff); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; font: inherit; }
+.lib-shelf.active { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
+.lib-shelf strong { font-size: 16px; }
+.lib-shelf-count { color: var(--red); font-weight: 700; font-size: 13px; }
+.lib-shelf-blurb { color: var(--muted); line-height: 1.45; font-size: 13.5px; }
+.lib-shelf-preview { color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 6px; margin-top: 4px; }
+.libhome-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.lib-card { text-align: left; background: var(--card, #fff); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; font: inherit; align-items: flex-start; }
+.lib-card strong { line-height: 1.35; }
+.lib-card-topics { color: var(--red); font-size: 12.5px; font-weight: 600; }
+.lib-result { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; background: none;
+  border: none; border-bottom: 1px solid var(--line); padding: 9px 2px; cursor: pointer; font: inherit; }
+.lib-result-main { display: flex; flex-direction: column; gap: 1px; }
+.lib-flash { animation: libFlash 1.8s ease-out; }
+@keyframes libFlash {
+  0% { box-shadow: 0 0 0 3px var(--red); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.lib-path-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.lib-path-head h3 { margin-top: 0; }
+.lib-path-progress { min-width: 170px; flex: 0 1 220px; }
+.lib-path-bar { height: 8px; background: #eee; border-radius: 99px; overflow: hidden; margin-bottom: 4px; }
+.lib-path-fill { height: 100%; background: var(--red); border-radius: 99px; }
+.lib-path-steps { list-style: none; padding: 0; margin: 12px 0 0; }
+.lib-path-step { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); }
+.lib-path-step .btn { margin-left: auto; flex-shrink: 0; }
+.lib-path-check { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; accent-color: var(--red); }
+.lib-path-num { font-weight: 700; color: var(--red); min-width: 20px; text-align: center; }
+.lib-path-step-main { display: flex; flex-direction: column; gap: 1px; }
+.lib-path-step.done .lib-path-step-main strong { text-decoration: line-through; color: var(--muted); }
+.lib-clip { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card, #fff); }
+.lib-clip .media-video { width: 100%; display: block; }
+.lib-clip-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+
+/* ---------------- tap-a-term (v55) ---------------- */
+.term-pop { background: none; border: none; border-bottom: 2px dotted var(--red); color: inherit;
+  font: inherit; padding: 0; cursor: pointer; }
+.term-popover { position: fixed; z-index: 1200; background: #fff; border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: 0 12px 34px rgba(0, 0, 0, .22); padding: 14px; }
+.term-popover p { line-height: 1.5; }
+.term-pop-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+body.tv-mode .term-popover { display: none; }

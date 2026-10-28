@@ -670,3 +670,77 @@ elif os.path.exists(igm_out):
           len(json.load(open(igm_out))), "entries")
 else:
     print("instagram movements: none found (the app runs fine without it)")
+
+# Library Home topic map (Library section): same source-of-truth
+# pattern again. The vault database copy
+# (track/sprinter-workout-database/library_topics.json) is the one to
+# edit — the six athlete-facing topics, which content categories and
+# sections sit on which shelf, and the Nutrition page's topic list
+# (the Nutrition page is static HTML; its article ids in
+# public/index.html must match the ids listed here). If the source is
+# ever missing, PRESERVE the bundled copy; a content refresh must
+# never wipe the map out.
+lt_src = os.path.join(DB, "library_topics.json")
+lt_out = os.path.join(OUT, "library_topics.json")
+if os.path.exists(lt_src):
+    shutil.copy(lt_src, lt_out)
+    _lt = json.load(open(lt_out))
+    print("library topics:", len(_lt.get("topics", [])), "topics (from source of truth)")
+elif os.path.exists(lt_out):
+    print("library topics: WARNING — source of truth missing, kept existing bundled copy")
+else:
+    print("library topics: none found (the app runs fine without it)")
+
+# Learning paths (Library section): same source-of-truth pattern
+# again. The vault database copy
+# (track/sprinter-workout-database/learning_paths.json) is the one to
+# edit — ordered steps through the real catalogs (a video id, a
+# definition term, a race strategy event, an exercise name, or a
+# nutrition topic id, each with its "why this step" line). The build
+# VALIDATES every step against the bundled catalogs it just wrote and
+# FAILS LOUDLY on a step that names nothing real — a path must never
+# ship pointing at a resource that does not exist. If the source is
+# ever missing, PRESERVE the bundled copy; a content refresh must
+# never wipe the paths out.
+lp_src = os.path.join(DB, "learning_paths.json")
+lp_out = os.path.join(OUT, "learning_paths.json")
+if os.path.exists(lp_src):
+    shutil.copy(lp_src, lp_out)
+    print("learning paths: copied (validated below)")
+elif os.path.exists(lp_out):
+    print("learning paths: WARNING — source of truth missing, kept existing bundled copy (validated below)")
+else:
+    print("learning paths: none found (the app runs fine without it)")
+
+if os.path.exists(lp_out):
+    _paths = json.load(open(lp_out)).get("paths", [])
+    _video_ids = {v["id"] for v in json.load(open(lib_out))} if os.path.exists(lib_out) else set()
+    _terms = {e["term"] for e in json.load(open(gloss_out))} if os.path.exists(gloss_out) else set()
+    _events = {e["id"] for e in json.load(open(rs_out)).get("events", [])} if os.path.exists(rs_out) else set()
+    _exercises = {m["name"] for m in json.load(open(igm_out))} if os.path.exists(igm_out) else set()
+    _nutrition = set()
+    if os.path.exists(lt_out):
+        _nutrition = {t["id"] for t in json.load(open(lt_out)).get("nutritionTopics", [])}
+    _catalogs = {"video": _video_ids, "definition": _terms, "race": _events,
+                 "exercise": _exercises, "nutrition": _nutrition}
+    _bad = []
+    for _p in _paths:
+        for _s in _p.get("steps", []):
+            _cat = _catalogs.get(_s.get("type"))
+            if _cat is None or _s.get("ref") not in _cat:
+                _bad.append("%s -> %s:%s" % (_p.get("id"), _s.get("type"), _s.get("ref")))
+    if _bad:
+        raise SystemExit("learning paths: steps that resolve to NOTHING in the "
+                         "catalogs: " + "; ".join(_bad))
+    # The Nutrition page is static HTML: every nutrition topic id in
+    # the map needs its article anchor on the page, or the deep link
+    # lands nowhere.
+    _index_html = open(os.path.join(APP, "public", "index.html")).read()
+    _missing_anchors = [t for t in _nutrition
+                        if ('id="nu-' + t + '"') not in _index_html]
+    if _missing_anchors:
+        raise SystemExit("library topics: nutrition topics with no article anchor "
+                         "in public/index.html: " + ", ".join(sorted(_missing_anchors)))
+    print("learning paths:", len(_paths), "paths,",
+          sum(len(p.get("steps", [])) for p in _paths),
+          "steps — every step resolves to a real catalog item")
