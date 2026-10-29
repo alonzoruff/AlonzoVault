@@ -452,8 +452,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v57',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v57"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v58',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v58"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2377,16 +2377,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v57'") &&
-    swJs.text.includes("sprinter-app-v57"));
+    appJs.text.includes("const APP_VERSION = 'v58'") &&
+    swJs.text.includes("sprinter-app-v58"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v57"') &&
-    pageHtml.text.includes('Cadets Sprint · App v57') &&
+    pageHtml.text.includes('data-app-version="v58"') &&
+    pageHtml.text.includes('Cadets Sprint · App v58') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -2472,7 +2472,7 @@ async function main() {
   check('qa: boot restores the session through syncAuthUi so coach tabs survive a reload',
     appJs.text.includes('syncAuthUi (not the individual renders)'));
   check('qa: coach views re-render when entered, not only at login',
-    appJs.text.includes("if (name === 'wellness') renderWellness();") &&
+    appJs.text.includes("if (name === 'ams') renderAms();") &&
     appJs.text.includes("if (name === 'groups') renderGroups();") &&
     appJs.text.includes("if (name === 'coach') renderCoach();"));
   check('qa: a new check-in starts unanswered and Save stays disabled until it is not',
@@ -2502,8 +2502,9 @@ async function main() {
     appJs.text.includes('Soreness ${c.soreness}/5'));
   check('v56: privacy copy describes the pain scale and the coach-only high-pain flag',
     appJs.text.includes('body pain from 1 to 10') && appJs.text.includes('high-pain flag'));
-  check('qa: wellness view triages flagged first and badges unlinked athletes',
-    appJs.text.includes('NOT LINKED') && appJs.text.includes('const triage'));
+  check('qa (v58): the wellness view is gone; flagged check-ins surface on Today\'s Checklist instead',
+    !appJs.text.includes('const triage') && !appJs.text.includes('wellness-row') &&
+    appJs.text.includes('w.flagged.map'));
   check('qa: roster cards show account-link status without opening Edit profile',
     appJs.text.includes('🔗 Linked:') && appJs.text.includes('Not linked — open Edit profile'));
   check('qa: checklist group cards carry the shared Run button',
@@ -2876,12 +2877,12 @@ async function main() {
     check('TV render path has no check-in or wellness references',
       tvStart >= 0 && tvEnd > tvStart && !tvCode.includes('checkin') && !tvCode.includes('wellness'),
       tvCode.length);
-    check('wellness view + check-in card are in the served page',
-      pageHtml.text.includes('id="view-wellness"') && pageHtml.text.includes('data-view="wellness"') &&
+    check('wellness tab is removed (v58) and the check-in card stays in the served page',
+      !pageHtml.text.includes('id="view-wellness"') && !pageHtml.text.includes('data-view="wellness"') &&
       pageHtml.text.includes('id="checkin-slot"') && pageHtml.text.includes('id="checkin-history"'));
-    check('wellness + check-in wiring is in the served JS',
-      appJs.text.includes('renderWellness') && appJs.text.includes('renderCheckin') &&
-      appJs.text.includes('/api/checkin') && appJs.text.includes('/api/wellness/today'));
+    check('wellness view wiring is removed (v58); check-in wiring stays in the served JS',
+      !appJs.text.includes('renderWellness') && appJs.text.includes('renderCheckin') &&
+      appJs.text.includes('/api/checkin'));
     r = await api(null, 'GET', '/api/checkin/today');
     check('check-in state without login is 401', r.status === 401, r.status);
   }

@@ -24,6 +24,14 @@
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
   --card-pad: 16px;
   --card-gap: 14px;
+  /* Motion tokens (v58): one duration/easing scale for the whole app.
+     Fast = press feedback, UI = menus/disclosures, page = view changes
+     and the travelling nav indicators. Transform/opacity only. */
+  --dur-1: 100ms;
+  --dur-2: 180ms;
+  --dur-3: 220ms;
+  --ease-std: cubic-bezier(.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, .2, 1);
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -125,7 +133,7 @@ body {
   .btn:hover { border-color: var(--gray); }
 }
 .tab:active, .btn:active, .session-row:active, .menu-item:active,
-.chip:active, .seg-btn:active, .tap-btn:active { transform: scale(.98); }
+.chip:active, .seg-btn:active, .tap-btn:active { transform: scale(.985); }
 .tabbar .tab:active { transform: none; background: #fdf0f3; }
 .tab.active { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
 .tab-icon { display: inline-flex; flex: none; }
@@ -149,16 +157,15 @@ body {
   }
   .tabbar .tab .tab-icon svg { width: 23px; height: 23px; }
   .tabbar .tab.active { background: transparent; border-color: transparent; color: var(--red); }
-  .tabbar .tab.active::before {
-    content: ""; position: absolute; top: 0; left: 22%; right: 22%;
-    height: 3px; border-radius: 0 0 3px 3px; background: var(--red);
-  }
+  /* The active-tab notch is a single travelling bar (.tab-glide in
+     the v58 section) that glides between tabs instead of a static
+     ::before appearing under each tab. */
 }
 main { max-width: 880px; margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); }
 .view { display: none; }
 .view.active { display: block; }
-h1 { font-size: 24px; margin: 6px 0 12px; line-height: 1.25; letter-spacing: -.01em; }
-h2 { font-size: 19px; margin: 4px 0 10px; line-height: 1.25; letter-spacing: -.01em; }
+h1 { font-size: 28px; font-weight: 800; margin: 6px 0 12px; line-height: 1.22; letter-spacing: -.02em; }
+h2 { font-size: 20px; font-weight: 700; margin: 4px 0 10px; line-height: 1.25; letter-spacing: -.015em; }
 h3 { font-size: 16.5px; margin: 10px 0 6px; line-height: 1.25; }
 .muted { color: var(--muted); font-size: 14px; }
 .card {
@@ -257,7 +264,7 @@ label { display: block; font-size: 14px; font-weight: 600; margin-top: 6px; }
 details.card summary { cursor: pointer; }
 @media (max-width: 520px) {
   .detail-grid { grid-template-columns: 1fr; }
-  h1 { font-size: 21px; }
+  h1 { font-size: 24px; }
 }
 
 /* ---------- motion: hero runner, lane stripes, micro-motion ----------
@@ -942,24 +949,32 @@ details.card summary { cursor: pointer; }
 
 /* Loading skeletons: reserve the shape of the content so views do not
    jump when data lands (cold starts on a flaky track-side connection).
-   No shimmer by default; the pulse only runs when motion is welcome. */
-.skel { background: #e9e9ec; border-radius: var(--radius); margin: 0 0 14px; }
+   A light sweep (transform only, one small element) says "loading"
+   better than a pulse; it only runs when motion is welcome. */
+.skel { background: #e9e9ec; border-radius: var(--radius); margin: 0 0 14px; position: relative; overflow: hidden; }
 .skel-card { height: 112px; }
 .skel-row { height: 64px; border-radius: var(--radius-sm); }
-.skel-line { height: 14px; border-radius: 7px; margin: 0 0 10px; }
+.skel-line { height: 14px; border-radius: 7px; margin: 0 0 10px; position: relative; overflow: hidden; }
 @media (prefers-reduced-motion: no-preference) {
-  .skel, .skel-line { animation: skelPulse 1.4s ease-in-out infinite alternate; }
-  @keyframes skelPulse { from { opacity: .65; } to { opacity: 1; } }
+  .skel::after, .skel-line::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, .55) 50%, transparent 75%);
+    transform: translateX(-100%);
+    animation: skelSweep 1.3s ease-in-out infinite;
+  }
+  @keyframes skelSweep { to { transform: translateX(100%); } }
 }
 #home-content { min-height: 420px; }
 #lib-list, #vid-grid { min-height: 320px; }
 
-/* Micro-motion: cards rise in, views cross over, HARD badges breathe */
-@keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+/* Micro-motion: the view itself rises in — container-level motion.
+   Animating every card separately reads as noise on long views and
+   costs frames on school iPads, so the entrance lives here only
+   (plus the small bounded moments in the v58 section). HARD badges
+   breathe on Today only. */
+@keyframes viewIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes badgePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
-.view.active .card { animation: riseIn .35s ease both; }
-.view.active { animation: viewIn .35s ease both; }
+.view.active { animation: viewIn var(--dur-2) var(--ease-enter) both; }
 /* HARD is signalled statically: a pulsing badge on every row of a long
    list is constant repaint and visual noise on school iPads. */
 .badge.high { box-shadow: inset 0 0 0 1px var(--high); }
@@ -1772,3 +1787,102 @@ body.tv-mode .term-popover { display: none; }
 .ci-dot.today:not(.on) { color: var(--red-dark); }
 .ci-week-label { font-size: 12.5px; color: var(--muted); margin-left: 2px; }
 .nu-jump-row { margin: 0 0 12px; }
+
+/* ================================================================
+   v58 design pass — navigation motion, polish, and the type rule
+   ----------------------------------------------------------------
+   Refinement inside the existing scarlet/white system: no new
+   theme, no decoration. All motion is transform/opacity on the
+   --dur tokens, and the global reduced-motion block above flattens
+   every animation/transition here too. Scarlet is an accent:
+   it marks where you are (nav pill, tab glide, active states)
+   and what matters (flags, the Run button) — nothing else.
+   ================================================================ */
+
+/* Header shadow deepens once the page is scrolled (JS toggles
+   .scrolled on the sticky topbar; colour/shadow only). */
+.topbar { transition: box-shadow var(--dur-2) ease; }
+.topbar.scrolled { box-shadow: 0 1px 0 var(--line), 0 12px 26px -12px rgba(20, 22, 26, .38); }
+
+/* Travelling nav pill: one scarlet pill sits behind the active
+   header tab and glides to the next (JS measures the tab and sets
+   transform/width/height on .nav-pill; .has-pill is only added
+   once JS has placed it, so no-JS keeps the static red tab). */
+.mainnav { position: relative; }
+.mainnav .tab { position: relative; z-index: 1; }
+.mainnav.has-pill .tab.active { background: transparent; border-color: transparent; }
+.nav-pill {
+  position: absolute; left: 0; top: 0; z-index: 0; border-radius: 999px;
+  background: var(--red); box-shadow: 0 1px 2px rgba(153, 0, 38, .25);
+  opacity: 0; pointer-events: none; will-change: transform;
+  transition: transform var(--dur-3) var(--ease-std), width var(--dur-3) var(--ease-std),
+    height var(--dur-3) var(--ease-std), opacity var(--dur-2) ease;
+}
+
+/* Bottom tab bar: the active marker is one bar that glides
+   between tabs (replaces the static per-tab ::before notch). */
+.tab-glide {
+  position: absolute; left: 0; top: 0; height: 3px; border-radius: 0 0 3px 3px;
+  background: var(--red); opacity: 0; pointer-events: none; will-change: transform;
+  transition: transform var(--dur-3) var(--ease-std), width var(--dur-3) var(--ease-std), opacity var(--dur-2) ease;
+}
+
+/* Dropdown menus and the mobile sheet arrive instead of snapping:
+   a 4px settle from the trigger, transform-origin at the corner
+   they open from. */
+.nav-menu { transform-origin: top left; }
+.nav-group.open .nav-menu { animation: menuIn var(--dur-2) var(--ease-enter) both; }
+@keyframes menuIn { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.nav-sheet:not([hidden]) { animation: sheetIn var(--dur-2) var(--ease-enter) both; }
+@keyframes sheetIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Inline disclosures (details) fade their contents up on open
+   instead of snapping; 200ms, no height animation (layout cost). */
+details[open] > :not(summary) { animation: fadeUp var(--dur-2) var(--ease-enter) both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Selected states read as a fine scarlet border + a whisper of
+   background shift, not a lift — calmer on long lists. */
+.lib-shelf.active { background: #fdf3f5; }
+.seg-btn.active { box-shadow: 0 1px 3px rgba(153, 0, 38, .28); }
+@media (hover: hover) {
+  .session-row:hover, .menu-item:hover { background: #fafafb; }
+}
+
+/* Learn tiles join the shared press feedback (they had a snap). */
+.learn-tile { transition: background-color var(--dur-2) ease, border-color var(--dur-2) ease, transform var(--dur-1) ease; }
+.learn-tile:active { transform: scale(.985); }
+
+/* Word of the Day deals in: a small rise + settle. The card is
+   re-created on every "Another word" tap, so the deal replays. */
+.wotd { animation: dealIn var(--dur-3) var(--ease-enter) both; }
+@keyframes dealIn { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* Check-in week dots pop in left to right (7 dots max, 15ms
+   steps — a bounded moment, not a list stagger). */
+.ci-dot { animation: dotIn var(--dur-2) var(--ease-enter) both; }
+.ci-week .ci-dot:nth-child(2) { animation-delay: 15ms; }
+.ci-week .ci-dot:nth-child(3) { animation-delay: 30ms; }
+.ci-week .ci-dot:nth-child(4) { animation-delay: 45ms; }
+.ci-week .ci-dot:nth-child(5) { animation-delay: 60ms; }
+.ci-week .ci-dot:nth-child(6) { animation-delay: 75ms; }
+.ci-week .ci-dot:nth-child(7) { animation-delay: 90ms; }
+@keyframes dotIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .ci-dot { animation-delay: 0ms !important; }
+}
+
+/* Update toast: 160ms in, 140ms out (JS adds .leaving). */
+.update-toast { animation: toastIn 160ms var(--ease-enter) both; }
+.update-toast.leaving { animation: toastOut 140ms var(--ease-std) both; }
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes toastOut { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 6px); } }
+
+/* Type rule (AJ, Oct 28): bold belongs to headings, titles and
+   data. Emphasis inside running copy — paragraphs, list items,
+   table cells — renders at body weight so prose reads calm and
+   the headings carry the hierarchy. The semantic <strong> stays
+   in the markup; only its rendering changes. Data values in the
+   device stats list keep their weight (they are data, not prose). */
+p strong, p b, li strong, li b, td strong, td b { font-weight: inherit; }
+.dev-stats li strong { font-weight: 700; }

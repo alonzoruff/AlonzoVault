@@ -151,8 +151,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v57';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v57';
+const APP_VERSION = 'v58';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v58';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -180,6 +180,7 @@ function showAppUpdatedToast() {
   toast.setAttribute('role', 'status');
   toast.textContent = 'Updated to the latest version';
   document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add('leaving'), 5060);
   setTimeout(() => toast.remove(), 5200);
 }
 
@@ -339,13 +340,13 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', race: 'train', records: 'train', leaderboard: 'train',
   libraryhome: 'learn', videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
   privacy: 'account',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training'], ['race', 'Race Strategy']],
   learn: [['libraryhome', 'Library'], ['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -427,6 +428,73 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNavMenus(); });
 
+/* ---------------- nav indicators + topbar shadow (v58) --------
+   One scarlet pill glides behind the active header tab; one bar
+   glides along the bottom tab bar. Both are measured from the
+   live layout, so they stay correct when the coach tab appears,
+   the window resizes, or the nav wraps to two rows. The first
+   placement is instant (transition suppressed) so nothing slides
+   in from the corner on load. */
+const navPillEl = document.createElement('span');
+navPillEl.className = 'nav-pill';
+navPillEl.setAttribute('aria-hidden', 'true');
+const mainNavEl = $('#main-tabs');
+if (mainNavEl) mainNavEl.appendChild(navPillEl);
+const tabGlideEl = document.createElement('span');
+tabGlideEl.className = 'tab-glide';
+tabGlideEl.setAttribute('aria-hidden', 'true');
+const tabBarEl = $('#tab-bar');
+if (tabBarEl) tabBarEl.appendChild(tabGlideEl);
+let navIndPlaced = false;
+function updateNavIndicators() {
+  const nav = $('#main-tabs');
+  const tab = nav ? nav.querySelector('.tab.active') : null;
+  if (nav && tab) {
+    const nr = nav.getBoundingClientRect();
+    const tr = tab.getBoundingClientRect();
+    if (tr.width) {
+      if (!navIndPlaced) navPillEl.style.transition = 'none';
+      nav.classList.add('has-pill');
+      navPillEl.style.width = tr.width + 'px';
+      navPillEl.style.height = tr.height + 'px';
+      navPillEl.style.transform = `translate(${tr.left - nr.left}px, ${tr.top - nr.top}px)`;
+      navPillEl.style.opacity = '1';
+      if (!navIndPlaced) { void navPillEl.offsetWidth; navPillEl.style.transition = ''; }
+    }
+  } else if (nav) { nav.classList.remove('has-pill'); navPillEl.style.opacity = '0'; }
+  const bar = $('#tab-bar');
+  const btab = bar ? bar.querySelector('.tab.active') : null;
+  if (bar && btab) {
+    const br = bar.getBoundingClientRect();
+    const tr = btab.getBoundingClientRect();
+    if (tr.width) {
+      if (!navIndPlaced) tabGlideEl.style.transition = 'none';
+      tabGlideEl.style.width = (tr.width * 0.56) + 'px';
+      tabGlideEl.style.transform = `translate(${tr.left - br.left + tr.width * 0.22}px, 0)`;
+      tabGlideEl.style.opacity = '1';
+      if (!navIndPlaced) { void tabGlideEl.offsetWidth; tabGlideEl.style.transition = ''; }
+    } else tabGlideEl.style.opacity = '0';
+  } else tabGlideEl.style.opacity = '0';
+  navIndPlaced = true;
+}
+let navIndRaf = false;
+window.addEventListener('resize', () => {
+  if (navIndRaf) return;
+  navIndRaf = true;
+  requestAnimationFrame(() => { navIndRaf = false; updateNavIndicators(); });
+});
+let topbarTick = false;
+window.addEventListener('scroll', () => {
+  if (topbarTick) return;
+  topbarTick = true;
+  requestAnimationFrame(() => {
+    topbarTick = false;
+    const bar = $('.topbar');
+    if (bar) bar.classList.toggle('scrolled', window.scrollY > 8);
+  });
+}, { passive: true });
+requestAnimationFrame(updateNavIndicators);
+
 function showView(name) {
   closeTermPop();
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
@@ -449,7 +517,6 @@ function showView(name) {
   if (name === 'testing') renderTesting();
   if (name === 'top') renderTop();
   if (name === 'inventory') renderInventory();
-  if (name === 'wellness') renderWellness();
   if (name === 'ams') renderAms();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
@@ -467,6 +534,7 @@ function showView(name) {
   if (name === 'exercises') renderExercises();
   if (name === 'libraryhome') renderLibraryHome();
   if (name === 'privacy') renderPrivacy();
+  updateNavIndicators();
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -918,12 +986,10 @@ async function renderCoachToday() {
     <p><button class="btn secondary" id="ct-open-ams" type="button">Open AMS — work concerns &amp; clearances</button></p>
     <h3>Daily wellness</h3>
     ${wellHtml}
-    <p><button class="btn secondary" id="ct-open-wellness" type="button">Open Wellness</button></p>
   </div>`;
   $('#ct-open-coach').addEventListener('click', () => { state.feedDate = data.date; renderCoach(); showView('coach'); });
   wireRunTodayButtons(el);
   $('#ct-open-ams').addEventListener('click', () => { state.amsProfileId = null; renderAms(); showView('ams'); });
-  $('#ct-open-wellness').addEventListener('click', () => { renderWellness(); showView('wellness'); });
 }
 function renderHomeLogs() {
   const el = $('#home-logs');
@@ -2285,18 +2351,19 @@ function syncAuthUi() {
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderInventory();
-  renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderWellness(); renderAnnouncements(); renderCustomWorkouts();
+  renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderAnnouncements(); renderCustomWorkouts();
   renderPrograms(); renderCalendar();
   renderWarmupCards();
   if (isCoach) loadMedia();
+  updateNavIndicators();
 }
 
 /* ================================================================
    DAILY WELLNESS CHECK-IN — the one thing an athlete logs.
    One short screen: sleep, body pain (1–10), energy, and a yes/no
    head-symptoms question (a yes files the concern that holds the
-   athlete until clearance). Coaches read it in the Wellness view
-   and on Coach Today. Check-in data is health data: it never
+   athlete until clearance). Coaches read it on Today's Checklist
+   and on each athlete's AMS page. Check-in data is health data: it never
    appears on any public or TV surface.
    ================================================================ */
 const CHECKIN_FLAG_LABELS = { 'low-sleep': 'Low sleep', 'high-pain': 'High pain', 'low-energy': 'Low energy',
@@ -2470,68 +2537,10 @@ function checkinReportHtml(ci) {
     ${trend ? `<h3>Team average sleep by day</h3>${trend}` : ''}`;
 }
 
-/* Coach Wellness view: who checked in today, the flags, and the
-   last 7 days per athlete plus team averages. Coach-only. */
-async function renderWellness() {
-  const el = $('#wellness-main');
-  if (!el) return;
-  if (!isCoachUser()) { gateHtml(el, 'Daily wellness check-ins live here.'); return; }
-  let today, trends;
-  try {
-    [today, trends] = await Promise.all([api('/api/wellness/today'), api('/api/wellness/trends?days=7')]);
-  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-  const s = today.summary;
-  const flagBadges = (flags) => flags.length
-    ? flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ')
-    : '<span class="badge low">OK</span>';
-  const triage = (rw) => rw.flags.length ? 0 : (rw.checkedIn ? 2 : 1);
-  const sortedRows = today.rows.slice().sort((a, b) => triage(a) - triage(b));
-  const rowsHtml = sortedRows.length ? sortedRows.map(rw => `
-    <div class="roster-row wellness-row ${rw.flags.length ? 'flagged' : ''}">
-      <span><strong>${esc(rw.profile.name)}</strong>${rw.profile.groupName ? ` <span class="muted">· ${esc(rw.profile.groupName)}</span>` : ''}</span>
-      ${rw.checkedIn
-        ? `<span class="muted">${checkinLine(rw.checkin)}</span><span>${flagBadges(rw.flags)}</span>`
-        : (rw.profile.linkedEmail
-          ? '<span class="muted">No check-in yet</span><span><span class="badge plain">MISSING</span></span>'
-          : '<span class="muted">No account linked — they cannot check in yet</span><span><span class="badge high">NOT LINKED</span></span>')}
-    </div>`).join('') : '<p class="muted">No athletes on the roster yet. Add them in Roster &amp; Groups and link their accounts so they can check in.</p>';
-  const sparkFor = (a) => {
-    const vals = a.days.map(d => d.sleep);
-    const pts = vals.map((v, i) => v == null ? null
-      : `${(2 + (i * 116) / Math.max(1, vals.length - 1)).toFixed(1)},${(30 - (v / 13) * 26).toFixed(1)}`).filter(Boolean).join(' ');
-    return pts ? `<svg width="120" height="32" viewBox="0 0 120 32" role="img" aria-label="Sleep hours, last 7 days"><polyline points="${pts}" fill="none" stroke="var(--scarlet)" stroke-width="2"/></svg>` : '<span class="muted">—</span>';
-  };
-  const trendsHtml = trends.athletes.length ? trends.athletes.map(a => `
-    <div class="roster-row">
-      <span><strong>${esc(a.profile.name)}</strong></span>
-      <span>${sparkFor(a)}</span>
-      <span class="muted">${a.days.map(d => d.sleep == null ? '–' : d.sleep).join(' · ')}</span>
-    </div>`).join('') : '<p class="muted">Nothing to trend yet.</p>';
-  const teamSleepPts = trends.team.filter(d => d.avgSleep != null).map(d => ({ week: d.date, value: d.avgSleep }));
-  const teamTrendHtml = teamSleepPts.length
-    ? lineChart([{ points: teamSleepPts, color: '#cc0033' }], { name: 'Avg sleep', unit: 'hrs', better: 'higher' }, true)
-    : '<p class="muted">No check-ins yet — the team trend appears once athletes start checking in.</p>';
-  el.innerHTML = `
-    <div class="stats-row">
-      <div class="stat-card"><span class="stat-num">${s.checkedIn}/${s.total}</span><span class="stat-label">Checked in today (${s.participation}%)</span></div>
-      <div class="stat-card"><span class="stat-num">${s.avgSleep == null ? '—' : s.avgSleep}</span><span class="stat-label">Avg sleep (hrs)</span></div>
-      <div class="stat-card"><span class="stat-num">${s.avgPain == null ? '—' : s.avgPain}</span><span class="stat-label">Avg body pain /10</span></div>
-      <div class="stat-card"><span class="stat-num">${s.avgEnergy == null ? '—' : s.avgEnergy}</span><span class="stat-label">Avg energy /5</span></div>
-      <div class="stat-card"><span class="stat-num">${s.flagged}</span><span class="stat-label">Flagged today</span></div>
-    </div>
-    <div class="card">
-      <h2>Today — ${esc(fmtDate(parseDate(today.date)))}</h2>
-      <p class="muted">Flags: slept under 6 hours · body pain 8–10 · energy 1–2. A head-symptoms report holds the athlete until clearance is recorded — work it from the athlete's AMS page.</p>
-      ${rowsHtml}
-    </div>
-    <div class="card">
-      <h2>Last 7 days</h2>
-      <p class="muted">Sleep hours per athlete, oldest to newest.</p>
-      ${trendsHtml}
-      <h3>Team average sleep by day</h3>
-      ${teamTrendHtml}
-    </div>`;
-}
+/* The standalone Wellness view was removed in v58 at AJ's word:
+   check-ins still live on Today, the flags still surface on
+   Today's Checklist and the AMS athlete page, and the
+   /api/wellness endpoints still serve them. Tab removal only. */
 
 /* ---------------- AMS (athlete management system) ----------------
    The coach-side home for one athlete: a roster table with the
