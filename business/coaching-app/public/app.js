@@ -2033,7 +2033,7 @@ async function renderCoachFormChecks() {
         <button class="btn primary" data-fc-reply="${fc.id}" type="button" style="width:auto">${fc.reply ? 'Update reply' : 'Save reply'}</button>
         <button class="btn secondary" data-fc-del="${fc.id}" type="button" style="width:auto">Delete</button>
       </p>
-    </div>`).join('') : '<p class="muted">No form checks yet — when a member sends a video, it lands here.</p>'}
+    </div>`).join('') : '<p class="muted">You\'re all caught up. When a member sends a video, it lands here.</p>'}
   </div>`;
   el.querySelectorAll('[data-fc-reply]').forEach(b => b.addEventListener('click', async () => {
     const row = b.closest('[data-fc-row]');
