@@ -24,6 +24,14 @@
   --card-gap: 14px;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .4);
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .4);
+  /* Motion tokens (v11 design pass): one duration scale and two
+     easings for the whole app, so movement feels like one system. */
+  --dur-fast: 100ms;
+  --dur-ui: 180ms;
+  --dur-page: 220ms;
+  --ease-std: cubic-bezier(.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, .2, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -956,10 +964,10 @@ details.card summary { cursor: pointer; }
 
 /* Micro-motion: cards rise in, views cross over, HARD badges breathe */
 @keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes badgePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
-.view.active .card { animation: riseIn .35s ease both; }
-.view.active { animation: viewIn .35s ease both; }
+.view.active .card { animation: riseIn .34s var(--ease-enter) both; animation-delay: var(--cd, 0ms); }
+.view.active { animation: viewIn .24s var(--ease-enter) both; }
 /* HARD is signalled statically: a pulsing badge on every row of a long
    list is constant repaint and visual noise on school iPads. */
 .badge.high { box-shadow: inset 0 0 0 1px var(--high); }
@@ -1630,7 +1638,7 @@ body.logged-out .primary-nav { display: none !important; }
 .landing-footer-strip {
   margin: 18px -16px -40px; padding: 18px 22px;
   background: #101114; border-top: 1px solid var(--line);
-  color: #fff; font-size: 15px; font-weight: 750; text-align: center;
+  color: #fff; font-size: 15px; font-weight: 500; text-align: center;
 }
 /* ---- v10 landing additions: parent clarity + proof + closing CTA ---- */
 .landing-forline {
@@ -1647,7 +1655,7 @@ body.logged-out .primary-nav { display: none !important; }
   display: grid; grid-template-columns: 1.2fr 1fr auto; align-items: center; gap: 10px;
   background: #101114; padding: 12px 14px;
 }
-.landing-sample-test { font-weight: 750; color: #fff; font-size: 14.5px; }
+.landing-sample-test { font-weight: 400; color: #fff; font-size: 14.5px; }
 .landing-sample-nums { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14.5px; }
 .landing-sample-nums strong { color: #fff; }
 .landing-sample-delta {
@@ -1792,3 +1800,119 @@ body.logged-out .primary-nav { display: none !important; }
   .sr-card { break-inside: avoid; }
   .sr-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ================================================================
+   v11 — visual + motion elevation pass.
+   One motion system (tokens in :root), transform/opacity only,
+   everything stilled by the global reduced-motion block above.
+   Landing: staged hero entrance, scroll-triggered reveals that
+   fire once and stay, and data typography on the report numbers.
+   App: dropdown menus and the phone sheet ease in instead of
+   snapping, the phone tab bar gets one travelling indicator, and
+   incoming views stagger their cards a breath apart (--cd, set
+   by showView). Type rule (AJ): regular text carries no bold —
+   headings, titles, buttons and data displays keep their weight,
+   so inline strongs in prose render at body weight below. ==== */
+#view-landing .card { animation: none; }
+#view-landing .landing-card { margin-bottom: 20px; }
+#view-landing li { line-height: 1.6; }
+
+/* ---- hero entrance: brand, eyebrow, headline, subline, actions
+   rise in sequence on load. Runs only when motion is welcome. -- */
+@keyframes heroIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  .landing-hero-content > * { animation: heroIn .35s var(--ease-enter) both; }
+  .landing-hero-content > :nth-child(2) { animation-delay: 40ms; }
+  .landing-hero-content > :nth-child(3) { animation-duration: .45s; animation-delay: 70ms; }
+  .landing-hero-content > :nth-child(4) { animation-delay: 130ms; }
+  .landing-hero-content > :nth-child(5) { animation-delay: 190ms; }
+  .landing-hero-content > :nth-child(6) { animation-duration: .25s; animation-delay: 250ms; }
+  .landing-hero-content > :nth-child(7) { animation-duration: .25s; animation-delay: 320ms; }
+  .landing-measure { animation: heroIn .4s var(--ease-enter) both; animation-delay: 340ms; }
+  .landing-measure:nth-child(2) { animation-delay: 400ms; }
+  .landing-measure:nth-child(3) { animation-delay: 460ms; }
+}
+
+/* ---- scroll reveals (landing): the hidden state exists only
+   under html.motion-ok, which app.js adds when motion is welcome
+   and IntersectionObserver exists. Revealed once, stays visible. */
+html.motion-ok [data-reveal] { opacity: 0; transform: translateY(14px); }
+html.motion-ok [data-reveal].rv-in {
+  opacity: 1; transform: translateY(0);
+  transition: opacity .42s var(--ease-std), transform .42s var(--ease-enter);
+}
+@media print { html.motion-ok [data-reveal] { opacity: 1 !important; transform: none !important; } }
+/* Inside a revealed block, small groups stagger by a step or two. */
+@keyframes itemIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes rowIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes chipIn { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
+html.motion-ok .landing-sample.rv-in .landing-sample-row { animation: rowIn .45s var(--ease-enter) both; }
+html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(2) { animation-delay: 60ms; }
+html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(3) { animation-delay: 120ms; }
+html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(4) { animation-delay: 120ms; }
+html.motion-ok .landing-sample.rv-in .landing-sample-delta { animation: chipIn .4s var(--ease-enter) both; animation-delay: 120ms; }
+html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(2) .landing-sample-delta { animation-delay: 180ms; }
+html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(3) .landing-sample-delta { animation-delay: 240ms; }
+html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(4) .landing-sample-delta { animation-delay: 240ms; }
+html.motion-ok .landing-card.rv-in .landing-tier { animation: itemIn .45s var(--ease-enter) both; }
+html.motion-ok .landing-card.rv-in .landing-tier:nth-child(2) { animation-delay: 60ms; }
+
+/* ---- report data typography: the improvement chip reads as a
+   chip, the best mark carries the row, prices align on a grid. -- */
+.landing-sample-delta { background: rgba(214, 243, 106, .1); padding: 3px 9px; border-radius: 999px; }
+.landing-sample-nums strong { font-size: 16.5px; font-weight: 800; letter-spacing: -.01em; }
+.landing-price { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+
+/* ---- navigation movement: dropdown menus ease open with their
+   items a step behind; the phone sheet drops the same way. ----- */
+@keyframes menuPop { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sheetDrop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.nav-group.open .nav-menu { animation: menuPop var(--dur-ui) var(--ease-enter) both; transform-origin: top left; }
+.nav-group.open .nav-item { animation: itemIn .22s var(--ease-enter) both; }
+.nav-group.open .nav-item:nth-child(2) { animation-delay: 20ms; }
+.nav-group.open .nav-item:nth-child(3) { animation-delay: 40ms; }
+.nav-group.open .nav-item:nth-child(4) { animation-delay: 60ms; }
+.nav-group.open .nav-item:nth-child(5) { animation-delay: 80ms; }
+.nav-group.open .nav-item:nth-child(6) { animation-delay: 100ms; }
+.nav-sheet:not([hidden]) { animation: sheetDrop .2s var(--ease-enter) both; }
+.nav-sheet:not([hidden]) > * { animation: itemIn .24s var(--ease-enter) both; }
+.nav-sheet:not([hidden]) > :nth-child(2) { animation-delay: 35ms; }
+.nav-sheet:not([hidden]) > :nth-child(3) { animation-delay: 70ms; }
+.nav-sheet:not([hidden]) > :nth-child(4) { animation-delay: 105ms; }
+.nav-sheet:not([hidden]) > :nth-child(5) { animation-delay: 140ms; }
+.nav-sheet:not([hidden]) > :nth-child(6) { animation-delay: 175ms; }
+
+/* ---- phone tab bar: one indicator that travels to the active
+   tab. app.js positions it and adds html.ind-on; until then the
+   per-tab bar above keeps doing the job. ----------------------- */
+.tabbar .tab-ind {
+  position: absolute; top: 0; left: 0; height: 3px; width: 40px;
+  border-radius: 0 0 3px 3px; background: var(--red); opacity: 0;
+  transition: transform .26s var(--ease-enter), width .26s var(--ease-enter), opacity .18s ease;
+  pointer-events: none;
+}
+.tabbar .tab.active::before { transition: opacity .18s ease; }
+html.ind-on .tabbar .tab.active::before { opacity: 0; }
+
+/* ---- micro-interactions: clickable rows lift a touch and their
+   arrow leans in; the invitation arrow steps forward on hover;
+   the This Week quick actions answer with a brighter edge. ----- */
+@media (hover: hover) {
+  .session-row:hover:not(:active), .menu-item:hover:not(:active) { transform: translateY(-2px); }
+  .menu-item:hover::after { transform: translateY(-54%) translateX(3px); color: var(--red-dark); }
+  .landing-cta:hover .cta-arrow { transform: translateX(3px); }
+}
+.menu-item::after { transition: transform var(--dur-ui) var(--ease-std), color var(--dur-ui) ease; }
+.cta-arrow { display: inline-block; margin-left: 2px; transition: transform var(--dur-ui) var(--ease-std); }
+.tw-actions .btn { transition: background-color var(--dur-ui) var(--ease-std), border-color var(--dur-ui) var(--ease-std), transform var(--dur-fast) ease; }
+@media (hover: hover) { .tw-actions .btn:hover { border-color: var(--red-dark); } }
+.btn:focus-visible, .tab:focus-visible, .nav-item:focus-visible,
+.seg-btn:focus-visible, .menu-item:focus-visible {
+  outline: 2px solid var(--red); outline-offset: 2px;
+}
+
+/* ---- AJ's type rule: prose runs at body weight. The strong tags
+   stay (semantics, and several strings are pinned), they simply
+   stop shouting. Data displays are not prose: the sample report's
+   best marks live outside p/li and keep their weight above. ---- */
+.view p strong, .view li strong { font-weight: 400; }

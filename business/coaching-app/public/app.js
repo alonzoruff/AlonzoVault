@@ -327,12 +327,12 @@ const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -422,6 +422,15 @@ function showView(name) {
   $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   closeNavMenus();
   renderSubnav(name, area);
+  positionTabIndicator();
+  /* Stagger the incoming view's cards a breath apart; the cap keeps
+     long views snappy. The CSS reads --cd as the riseIn delay. */
+  if (!prefersReducedMotion) {
+    const activeView = document.getElementById('view-' + name);
+    if (activeView) activeView.querySelectorAll('.card').forEach((c, i) => {
+      c.style.setProperty('--cd', Math.min(i, 6) * 45 + 'ms');
+    });
+  }
   /* The TV board takes over the whole screen: body.tv-mode hides
      the app chrome (CSS), and its timers run only while it shows. */
   document.body.classList.toggle('tv-mode', name === 'tv');
@@ -438,7 +447,6 @@ function showView(name) {
   if (name === 'top') renderTop();
   if (name === 'health') renderHealth();
   if (name === 'inventory') renderInventory();
-  if (name === 'wellness') renderWellness();
   if (name === 'attendance') renderAttendance();
   if (name === 'ams') renderAms();
   if (name === 'formcheckqueue') renderCoachFormChecks();
@@ -480,6 +488,52 @@ function countUp(el) {
     if (p < 1) requestAnimationFrame(tick);
   })(start);
 }
+
+/* ---------------- landing scroll reveals ----------------
+   Below-the-fold landing blocks rise in once as they approach the
+   viewport, then stay put. The hidden state only exists under
+   html.motion-ok, added here solely when motion is welcome and
+   IntersectionObserver exists — no JS or reduced motion means the
+   page is simply composed. The sample Speed Report values stay
+   static on purpose: they are labelled sample data, and trust
+   beats flash. */
+const revealEls = $$('#view-landing [data-reveal]');
+if (revealEls.length && !prefersReducedMotion && 'IntersectionObserver' in window) {
+  document.documentElement.classList.add('motion-ok');
+  const revealIo = new IntersectionObserver((entries) => {
+    entries.forEach(en => {
+      if (!en.isIntersecting) return;
+      en.target.classList.add('rv-in');
+      revealIo.unobserve(en.target);
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+  revealEls.forEach(el => revealIo.observe(el));
+}
+
+/* ---------------- phone tab bar indicator ----------------
+   One bar that travels to the active tab (transform/width only).
+   html.ind-on retires the per-tab bar once this one is live; if
+   anything here fails, the per-tab bar simply keeps working. */
+const tabBarEl = document.getElementById('tab-bar');
+function positionTabIndicator() {
+  if (!tabBarEl || !tabBarEl.offsetWidth) return;
+  let ind = tabBarEl.querySelector('.tab-ind');
+  if (!ind) {
+    ind = document.createElement('span');
+    ind.className = 'tab-ind';
+    ind.setAttribute('aria-hidden', 'true');
+    tabBarEl.appendChild(ind);
+    document.documentElement.classList.add('ind-on');
+  }
+  const act = tabBarEl.querySelector('.tab.active');
+  if (!act || !act.offsetWidth) { ind.style.opacity = '0'; return; }
+  const w = Math.round(act.offsetWidth * 0.56);
+  ind.style.width = w + 'px';
+  ind.style.transform = 'translateX(' + Math.round(act.offsetLeft + (act.offsetWidth - w) / 2) + 'px)';
+  ind.style.opacity = '1';
+}
+window.addEventListener('resize', positionTabIndicator);
+requestAnimationFrame(positionTabIndicator);
 
 /* ---------------- shared session rendering ---------------- */
 function badge(cns) {
@@ -793,12 +847,10 @@ async function renderCoachToday() {
     <p><button class="btn secondary" id="ct-open-health" type="button">Open Aches &amp; Pains</button></p>
     <h3>Daily wellness</h3>
     ${wellHtml}
-    <p><button class="btn secondary" id="ct-open-wellness" type="button">Open Wellness</button></p>
   </div>`;
   $('#ct-open-coach').addEventListener('click', () => { state.feedDate = data.date; renderCoach(); showView('coach'); });
   wireRunTodayButtons(el);
   $('#ct-open-health').addEventListener('click', () => { renderHealth(); showView('health'); });
-  $('#ct-open-wellness').addEventListener('click', () => { renderWellness(); showView('wellness'); });
 }
 function renderHomeLogs() {
   const el = $('#home-logs');
@@ -1268,7 +1320,7 @@ function renderAccount() {
     $('#account-main').innerHTML = `<div class="card">
       <p>Logged in as <strong>${esc(state.user.email)}</strong>.</p>
       <p>${state.user.role === 'coach' ? '<span class="badge high">COACH ACCOUNT</span>' : '<span class="badge low">NOT A COACH ACCOUNT</span>'}</p>
-      <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Member account: once your coach links this email to your name on the member roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. The rest of the program side stays coach-run.'} Your personal log entries and cross-training swaps save to this account.</p>
+      <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Member account: once your coach links this email to your name on the member roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. Your coach runs everything else.'} Your personal log entries and cross-training swaps save to this account.</p>
       <button class="btn" id="acct-logout" type="button">Log out</button>
       ${appVersionHtml()}</div>
       <div id="coach-accounts"></div>
@@ -1347,7 +1399,7 @@ function syncAuthUi() {
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
   renderMemberIntake();
-  renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderWellness(); renderAnnouncements(); renderCustomWorkouts();
+  renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderAnnouncements(); renderCustomWorkouts();
   renderPrograms(); renderCalendar();
   renderWarmupCards();
   if (isCoach) loadMedia();
@@ -1356,8 +1408,8 @@ function syncAuthUi() {
 /* ================================================================
    DAILY WELLNESS CHECK-IN — the one thing an athlete logs.
    One short screen: sleep, soreness, energy, and an optional
-   "something hurts". Coaches read it in the Wellness view and on
-   Coach Today. Check-in data is health data: it never appears on
+   "something hurts". Coaches read it on Coach
+   Today and in the AMS. Check-in data is health data: it never appears on
    any public or TV surface.
    ================================================================ */
 const CHECKIN_FLAG_LABELS = { 'low-sleep': 'Low sleep', 'high-soreness': 'Very sore', 'low-energy': 'Low energy' };
@@ -2289,69 +2341,6 @@ function checkinReportHtml(ci) {
     <p class="muted">${ci.totalCheckins} check-in${ci.totalCheckins === 1 ? '' : 's'} logged so far.</p>
     ${part}
     ${trend ? `<h3>Team average sleep by day</h3>${trend}` : ''}`;
-}
-
-/* Coach Wellness view: who checked in today, the flags, and the
-   last 7 days per athlete plus team averages. Coach-only. */
-async function renderWellness() {
-  const el = $('#wellness-main');
-  if (!el) return;
-  if (!isCoachUser()) { gateHtml(el, 'Daily wellness check-ins live here.'); return; }
-  let today, trends;
-  try {
-    [today, trends] = await Promise.all([api('/api/wellness/today'), api('/api/wellness/trends?days=7')]);
-  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-  const s = today.summary;
-  const flagBadges = (flags) => flags.length
-    ? flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ')
-    : '<span class="badge low">OK</span>';
-  const triage = (rw) => rw.flags.length ? 0 : (rw.checkedIn ? 2 : 1);
-  const sortedRows = today.rows.slice().sort((a, b) => triage(a) - triage(b));
-  const rowsHtml = sortedRows.length ? sortedRows.map(rw => `
-    <div class="roster-row wellness-row ${rw.flags.length ? 'flagged' : ''}">
-      <span><strong>${esc(rw.profile.name)}</strong>${rw.profile.groupName ? ` <span class="muted">· ${esc(rw.profile.groupName)}</span>` : ''}</span>
-      ${rw.checkedIn
-        ? `<span class="muted">Slept ${rw.checkin.sleep}h · Sore ${rw.checkin.soreness}/5 · Energy ${rw.checkin.energy}/5${rw.checkin.hurts && rw.checkin.painText ? ` · <strong>Hurts:</strong> ${esc(rw.checkin.painText)}` : ''}</span><span>${flagBadges(rw.flags)}</span>`
-        : (rw.profile.linkedEmail
-          ? '<span class="muted">No check-in yet</span><span><span class="badge plain">MISSING</span></span>'
-          : '<span class="muted">No account linked — they cannot check in yet</span><span><span class="badge high">NOT LINKED</span></span>')}
-    </div>`).join('') : '<p class="muted">No athletes on the roster yet. Add them in Roster &amp; Groups and link their accounts so they can check in.</p>';
-  const sparkFor = (a) => {
-    const vals = a.days.map(d => d.sleep);
-    const pts = vals.map((v, i) => v == null ? null
-      : `${(2 + (i * 116) / Math.max(1, vals.length - 1)).toFixed(1)},${(30 - (v / 13) * 26).toFixed(1)}`).filter(Boolean).join(' ');
-    return pts ? `<svg width="120" height="32" viewBox="0 0 120 32" role="img" aria-label="Sleep hours, last 7 days"><polyline points="${pts}" fill="none" stroke="var(--scarlet)" stroke-width="2"/></svg>` : '<span class="muted">—</span>';
-  };
-  const trendsHtml = trends.athletes.length ? trends.athletes.map(a => `
-    <div class="roster-row">
-      <span><strong>${esc(a.profile.name)}</strong></span>
-      <span>${sparkFor(a)}</span>
-      <span class="muted">${a.days.map(d => d.sleep == null ? '–' : d.sleep).join(' · ')}</span>
-    </div>`).join('') : '<p class="muted">Nothing to trend yet.</p>';
-  const teamSleepPts = trends.team.filter(d => d.avgSleep != null).map(d => ({ week: d.date, value: d.avgSleep }));
-  const teamTrendHtml = teamSleepPts.length
-    ? lineChart([{ points: teamSleepPts, color: '#cc0033' }], { name: 'Avg sleep', unit: 'hrs', better: 'higher' }, true)
-    : '<p class="muted">No check-ins yet — the team trend appears once athletes start checking in.</p>';
-  el.innerHTML = `
-    <div class="stats-row">
-      <div class="stat-card"><span class="stat-num">${s.checkedIn}/${s.total}</span><span class="stat-label">Checked in today (${s.participation}%)</span></div>
-      <div class="stat-card"><span class="stat-num">${s.avgSleep == null ? '—' : s.avgSleep}</span><span class="stat-label">Avg sleep (hrs)</span></div>
-      <div class="stat-card"><span class="stat-num">${s.avgSoreness == null ? '—' : s.avgSoreness}</span><span class="stat-label">Avg soreness /5</span></div>
-      <div class="stat-card"><span class="stat-num">${s.avgEnergy == null ? '—' : s.avgEnergy}</span><span class="stat-label">Avg energy /5</span></div>
-      <div class="stat-card"><span class="stat-num">${s.flagged}</span><span class="stat-label">Flagged today</span></div>
-    </div>
-    <div class="card">
-      <h2>Today — ${esc(fmtDate(parseDate(today.date)))}</h2>
-      <p class="muted">Flags: slept under 6 hours · soreness 4–5 · energy 1–2. A "hurts" report also lands in Aches &amp; Pains for follow-up.</p>
-      ${rowsHtml}
-    </div>
-    <div class="card">
-      <h2>Last 7 days</h2>
-      <p class="muted">Sleep hours per athlete, oldest to newest.</p>
-      ${trendsHtml}
-      <h3>Team average sleep by day</h3>
-      ${teamTrendHtml}
-    </div>`;
 }
 
 /* ---------------- attendance (coach roll-book) ----------------
