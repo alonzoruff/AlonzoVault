@@ -126,10 +126,10 @@
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <p class="view-sub muted">Watch how it is done, look up any word, and fuel the work.</p>
     <div class="menu-list">
-      <button type="button" class="menu-item" data-view="libraryhome">Library <span>The whole library in one place — search everything, follow a learning path, watch Coach's Corner</span></button>
-      <button type="button" class="menu-item" data-view="videos">Videos <span>Watch a demo of any drill or lift</span></button>
-      <button type="button" class="menu-item" data-view="definitions">Definitions <span>Every term in plain language, with the coaching cue</span></button>
-      <button type="button" class="menu-item" data-view="exercises">Exercise Library <span>Movements saved from Instagram, with cues and sources</span></button>
+      <button type="button" class="menu-item" data-view="libraryhome">Library <span>The whole library in one place — search everything, follow a learning path, watch Coach's Corner<em class="menu-count" id="lc-paths"></em></span></button>
+      <button type="button" class="menu-item" data-view="videos">Videos <span>Watch a demo of any drill or lift<em class="menu-count" id="lc-videos"></em></span></button>
+      <button type="button" class="menu-item" data-view="definitions">Definitions <span>Every term in plain language, with the coaching cue<em class="menu-count" id="lc-defs"></em></span></button>
+      <button type="button" class="menu-item" data-view="exercises">Exercise Library <span>Movements saved from Instagram, with cues and sources<em class="menu-count" id="lc-ex"></em></span></button>
       <button type="button" class="menu-item" data-view="nutrition">Nutrition <span>What to eat and when — practice days and meet days</span></button>
       <button type="button" class="menu-item" data-view="education">Coach Education <span>Clinics and courses for coaches</span></button>
       <button type="button" class="menu-item" data-view="guide">How to use this app <span>The whole system in plain words</span></button>
@@ -149,8 +149,7 @@
       <button type="button" class="menu-item" data-view="programs">Programs <span>Reusable week-by-week training templates — build once, apply to any group</span></button>
       <button type="button" class="menu-item" data-view="calendar">Team Calendar <span>The whole month at a glance: every group's sessions, meets, and test days</span></button>
       <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
-      <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, attention flags, and the full picture — wellness, testing, meets, attendance, health, goals, and private coach notes</span></button>
-      <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book — present, late, excused, absent — and every athlete's record</span></button>
+      <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, attention flags, and the full picture — wellness, testing, meets, health, goals, and private coach notes</span></button>
       <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
       <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
       <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked — the same board the athletes see</span></button>
@@ -160,9 +159,8 @@
       <button type="button" class="menu-item" data-view="records">School Records <span>Manage the all-time top 10 board</span></button>
       <button type="button" class="menu-item" data-view="reports">Reports <span>Team trends, completion and load charts, and athlete report cards</span></button>
       <button type="button" class="menu-item" data-view="digest">Weekly Digest <span>Last week at a glance — check-ins, training, PRs, health — and the week coming</span></button>
-      <button type="button" class="menu-item" data-view="wellness">Daily Wellness <span>Who checked in today — sleep, soreness, and energy, with flags</span></button>
+      <button type="button" class="menu-item" data-view="wellness">Daily Wellness <span>Who checked in today — sleep, body pain, and energy, with flags</span></button>
       <button type="button" class="menu-item" data-view="announce">Announcements <span>One-way posts to the whole team or a single group — athletes read them on Today</span></button>
-      <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
       <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
       <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
       <button type="button" class="menu-item" data-view="devices">Devices <span>ForceDecks, NordBord, and T-APEX: import each device's results file and they land in every athlete's testing history, labeled by device</span></button>
@@ -433,6 +431,15 @@
     <div class="subnav-slot"></div>
     <p class="view-sub muted">What to eat and when — on practice days, meet days, and lifting days.</p>
     <p class="muted">Fueling education for Cadet sprinters — principles, plates, and timing. No diet plans and no calorie counting: eat to match the work, protein at every meal, and never train on empty. Ranges below are general education guidelines for hard-training athletes, in the coach's words.</p>
+    <div class="chip-row nu-jump-row" aria-label="Jump to a nutrition card">
+      <button type="button" class="chip" data-nu-jump="nu-daily-fueling">Daily fueling</button>
+      <button type="button" class="chip" data-nu-jump="nu-before-practice">Before practice</button>
+      <button type="button" class="chip" data-nu-jump="nu-recovery-fueling">Recovery</button>
+      <button type="button" class="chip" data-nu-jump="nu-hydration">Hydration</button>
+      <button type="button" class="chip" data-nu-jump="nu-meet-day-timeline">Meet day</button>
+      <button type="button" class="chip" data-nu-jump="nu-weight-room-fueling">Weight room days</button>
+      <button type="button" class="chip" data-nu-jump="nu-supplements">Supplements</button>
+    </div>
 
     <article class="nu-card nu-scarlet" id="nu-daily-fueling">
       <h2>1 · Daily Fueling for Sprinters</h2>
@@ -636,16 +643,6 @@
     <div id="top-main"></div>
   </section>
 
-  <!-- HEALTH -->
-  <section id="view-health" class="view">
-    <h1>Aches &amp; Pains</h1>
-    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <div class="subnav-slot"></div>
-    <p class="view-sub muted">Record what an athlete reports to you, and track it until it clears.</p>
-    <p class="muted">Your private notebook: record what an athlete reports to you — an ache, a pain, something tight — and track it until it clears. Athletes never see this; it is coach-only.</p>
-    <div id="health-main"></div>
-  </section>
-
   <!-- GROUPS (coach) -->
   <section id="view-groups" class="view">
     <h1>Roster &amp; Groups</h1>
@@ -733,17 +730,8 @@
     <h1>Daily Wellness</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The daily check-in: how every athlete slept, how sore they are, and their energy — flagged before practice starts. Coaches only.</p>
+    <p class="view-sub muted">The daily check-in: how every athlete slept, their body pain (1–10), and their energy — flagged before practice starts. Coaches only.</p>
     <div id="wellness-main"></div>
-  </section>
-
-  <!-- ATTENDANCE (coach) -->
-  <section id="view-attendance" class="view">
-    <h1>Attendance</h1>
-    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <div class="subnav-slot"></div>
-    <p class="view-sub muted">The daily roll-book: who is here, who is late, who is excused, and who is absent. Every tap saves on its own. Coaches only — athletes never see this.</p>
-    <div id="attendance-main"></div>
   </section>
 
   <!-- AMS (coach) -->
@@ -751,7 +739,7 @@
     <h1>AMS</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The athlete-management home: the whole roster with status and attention flags, and one page per athlete — wellness, testing, meet results, attendance, health, goals, and private coach notes. Coaches only.</p>
+    <p class="view-sub muted">The athlete-management home: the whole roster with status and attention flags, and one page per athlete — wellness, testing, meet results, health, goals, and private coach notes. Coaches only.</p>
     <div id="ams-main"></div>
   </section>
 
@@ -782,6 +770,10 @@
     <div class="subnav-slot"></div>
     <p class="view-sub muted">The 16 standard drills — how each one goes, and a demo for most of them.</p>
     <p class="muted">The standard warm-up series. Part A warms up, Part B mobilizes and drills sprint mechanics.</p>
+    <div class="filters card">
+      <input id="drill-search" type="search" placeholder="Search drills (try “A-skip”, “hip”, “ankle”)">
+      <p id="drill-count" class="muted"></p>
+    </div>
     <div id="drill-list"></div>
   </section>
 
@@ -958,7 +950,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v55">Cadets Sprint · App v55</div>
+  <div class="app-version" data-app-version="v57">Cadets Sprint · App v57</div>
 </footer>
 
 <script src="/app.js"></script>

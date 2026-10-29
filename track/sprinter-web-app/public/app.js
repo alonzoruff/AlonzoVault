@@ -151,8 +151,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v55';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v55';
+const APP_VERSION = 'v57';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v57';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -339,13 +339,13 @@ const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', race: 'train', records: 'train', leaderboard: 'train',
   libraryhome: 'learn', videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', attendance: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', wellness: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
   privacy: 'account',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training'], ['race', 'Race Strategy']],
   learn: [['libraryhome', 'Library'], ['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['wellness', 'Wellness'], ['announce', 'Announcements'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -448,10 +448,8 @@ function showView(name) {
   if (name === 'groups') renderGroups();
   if (name === 'testing') renderTesting();
   if (name === 'top') renderTop();
-  if (name === 'health') renderHealth();
   if (name === 'inventory') renderInventory();
   if (name === 'wellness') renderWellness();
-  if (name === 'attendance') renderAttendance();
   if (name === 'ams') renderAms();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
@@ -529,6 +527,23 @@ function sessionStructureHtml(s) {
     ${b.meta ? `<p class="muted">${esc(b.meta)}</p>` : ''}
     <ul class="nu-list">${(b.lines || []).map(l => `<li>${decorateText(l)}</li>`).join('')}</ul>`).join('');
 }
+/* "Keep learning" block on the workout detail (v57): the app is a
+   resource for getting better, not just a list — every workout now
+   points onward to the definition of its training type, the demo
+   library, and the full glossary. Purely additive links; the detail
+   card above renders exactly as before. */
+function sessionLearnHtml(s) {
+  const gloss = (state.content && state.content.glossary) || [];
+  const qLabel = labelQuality(s.quality);
+  const term = gloss.find(e => e.term.toLowerCase() === qLabel.toLowerCase())
+    || gloss.find(e => e.term.toLowerCase() === String(s.name || '').toLowerCase());
+  return `<h3>Keep learning</h3>
+    <div class="filter-row">
+      ${term ? `<button class="btn secondary" id="detail-def" data-term="${esc(term.term)}" type="button">What is “${esc(term.term)}”?</button>` : ''}
+      <button class="btn secondary" id="detail-videos" type="button">Watch demo videos</button>
+      <button class="btn secondary" id="detail-defs" type="button">Browse all definitions</button>
+    </div>`;
+}
 function sessionDetailHtml(s) {
   const row = (k, v) => v ? `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
   return `<div class="card">
@@ -550,6 +565,7 @@ function sessionDetailHtml(s) {
     </dl>
     <h3>Coaching cues</h3><p>${decorateText(s.coaching_cues)}</p>
     ${sessionStructureHtml(s)}
+    ${sessionLearnHtml(s)}
     <p class="muted">Source: ${esc(s.source)}</p>
     ${s.source_url ? `<p class="muted">From Instagram: <a href="${esc(s.source_url)}" target="_blank" rel="noopener">@${esc(s.source_username || '')}</a></p>` : ''}
   </div>`;
@@ -576,6 +592,16 @@ function openSession(id) {
   });
   const runBtn = $('#detail-run');
   if (runBtn) runBtn.addEventListener('click', () => openRunner(sessionToRunnerPlan(s)));
+  const defBtn = $('#detail-def');
+  if (defBtn) defBtn.addEventListener('click', () => openLibraryItem(libItemKey('definition', defBtn.dataset.term)));
+  const vidBtn = $('#detail-videos');
+  if (vidBtn) vidBtn.addEventListener('click', () => {
+    state.vidCat = 'All'; state.vidQuery = '';
+    const vs = $('#vid-search'); if (vs) vs.value = '';
+    showView('videos'); renderVideos();
+  });
+  const defsBtn = $('#detail-defs');
+  if (defsBtn) defsBtn.addEventListener('click', () => showView('definitions'));
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -584,6 +610,28 @@ document.addEventListener('click', (e) => {
   const codeEl = e.target.closest('[data-code]');
   if (codeEl) openSession(codeEl.dataset.code);
 });
+/* Nutrition jump chips (v57): the six fueling cards are long; the
+   chips at the top of the Nutrition view scroll straight to one
+   card and flash it, reusing the library flash. Delegated because
+   the Nutrition view's innerHTML is re-serialized at boot by the
+   tap-a-term decorator, which would drop direct listeners. */
+document.addEventListener('click', (e) => {
+  const j = e.target.closest('[data-nu-jump]');
+  if (!j) return;
+  const el = document.getElementById(j.dataset.nuJump);
+  if (el) flashLibEl(el);
+});
+/* Learn hub counts (v57): the hub menu now says how much is behind
+   each door — real counts from the loaded content, filled once at
+   boot. Empty content leaves the plain label untouched. */
+function fillLearnCounts() {
+  const c = state.content || {};
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  if ((c.videoLibrary || []).length) set('lc-videos', ` · ${c.videoLibrary.length} videos`);
+  if ((c.glossary || []).length) set('lc-defs', ` · ${c.glossary.length} terms`);
+  if ((c.exerciseLibrary || []).length) set('lc-ex', ` · ${c.exerciseLibrary.length} movements`);
+  if ((c.learningPaths || []).length) set('lc-paths', ` · ${c.learningPaths.length} learning paths`);
+}
 
 /* ---------------- home ---------------- */
 /* "Start here" strip: three plain first steps for a new visitor.
@@ -609,6 +657,79 @@ function openWarmupCard() {
     const el = document.getElementById(cardId);
     if (el) el.scrollIntoView({ block: 'start' });
   });
+}
+
+/* ---------------- home: "Get better today" learning card (v57) ----
+   AJ's direction: the app is a resource athletes use to get better
+   and LEARN, not just a schedule. This card sits on Today under the
+   day's workout: a rotating Word of the Day from the glossary (with
+   its coaching cue), four big tiles into the learning surfaces, and
+   a fuel prompt matched to whether today is a hard or easy day.
+   Everything is a link into an existing view — no new data, no new
+   endpoints, and nothing here pre-fills or records anything. */
+function dayOfYear(d) {
+  const start = new Date(d.getFullYear(), 0, 0);
+  return Math.floor((d - start) / 86400000);
+}
+function wotdEntry() {
+  const gloss = (state.content && state.content.glossary) || [];
+  if (!gloss.length) return null;
+  const idx = (((dayOfYear(new Date()) + (state.wotdSkip || 0)) % gloss.length) + gloss.length) % gloss.length;
+  return gloss[idx];
+}
+function wotdHtml() {
+  const e = wotdEntry();
+  if (!e) return '';
+  const def = e.definition.length > 200 ? e.definition.slice(0, 197).trimEnd() + '…' : e.definition;
+  return `<div class="wotd" id="wotd-block">
+    <div class="wotd-label">Word of the day · ${esc(e.category)}</div>
+    <div class="wotd-term">${esc(e.term)}</div>
+    <p class="wotd-def">${esc(def)}</p>
+    ${e.cues ? `<p class="wotd-cue"><strong>Cue:</strong> ${esc(e.cues)}</p>` : ''}
+    <div class="filter-row">
+      <button class="btn secondary" id="wotd-open" type="button">Full definition</button>
+      <button class="btn secondary" id="wotd-next" type="button">Another word</button>
+    </div>
+  </div>`;
+}
+function wireWotd() {
+  const open = $('#wotd-open');
+  if (open) open.addEventListener('click', () => {
+    const e = wotdEntry();
+    if (e) openLibraryItem(libItemKey('definition', e.term));
+  });
+  const next = $('#wotd-next');
+  if (next) next.addEventListener('click', () => {
+    state.wotdSkip = (state.wotdSkip || 0) + 1;
+    const block = $('#wotd-block');
+    if (!block) return;
+    const fresh = document.createElement('div');
+    fresh.innerHTML = wotdHtml();
+    if (fresh.firstElementChild) { block.replaceWith(fresh.firstElementChild); wireWotd(); }
+  });
+}
+function homeLearnHtml(info, inSeason) {
+  const hard = !!(inSeason && info && info.isHigh);
+  const fuelId = hard ? 'nu-recovery-fueling' : 'nu-daily-fueling';
+  const fuelTitle = hard ? 'Fuel the hard day' : 'Fuel the day';
+  const fuelText = hard
+    ? 'Hard day: protein + carbs together within the hour after practice, then a real dinner at home.'
+    : 'The everyday plate: protein at every meal, carbs matched to the work, breakfast non-negotiable.';
+  return `<div class="card learn-card">
+    <h2>Get better today</h2>
+    <p class="muted">This app is here to make you better — learn the words, watch the demos, know the plan. Start with today's word.</p>
+    ${wotdHtml()}
+    <div class="learn-tiles">
+      <button type="button" class="learn-tile" data-view="drills"><strong>Warm-Up Drills</strong><span>Every drill, with a demo video</span></button>
+      <button type="button" class="learn-tile" data-view="videos"><strong>Video Library</strong><span>Watch any lift or drill done right</span></button>
+      <button type="button" class="learn-tile" data-view="libraryhome"><strong>Learning Paths</strong><span>Short guided routes, step by step</span></button>
+      <button type="button" class="learn-tile" data-view="race"><strong>Race Strategy</strong><span>How every race is run — plus the split calculator</span></button>
+    </div>
+    <div class="learn-fuel">
+      <div><strong>${fuelTitle}</strong><span class="muted">${fuelText}</span></div>
+      <button class="btn secondary" id="home-fuel" data-fuel-target="${fuelId}" type="button">Open Nutrition</button>
+    </div>
+  </div>`;
 }
 
 function renderHome() {
@@ -667,6 +788,7 @@ function renderHome() {
       </ol>
     </div>`;
 
+  const todayInfo = inSeason ? dayInfo(wk, todayKey) : null;
   $('#home-content').removeAttribute('aria-busy');
   $('#home-content').innerHTML = `
     ${LANE_DIVIDER}
@@ -674,6 +796,7 @@ function renderHome() {
     ${isCoachUser() ? '<div id="coach-today"></div>' : ''}
     ${todayHtml}
     ${startStrip}
+    ${homeLearnHtml(todayInfo, inSeason)}
     <div class="card">
       <div class="hero-stats">
         <div class="hero-stat"><span class="stat-num" data-count="${c.sessions.length}">0</span><span class="stat-label">workouts</span></div>
@@ -705,6 +828,12 @@ function renderHome() {
   $('#home-open-season').addEventListener('click', () => { state.week = wkNum; renderSeason(); showView('season'); });
   const warmBtn = $('#home-warmup-card');
   if (warmBtn) warmBtn.addEventListener('click', openWarmupCard);
+  wireWotd();
+  const fuelBtn = $('#home-fuel');
+  if (fuelBtn) fuelBtn.addEventListener('click', () => {
+    showView('nutrition');
+    requestAnimationFrame(() => flashLibEl(document.getElementById(fuelBtn.dataset.fuelTarget)));
+  });
   const dismissBtn = $('#start-dismiss');
   if (dismissBtn) dismissBtn.addEventListener('click', () => {
     dismissStartHere();
@@ -765,12 +894,12 @@ async function renderCoachToday() {
     <div class="roster-row">
       <span>${c.flagged ? '🚩 ' : ''}<strong>${esc(c.athleteName)}</strong> — ${c.source === 'athlete' ? 'athlete reported: ' + esc(c.note || 'something hurts') : `${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}), pain ${c.pain}/10`}${c.impact === 'stopped' ? ' · stopped training' : ''}</span>
       <span class="badge ${c.status === 'new' ? 'high' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
-    </div>`).join('') + (open.length > 8 ? `<p class="muted">…and ${open.length - 8} more open in Aches &amp; Pains.</p>` : '')
+    </div>`).join('') + (open.length > 8 ? `<p class="muted">…and ${open.length - 8} more open — work them from the athlete's AMS page.</p>` : '')
     : '<p class="muted">No open health flags. Good news.</p>';
   const heldList = data.heldAthletes || [];
   const heldHtml = heldList.length ? `<h3>Held — clearance required (${heldList.length})</h3>`
     + heldList.map(h => `<div class="roster-row"><span>⛔ <strong>${esc(h.name)}</strong></span><span class="badge high">HELD</span></div>`).join('')
-    + '<p class="muted">Head-related concern open. The hold lifts only when written clearance from a licensed provider is recorded on the concern in Aches &amp; Pains.</p>' : '';
+    + '<p class="muted">Head-related concern open. The hold lifts only when written clearance from a licensed provider is recorded on the concern, on the AMS athlete page.</p>' : '';
   const w = data.wellness || { checkedIn: 0, total: 0, flagged: [] };
   const wellHtml = w.total
     ? `<p>Wellness: <strong>${w.checkedIn}/${w.total} checked in</strong>${w.flagged.length ? ` · ${w.flagged.length} flagged` : ''}</p>`
@@ -786,14 +915,14 @@ async function renderCoachToday() {
     <h3>Health flags${open.length ? ` (${open.length} open)` : ''}</h3>
     ${healthHtml}
     ${heldHtml}
-    <p><button class="btn secondary" id="ct-open-health" type="button">Open Aches &amp; Pains</button></p>
+    <p><button class="btn secondary" id="ct-open-ams" type="button">Open AMS — work concerns &amp; clearances</button></p>
     <h3>Daily wellness</h3>
     ${wellHtml}
     <p><button class="btn secondary" id="ct-open-wellness" type="button">Open Wellness</button></p>
   </div>`;
   $('#ct-open-coach').addEventListener('click', () => { state.feedDate = data.date; renderCoach(); showView('coach'); });
   wireRunTodayButtons(el);
-  $('#ct-open-health').addEventListener('click', () => { renderHealth(); showView('health'); });
+  $('#ct-open-ams').addEventListener('click', () => { state.amsProfileId = null; renderAms(); showView('ams'); });
   $('#ct-open-wellness').addEventListener('click', () => { renderWellness(); showView('wellness'); });
 }
 function renderHomeLogs() {
@@ -909,10 +1038,21 @@ function fillLibFilters() {
 
 /* ---------------- drills + 400m ---------------- */
 function renderDrills() {
+  /* v57: a search box over the 16 drills (name, cue, distance) so an
+     athlete can find the one drill they need mid-warm-up instead of
+     scrolling the whole series. Unfiltered, this renders exactly
+     the grouped list it always has. */
+  const q = (state.drillQuery || '').trim().toLowerCase();
+  const all = state.content.drills;
+  const list = q
+    ? all.filter(d => (d.name + ' ' + d.coaching_cue + ' ' + d.distance_or_reps).toLowerCase().includes(q))
+    : all;
+  const countEl = $('#drill-count');
+  if (countEl) countEl.textContent = `Showing ${list.length} of ${all.length} drills.`;
   const byCat = {};
-  for (const d of state.content.drills) { (byCat[d.category] = byCat[d.category] || []).push(d); }
+  for (const d of list) { (byCat[d.category] = byCat[d.category] || []).push(d); }
   const catName = { general: 'Part A — general warm-up', dynamic_stretch: 'Part B — dynamic mobility', sprint_drill: 'Part B — sprint drills' };
-  $('#drill-list').innerHTML = Object.keys(byCat).map(cat => `
+  $('#drill-list').innerHTML = list.length ? Object.keys(byCat).map(cat => `
     <h2>${esc(catName[cat] || cat)}</h2>
     ${LANE_DIVIDER}
     ${byCat[cat].map(d => `<div class="card drill-card" data-drill="${esc(d.id)}">
@@ -924,7 +1064,13 @@ function renderDrills() {
         ${demoHtml(d.id, d.name)}
       </div>
     </div>`).join('')}
-  `).join('');
+  `).join('') : '<p class="muted">No drills match that search.</p><button class="btn secondary" id="drill-clear" type="button">Clear search</button>';
+  const clearBtn = $('#drill-clear');
+  if (clearBtn) clearBtn.addEventListener('click', () => {
+    state.drillQuery = '';
+    const s = $('#drill-search'); if (s) s.value = '';
+    renderDrills();
+  });
 }
 function renderQtr() {
   const qtrs = state.content.sessions.filter(s => s.id.startsWith('QTR-'));
@@ -2047,7 +2193,8 @@ function renderPrivacy() {
   el.innerHTML = `
     <div class="card">
       <h2>What this app holds</h2>
-      <p>This is the St. John's track &amp; field team app. For each athlete it can hold: their name, team group and events, and school email; daily wellness check-ins (sleep, soreness, energy, and a note when something hurts); health concerns a coach or the athlete reports; training and testing results; meet results; attendance; and the coach's training notes.</p>
+      <p>This is the St. John's track &amp; field team app. For each athlete it can hold: their name, team group and events, and school email; daily wellness check-ins (sleep, body pain from 1 to 10, energy, and a yes/no answer about head symptoms); health concerns — above all the head-symptom reports described below, which the coaching staff work through with the athlete; training and testing results; meet results; and the coach's training notes.</p>
+      <p>When an athlete reports body pain of 8 or higher in a check-in, the coaching staff see a high-pain flag on their screens so someone follows up with the athlete in person. Athletes never see that flag, and it never appears on the TV boards or leaderboards.</p>
       <h2>Who can see it</h2>
       <p>Only the coaching staff, through their coach accounts. Athletes can see their own check-ins, their own lifting loads, their goals, and team meet results. Health details — check-ins, concerns, coach notes — are never shown on the weight-room TV boards, never on leaderboards, and never to other athletes.</p>
       <h2>Sharing for safety</h2>
@@ -2079,7 +2226,7 @@ function renderAccount() {
     $('#account-main').innerHTML = `<div class="card">
       <p>Logged in as <strong>${esc(state.user.email)}</strong>.</p>
       <p>${state.user.role === 'coach' ? '<span class="badge high">COACH ACCOUNT</span>' : '<span class="badge low">NOT A COACH ACCOUNT</span>'}</p>
-      <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Athlete account: once your coach links this email to your name on the team roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. The rest of the team side stays coach-run.'} Your personal log entries and cross-training swaps save to this account.</p>
+      <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Athlete account: once your coach links this email to your name on the team roster, you can log the daily wellness check-in (sleep, body pain, energy) on the Today page. The rest of the team side stays coach-run.'} Your personal log entries and cross-training swaps save to this account.</p>
       <button class="btn" id="acct-logout" type="button">Log out</button>
       <button class="btn secondary" type="button" data-view="privacy">Privacy &amp; Safety</button>
       ${appVersionHtml()}</div>
@@ -2137,7 +2284,7 @@ function syncAuthUi() {
   const isCoach = !!(state.user && state.user.role === 'coach');
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
-  renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
+  renderGroups(); renderCoach(); renderTesting(); renderTop(); renderInventory();
   renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderWellness(); renderAnnouncements(); renderCustomWorkouts();
   renderPrograms(); renderCalendar();
   renderWarmupCards();
@@ -2146,16 +2293,44 @@ function syncAuthUi() {
 
 /* ================================================================
    DAILY WELLNESS CHECK-IN — the one thing an athlete logs.
-   One short screen: sleep, soreness, energy, and an optional
-   "something hurts". Coaches read it in the Wellness view and on
-   Coach Today. Check-in data is health data: it never appears on
-   any public or TV surface.
+   One short screen: sleep, body pain (1–10), energy, and a yes/no
+   head-symptoms question (a yes files the concern that holds the
+   athlete until clearance). Coaches read it in the Wellness view
+   and on Coach Today. Check-in data is health data: it never
+   appears on any public or TV surface.
    ================================================================ */
-const CHECKIN_FLAG_LABELS = { 'low-sleep': 'Low sleep', 'high-soreness': 'Very sore', 'low-energy': 'Low energy' };
+const CHECKIN_FLAG_LABELS = { 'low-sleep': 'Low sleep', 'high-pain': 'High pain', 'low-energy': 'Low energy',
+  /* Legacy display only: pre-v56 records flagged on soreness. */
+  'high-soreness': 'Very sore' };
 function isAthleteUser() { return !!(state.user && state.user.role === 'athlete'); }
 function checkinLine(c) {
-  return `Slept ${c.sleep}h · Soreness ${c.soreness}/5 · Energy ${c.energy}/5`
+  /* Current records carry pain (1–10); pre-v56 records carry
+     soreness (1–5) and maybe a "hurts" note — render whichever
+     shape the record actually holds, never a blank. */
+  const mid = typeof c.pain === 'number'
+    ? `Body pain ${c.pain}/10`
+    : (c.soreness != null ? `Soreness ${c.soreness}/5` : 'Body pain —');
+  return `Slept ${c.sleep}h · ${mid} · Energy ${c.energy}/5`
+    + (c.headSymptoms ? ' · Head symptoms reported' : '')
     + (c.hurts && c.painText ? ` · Hurts: ${esc(c.painText)}` : '');
+}
+
+/* Last-7-days check-in dots (v57): progress an athlete can SEE.
+   Filled = a check-in exists for that day; today is outlined.
+   Reads only the athlete's own entries — nothing is recorded or
+   pre-filled by drawing the dots. */
+function checkinWeekHtml(mine, todayDateStr, doneToday) {
+  const done = new Set((mine && mine.entries ? mine.entries : []).map(e => e.date));
+  if (doneToday) done.add(todayDateStr);
+  const base = parseDate(todayDateStr);
+  if (!base || isNaN(base)) return '';
+  const cells = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() - i);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    cells.push(`<span class="ci-dot ${done.has(key) ? 'on' : ''} ${i === 0 ? 'today' : ''}" title="${esc(fmtDate(d))}">${'SMTWTFS'[d.getDay()]}</span>`);
+  }
+  return `<div class="ci-week" aria-label="Your check-ins over the last 7 days">${cells.join('')}<span class="ci-week-label">last 7 days</span></div>`;
 }
 
 async function renderCheckin() {
@@ -2182,11 +2357,11 @@ async function renderCheckin() {
       slot.innerHTML = `<div class="card checkin-card">
         <h2>Daily Check-In</h2>
         <p><strong>Ask your coach to link your account.</strong></p>
-        <p class="muted">Once your coach links this email (${esc(state.user.email)}) to your name on the team roster, you can log your daily check-in here — sleep, soreness, and energy in under 20 seconds.</p>
+        <p class="muted">Once your coach links this email (${esc(state.user.email)}) to your name on the team roster, you can log your daily check-in here — sleep, body pain, and energy in under 20 seconds.</p>
       </div>`;
     } else {
       const c = today.checkin;
-      const tapRow = (name, val) => [1, 2, 3, 4, 5].map(n =>
+      const tapRow = (name, val, max) => Array.from({ length: max }, (_, i) => i + 1).map(n =>
         `<button type="button" class="tap-btn ${n === val ? 'on' : ''}" data-ci="${name}" data-val="${n}">${n}</button>`).join('');
       slot.innerHTML = `<div class="card checkin-card">
         <h2>Daily Check-In ${c ? '<span class="badge low">DONE TODAY ✓</span>' : ''}</h2>
@@ -2194,22 +2369,19 @@ async function renderCheckin() {
         ${today.held && today.held.held ? `<div class="ci-held"><strong>You are paused from training.</strong> ${esc(today.held.message || '')}</div>` : ''}
         ${CHECKIN_SAFETY_NOTICE}
         ${mine && mine.streak ? `<p class="checkin-streak">🔥 Checked in ${mine.streak} day${mine.streak === 1 ? '' : 's'} in a row</p>` : ''}
+        ${checkinWeekHtml(mine, today.date, !!c)}
         <div class="ci-label">Sleep last night</div>
         <div class="ci-stepper">
           <button type="button" class="tap-btn" id="ci-sleep-minus" aria-label="Less sleep">−</button>
           <span class="ci-sleep-val" id="ci-sleep-val">${c ? c.sleep + ' hrs' : '— hrs'}</span>
           <button type="button" class="tap-btn" id="ci-sleep-plus" aria-label="More sleep">+</button>
         </div>
-        <div class="ci-label">How sore are you? <span class="muted">(1 = fresh, 5 = very sore)</span></div>
-        <div class="ci-taps">${tapRow('soreness', c ? c.soreness : null)}</div>
+        <div class="ci-label">Body pain today <span class="muted">(1 = none, 10 = the worst)</span></div>
+        <div class="ci-taps">${tapRow('pain', c ? c.pain : null, 10)}</div>
         <div class="ci-label">Energy today <span class="muted">(1 = drained, 5 = full)</span></div>
-        <div class="ci-taps">${tapRow('energy', c ? c.energy : null)}</div>
-        <label class="check-line ci-hurts"><input type="checkbox" id="ci-hurts" ${c && c.hurts ? 'checked' : ''}> Something hurts</label>
-        <div id="ci-pain-wrap" ${c && c.hurts ? '' : 'hidden'}>
-          <label>What hurts, and where? <input type="text" id="ci-pain" maxlength="240" value="${esc(c ? c.painText : '')}" placeholder="e.g. Right hamstring feels tight"></label>
-          <label class="check-line ci-head"><input type="checkbox" id="ci-head" ${c && c.headSymptoms ? 'checked' : ''}> Head symptoms — a headache, dizziness, or a hit to the head</label>
-          <p class="muted" id="ci-head-note" ${c && c.headSymptoms ? '' : 'hidden'}>If you check this, you will be paused from training until the school has written clearance from a licensed medical provider on file. That is the DC rule for head injuries — it protects you.</p>
-        </div>
+        <div class="ci-taps">${tapRow('energy', c ? c.energy : null, 5)}</div>
+        <label class="check-line ci-head"><input type="checkbox" id="ci-head" ${c && c.headSymptoms ? 'checked' : ''}> Head symptoms — a headache, dizziness, or a hit to the head</label>
+        <p class="muted" id="ci-head-note" ${c && c.headSymptoms ? '' : 'hidden'}>If you check this, you will be paused from training until the school has written clearance from a licensed medical provider on file. That is the DC rule for head injuries — it protects you.</p>
         <label>Anything else? (optional) <input type="text" id="ci-note" maxlength="500" value="${esc(c ? c.note : '')}" placeholder="Short note for your coach"></label>
         ${c ? '' : '<p class="muted" id="ci-hint">Tap each answer to fill it in — nothing is pre-filled, so what saves is really yours.</p>'}
         <button class="btn primary ci-save" id="ci-save" type="button">${c ? 'Update check-in' : 'Save check-in'}</button>
@@ -2220,10 +2392,10 @@ async function renderCheckin() {
          data without answering, which feeds the coach's flags. Editing
          today's saved check-in still starts from its real values. */
       let sleep = c ? c.sleep : null;
-      const picked = { soreness: c ? c.soreness : null, energy: c ? c.energy : null };
+      const picked = { pain: c ? c.pain : null, energy: c ? c.energy : null };
       const saveBtn = $('#ci-save');
       const updateSave = () => {
-        const ready = sleep != null && picked.soreness != null && picked.energy != null;
+        const ready = sleep != null && picked.pain != null && picked.energy != null;
         saveBtn.disabled = !ready;
         saveBtn.style.opacity = ready ? '' : '.55';
       };
@@ -2241,21 +2413,16 @@ async function renderCheckin() {
         slot.querySelectorAll(`[data-ci="${b.dataset.ci}"]`).forEach(x => x.classList.toggle('on', x === b));
         updateSave();
       }));
-      $('#ci-hurts').addEventListener('change', (e) => {
-        $('#ci-pain-wrap').hidden = !e.target.checked;
-        if (!e.target.checked) { $('#ci-pain').value = ''; $('#ci-head').checked = false; $('#ci-head-note').hidden = true; }
-      });
       $('#ci-head').addEventListener('change', (e) => {
         $('#ci-head-note').hidden = !e.target.checked;
       });
       updateSave();
       saveBtn.addEventListener('click', async () => {
-        if (sleep == null || picked.soreness == null || picked.energy == null) return;
+        if (sleep == null || picked.pain == null || picked.energy == null) return;
         try {
           await apiPost('/api/checkin', {
-            sleep, soreness: picked.soreness, energy: picked.energy,
-            hurts: $('#ci-hurts').checked, painText: $('#ci-hurts').checked ? $('#ci-pain').value : '',
-            headSymptoms: $('#ci-hurts').checked && $('#ci-head').checked,
+            sleep, pain: picked.pain, energy: picked.energy,
+            headSymptoms: $('#ci-head').checked,
             note: $('#ci-note').value,
           });
           state.ciMsg = 'Saved — your coaches can see it. ✓';
@@ -2274,6 +2441,7 @@ async function renderCheckin() {
           ? mine.entries.map(e => `<div class="roster-row"><span><strong>${esc(fmtDate(parseDate(e.date)))}</strong></span><span class="muted">${esc(checkinLine(e))}</span></div>`).join('')
           : '<p class="muted">No check-ins yet — your first one takes under 20 seconds on the Today page.</p>'}
         ${mine.streak ? `<p class="checkin-streak">🔥 ${mine.streak} day${mine.streak === 1 ? '' : 's'} in a row</p>` : ''}
+        ${checkinWeekHtml(mine, today.date, !!(today && today.checkin))}
       </div>`;
     }
   }
@@ -2322,7 +2490,7 @@ async function renderWellness() {
     <div class="roster-row wellness-row ${rw.flags.length ? 'flagged' : ''}">
       <span><strong>${esc(rw.profile.name)}</strong>${rw.profile.groupName ? ` <span class="muted">· ${esc(rw.profile.groupName)}</span>` : ''}</span>
       ${rw.checkedIn
-        ? `<span class="muted">Slept ${rw.checkin.sleep}h · Sore ${rw.checkin.soreness}/5 · Energy ${rw.checkin.energy}/5${rw.checkin.hurts && rw.checkin.painText ? ` · <strong>Hurts:</strong> ${esc(rw.checkin.painText)}` : ''}</span><span>${flagBadges(rw.flags)}</span>`
+        ? `<span class="muted">${checkinLine(rw.checkin)}</span><span>${flagBadges(rw.flags)}</span>`
         : (rw.profile.linkedEmail
           ? '<span class="muted">No check-in yet</span><span><span class="badge plain">MISSING</span></span>'
           : '<span class="muted">No account linked — they cannot check in yet</span><span><span class="badge high">NOT LINKED</span></span>')}
@@ -2347,13 +2515,13 @@ async function renderWellness() {
     <div class="stats-row">
       <div class="stat-card"><span class="stat-num">${s.checkedIn}/${s.total}</span><span class="stat-label">Checked in today (${s.participation}%)</span></div>
       <div class="stat-card"><span class="stat-num">${s.avgSleep == null ? '—' : s.avgSleep}</span><span class="stat-label">Avg sleep (hrs)</span></div>
-      <div class="stat-card"><span class="stat-num">${s.avgSoreness == null ? '—' : s.avgSoreness}</span><span class="stat-label">Avg soreness /5</span></div>
+      <div class="stat-card"><span class="stat-num">${s.avgPain == null ? '—' : s.avgPain}</span><span class="stat-label">Avg body pain /10</span></div>
       <div class="stat-card"><span class="stat-num">${s.avgEnergy == null ? '—' : s.avgEnergy}</span><span class="stat-label">Avg energy /5</span></div>
       <div class="stat-card"><span class="stat-num">${s.flagged}</span><span class="stat-label">Flagged today</span></div>
     </div>
     <div class="card">
       <h2>Today — ${esc(fmtDate(parseDate(today.date)))}</h2>
-      <p class="muted">Flags: slept under 6 hours · soreness 4–5 · energy 1–2. A "hurts" report also lands in Aches &amp; Pains for follow-up.</p>
+      <p class="muted">Flags: slept under 6 hours · body pain 8–10 · energy 1–2. A head-symptoms report holds the athlete until clearance is recorded — work it from the athlete's AMS page.</p>
       ${rowsHtml}
     </div>
     <div class="card">
@@ -2365,119 +2533,12 @@ async function renderWellness() {
     </div>`;
 }
 
-/* ---------------- attendance (coach roll-book) ----------------
-   One mark per athlete per day: present, late, excused, absent.
-   Tapping a status saves just that athlete, in place (the Phase 1
-   pattern — the row and the day counts repaint only after the
-   server confirms); tapping the active status again clears the
-   mark back to unmarked. The per-athlete record below runs over
-   marked days only, so a day nobody took roll never counts
-   against anyone. */
-const ATT_STATUS_LIST = [['present', 'Present'], ['late', 'Late'], ['excused', 'Excused'], ['absent', 'Absent']];
-async function renderAttendance() {
-  const el = $('#attendance-main');
-  if (!el) return;
-  if (!isCoachUser()) { gateHtml(el, 'The daily attendance roll-book lives here.'); return; }
-  if (!state.attendanceDate) state.attendanceDate = todayStr();
-  const date = state.attendanceDate;
-  let data, summary;
-  try {
-    [data, summary] = await Promise.all([
-      api('/api/attendance?date=' + encodeURIComponent(date)),
-      api('/api/attendance/summary'),
-    ]);
-  } catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-  const marks = new Map();
-  const blocks = data.groups.concat(data.unassigned && data.unassigned.members.length ? [data.unassigned] : []);
-  for (const blk of blocks) for (const m of blk.members) {
-    marks.set(m.profile.id, m.attendance ? m.attendance.status : null);
-  }
-  const countsHtml = () => {
-    const c = { present: 0, late: 0, excused: 0, absent: 0, unmarked: 0 };
-    for (const s of marks.values()) { if (s) c[s]++; else c.unmarked++; }
-    return [['Present', c.present], ['Late', c.late], ['Excused', c.excused], ['Absent', c.absent], ['Unmarked', c.unmarked]]
-      .map(([label, n]) => `<div class="hero-stat"><span class="stat-num">${n}</span><span class="stat-label">${label}</span></div>`).join('');
-  };
-  const paintCounts = () => { const s = $('#att-counts'); if (s) s.innerHTML = countsHtml(); };
-  const paintAttRow = (row, status) => {
-    row.querySelectorAll('[data-att-status]').forEach(b =>
-      b.classList.toggle('active', b.dataset.attStatus === status));
-  };
-  const wireAttRow = (row) => {
-    row.querySelectorAll('[data-att-status]').forEach(btn => btn.addEventListener('click', async () => {
-      const pid = btn.dataset.attPid;
-      const tapped = btn.dataset.attStatus;
-      const next = marks.get(pid) === tapped ? null : tapped;
-      clearRowError(row);
-      try {
-        await apiPut('/api/attendance/' + encodeURIComponent(date) + '/' + encodeURIComponent(pid), { status: next });
-        marks.set(pid, next);
-        paintAttRow(row, next);
-        paintCounts();
-        flashSaved(row);
-      } catch (err) { showRowError(row, err.message); }
-    }));
-  };
-  const attRowHtml = (m) => `
-    <div class="roster-row att-row" data-att-row="${m.profile.id}">
-      <span class="att-name"><strong>${esc(m.profile.name)}</strong>${m.profile.topAthlete ? ' <span class="badge star">★</span>' : ''}</span>
-      <span class="seg att-seg" role="group" aria-label="Attendance for ${esc(m.profile.name)}">${ATT_STATUS_LIST.map(([s, label]) =>
-        `<button type="button" class="seg-btn${marks.get(m.profile.id) === s ? ' active' : ''}" data-att-status="${s}" data-att-pid="${m.profile.id}">${label}</button>`).join('')}</span>
-    </div>`;
-  const blockHtml = (blk) => `
-    <div class="card">
-      <h3>${blk.group ? esc(blk.group.name) : 'No group'}</h3>
-      ${blk.members.length ? blk.members.map(attRowHtml).join('') : '<p class="muted">No athletes here yet.</p>'}
-    </div>`;
-  const sumTable = (title, key) => {
-    const rows = summary.athletes.map(a => {
-      const w = a[key];
-      return `<tr><td>${esc(a.profile.name)}</td><td>${w.marked}</td><td>${w.present}</td><td>${w.late}</td><td>${w.excused}</td><td>${w.absent}</td><td>${w.percent == null ? '—' : w.percent + '%'}</td></tr>`;
-    }).join('');
-    return `<h3>${esc(title)}</h3>
-      <div class="table-wrap"><table class="ranked">
-        <thead><tr><th>Athlete</th><th>Marked</th><th>Present</th><th>Late</th><th>Excused</th><th>Absent</th><th>Attended</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7">No athletes on the roster yet.</td></tr>'}</tbody>
-      </table></div>`;
-  };
-  el.innerHTML = `
-    <div class="card">
-      <label>Date <input type="date" id="att-date" value="${esc(date)}"></label>
-      ${date !== todayStr() ? '<button class="btn secondary" id="att-today" type="button" style="width:auto">Back to today</button>' : ''}
-      <p class="muted">Roll for ${esc(fmtDate(parseDate(date)))}. Tap a status to save it; tap the same status again to clear the mark. Past days can be fixed up here, and future days can be pre-marked.</p>
-      <div class="hero-stats" id="att-counts">${countsHtml()}</div>
-      <p><button class="btn primary" id="att-all-present" type="button" style="width:auto">Mark all present</button>
-      <span class="muted">Fills in everyone still unmarked — anyone already late, excused, or absent keeps their mark.</span></p>
-    </div>
-    ${blocks.map(blockHtml).join('')}
-    <div class="card">
-      <h2>Attendance record</h2>
-      <p class="muted">Attended counts present plus late. The percentage runs over marked days only — unmarked days never count against an athlete.</p>
-      ${sumTable('Last 30 days', 'last30')}
-      ${sumTable('Season to date', 'season')}
-    </div>`;
-  $('#att-date').addEventListener('change', (e) => { state.attendanceDate = e.target.value; renderAttendance(); });
-  const attTodayBtn = $('#att-today');
-  if (attTodayBtn) attTodayBtn.addEventListener('click', () => { state.attendanceDate = todayStr(); renderAttendance(); });
-  el.querySelectorAll('[data-att-row]').forEach(wireAttRow);
-  $('#att-all-present').addEventListener('click', async () => {
-    const btn = $('#att-all-present');
-    btn.disabled = true;
-    try {
-      await apiPost('/api/attendance/' + encodeURIComponent(date) + '/mark-all-present', {});
-      for (const [pid, s] of marks) if (!s) marks.set(pid, 'present');
-      el.querySelectorAll('[data-att-row]').forEach(row => paintAttRow(row, marks.get(row.dataset.attRow)));
-      paintCounts();
-    } catch (err) { alert(err.message); }
-    btn.disabled = false;
-  });
-}
-
 /* ---------------- AMS (athlete management system) ----------------
    The coach-side home for one athlete: a roster table with the
    coach-set status and the server's attention flags, and a profile
-   page aggregating wellness, testing, meet PRs, attendance, health,
-   goals, and the private coach-notes thread. All of it reads the
+   page aggregating wellness, testing, meet PRs, health (concerns,
+   clearance, trainer summary), goals, and the private coach-notes
+   thread. All of it reads the
    /api/ams endpoints (coach-only); Roster & Groups stays the place
    for roster editing and import. */
 const AMS_STATUS_LABELS = { active: 'Active', injured: 'Injured', inactive: 'Inactive' };
@@ -2516,7 +2577,7 @@ async function renderAms() {
           ${Object.keys(AMS_STATUS_LABELS).map(s => `<option value="${s}" ${state.amsStatus === s ? 'selected' : ''}>${AMS_STATUS_LABELS[s]}</option>`).join('')}
         </select></label>
       </div>
-      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Attendance = 2+ absences in the last 14 days · Health = an open aches &amp; pains concern · plus the device flags from the latest ForceDecks / NordBord sessions (imbalance, asymmetry, jump drop-off). Tap an athlete for their full page.</p>
+      <p class="muted">Attention flags are computed from the data already in the app: Readiness = 2+ flagged check-ins in the last 7 days · No check-in = a linked athlete with none in the last 3 days · Health = an open health concern · High pain = body pain 8+ reported in the last 7 days · plus the device flags from the latest ForceDecks / NordBord sessions (imbalance, asymmetry, jump drop-off). Tap an athlete for their full page.</p>
       <div id="ams-table"></div>
     </div>`;
   const paintTable = () => {
@@ -2551,14 +2612,156 @@ async function renderAms() {
   $('#ams-group').addEventListener('change', (e) => { state.amsGroup = e.target.value; paintTable(); });
   $('#ams-status-filter').addEventListener('change', (e) => { state.amsStatus = e.target.value; paintTable(); });
 }
+/* The concern working card, on the athlete's AMS page (v56 — this
+   is where the concern workflow lives now that the standalone
+   Aches & Pains section is gone): acknowledge, status, disposition,
+   the head-clearance recording that lifts a hold, the trainer
+   summary, and the audit trail. Athlete-reported concerns are
+   never deletable; the delete button only appears on coach-filed
+   records, and the server enforces the same rule. The save speaks
+   the concern API's own shape: acknowledge as a boolean action,
+   clearance as one { by, date, note } record. */
+function amsConcernCard(c) {
+  const sev = c.status === 'cleared' ? 'low' : (c.pain != null && c.pain >= 7 ? 'high' : 'plain');
+  const cl = c.clearance || null;
+  const auditRows = (c.audit || []).map(a => `<p class="muted">${esc(a.at)} · ${esc(a.email || 'system')} · ${esc(a.action)}${a.detail ? ' — ' + esc(a.detail) : ''}</p>`).join('');
+  return `<div class="card" data-ams-concern="${c.id}">
+    <div class="roster-row">
+      <span><strong>${esc(AREA_LABELS[c.area] || c.area || 'Health concern')}</strong> (${esc(c.side || '—')})</span>
+      <span class="badge ${sev}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
+    </div>
+    ${c.headRelated ? '<p><span class="badge high">HELD — CLEARANCE REQUIRED</span> <span class="muted">Head-related. Written clearance from a licensed provider is required before this concern can be cleared.</span></p>' : ''}
+    ${c.acknowledgedAt
+      ? `<p class="muted">Acknowledged by ${esc(c.acknowledgedByEmail || 'a coach')} · ${esc(String(c.acknowledgedAt).slice(0, 10))}</p>`
+      : '<p><span class="badge plain">NOT YET ACKNOWLEDGED</span></p>'}
+    <p class="muted">Started ${esc(c.started)} · ${esc(FEELING_LABELS[c.feeling] || c.feeling)}${c.pain != null ? ' · pain ' + c.pain + '/10 at its worst' : ''} · ${esc(IMPACT_LABELS[c.impact] || c.impact)}${c.source === 'athlete' ? ' · reported by the athlete' : ' · recorded by a coach'}</p>
+    ${c.note ? `<p><strong>Report:</strong> ${esc(c.note)}</p>` : ''}
+    ${c.disposition ? `<p><strong>Disposition:</strong> ${esc(c.disposition)}</p>` : ''}
+    ${cl ? `<p><strong>Clearance:</strong> written clearance from ${esc(cl.by)} · ${esc(cl.date)} · ${esc(cl.note)}</p>` : ''}
+    <div class="filter-row">
+      <label class="check-line"><input type="checkbox" data-ams-hc-ack ${c.acknowledgedAt ? 'checked' : ''}> I have seen this report and spoken with the athlete</label>
+    </div>
+    <div class="filter-row">
+      <label>Status <select data-ams-hc-status>
+        ${Object.keys(STATUS_LABELS).map(s => `<option value="${s}" ${c.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
+      </select></label>
+      <label>Worst pain <select data-ams-hc-pain>
+        <option value="">— not recorded —</option>
+        ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${c.pain === n ? 'selected' : ''}>${n}</option>`).join('')}
+      </select></label>
+      <label class="check-line"><input type="checkbox" data-ams-hc-head ${c.headRelated ? 'checked' : ''}> Head-related</label>
+    </div>
+    <label>Coach note <input type="text" data-ams-hc-note maxlength="500" value="${esc(c.coachNote || '')}" placeholder="What you observed, what you told them"></label>
+    <label>Disposition (how this closed) <input type="text" data-ams-hc-disposition maxlength="500" value="${esc(c.disposition || '')}" placeholder="e.g. Seen by the athletic trainer; modified training for a week"></label>
+    <div data-ams-hc-clearance ${c.headRelated ? '' : 'hidden'}>
+      <div class="filter-row">
+        <label>Cleared by (licensed provider) <input type="text" data-ams-hc-clearedby maxlength="120" value="${esc(cl ? cl.by : '')}" placeholder="e.g. Dr. Smith, MedStar"></label>
+        <label>Clearance date <input type="date" data-ams-hc-cleareddate value="${esc(cl ? cl.date : '')}"></label>
+      </div>
+      <label>Clearance note <input type="text" data-ams-hc-clearednote maxlength="500" value="${esc(cl ? cl.note : '')}" placeholder="Attest that written clearance from a licensed provider was received"></label>
+      <label class="check-line"><input type="checkbox" data-ams-hc-attest ${cl ? 'checked' : ''}> Written clearance has been received and is on file</label>
+    </div>
+    <div class="filter-row">
+      <button class="btn primary" data-ams-hc-save type="button">Save</button>
+      <button class="btn secondary" data-ams-hc-summary type="button">Copy summary for the athletic trainer</button>
+      ${c.source === 'athlete'
+        ? '<span class="muted">Athlete-reported concerns cannot be deleted — close them with a disposition.</span>'
+        : '<button class="btn secondary" data-ams-hc-del type="button">Delete</button>'}
+    </div>
+    ${auditRows ? `<details><summary>Audit trail</summary>${auditRows}</details>` : ''}
+  </div>`;
+}
+/* The trainer summary is assembled here in the browser from the
+   concern record — the same text the old Aches & Pains view
+   produced: who, what, since when, where it stands, and the full
+   audit trail, ready to paste or print for the athletic trainer. */
+function amsTrainerSummaryText(c, athleteName) {
+  const lines = [
+    "Health concern summary — St. John's track & field",
+    'Athlete: ' + athleteName,
+    'Concern: ' + (AREA_LABELS[c.area] || c.area || 'Health concern') + ' (' + (c.side || '—') + ') · '
+      + (FEELING_LABELS[c.feeling] || c.feeling) + ' · started ' + c.started,
+    'Status: ' + (STATUS_LABELS[c.status] || c.status)
+      + (c.pain != null ? ' · worst pain ' + c.pain + '/10' : '')
+      + ' · training impact: ' + (IMPACT_LABELS[c.impact] || c.impact),
+    'Source: ' + (c.source === 'athlete' ? 'reported by the athlete' : 'recorded by a coach'),
+  ];
+  if (c.headRelated) lines.push('HEAD-RELATED: athlete is held from training until written clearance from a licensed provider is recorded.');
+  if (c.note) lines.push('Report: ' + c.note);
+  if (c.coachNote) lines.push('Coach note: ' + c.coachNote);
+  if (c.acknowledgedAt) lines.push('Acknowledged by ' + (c.acknowledgedByEmail || 'a coach') + ' on ' + String(c.acknowledgedAt).slice(0, 10) + '.');
+  if (c.disposition) lines.push('Disposition: ' + c.disposition);
+  if (c.clearance) lines.push('Clearance: written clearance from ' + c.clearance.by + ', dated ' + c.clearance.date + ' — ' + c.clearance.note);
+  if ((c.audit || []).length) {
+    lines.push('Audit trail:');
+    for (const a of c.audit) lines.push('  ' + a.at + ' · ' + (a.email || 'system') + ' · ' + a.action + (a.detail ? ' — ' + a.detail : ''));
+  }
+  return lines.join('\n');
+}
+function wireAmsConcernCards(el, athleteName, concerns) {
+  const byId = {};
+  for (const c of concerns || []) byId[c.id] = c;
+  el.querySelectorAll('[data-ams-concern]').forEach(card => {
+    const id = card.dataset.amsConcern;
+    const concern = byId[id];
+    const q = (sel) => card.querySelector(sel);
+    const headBox = q('[data-ams-hc-head]');
+    if (headBox) headBox.addEventListener('change', () => {
+      q('[data-ams-hc-clearance]').hidden = !headBox.checked;
+    });
+    const saveBtn = q('[data-ams-hc-save]');
+    if (saveBtn) saveBtn.addEventListener('click', async () => {
+      const painSel = q('[data-ams-hc-pain]');
+      const head = q('[data-ams-hc-head]').checked;
+      const body = {
+        status: q('[data-ams-hc-status]').value,
+        acknowledge: q('[data-ams-hc-ack]').checked,
+        pain: painSel.value === '' ? undefined : Number(painSel.value),
+        headRelated: head,
+        coachNote: q('[data-ams-hc-note]').value,
+        disposition: q('[data-ams-hc-disposition]').value,
+      };
+      if (head) {
+        const by = q('[data-ams-hc-clearedby]').value.trim();
+        const date = q('[data-ams-hc-cleareddate]').value;
+        const note = q('[data-ams-hc-clearednote]').value.trim();
+        if (by || date || note) body.clearance = { by, date, note };
+      }
+      try { await apiPut('/api/concerns/' + encodeURIComponent(id), body); renderAms(); }
+      catch (err) { alert(err.message); }
+    });
+    const sumBtn = q('[data-ams-hc-summary]');
+    if (sumBtn) sumBtn.addEventListener('click', () => {
+      const box = $('#at-summary');
+      if (!box || !concern) return;
+      box.innerHTML = `<div class="card"><h3>Summary for the athletic trainer</h3>
+        <textarea id="at-summary-text" rows="14" readonly>${esc(amsTrainerSummaryText(concern, athleteName))}</textarea>
+        <div class="filter-row"><button class="btn primary" id="at-copy" type="button">Copy text</button>
+        <button class="btn secondary" id="at-print" type="button">Print</button>
+        <button class="btn secondary" id="at-close" type="button">Close</button></div></div>`;
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $('#at-copy').addEventListener('click', async () => {
+        const t = $('#at-summary-text');
+        try { await navigator.clipboard.writeText(t.value); alert('Copied.'); }
+        catch (e) { t.select(); document.execCommand('copy'); }
+      });
+      $('#at-print').addEventListener('click', () => window.print());
+      $('#at-close').addEventListener('click', () => { box.innerHTML = ''; });
+    });
+    const delBtn = q('[data-ams-hc-del]');
+    if (delBtn) delBtn.addEventListener('click', async () => {
+      if (!confirm('Delete this concern? This cannot be undone.')) return;
+      try { await apiDelete('/api/concerns/' + encodeURIComponent(id)); renderAms(); }
+      catch (err) { alert(err.message); }
+    });
+  });
+}
 async function renderAmsProfile(el, profileId) {
   let d;
   try { d = await api('/api/ams/athlete/' + encodeURIComponent(profileId)); }
   catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   const p = d.profile;
   const w = d.wellness;
-  const att = d.attendance;
-  const attLine = (label, win) => `<p><strong>${label}:</strong> ${win.marked} marked · ${win.attended} attended · ${win.absent} absent${win.percent == null ? '' : ' · ' + win.percent + '% attended'}</p>`;
   /* Devices strip: the latest session per device (server-computed
      from the same testing store the Testing card reads), shown only
      for devices this athlete actually has data on. */
@@ -2593,16 +2796,16 @@ async function renderAmsProfile(el, profileId) {
         </select></label>
       </div>
       <p>Attention: ${amsFlagBadges(d.flags)}</p>
-      ${d.held && d.held.held ? `<div class="ci-held"><strong>HELD — clearance required.</strong> A head-related concern has been open since ${esc(String(d.held.since || '').slice(0, 10))}. This athlete stays out until written clearance from a licensed provider is recorded on the concern in Aches &amp; Pains.</div>` : ''}
+      ${d.held && d.held.held ? `<div class="ci-held"><strong>HELD — clearance required.</strong> A head-related concern has been open since ${esc(String(d.held.since || '').slice(0, 10))}. This athlete stays out until written clearance from a licensed provider is recorded on the concern, in the Health card below.</div>` : ''}
     </div>
     <div class="card">
       <h2>Wellness — last 14 days</h2>
       ${w.recent.length ? `
-      <p class="muted">${w.summary.days} check-ins · avg sleep ${w.summary.avgSleep == null ? '—' : w.summary.avgSleep}h · avg soreness ${w.summary.avgSoreness == null ? '—' : w.summary.avgSoreness}/5 · avg energy ${w.summary.avgEnergy == null ? '—' : w.summary.avgEnergy}/5 · ${w.summary.flaggedDays} flagged day${w.summary.flaggedDays === 1 ? '' : 's'}</p>
+      <p class="muted">${w.summary.days} check-ins · avg sleep ${w.summary.avgSleep == null ? '—' : w.summary.avgSleep}h · avg pain ${w.summary.avgPain == null ? '—' : w.summary.avgPain}/10 · avg energy ${w.summary.avgEnergy == null ? '—' : w.summary.avgEnergy}/5 · ${w.summary.flaggedDays} flagged day${w.summary.flaggedDays === 1 ? '' : 's'}</p>
       <div class="table-wrap"><table class="ranked">
-        <thead><tr><th>Date</th><th>Sleep</th><th>Soreness</th><th>Energy</th><th>Flags</th></tr></thead>
+        <thead><tr><th>Date</th><th>Sleep</th><th>Pain</th><th>Energy</th><th>Flags</th></tr></thead>
         <tbody>${w.recent.slice().reverse().map(c => `<tr>
-          <td>${esc(fmtDate(parseDate(c.date)))}</td><td>${c.sleep}h</td><td>${c.soreness}/5</td><td>${c.energy}/5</td>
+          <td>${esc(fmtDate(parseDate(c.date)))}</td><td>${c.sleep}h</td><td>${typeof c.pain === 'number' ? c.pain + '/10' : (c.soreness != null ? c.soreness + '/5 (soreness)' : '—')}</td><td>${c.energy}/5</td>
           <td>${c.flags.length ? c.flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ') : '<span class="badge low">OK</span>'}</td>
         </tr>`).join('')}</tbody>
       </table></div>` : '<p class="muted">No check-ins in the last 14 days.</p>'}
@@ -2624,21 +2827,12 @@ async function renderAmsProfile(el, profileId) {
         <div class="roster-row"><span>${esc(r.date)} · ${esc(r.eventName)} — <strong>${esc(r.mark)}</strong></span><span class="muted">${esc(r.meet)}</span></div>`).join('')}` : ''}
     </div>
     <div class="card">
-      <h2>Attendance</h2>
-      ${attLine('Last 30 days', att.last30)}
-      ${attLine('Season to date', att.season)}
-      ${att.recent.length ? att.recent.map(m => `
-        <div class="roster-row"><span>${esc(fmtDate(parseDate(m.date)))}</span><span class="badge ${m.status === 'absent' ? 'high' : 'plain'}">${esc(m.status).toUpperCase()}</span></div>`).join('') : '<p class="muted">No attendance marks yet.</p>'}
-    </div>
-    <div class="card">
-      <h2>Health — aches &amp; pains</h2>
+      <h2>Health — concerns</h2>
       <p class="muted">${d.health.counts.open} new · ${d.health.counts.monitoring} monitoring · ${d.health.counts.cleared} cleared · ${d.health.counts.total} total</p>
-      ${d.health.concerns.length ? d.health.concerns.map(c => `
-        <div class="roster-row">
-          <span><strong>${esc(AREA_LABELS[c.area] || c.area)}</strong> (${esc(c.side)}) · ${esc(FEELING_LABELS[c.feeling] || c.feeling)} · started ${esc(c.started)}${c.source === 'athlete' ? ' · athlete reported' : ''}</span>
-          <span class="badge ${c.status === 'cleared' ? 'low' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
-        </div>${c.note ? `<p class="muted">${esc(c.note)}</p>` : ''}`).join('') : '<p class="muted">No concerns on file.</p>'}
+      <p class="muted">This is where concerns are worked now: acknowledge them, track them, record dispositions, and — for a head-related concern — record the written clearance that lifts the hold. New concerns arrive when an athlete reports head symptoms in the daily check-in; coaches cannot file new ones here. Athletes never see this card.</p>
+      ${d.health.concerns.length ? d.health.concerns.map(c => amsConcernCard(c)).join('') : '<p class="muted">No concerns on file.</p>'}
     </div>
+    <div id="at-summary"></div>
     <div class="card">
       <h2>Goals</h2>
       ${d.goals.length ? d.goals.map(g => `
@@ -2670,6 +2864,7 @@ async function renderAmsProfile(el, profileId) {
       </div>
     </div>`;
   $('#ams-back').addEventListener('click', () => { state.amsProfileId = null; renderAms(); window.scrollTo(0, 0); });
+  wireAmsConcernCards(el, p.name, d.health.concerns);
   $('#ams-status').addEventListener('change', async (e) => {
     try {
       await apiPut('/api/profiles/' + encodeURIComponent(profileId), { status: e.target.value });
@@ -3349,7 +3544,7 @@ async function renderGroups() {
             <input type="text" id="ee-${pr.id}" value="${esc((pr.events || []).join(', '))}"></label>
           <button class="btn primary" data-save-profile="${pr.id}" type="button">Save profile</button>
           <h3>Account link — daily check-in</h3>
-          <p class="muted">Link the email this athlete uses for their account and they can log the daily check-in (sleep, soreness, energy) themselves. Nothing else opens up.</p>
+          <p class="muted">Link the email this athlete uses for their account and they can log the daily check-in (sleep, body pain, energy) themselves. Nothing else opens up.</p>
           <label>Account email <input type="email" id="lk-${pr.id}" value="${esc(pr.linkedEmail || '')}" placeholder="athlete@example.com"></label>
           <button class="btn primary" data-link-profile="${pr.id}" type="button">${pr.linkedEmail ? 'Update link' : 'Link account'}</button>
           ${pr.linkedEmail ? `<button class="btn danger" data-unlink-profile="${pr.id}" type="button">Unlink</button>
@@ -4129,202 +4324,13 @@ async function renderTop() {
   });
 }
 
-/* ---------------- aches & pains ---------------- */
+/* ---------------- health concern labels ----------------
+   Kept for the records that carry them: concern cards on the AMS
+   athlete page read these, and pre-v56 records still use them. */
 const AREA_LABELS = { ankle: 'Ankle', achilles: 'Achilles', calf: 'Calf', shin: 'Shin', knee: 'Knee', hamstring: 'Hamstring', quad: 'Quad', 'hip-flexor': 'Hip flexor', hip: 'Hip', groin: 'Groin', glute: 'Glute', 'lower-back': 'Lower back', foot: 'Foot', shoulder: 'Shoulder', other: 'Other' };
 const FEELING_LABELS = { ache: 'Ache', sharp: 'Sharp pain', tightness: 'Tightness', soreness: 'Soreness', stiffness: 'Stiffness', swelling: 'Swelling', other: 'Other' };
 const IMPACT_LABELS = { none: 'No effect', modified: 'Modified training', stopped: 'Stopped me' };
 const STATUS_LABELS = { new: 'New', monitoring: 'Monitoring', cleared: 'Cleared' };
-async function renderHealth() {
-  const el = $('#health-main');
-  if (!el) return;
-  if (!isCoachUser()) { gateHtml(el, 'Health concerns live here.'); return; }
-  await refreshProfiles();
-  let concerns = [];
-  try { concerns = (await api('/api/concerns')).concerns; state.concerns = concerns; }
-  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-  const isHeld = (c) => !!c.headRelated && c.status !== 'cleared';
-  const concernCard = (c) => `
-    <div class="card concern-card ${c.flagged ? 'flagged' : ''}">
-      <div class="roster-row">
-        <span><strong>${esc(c.athleteName)}</strong> · ${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}) — ${esc(FEELING_LABELS[c.feeling] || c.feeling)}</span>
-        <span>${c.pain == null ? '<span class="badge plain">NO SCORE YET</span>' : `<span class="badge ${c.pain >= 7 ? 'high' : 'plain'}">PAIN ${c.pain}/10</span>`}
-        ${c.impact === 'stopped' ? '<span class="badge high">STOPPED</span>' : `<span class="badge plain">${esc(IMPACT_LABELS[c.impact] || c.impact)}</span>`}
-        ${c.source === 'athlete' ? '<span class="badge star">ATHLETE REPORTED</span>' : ''}
-        ${c.headRelated ? '<span class="badge high">HEAD-RELATED</span>' : ''}
-        ${isHeld(c) ? '<span class="badge high">HELD — CLEARANCE REQUIRED</span>' : ''}
-        ${c.clearance ? '<span class="badge low">CLEARANCE RECORDED</span>' : ''}
-        <span class="badge ${c.status === 'cleared' ? 'low' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span></span>
-      </div>
-      <p class="muted">Started ${esc(c.started)} · filed ${esc(String(c.createdAt).slice(0, 10))}</p>
-      ${c.note ? `<p>${esc(c.note)}</p>` : ''}
-      ${c.source === 'athlete' ? (c.acknowledgedAt
-        ? `<p class="muted">Acknowledged by ${esc(c.acknowledgedByEmail || 'a coach')} · ${esc(String(c.acknowledgedAt).slice(0, 10))}</p>`
-        : `<label class="check-line"><input type="checkbox" id="ca-${c.id}"> Mark acknowledged — I have picked this report up</label>`) : ''}
-      <div class="filter-row">
-        <label>Status <select id="cs-${c.id}">
-          ${Object.keys(STATUS_LABELS).map(s => `<option value="${s}" ${c.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
-        </select></label>
-        <label>Pain now <select id="cp-${c.id}">
-          <option value="" ${c.pain == null ? 'selected' : ''}>— not recorded —</option>
-          ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${c.pain === n ? 'selected' : ''}>${n}/10</option>`).join('')}
-        </select></label>
-        <label class="check-line"><input type="checkbox" id="ch-${c.id}" ${c.headRelated ? 'checked' : ''}> Head-related</label>
-      </div>
-      <label>Coach note <input type="text" id="cn-${c.id}" value="${esc(c.coachNote || '')}" placeholder="e.g. Sent to athletic trainer"></label>
-      <label>Disposition — what was done <input type="text" id="cdis-${c.id}" value="${esc(c.disposition || '')}" placeholder="e.g. Seen by the athletic trainer; modified training this week"></label>
-      ${c.source === 'athlete' && c.status !== 'cleared' ? '<p class="muted">Athlete-reported concerns close with a disposition — what was done about the report. They cannot be deleted.</p>' : ''}
-      ${c.headRelated ? (c.clearance
-        ? `<p>Clearance on file: <strong>${esc(c.clearance.by)}</strong> · ${esc(c.clearance.date)} — ${esc(c.clearance.note)} <span class="muted">(recorded by ${esc(c.clearance.recordedBy || '')})</span></p>`
-        : `<div class="filter-row">
-            <label>Cleared by <input type="text" id="ccb-${c.id}" placeholder="Name of the licensed provider"></label>
-            <label>Clearance date <input type="date" id="ccd-${c.id}"></label>
-          </div>
-          <label>Clearance note <input type="text" id="ccn-${c.id}" placeholder="Attests: written clearance from a licensed provider was received"></label>
-          <p class="muted">A head-related concern can only be cleared once this clearance is recorded.</p>`) : ''}
-      <div class="filter-row">
-        <button class="btn primary" data-concern-save="${c.id}" type="button">Save update</button>
-        <button class="btn secondary" data-concern-copy="${c.id}" type="button">Copy summary for the athletic trainer</button>
-        ${c.source !== 'athlete' ? `<button class="btn danger" data-concern-del="${c.id}" type="button">Delete</button>` : ''}
-      </div>
-      ${(c.audit && c.audit.length) ? `<details class="concern-audit"><summary>Audit trail (${c.audit.length})</summary>
-        ${c.audit.map(a => `<div class="roster-row"><span>${esc(a.action)}${a.detail ? ' — ' + esc(a.detail) : ''}</span><span class="muted">${esc(a.email || 'athlete')} · ${esc(String(a.at || '').slice(0, 16).replace('T', ' '))}</span></div>`).join('')}
-      </details>` : ''}
-    </div>`;
-  const byAthlete = {};
-  for (const c of concerns) { (byAthlete[c.athleteName] = byAthlete[c.athleteName] || []).push(c); }
-  el.innerHTML = `
-    <form class="card" id="concern-form">
-      <h2>Record a concern</h2>
-      <p class="muted">An athlete tells you something hurts — you write it down here so the plan can adjust.</p>
-      <label>Athlete <select id="hc-athlete">${profileOptions(null, true)}</select></label>
-      <div class="filter-row">
-        <label>Body area <select id="hc-area">${Object.keys(AREA_LABELS).map(a => `<option value="${a}">${AREA_LABELS[a]}</option>`).join('')}</select></label>
-        <label>Side <select id="hc-side"><option value="left">Left</option><option value="right">Right</option><option value="both">Both</option><option value="na">N/A</option></select></label>
-      </div>
-      <div class="filter-row">
-        <label>Feels like <select id="hc-feeling">${Object.keys(FEELING_LABELS).map(f => `<option value="${f}">${FEELING_LABELS[f]}</option>`).join('')}</select></label>
-        <label>Pain (1-10) <select id="hc-pain"><option value="" selected>— pick —</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}">${n}</option>`).join('')}</select></label>
-      </div>
-      <div class="filter-row">
-        <label>When it started <input type="date" id="hc-started" value="${todayStr()}"></label>
-        <label>Effect on training <select id="hc-impact"><option value="none">No effect</option><option value="modified">Modified</option><option value="stopped">Stopped me</option></select></label>
-      </div>
-      <label>Note <textarea id="hc-note" rows="2" placeholder="What the athlete said, in their words if you can"></textarea></label>
-      <label class="check-line"><input type="checkbox" id="hc-head"> Head-related — headache, dizziness, or a hit to the head (holds the athlete until clearance is recorded)</label>
-      <button class="btn primary" type="submit">File concern</button>
-      <p class="error" id="hc-err"></p>
-    </form>
-    <h2>All concerns</h2>
-    ${LANE_DIVIDER}
-    <p class="muted">High pain (7+) and "stopped" concerns sit at the top until cleared.</p>
-    ${concerns.length ? concerns.map(concernCard).join('') : '<p class="muted">No concerns on file. Good news.</p>'}
-    <h2>History by athlete</h2>
-    ${LANE_DIVIDER}
-    ${Object.keys(byAthlete).sort().map(name => `
-      <details class="card"><summary><strong>${esc(name)}</strong> — ${byAthlete[name].length} concern${byAthlete[name].length === 1 ? '' : 's'}</summary>
-      ${byAthlete[name].map(c => `<div class="roster-row"><span>${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}) · ${esc(FEELING_LABELS[c.feeling] || c.feeling)} · started ${esc(c.started)}${c.source === 'athlete' ? ' · athlete reported' : ''}</span>
-        <span><span class="badge ${c.pain != null && c.pain >= 7 ? 'high' : 'plain'}">${c.pain == null ? 'no score' : c.pain + '/10'}</span> <span class="badge plain">${esc(STATUS_LABELS[c.status] || c.status)}</span></span></div>`).join('')}
-      </details>`).join('') || '<p class="muted">Nothing yet.</p>'}`;
-  el.insertAdjacentHTML('beforeend', '<div id="at-summary"></div>');
-  $('#concern-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await apiPost('/api/concerns', {
-        profileId: $('#hc-athlete').value,
-        area: $('#hc-area').value, side: $('#hc-side').value, feeling: $('#hc-feeling').value,
-        pain: parseInt($('#hc-pain').value, 10), started: $('#hc-started').value,
-        impact: $('#hc-impact').value, note: $('#hc-note').value,
-        headRelated: $('#hc-head').checked,
-      });
-      renderHealth();
-    } catch (err) { $('#hc-err').textContent = err.message; }
-  });
-  el.querySelectorAll('[data-concern-save]').forEach(b => b.addEventListener('click', async () => {
-    const id = b.dataset.concernSave;
-    const q = (sel) => document.getElementById(sel + id);
-    try {
-      const payload = {
-        status: q('cs-').value,
-        pain: q('cp-').value === '' ? undefined : parseInt(q('cp-').value, 10),
-        coachNote: q('cn-').value,
-        disposition: q('cdis-') ? q('cdis-').value : undefined,
-        headRelated: q('ch-') ? q('ch-').checked : undefined,
-      };
-      const ack = q('ca-');
-      if (ack && ack.checked) payload.acknowledge = true;
-      /* Clearance rides along only when its fields are filled in;
-         the server validates the set as a whole. */
-      const ccb = q('ccb-');
-      if (ccb && ccb.value.trim()) {
-        payload.clearance = { by: ccb.value, date: q('ccd-').value, note: q('ccn-').value };
-      }
-      await apiPut('/api/concerns/' + encodeURIComponent(id), payload);
-      renderHealth();
-    } catch (err) { alert(err.message); }
-  }));
-  el.querySelectorAll('[data-concern-del]').forEach(b => b.addEventListener('click', async () => {
-    if (!confirm('Delete this coach-filed concern? Athlete-reported concerns cannot be deleted — they close with a disposition.')) return;
-    try {
-      await apiDel('/api/concerns/' + encodeURIComponent(b.dataset.concernDel));
-      renderHealth();
-    } catch (err) { alert(err.message); }
-  }));
-  el.querySelectorAll('[data-concern-copy]').forEach(b => b.addEventListener('click', () => {
-    const c = concerns.find(x => x.id === b.dataset.concernCopy);
-    if (!c) return;
-    const lines = [
-      'Athlete health concern — summary for the athletic trainer',
-      'Athlete: ' + (c.athleteName || ''),
-      'Reported: ' + String(c.createdAt || '').slice(0, 10)
-        + (c.source === 'athlete' ? ' (athlete-reported in the daily check-in)' : ' (filed by a coach)'),
-      'What: ' + (AREA_LABELS[c.area] || c.area) + ' (' + c.side + ') — ' + (FEELING_LABELS[c.feeling] || c.feeling)
-        + (c.headRelated ? ' · HEAD-RELATED' : ''),
-      'Started: ' + (c.started || '') + ' · Pain: ' + (c.pain == null ? 'not scored yet' : c.pain + '/10')
-        + ' · Effect on training: ' + (IMPACT_LABELS[c.impact] || c.impact),
-      c.note ? 'Athlete\'s words / note: ' + c.note : '',
-      'Status: ' + (STATUS_LABELS[c.status] || c.status)
-        + (c.acknowledgedAt ? ' · acknowledged ' + String(c.acknowledgedAt).slice(0, 10) : ' · not yet acknowledged'),
-      c.disposition ? 'Disposition: ' + c.disposition : 'Disposition: none recorded yet',
-      c.clearance ? 'Clearance on file: ' + c.clearance.by + ', ' + c.clearance.date + ' — ' + c.clearance.note : '',
-    ].filter(Boolean).join('\n');
-    const box = $('#at-summary');
-    box.innerHTML = `<div class="card" id="at-summary-card">
-      <h3>Summary for the athletic trainer</h3>
-      <pre class="at-summary-text">${esc(lines)}</pre>
-      <div class="filter-row">
-        <button class="btn primary" id="at-copy" type="button">Copy summary</button>
-        <button class="btn secondary" id="at-print" type="button">Print</button>
-        <button class="btn secondary" id="at-close" type="button">Close</button>
-      </div>
-      <p class="muted" id="at-copy-msg"></p>
-    </div>`;
-    $('#at-copy').addEventListener('click', async () => {
-      const msg = $('#at-copy-msg');
-      try {
-        await navigator.clipboard.writeText(lines);
-        msg.textContent = 'Copied — paste it wherever the athletic trainer will see it.';
-      } catch (_) {
-        msg.textContent = 'Copy did not work in this browser — select the text above and copy it by hand.';
-      }
-    });
-    $('#at-print').addEventListener('click', () => {
-      const card = $('#at-summary-card');
-      card.classList.add('print-target');
-      document.body.classList.add('printing-card');
-      const cleanup = () => {
-        card.classList.remove('print-target');
-        document.body.classList.remove('printing-card');
-        window.removeEventListener('afterprint', cleanup);
-      };
-      window.addEventListener('afterprint', cleanup);
-      setTimeout(cleanup, 1500);
-      window.print();
-    });
-    $('#at-close').addEventListener('click', () => { box.innerHTML = ''; });
-    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }));
-}
-
 /* ---------------- equipment inventory ---------------- */
 const INV_CATEGORIES = ['Starting Blocks', 'Hurdles', 'Relay Batons', 'Throws Implements',
   'Timing & Tech', 'Medicine Balls', 'Bands & Mobility', 'Plyo & Training Aids',
@@ -5550,6 +5556,7 @@ function paintCalendar() {
 
 /* ---------------- wiring ---------------- */
 $('#lib-search').addEventListener('input', (e) => { state.libQuery = e.target.value; renderLibrary(); });
+$('#drill-search').addEventListener('input', (e) => { state.drillQuery = e.target.value; renderDrills(); });
 $('#libhome-search').addEventListener('input', (e) => { state.libHomeQuery = e.target.value; renderLibraryHome(); });
 $('#vid-search').addEventListener('input', (e) => { state.vidQuery = e.target.value; renderVideos(); });
 $('#vid-chips').addEventListener('click', (e) => {
@@ -5846,7 +5853,7 @@ async function renderReports() {
     + (health.byMonth.length
       ? barChart(health.byMonth.map(m => ({ label: monthLabel(m.month) })),
         [{ name: 'Concerns opened', cls: 'bar-a', values: health.byMonth.map(m => m.opened) }], false)
-      : '<p class="muted">No aches &amp; pains recorded yet.</p>')
+      : '<p class="muted">No health concerns recorded yet.</p>')
     + checkinReportHtml(health.checkins);
   el.innerHTML = `
     <div class="card">
@@ -6007,13 +6014,13 @@ async function renderDigest() {
     ? `<div class="hero-stats">
         <div class="hero-stat"><div class="stat-num">${ci.recorded}/${ci.possible}</div><div class="stat-label">Check-ins (${ci.percent}%)</div></div>
         <div class="hero-stat"><div class="stat-num">${ci.avgSleep}h</div><div class="stat-label">Avg sleep</div></div>
-        <div class="hero-stat"><div class="stat-num">${ci.avgSoreness}</div><div class="stat-label">Avg soreness</div></div>
+        <div class="hero-stat"><div class="stat-num">${ci.avgPain}</div><div class="stat-label">Avg body pain</div></div>
         <div class="hero-stat"><div class="stat-num">${ci.avgEnergy}</div><div class="stat-label">Avg energy</div></div>
       </div>`
       + (ci.flagged.length
         ? `<p><strong>${ci.flaggedCount} athlete${ci.flaggedCount === 1 ? '' : 's'} flagged</strong> — most flagged:</p><ul class="digest-list">${ci.flagged.map(f =>
           `<li><strong>${esc(f.name)}</strong> — flagged ${f.flaggedDays} day${f.flaggedDays === 1 ? '' : 's'}, mostly ${esc(CHECKIN_FLAG_LABELS[f.mainFlag] || f.mainFlag)}</li>`).join('')}</ul>`
-        : '<p class="muted">Nobody flagged all week — sleep, soreness, and energy stayed in range.</p>')
+        : '<p class="muted">Nobody flagged all week — sleep, pain, and energy stayed in range.</p>')
     : '<p class="muted">No check-ins recorded that week.</p>';
   const trHtml = data.training.groups.length
     ? `<div class="table-wrap"><table class="ranked"><thead><tr><th>Group</th><th>Days done</th><th>Assigned days</th><th>Completions</th></tr></thead><tbody>${data.training.groups.map(g =>
@@ -6042,7 +6049,7 @@ async function renderDigest() {
       <div class="hero-stat"><div class="stat-num">${h.monitoring}</div><div class="stat-label">Monitoring now</div></div>
     </div>`
     + (!h.opened && !h.cleared && !h.open && !h.monitoring
-      ? '<p class="muted">No aches &amp; pains on the books — nothing opened, nothing outstanding.</p>' : '');
+      ? '<p class="muted">No health concerns on the books — nothing opened, nothing outstanding.</p>' : '');
   const wa = data.weekAhead;
   const waHtml = `<p><strong>Season week ${wa.seasonWeek}${wa.phase ? ' · ' + esc(wa.phase) : ''}</strong> — ${wa.trainingDays} training day${wa.trainingDays === 1 ? '' : 's'}, ${wa.highDays} high-CNS.</p>`
     + `<div class="table-wrap"><table class="ranked"><thead><tr><th>Day</th><th>Sessions</th><th></th></tr></thead><tbody>${wa.days.map(d =>
@@ -6058,7 +6065,7 @@ async function renderDigest() {
     </div>
     <div class="card">
       <h2>Check-ins</h2>
-      <p class="muted">Daily sleep, soreness, and energy from the athletes — ${ci.roster} on the roster.</p>
+      <p class="muted">Daily sleep, body pain, and energy from the athletes — ${ci.roster} on the roster.</p>
       ${ciHtml}
     </div>
     <div class="card">
@@ -6941,7 +6948,6 @@ async function renderData() {
     <div class="card">
       <h3>Spreadsheets (CSV)</h3>
       <p>
-        <a class="btn secondary" href="/api/export/attendance.csv">Attendance</a>
         <a class="btn secondary" href="/api/export/checkins.csv">Check-ins</a>
         <a class="btn secondary" href="/api/export/records.csv">School records</a>
       </p>
@@ -8454,6 +8460,7 @@ function tvStopTimers() {
   state.week = currentWeekNum();
   fillLibFilters();
   fillWeekJump();
+  fillLearnCounts();
   renderDrills();
   renderQtr();
   renderRaceStrategy();

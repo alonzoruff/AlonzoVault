@@ -21,14 +21,15 @@
  * MODEL — team data is coach-input only, with one athlete surface.
  * The coach keeps a roster of athlete PROFILES (name, training group,
  * event tags, Top Athlete star) and records almost everything himself:
- * assignment completions, testing-day results, weekly tracker numbers,
- * and aches & pains concerns. The single exception is the daily
- * wellness check-in: an athlete whose account email a coach has
- * linked to their roster profile can log sleep, soreness, and energy
- * once a day — and flag that something hurts, which files an
- * athlete-reported concern for the coaches to pick up. Everything
- * else an athlete account can do is read-only browsing, plus the
- * personal practice log and cross-training swaps.
+ * assignment completions, testing-day results, and weekly tracker
+ * numbers. The single exception is the daily wellness check-in: an
+ * athlete whose account email a coach has linked to their roster
+ * profile can log sleep, body pain (1–10), and energy once a day —
+ * and answer a yes/no head-symptoms question, where a yes files a
+ * head-related athlete-reported concern that holds the athlete until
+ * a clearance is recorded (concerns are managed on the athlete's
+ * AMS page). Everything else an athlete account can do is read-only
+ * browsing, plus the personal practice log and cross-training swaps.
  * The first account registered is the head coach (owner); the owner can
  * invite assistant coaches by email, and an invited email registers
  * with coach access to the same shared team data. Only the owner
@@ -697,6 +698,17 @@ function displayValue(result) {
   return result.value;
 }
 const round2 = (v) => Math.round(v * 100) / 100;
+/* Average of a numeric field over rows that actually carry it —
+   check-in history mixes shapes (pre-v56 records have soreness,
+   current ones have pain), so a field average must skip the rows
+   that never recorded it instead of turning NaN. Null when no row
+   carries the field. */
+function avgNumeric(rows, key) {
+  const vals = [];
+  for (const r of rows) if (r && typeof r[key] === 'number') vals.push(r[key]);
+  if (!vals.length) return null;
+  return round2(vals.reduce((s, v) => s + v, 0) / vals.length);
+}
 function medianOf(nums) {
   if (!nums.length) return null;
   const s = nums.slice().sort((a, b) => a - b);
@@ -1472,8 +1484,6 @@ function demoCoverage() {
   return { rows, summary };
 }
 
-const CONCERN_AREAS = ['ankle', 'achilles', 'calf', 'shin', 'knee', 'hamstring', 'quad', 'hip-flexor', 'hip', 'groin', 'glute', 'lower-back', 'foot', 'shoulder', 'other'];
-const CONCERN_FEELINGS = ['ache', 'sharp', 'tightness', 'soreness', 'stiffness', 'swelling', 'other'];
 const EVENT_TAGS = ['sprinter', 'jumper', 'hurdler'];
 
 /* Equipment inventory: fixed category + condition lists. The coach
@@ -1875,17 +1885,25 @@ function overrideSemantic(ov) {
 /* ------------------------------------------------------------------ */
 /* Flag rules, shared by the athlete view, the coach Wellness view,
    and the Coach Today line so a flag means the same thing everywhere:
-   slept under 6 hours, soreness 4 or 5, energy 1 or 2. */
+   slept under 6 hours, body pain 8 or higher, energy 1 or 2.
+   (Pre-v56 check-ins carried soreness 1–5 instead of pain; their
+   stored fields still ride along below so history renders, but the
+   flag rules read the current shape only.) */
 function checkinFlags(c) {
   const flags = [];
   if (c.sleep < 6) flags.push('low-sleep');
-  if (c.soreness >= 4) flags.push('high-soreness');
+  if (typeof c.pain === 'number' && c.pain >= 8) flags.push('high-pain');
   if (c.energy <= 2) flags.push('low-energy');
   return flags;
 }
 function publicCheckin(c) {
   return {
-    date: c.date, sleep: c.sleep, soreness: c.soreness, energy: c.energy,
+    date: c.date, sleep: c.sleep,
+    pain: typeof c.pain === 'number' ? c.pain : null,
+    energy: c.energy,
+    /* Legacy fields (pre-v56 records only): kept readable so an old
+       check-in still renders in history; new records never set them. */
+    soreness: typeof c.soreness === 'number' ? c.soreness : null,
     hurts: !!c.hurts, painText: c.painText || '', note: c.note || '',
     headSymptoms: !!c.headSymptoms,
     flags: checkinFlags(c), updatedAt: c.updatedAt,
@@ -1906,19 +1924,21 @@ function checkinStreak(profileId) {
   while (cursor && byDate[cursor]) { n++; cursor = addDaysStr(cursor, -1); }
   return n;
 }
-/* File an athlete-reported concern in the existing Aches & Pains
-   store. The athlete only gives words ("right hamstring is tight"),
-   so the structured coach fields take neutral values: area/feeling
-   "other", no pain score (null — the coach sets one when they pick
-   it up), and source 'athlete' marks it as self-reported wherever
-   concerns are shown. Returns the new concern's id. */
-function createAthleteConcern(prof, date, painText, userId, headSymptoms) {
+/* File the athlete-reported concern a head-symptoms check-in
+   creates. The check-in carries no free text anymore, so the note
+   is the standing line below; the structured coach fields take
+   neutral values (area/feeling "other", no pain score — the coach
+   sets one when they pick it up on the athlete's AMS page), and
+   source 'athlete' marks it as self-reported wherever concerns are
+   shown. Returns the new concern's id. */
+const HEAD_CONCERN_NOTE = 'Head symptoms reported in the daily check-in';
+function createAthleteConcern(prof, date, note, userId, headSymptoms) {
   const now = new Date().toISOString();
   const concern = {
     id: crypto.randomUUID(), profileId: prof.id,
     area: 'other', side: 'na', feeling: 'other', pain: null,
     started: date, impact: 'none',
-    note: painText, status: 'new', coachNote: '',
+    note, status: 'new', coachNote: '',
     source: 'athlete', reportedBy: userId || null, checkinDate: date,
     headRelated: !!headSymptoms,
     acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
@@ -1997,27 +2017,24 @@ function decryptBackupEnvelope(env, passphrase) {
   ]).toString('utf8');
 }
 /* The check-in validation rules, in one place: sleep 3–13 hours in
-   half-hour steps, soreness/energy whole numbers 1–5, pain text up
-   to 240 chars, note up to 500. Returns { fields } or { error }. */
+   half-hour steps, body pain a required whole number 1–10, energy
+   a whole number 1–5, note up to 500. The old soreness scale and
+   the "something hurts" free text are gone (v56): a stray soreness,
+   hurts, or painText field in the body is ignored, never stored,
+   and never files a concern. Returns { fields } or { error }. */
 function validateCheckin(body) {
   const sleep = num(body.sleep);
   if (sleep === null || sleep < 3 || sleep > 13
     || Math.abs(sleep * 2 - Math.round(sleep * 2)) > 1e-9) {
     return { error: 'Sleep must be between 3 and 13 hours, in half-hour steps.' };
   }
-  const soreness = num(body.soreness);
-  if (soreness === null || !Number.isInteger(soreness) || soreness < 1 || soreness > 5) {
-    return { error: 'Soreness must be a whole number from 1 to 5.' };
+  const pain = num(body.pain);
+  if (pain === null || !Number.isInteger(pain) || pain < 1 || pain > 10) {
+    return { error: 'Body pain must be a whole number from 1 to 10.' };
   }
   const energy = num(body.energy);
   if (energy === null || !Number.isInteger(energy) || energy < 1 || energy > 5) {
     return { error: 'Energy must be a whole number from 1 to 5.' };
-  }
-  if (body.painText !== undefined && body.painText !== null && typeof body.painText !== 'string') {
-    return { error: 'Say what hurts in words.' };
-  }
-  if (typeof body.painText === 'string' && body.painText.length > 240) {
-    return { error: 'Keep the pain note to 240 characters or less.' };
   }
   if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') {
     return { error: 'The note must be text.' };
@@ -2027,14 +2044,12 @@ function validateCheckin(body) {
   }
   return {
     fields: {
-      sleep, soreness, energy,
-      hurts: !!body.hurts,
+      sleep, pain, energy,
       /* The concussion branch: a structured yes/no the athlete
-         answers alongside "something hurts" — headache, dizziness,
-         or a hit to the head. It files the concern as head-related,
-         which holds the athlete until a clearance is recorded. */
-      headSymptoms: !!body.hurts && !!body.headSymptoms,
-      painText: clean(body.painText, 240),
+         answers on its own — headache, dizziness, or a hit to the
+         head. A yes files a head-related concern, which holds the
+         athlete until a clearance is recorded. */
+      headSymptoms: !!body.headSymptoms,
       note: clean(body.note, 500),
     },
   };
@@ -2239,20 +2254,22 @@ function qualityForTest(t) {
 /* ------------------------------------------------------------------ */
 /* AMS attention flags (coach-side only)                               */
 /* ------------------------------------------------------------------ */
-/* Four flags, each computed from data the app already holds, with
-   the same rules everywhere they appear (the AMS roster table and
-   the AMS profile page read this one function):
+/* Attention flags, each computed from data the app already holds,
+   with the same rules everywhere they appear (the AMS roster table
+   and the AMS profile page read this one function):
    - Readiness: 2+ check-ins flagged by checkinFlags in the last
      7 days (today and the 6 days before it).
    - No check-in: a LINKED athlete with no check-in in the last
      3 days (today and the 2 days before it). Unlinked athletes
      never earn this flag — they get the neutral "Not linked"
      indicator instead, since they cannot check in at all.
-   - Attendance: 2+ Absent marks in the last 14 days.
-   - Health: 1+ aches & pains concerns currently new/open/monitoring
+   - Health: 1+ health concerns currently new/open/monitoring
      (the concern store's live statuses are new/monitoring/cleared;
      'open' is accepted defensively so a future status rename can
      never silently hide an active concern).
+   - High pain: body pain of 8+ reported on any check-in in the
+     last 7 days — a prompt for a human follow-up, coach-facing
+     only, like the distress pattern below.
    Plus three device flags from the athlete's latest ForceDecks /
    NordBord sessions — NordBord imbalance (>10% left/right max
    force apart), ForceDecks asymmetry (an 'asym' metric over 10),
@@ -2307,25 +2324,35 @@ function amsFlagsFor(pr, today) {
       });
     }
   }
-  const start14 = addDaysStr(today, -13);
-  let absents = 0;
-  for (const ds of Object.keys(db.attendance)) {
-    if (ds < start14 || ds > today) continue;
-    const rec = db.attendance[ds][pr.id];
-    if (rec && rec.status === 'absent') absents++;
-  }
-  if (absents >= 2) {
-    flags.push({
-      key: 'attendance', label: 'Attendance', count: absents,
-      detail: absents + ' absences in the last 14 days',
-    });
-  }
   const openConcerns = (db.concerns[pr.id] || [])
     .filter(c => c.status === 'new' || c.status === 'open' || c.status === 'monitoring').length;
   if (openConcerns >= 1) {
     flags.push({
       key: 'health', label: 'Health', count: openConcerns,
       detail: openConcerns + (openConcerns === 1 ? ' open concern' : ' open concerns'),
+    });
+  }
+  /* High pain: body pain of 8 or more on any check-in in the last
+     7 days. The count is the number of such days; the detail names
+     the most recent one, so the coach knows how fresh it is. */
+  let highPainDays = 0;
+  let highPainLatest = null;
+  for (const ds of Object.keys(byDate)) {
+    if (ds < weekStart || ds > today) continue;
+    const c = byDate[ds];
+    if (typeof c.pain === 'number' && c.pain >= 8) {
+      highPainDays++;
+      if (!highPainLatest || ds > highPainLatest.date) {
+        highPainLatest = { date: ds, pain: c.pain };
+      }
+    }
+  }
+  if (highPainDays >= 1) {
+    flags.push({
+      key: 'high-pain', label: 'High pain reported — check in with this athlete',
+      count: highPainDays,
+      detail: 'Body pain ' + highPainLatest.pain + '/10 reported on ' + highPainLatest.date
+        + (highPainDays > 1 ? ' (' + highPainDays + ' days at 8+ in the last 7 days)' : ''),
     });
   }
   /* Device flags, each read off the athlete's LATEST session for
@@ -3260,11 +3287,11 @@ async function handleApi(req, res, url) {
 
   /* ---------- daily wellness check-in (athlete-entered) ----------
      The one thing an athlete writes about the team: how they slept,
-     how sore they are, their energy — once a day. It only works for
-     an account a coach has linked to a roster profile; the profile
-     always comes from the caller's own binding, never from the
-     request, so writing (or reading) anyone else's check-in is
-     impossible by construction. */
+     their body pain (1–10), their energy, and a yes/no on head
+     symptoms — once a day. It only works for an account a coach has
+     linked to a roster profile; the profile always comes from the
+     caller's own binding, never from the request, so writing (or
+     reading) anyone else's check-in is impossible by construction. */
   if (p === '/api/checkin/today' && req.method === 'GET') {
     const prof = linkedProfileFor(user);
     const date = todayStr();
@@ -3330,52 +3357,37 @@ async function handleApi(req, res, url) {
       profileId: prof.id, date, concernId: null, createdAt: now,
     };
     Object.assign(entry, {
-      sleep: f.sleep, soreness: f.soreness, energy: f.energy,
-      hurts: f.hurts, painText: f.hurts ? f.painText : '',
+      sleep: f.sleep, pain: f.pain, energy: f.energy,
       headSymptoms: f.headSymptoms,
       note: f.note, updatedAt: now,
     });
-    /* Pain integration: "something hurts" + words files ONE
-       athlete-reported concern per check-in day. Re-submitting the
-       same day updates that same concern's text instead of filing a
-       second one. If the athlete edits the report away, the linked
-       concern is removed too — but only while a coach has not
-       picked it up yet (status still 'new'); once it is being
-       monitored, the record stands on its own. */
-    if (f.hurts) {
-      let concern = entry.concernId
-        ? (db.concerns[prof.id] || []).find(c => c.id === entry.concernId)
-        : null;
-      if (concern && concern.status === 'cleared') concern = null;
-      if (concern) {
-        concern.note = f.painText;
-        concern.updatedAt = now;
-        /* Head symptoms reported on a re-submit mark the concern
-           head-related (and so hold the athlete). The reverse never
-           happens here: an edit cannot un-mark a head concern —
-           only a recorded clearance closes one. */
-        if (f.headSymptoms && !concern.headRelated) {
-          concern.headRelated = true;
-          concernAuditPush(concern, null, 'head-flagged',
-            'Head symptoms reported in the daily check-in');
+    /* A re-saved check-in is a current-shape record: the pre-v56
+       fields come off the stored entry, so what is stored always
+       matches the questions the athlete actually answered. (Other
+       days' historical records keep their stored fields as-is.) */
+    delete entry.soreness;
+    delete entry.hurts;
+    delete entry.painText;
+    /* Head-symptoms integration: a yes files ONE athlete-reported
+       head-related concern, which holds the athlete until a coach
+       works it through disposition and recorded clearance on the
+       athlete's AMS page. While a head concern is already open, a
+       further yes links to it instead of filing a duplicate. The
+       reverse never happens: editing the check-in cannot withdraw
+       or un-mark a head concern — only a recorded clearance
+       closes one. */
+    if (f.headSymptoms) {
+      const open = openHeadConcernFor(prof.id);
+      if (open) {
+        if (entry.concernId !== open.id) {
+          entry.concernId = open.id;
+          concernAuditPush(open, null, 'head-flagged',
+            'Head symptoms reported again in the daily check-in');
+          open.updatedAt = now;
         }
       } else {
-        entry.concernId = createAthleteConcern(prof, date, f.painText, user.id, f.headSymptoms);
+        entry.concernId = createAthleteConcern(prof, date, HEAD_CONCERN_NOTE, user.id, true);
       }
-    } else if (entry.concernId) {
-      const list = db.concerns[prof.id] || [];
-      const idx = list.findIndex(c => c.id === entry.concernId);
-      /* A head-related concern is never withdrawn by an edit, even
-         while it is still 'new' — it stands until a coach works it
-         through disposition and recorded clearance. */
-      if (idx >= 0 && list[idx].status === 'new' && !list[idx].headRelated) {
-        list.splice(idx, 1);
-        entry.concernId = null;
-      } else if (idx < 0) {
-        entry.concernId = null;
-      }
-      /* A concern a coach is already monitoring keeps its link, so
-         re-flagging later updates it instead of filing a duplicate. */
     }
     db.checkins[prof.id][date] = entry;
     saveDb();
@@ -4022,7 +4034,7 @@ async function handleApi(req, res, url) {
     });
     /* Athletes held for head symptoms: the flag only (name +
        since), never the symptom detail — the checklist shows who
-       is out, the concern itself lives in Aches & Pains. */
+       is out, the concern itself lives on the athlete's AMS page. */
     const heldAthletes = [];
     for (const pr of db.profiles) {
       if (pr.archived) continue;
@@ -4048,164 +4060,12 @@ async function handleApi(req, res, url) {
     });
   }
 
-  /* ---------- attendance (coach roll-book) ----------
-     One mark per athlete per day — present, late, excused, absent —
-     entered by the coach only. Attendance is its own record: it
-     never touches assignments or completions, and it never reaches
-     an athlete-facing payload (these endpoints live below the coach
-     gate, and the TV board never reads them). Dates are unbounded
-     beyond sane parsing: past days can be fixed up, future days can
-     be pre-marked. */
-  const ATTENDANCE_STATUSES = ['present', 'late', 'excused', 'absent'];
-  function attendanceCountsFor(date, memberIds) {
-    const marks = db.attendance[date] || {};
-    const counts = { present: 0, late: 0, excused: 0, absent: 0, unmarked: 0 };
-    for (const id of memberIds) {
-      const rec = marks[id];
-      if (rec && ATTENDANCE_STATUSES.includes(rec.status)) counts[rec.status]++;
-      else counts.unmarked++;
-    }
-    return counts;
-  }
-  /* The summary windows and their per-athlete counting, shared by
-     the summary endpoint and the AMS profile page so both read the
-     same numbers: last 30 days ending today, and season-to-date
-     (the season opens on the plan's first week). Attended counts
-     present + late; the percentage runs over marked days only —
-     unmarked days never count against an athlete (null when the
-     athlete has no marks in the window at all). */
-  function attendanceWindows() {
-    const today = todayStr();
-    const seasonStart = (CONTENT.weeks && CONTENT.weeks.length && CONTENT.weeks[0].start)
-      || addDaysStr(today, -29);
-    return {
-      today,
-      last30: { from: addDaysStr(today, -29), to: today },
-      season: { from: seasonStart, to: today },
-    };
-  }
-  function attendanceCountsInWindow(profileId, win) {
-    const counts = { marked: 0, present: 0, late: 0, excused: 0, absent: 0, attended: 0, percent: null };
-    for (const date of Object.keys(db.attendance)) {
-      if (date < win.from || date > win.to) continue;
-      const rec = db.attendance[date][profileId];
-      if (!rec || !ATTENDANCE_STATUSES.includes(rec.status)) continue;
-      counts.marked++;
-      counts[rec.status]++;
-    }
-    counts.attended = counts.present + counts.late;
-    counts.percent = counts.marked ? Math.round((counts.attended / counts.marked) * 1000) / 10 : null;
-    return counts;
-  }
-  /* An athlete's most recent attendance marks, newest first. */
-  function attendanceRecentMarks(profileId, limit) {
-    const out = [];
-    for (const date of Object.keys(db.attendance).sort().reverse()) {
-      const rec = db.attendance[date][profileId];
-      if (rec && ATTENDANCE_STATUSES.includes(rec.status)) {
-        out.push({ date, status: rec.status });
-      }
-      if (out.length >= limit) break;
-    }
-    return out;
-  }
-  if (p === '/api/attendance' && req.method === 'GET') {
-    const date = clean(q.get('date') || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
-    const marks = db.attendance[date] || {};
-    const blockFor = (g) => {
-      const members = db.profiles.filter(pr => !pr.archived && (g ? pr.groupId === g.id : !pr.groupId));
-      return {
-        group: g ? { id: g.id, name: g.name } : null,
-        members: members.map(pr => ({
-          profile: publicProfile(pr),
-          attendance: marks[pr.id]
-            ? { status: marks[pr.id].status, updatedAt: marks[pr.id].updatedAt, updatedBy: marks[pr.id].updatedBy }
-            : null,
-        })),
-      };
-    };
-    const active = db.profiles.filter(pr => !pr.archived);
-    return sendJson(res, 200, {
-      date,
-      counts: attendanceCountsFor(date, active.map(pr => pr.id)),
-      groups: db.groups.map(blockFor),
-      unassigned: blockFor(null),
-    });
-  }
-
-  const attRoute = p.match(/^\/api\/attendance\/([^/]+)\/([^/]+)$/);
-  if (attRoute && req.method === 'POST' && attRoute[2] === 'mark-all-present') {
-    const date = attRoute[1];
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
-    db.attendance[date] = db.attendance[date] || {};
-    let marked = 0, skipped = 0;
-    for (const pr of db.profiles) {
-      if (pr.archived) continue;
-      if (db.attendance[date][pr.id]) { skipped++; continue; }
-      db.attendance[date][pr.id] = { status: 'present', updatedAt: new Date().toISOString(), updatedBy: user.id };
-      marked++;
-    }
-    saveDb();
-    return sendJson(res, 200, { ok: true, date, marked, skipped });
-  }
-  if (attRoute && req.method === 'PUT') {
-    const date = attRoute[1];
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
-    const prof = profileById(decodeURIComponent(attRoute[2]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
-    const body = await readBody(req);
-    if (body.status === null || body.status === undefined) {
-      if (db.attendance[date]) {
-        delete db.attendance[date][prof.id];
-        if (!Object.keys(db.attendance[date]).length) delete db.attendance[date];
-      }
-      saveDb();
-      return sendJson(res, 200, { ok: true, cleared: true, date, profileId: prof.id });
-    }
-    const status = clean(body.status, 20);
-    if (!ATTENDANCE_STATUSES.includes(status)) {
-      return sendJson(res, 400, { error: 'Status must be present, late, excused, or absent — or null to clear.' });
-    }
-    db.attendance[date] = db.attendance[date] || {};
-    const rec = { status, updatedAt: new Date().toISOString(), updatedBy: user.id };
-    db.attendance[date][prof.id] = rec;
-    saveDb();
-    return sendJson(res, 200, { ok: true, date, profileId: prof.id, attendance: rec });
-  }
-
-  /* Per-athlete attendance over trailing windows: the last 30 days
-     and season-to-date by default (the season opens on the plan's
-     first week), plus an exact custom window when ?from&to are
-     given — the shape the future AMS layer reuses. Attended counts
-     present + late; the percentage runs over marked days only, so
-     unmarked days never count against an athlete (null when an
-     athlete has no marks in the window at all). */
-  if (p === '/api/attendance/summary' && req.method === 'GET') {
-    const aw = attendanceWindows();
-    const today = aw.today;
-    const windows = { last30: aw.last30, season: aw.season };
-    const customFrom = clean(q.get('from') || '', 10);
-    const customTo = clean(q.get('to') || '', 10);
-    if (customFrom || customTo) {
-      if (!parseDateStr(customFrom) || !parseDateStr(customTo) || customFrom > customTo) {
-        return sendJson(res, 400, { error: 'A custom window needs from and to as YYYY-MM-DD, from on or before to.' });
-      }
-      windows.custom = { from: customFrom, to: customTo };
-    }
-    const athletes = db.profiles.filter(pr => !pr.archived).map(pr => {
-      const row = { profile: publicProfile(pr) };
-      for (const key of Object.keys(windows)) row[key] = attendanceCountsInWindow(pr.id, windows[key]);
-      return row;
-    });
-    return sendJson(res, 200, { today, windows, athletes });
-  }
-
   /* ---------- AMS (athlete management system) ----------
      The coach-side home for everything the app holds on one
      athlete: a roster table with coach-set status and computed
      attention flags, one aggregate page per athlete (wellness,
-     testing, meet PRs, attendance, health, goals), and a private
+     testing, meet PRs, health — including the concern workflow
+     and clearance recording — and goals), and a private
      coach-notes thread. Everything here sits below the coach
      gate: athletes get 403, logged-out 401. Notes in particular
      are coach-only data — they are served ONLY by these endpoints
@@ -4245,21 +4105,14 @@ async function handleApi(req, res, url) {
       const c = byDate[addDaysStr(today, -i)];
       if (c) recent.push(publicCheckin(c));
     }
-    const avgOf = (key) => (recent.length
-      ? round2(recent.reduce((s, c) => s + c[key], 0) / recent.length) : null);
     const wellness = {
       recent,
       summary: {
         days: recent.length,
-        avgSleep: avgOf('sleep'), avgSoreness: avgOf('soreness'), avgEnergy: avgOf('energy'),
+        avgSleep: avgNumeric(recent, 'sleep'), avgPain: avgNumeric(recent, 'pain'),
+        avgEnergy: avgNumeric(recent, 'energy'),
         flaggedDays: recent.filter(c => c.flags.length).length,
       },
-    };
-    const aw = attendanceWindows();
-    const attendance = {
-      last30: attendanceCountsInWindow(prof.id, aw.last30),
-      season: attendanceCountsInWindow(prof.id, aw.season),
-      recent: attendanceRecentMarks(prof.id, 10),
     };
     const concerns = (db.concerns[prof.id] || []).slice()
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -4298,7 +4151,6 @@ async function handleApi(req, res, url) {
       devices: deviceSummaryFor(prof.id),
       meetPrs: meetPrsFor(prof.id),
       recentResults,
-      attendance,
       health: { counts: healthCounts, concerns },
       goals: goalsForProfile(prof.id),
       learningPaths,
@@ -4802,27 +4654,6 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true, counts });
   }
 
-  if (p === '/api/export/attendance.csv' && req.method === 'GET') {
-    const rows = [['Date', 'Athlete', 'Group', 'Status']];
-    const entries = [];
-    for (const [date, byProfile] of Object.entries(db.attendance)) {
-      for (const [pid, mark] of Object.entries(byProfile || {})) {
-        const prof = profileById(pid);
-        const pub = prof ? publicProfile(prof) : null;
-        entries.push({
-          date, name: pub ? pub.name : pid,
-          row: [date, pub ? pub.name : pid, pub ? (pub.groupName || '') : '',
-            mark && mark.status ? mark.status : ''],
-        });
-      }
-    }
-    entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.name.localeCompare(b.name)));
-    for (const e of entries) rows.push(e.row);
-    logDataEvent(user, 'csv', 'attendance.csv');
-    saveDb();
-    return sendCsv(res, 'attendance.csv', rows);
-  }
-
   if (p === '/api/export/testing-detail.csv' && req.method === 'GET') {
     const rows = [['Athlete', 'Test Date', 'Test', 'Value', 'Weight (lb)', 'Reps', 'Est. 1RM (lb)']];
     const entries = [];
@@ -4848,7 +4679,10 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/export/checkins.csv' && req.method === 'GET') {
-    const rows = [['Athlete', 'Date', 'Sleep (hrs)', 'Soreness', 'Energy', 'Something Hurts']];
+    /* Pain is the current scale (v56). Historical rows predate it
+       and export a blank Pain — their soreness values stay in the
+       stored records and backups, just not in this sheet. */
+    const rows = [['Athlete', 'Date', 'Sleep (hrs)', 'Pain', 'Energy']];
     const entries = [];
     for (const [pid, byDate] of Object.entries(db.checkins)) {
       const prof = profileById(pid);
@@ -4857,9 +4691,8 @@ async function handleApi(req, res, url) {
         entries.push({
           name, date,
           row: [name, date, numStr(c.sleep),
-            c.soreness === null || c.soreness === undefined ? '' : String(c.soreness),
-            c.energy === null || c.energy === undefined ? '' : String(c.energy),
-            c.hurts ? 'yes' : 'no'],
+            typeof c.pain === 'number' ? String(c.pain) : '',
+            c.energy === null || c.energy === undefined ? '' : String(c.energy)],
         });
       }
     }
@@ -5240,47 +5073,16 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { topAthletes: tops, metrics: allWeeklyMetrics(), entries });
   }
 
-  /* ---------- Aches & pains (coach records what athletes report) ---------- */
-  if (p === '/api/concerns' && req.method === 'POST') {
-    const body = await readBody(req);
-    const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
-    const area = clean(body.area, 20);
-    const side = clean(body.side, 6);
-    const feeling = clean(body.feeling, 16);
-    const impact = clean(body.impact, 10);
-    const started = clean(body.started, 10);
-    if (!CONCERN_AREAS.includes(area)) return sendJson(res, 400, { error: 'Pick a body area from the list.' });
-    if (!['left', 'right', 'both', 'na'].includes(side)) return sendJson(res, 400, { error: 'Pick a side: left, right, both, or n/a.' });
-    if (!CONCERN_FEELINGS.includes(feeling)) return sendJson(res, 400, { error: 'Pick what it feels like from the list.' });
-    if (!['none', 'modified', 'stopped'].includes(impact)) return sendJson(res, 400, { error: 'Say whether it affects training.' });
-    if (!parseDateStr(started)) return sendJson(res, 400, { error: 'When it started must be a date (YYYY-MM-DD).' });
-    const pain = num(body.pain);
-    if (pain === null || !Number.isInteger(pain) || pain < 1 || pain > 10) {
-      return sendJson(res, 400, { error: 'Pain level must be a whole number from 1 to 10.' });
-    }
-    const now = new Date().toISOString();
-    const concern = {
-      id: crypto.randomUUID(), profileId: prof.id,
-      area, side, feeling, pain, started, impact,
-      note: clean(body.note, 500),
-      status: 'new', coachNote: '',
-      /* A coach can file a concern as head-related (the athlete
-         said it in person, the hit happened at practice): it
-         holds the athlete exactly like a check-in head report. */
-      headRelated: !!body.headRelated,
-      acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
-      disposition: '', dispositionBy: null, dispositionAt: null,
-      clearance: null,
-      audit: [{ userId: user.id, email: user.email, action: 'filed', at: now, detail: '' }],
-      createdAt: now, updatedAt: now,
-    };
-    db.concerns[prof.id] = db.concerns[prof.id] || [];
-    db.concerns[prof.id].push(concern);
-    saveDb();
-    return sendJson(res, 201, { concern });
-  }
-
+  /* ---------- Health concerns (worked on the athlete's AMS page) ---------- */
+  /* Health concerns: there is deliberately no creation endpoint
+     anymore (v56). New concerns come into being exactly one way —
+     an athlete reporting head symptoms in the daily check-in files
+     the head-related concern that holds them. Everything below is
+     the working side of records that already exist (including
+     coach-filed records from before v56, which stay fully
+     workable): list, read, update (acknowledge / disposition /
+     clearance / close), and delete for coach-filed records.
+     Athlete-reported records are never deleted. */
   if (p === '/api/concerns' && req.method === 'GET') {
     // Coach-only list of every concern, severity first, then newest.
     const all = [];
@@ -5461,8 +5263,7 @@ async function handleApi(req, res, url) {
       .sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
   }
   function wellnessAvg(rows, key) {
-    if (!rows.length) return null;
-    return round2(rows.reduce((s, c) => s + c[key], 0) / rows.length);
+    return avgNumeric(rows, key);
   }
   if (p === '/api/wellness/today' && req.method === 'GET') {
     const date = todayStr();
@@ -5484,7 +5285,7 @@ async function handleApi(req, res, url) {
         participation: rows.length ? Math.round((done.length / rows.length) * 100) : 0,
         flagged: rows.filter(rw => rw.flags.length).length,
         avgSleep: wellnessAvg(done, 'sleep'),
-        avgSoreness: wellnessAvg(done, 'soreness'),
+        avgPain: wellnessAvg(done, 'pain'),
         avgEnergy: wellnessAvg(done, 'energy'),
       },
       rows,
@@ -5503,7 +5304,9 @@ async function handleApi(req, res, url) {
         const c = (db.checkins[pr.id] || {})[d] || null;
         return {
           date: d,
-          sleep: c ? c.sleep : null, soreness: c ? c.soreness : null, energy: c ? c.energy : null,
+          sleep: c ? c.sleep : null,
+          pain: c && typeof c.pain === 'number' ? c.pain : null,
+          energy: c ? c.energy : null,
           flags: c ? checkinFlags(c) : [],
         };
       }),
@@ -5513,7 +5316,7 @@ async function handleApi(req, res, url) {
       return {
         date: d, checkedIn: cs.length,
         avgSleep: wellnessAvg(cs, 'sleep'),
-        avgSoreness: wellnessAvg(cs, 'soreness'),
+        avgPain: wellnessAvg(cs, 'pain'),
         avgEnergy: wellnessAvg(cs, 'energy'),
       };
     });
@@ -6330,10 +6133,10 @@ async function handleApi(req, res, url) {
     });
     const dailyTrend = Object.keys(dayEntries).sort().map(d => {
       const cs = dayEntries[d];
-      const avgOf = (k) => round2(cs.reduce((s, c) => s + c[k], 0) / cs.length);
       return {
         date: d, count: cs.length,
-        avgSleep: avgOf('sleep'), avgSoreness: avgOf('soreness'), avgEnergy: avgOf('energy'),
+        avgSleep: avgNumeric(cs, 'sleep'), avgPain: avgNumeric(cs, 'pain'),
+        avgEnergy: avgNumeric(cs, 'energy'),
       };
     });
     return sendJson(res, 200, {
@@ -6447,11 +6250,10 @@ async function handleApi(req, res, url) {
         for (const f of flags) rec.counts[f] = (rec.counts[f] || 0) + 1;
       }
     }
-    const ciAvg = (key) => (ciWeek.length
-      ? round2(ciWeek.reduce((s, c) => s + c[key], 0) / ciWeek.length) : null);
+    const ciAvg = (key) => avgNumeric(ciWeek, key);
     const flagged = [...flagByAthlete.values()].map(rec => {
       let mainFlag = null, most = -1;
-      for (const f of ['low-sleep', 'high-soreness', 'low-energy']) {
+      for (const f of ['low-sleep', 'high-pain', 'low-energy']) {
         if ((rec.counts[f] || 0) > most) { most = rec.counts[f] || 0; mainFlag = f; }
       }
       return {
@@ -6464,7 +6266,7 @@ async function handleApi(req, res, url) {
       recorded: ciRecorded, possible: ciPossible,
       percent: ciPossible ? Math.round((ciRecorded / ciPossible) * 100) : 0,
       roster: roster.length,
-      avgSleep: ciAvg('sleep'), avgSoreness: ciAvg('soreness'), avgEnergy: ciAvg('energy'),
+      avgSleep: ciAvg('sleep'), avgPain: ciAvg('pain'), avgEnergy: ciAvg('energy'),
       flaggedCount: flagByAthlete.size,
       flagged,
     };

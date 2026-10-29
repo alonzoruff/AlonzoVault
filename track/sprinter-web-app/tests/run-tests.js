@@ -427,12 +427,19 @@ async function main() {
      'data-view="account"', 'data-view="coachhub"'].every(s => pageHtml.text.includes(s)));
   check('mobile bottom tab bar is in the served page',
     pageHtml.text.includes('id="tab-bar"') && pageHtml.text.includes('tabbar'));
-  check('every pre-existing view section survived the reorganization',
+  check('every surviving view section is still in the page',
     ['view-home', 'view-library', 'view-season', 'view-log', 'view-cards', 'view-nutrition',
      'view-videos', 'view-definitions', 'view-education', 'view-testing', 'view-top',
-     'view-health', 'view-groups', 'view-coach', 'view-inventory', 'view-drills',
+     'view-groups', 'view-coach', 'view-inventory', 'view-drills',
      'view-qtr', 'view-guide', 'view-account']
       .every(id => pageHtml.text.includes('id="' + id + '"')));
+  /* v56: the Attendance and Aches & Pains sections are gone at the
+     coach's direction — sections, menu entries, and nav routes. */
+  check('v56: attendance and aches sections are gone from the page',
+    !pageHtml.text.includes('id="view-attendance"') && !pageHtml.text.includes('id="view-health"') &&
+    !pageHtml.text.includes('data-view="attendance"') && !pageHtml.text.includes('data-view="health"') &&
+    !appJs.text.includes("['attendance', 'Attendance']") && !appJs.text.includes("['health', 'Aches & Pains']") &&
+    !appJs.text.includes('renderAttendance') && !appJs.text.includes('renderHealth'));
   check('grouped views keep a sub-navigation slot',
     (pageHtml.text.match(/subnav-slot/g) || []).length >= 12,
     (pageHtml.text.match(/subnav-slot/g) || []).length);
@@ -445,8 +452,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v55',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v55"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v57',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v57"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -844,26 +851,39 @@ async function main() {
   check('dashboard lists Jane as a top athlete', r.json.topAthletes.some(t => t.id === jane));
   check('dashboard carries Jane fly-30m entries', !!(r.json.entries[jane] || {})['fly-30m']);
 
-  /* ---------------- aches & pains ---------------- */
+  /* ---------------- health concerns (worked on the AMS page) ----
+     v56 removed the Aches & Pains section AND the creation
+     endpoint with it: new concerns come into being only when an
+     athlete reports head symptoms in the daily check-in. Records
+     that already exist — like the coach-filed ones below, seeded
+     the way a pre-v56 backup carries them — stay fully workable:
+     list, update, disposition, clearance, close. */
   r = await api(coach, 'POST', '/api/concerns', { profileId: jane, area: 'hamstring', side: 'left', feeling: 'tightness', pain: 6, started: '2026-10-27', impact: 'modified', note: 'Tight after hills' });
-  check('concern create is 201', r.status === 201, r.status);
-  check('concern starts as "new"', r.json.concern.status === 'new', r.json.concern);
-  const concern1 = r.json.concern.id;
-  for (const [label, patch] of [
-    ['pain 0', { pain: 0 }], ['pain 11', { pain: 11 }], ['pain 5.5', { pain: 5.5 }],
-    ['bad area', { area: 'elbow-grease' }], ['bad side', { side: 'middle' }],
-    ['bad feeling', { feeling: 'weird' }], ['bad impact', { impact: 'meh' }],
-    ['Feb 30 start', { started: '2026-02-30' }], ['word start date', { started: 'yesterday' }],
-  ]) {
-    const body = Object.assign({ profileId: jane, area: 'knee', side: 'left', feeling: 'ache', pain: 5, started: '2026-10-27', impact: 'none' }, patch);
-    r = await api(coach, 'POST', '/api/concerns', body);
-    check('concern with ' + label + ' is 400', r.status === 400, r.status);
-  }
-  r = await api(coach, 'POST', '/api/concerns', { profileId: 'nope', area: 'knee', side: 'left', feeling: 'ache', pain: 5, started: '2026-10-27', impact: 'none' });
-  check('concern for unknown profile is 404', r.status === 404, r.status);
-  r = await api(coach, 'POST', '/api/concerns', { profileId: jane, area: 'achilles', side: 'right', feeling: 'sharp', pain: 8, started: '2026-10-28', impact: 'stopped', note: '' });
-  const concern2 = r.json.concern.id;
+  check('v56: concern creation endpoint is gone (404)', r.status === 404, r.status);
+  r = await api(athlete, 'POST', '/api/concerns', { profileId: jane, area: 'knee', side: 'left', feeling: 'ache', pain: 5, started: '2026-10-27', impact: 'none' });
+  check('v56: concern creation is gone for athletes too (403 at the coach wall)', r.status === 403, r.status);
+  const concernSeed = (id, over) => Object.assign({
+    id, profileId: jane, area: 'hamstring', side: 'left', feeling: 'tightness',
+    pain: 6, started: '2026-10-27', impact: 'modified', note: 'Tight after hills',
+    status: 'new', coachNote: '', source: 'coach', reportedBy: null, checkinDate: null,
+    headRelated: false,
+    acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
+    disposition: '', dispositionBy: null, dispositionAt: null, clearance: null,
+    audit: [], createdAt: '2026-10-27T12:00:00.000Z', updatedAt: '2026-10-27T12:00:00.000Z',
+  }, over);
+  const concern1 = 'test-concern-jane-1';
+  const concern2 = 'test-concern-jane-2';
+  r = await api(coach, 'POST', '/api/import/backup', {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    data: { concerns: { [jane]: [
+      concernSeed(concern1),
+      concernSeed(concern2, { area: 'achilles', side: 'right', feeling: 'sharp', pain: 8, started: '2026-10-28', impact: 'stopped', note: '', createdAt: '2026-10-28T12:00:00.000Z', updatedAt: '2026-10-28T12:00:00.000Z' }),
+    ] } },
+  });
+  check('pre-existing concerns seed from a backup import', r.status === 200, r.status);
   r = await api(coach, 'GET', '/api/concerns');
+  check('seeded concerns are listed, starting as "new"',
+    r.json.concerns.some(c => c.id === concern1 && c.status === 'new'), r.json.concerns.map(c => c.id));
   check('flagged high-pain concern sorts first', r.json.concerns[0].id === concern2 && r.json.concerns[0].flagged === true, r.json.concerns.map(c => [c.pain, c.flagged]));
   r = await api(coach, 'PUT', '/api/concerns/' + concern2, { status: 'monitoring', coachNote: 'Sent to athletic trainer' });
   check('concern moves to monitoring with note', r.status === 200 && r.json.concern.status === 'monitoring' && r.json.concern.coachNote === 'Sent to athletic trainer', r.json);
@@ -875,7 +895,6 @@ async function main() {
   check('concern update unknown id is 404', r.status === 404, r.status);
   r = await api(coach, 'PUT', '/api/concerns/' + concern2, { status: 'cleared' });
   check('concern can be cleared', r.status === 200 && r.json.concern.status === 'cleared', r.json);
-  void concern1;
 
   /* ---------------- combined profile records ---------------- */
   await api(coach, 'POST', '/api/completions', { profileId: jane, date: '2026-10-26', marks: '10.4', feel: 5 });
@@ -1132,11 +1151,26 @@ async function main() {
   const today = nowD.getFullYear() + '-' + pad2(nowD.getMonth() + 1) + '-' + pad2(nowD.getDate());
 
   // A flagged, still-open concern for Jane (pain 9, stopped training).
-  r = await api(coach, 'POST', '/api/concerns', {
-    profileId: jane, area: 'knee', side: 'right', feeling: 'sharp', pain: 9,
-    started: today, impact: 'stopped', note: 'Summary flag check',
+  // v56: seeded through a backup import, appended to the records
+  // Jane already has (an import replaces a profile's concern list,
+  // so the current list is read back and carried along).
+  r = await api(coach, 'GET', '/api/concerns');
+  const janeConcerns = r.json.concerns.filter(c => c.profileId === jane)
+    .map(c => { const copy = Object.assign({}, c); delete copy.flagged; return copy; });
+  janeConcerns.push({
+    id: 'test-concern-jane-3', profileId: jane, area: 'knee', side: 'right', feeling: 'sharp',
+    pain: 9, started: today, impact: 'stopped', note: 'Summary flag check',
+    status: 'new', coachNote: '', source: 'coach', reportedBy: null, checkinDate: null,
+    headRelated: false,
+    acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
+    disposition: '', dispositionBy: null, dispositionAt: null, clearance: null,
+    audit: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   });
-  check('summary setup: flagged concern created', r.status === 201, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    data: { concerns: { [jane]: janeConcerns } },
+  });
+  check('summary setup: flagged concern seeded', r.status === 200, r.status);
   // Give Jane's group a session today via override so "today" is completable
   // on any weekday (a plan Sunday is an off day, and off days reject marks).
   r = await api(coach, 'POST', '/api/assignments/override', { groupId: gSprint, date: today, sessionId: 'SE-02', note: 'summary test setup' });
@@ -1688,12 +1722,25 @@ async function main() {
   check('athlete report: completion totals are honest (2 recorded; percent null or 0-100)',
     r.json.completions.total === 2 && (r.json.completions.percent === null ||
       (r.json.completions.percent >= 0 && r.json.completions.percent <= 100)), r.json.completions);
-  r = await api(coach, 'POST', '/api/concerns', { profileId: amyR, area: 'knee', side: 'left', feeling: 'ache', pain: 4, started: '2026-12-01', impact: 'modified' });
-  const amyConcern1 = r.json.concern.id;
-  await api(coach, 'PUT', '/api/concerns/' + amyConcern1, { status: 'monitoring' });
-  r = await api(coach, 'POST', '/api/concerns', { profileId: amyR, area: 'ankle', side: 'right', feeling: 'soreness', pain: 2, started: '2026-12-02', impact: 'none' });
-  const amyConcern2 = r.json.concern.id;
-  await api(coach, 'PUT', '/api/concerns/' + amyConcern2, { status: 'cleared' });
+  /* v56: Amy's two concerns arrive the way pre-existing records
+     do now — in a backup import, with their statuses preset (one
+     monitoring, one cleared). */
+  const amyConcernSeed = (id, over) => Object.assign({
+    id, profileId: amyR, area: 'knee', side: 'left', feeling: 'ache', pain: 4,
+    started: '2026-12-01', impact: 'modified', note: '', status: 'new', coachNote: '',
+    source: 'coach', reportedBy: null, checkinDate: null, headRelated: false,
+    acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
+    disposition: '', dispositionBy: null, dispositionAt: null, clearance: null,
+    audit: [], createdAt: '2026-12-01T12:00:00.000Z', updatedAt: '2026-12-01T12:00:00.000Z',
+  }, over);
+  r = await api(coach, 'POST', '/api/import/backup', {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    data: { concerns: { [amyR]: [
+      amyConcernSeed('test-concern-amy-1', { status: 'monitoring' }),
+      amyConcernSeed('test-concern-amy-2', { area: 'ankle', side: 'right', feeling: 'soreness', pain: 2, started: '2026-12-02', impact: 'none', status: 'cleared', createdAt: '2026-12-02T12:00:00.000Z', updatedAt: '2026-12-02T12:00:00.000Z' }),
+    ] } },
+  });
+  check('reports setup: Amy concerns seeded by import', r.status === 200, r.status);
   r = await api(coach, 'GET', '/api/reports/athlete/' + amyR);
   check('athlete report: health counts by status',
     r.json.health.open === 0 && r.json.health.monitoring === 1 &&
@@ -2330,16 +2377,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v55'") &&
-    swJs.text.includes("sprinter-app-v55"));
+    appJs.text.includes("const APP_VERSION = 'v57'") &&
+    swJs.text.includes("sprinter-app-v57"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v55"') &&
-    pageHtml.text.includes('Cadets Sprint · App v55') &&
+    pageHtml.text.includes('data-app-version="v57"') &&
+    pageHtml.text.includes('Cadets Sprint · App v57') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
@@ -2429,11 +2476,12 @@ async function main() {
     appJs.text.includes("if (name === 'groups') renderGroups();") &&
     appJs.text.includes("if (name === 'coach') renderCoach();"));
   check('qa: a new check-in starts unanswered and Save stays disabled until it is not',
-    appJs.text.includes('soreness: c ? c.soreness : null') &&
+    appJs.text.includes('pain: c ? c.pain : null') &&
     appJs.text.includes('energy: c ? c.energy : null') &&
     appJs.text.includes('saveBtn.disabled = !ready'));
-  check('qa: pain text is only sent while Something hurts is checked',
-    appJs.text.includes("painText: $('#ci-hurts').checked ? $('#ci-pain').value : ''"));
+  check('qa (v56): the check-in sends the standalone head-symptoms answer and no hurts text',
+    appJs.text.includes("headSymptoms: $('#ci-head').checked") &&
+    !appJs.text.includes('ci-hurts') && !appJs.text.includes('ci-pain'));
   check('qa: check-in load failure shows an error with retry instead of a silent blank',
     appJs.text.includes('ci-retry'));
   check('qa: coach Today summary failure shows an error with retry instead of vanishing',
@@ -2447,6 +2495,13 @@ async function main() {
     !appJs.text.includes("], 'week', true)"));
   check('qa: a concern with no pain score offers a not-recorded option (never a silent 1/10)',
     appJs.text.includes('— not recorded —') && appJs.text.includes("value === '' ? undefined"));
+  check('v56: the check-in form asks the 1-10 body pain question',
+    appJs.text.includes('Body pain today') && appJs.text.includes("tapRow('pain', c ? c.pain : null, 10)") &&
+    appJs.text.includes("tapRow('energy', c ? c.energy : null, 5)"));
+  check('v56: history renders legacy soreness records instead of blanking them',
+    appJs.text.includes('Soreness ${c.soreness}/5'));
+  check('v56: privacy copy describes the pain scale and the coach-only high-pain flag',
+    appJs.text.includes('body pain from 1 to 10') && appJs.text.includes('high-pain flag'));
   check('qa: wellness view triages flagged first and badges unlinked athletes',
     appJs.text.includes('NOT LINKED') && appJs.text.includes('const triage'));
   check('qa: roster cards show account-link status without opening Edit profile',
@@ -2470,8 +2525,8 @@ async function main() {
 
   /* ---------------- athlete accounts + daily wellness check-in ----------------
      The first athlete-entered surface: a coach links an email to a
-     roster profile; that account can then log sleep/soreness/energy
-     once a day. Runs its own fixtures so the other sections' roster
+     roster profile; that account can then log sleep, body pain
+     (1-10), and energy once a day. Runs its own fixtures so the other sections' roster
      counts stay untouched. Boundary dates are computed from the
      server's own today (reportToday), never hardcoded. */
   const pad2w = (n) => String(n).padStart(2, '0');
@@ -2502,7 +2557,7 @@ async function main() {
   r = await api(will, 'GET', '/api/checkin/today');
   check('unlinked athlete check-in state is linked:false, not an error',
     r.status === 200 && r.json.linked === false && r.json.checkin === null, r.json);
-  r = await api(will, 'POST', '/api/checkin', { sleep: 8, soreness: 3, energy: 3 });
+  r = await api(will, 'POST', '/api/checkin', { sleep: 8, pain: 3, energy: 3 });
   check('unlinked athlete check-in POST is 403 with the notLinked flag',
     r.status === 403 && r.json.notLinked === true, r.json);
   r = await api(will, 'GET', '/api/checkin/mine');
@@ -2562,40 +2617,41 @@ async function main() {
 
   /* Validation: clean 400s, nothing half-saved. */
   const badCheckins = [
-    [{ sleep: 2.5, soreness: 3, energy: 3 }, 'sleep below range'],
-    [{ sleep: 13.5, soreness: 3, energy: 3 }, 'sleep above range'],
-    [{ sleep: 7.3, soreness: 3, energy: 3 }, 'sleep off the half step'],
-    [{ sleep: 8, soreness: 0, energy: 3 }, 'soreness below range'],
-    [{ sleep: 8, soreness: 6, energy: 3 }, 'soreness above range'],
-    [{ sleep: 8, soreness: 2.5, energy: 3 }, 'soreness not whole'],
-    [{ sleep: 8, soreness: 3, energy: 0 }, 'energy below range'],
-    [{ sleep: 8, soreness: 3, energy: 6 }, 'energy above range'],
-    [{ sleep: 8, soreness: 3, energy: 3, hurts: true, painText: 'x'.repeat(241) }, 'pain text over 240 chars'],
-    [{ sleep: 8, soreness: 3, energy: 3, note: 'x'.repeat(501) }, 'note over 500 chars'],
-    [{ sleep: 8, soreness: 3, energy: 3, date: addDays(reportToday, 1) }, 'future date'],
-    [{ sleep: 8, soreness: 3, energy: 3, date: '2026-02-30' }, 'impossible date'],
+    [{ sleep: 2.5, pain: 3, energy: 3 }, 'sleep below range'],
+    [{ sleep: 13.5, pain: 3, energy: 3 }, 'sleep above range'],
+    [{ sleep: 7.3, pain: 3, energy: 3 }, 'sleep off the half step'],
+    [{ sleep: 8, pain: 0, energy: 3 }, 'pain below range'],
+    [{ sleep: 8, pain: 11, energy: 3 }, 'pain above range'],
+    [{ sleep: 8, pain: 2.5, energy: 3 }, 'pain not whole'],
+    [{ sleep: 8, energy: 3 }, 'pain missing (it is required)'],
+    [{ sleep: 8, soreness: 3, energy: 3 }, 'soreness alone no longer satisfies the check-in'],
+    [{ sleep: 8, pain: 3, energy: 0 }, 'energy below range'],
+    [{ sleep: 8, pain: 3, energy: 6 }, 'energy above range'],
+    [{ sleep: 8, pain: 3, energy: 3, note: 'x'.repeat(501) }, 'note over 500 chars'],
+    [{ sleep: 8, pain: 3, energy: 3, date: addDays(reportToday, 1) }, 'future date'],
+    [{ sleep: 8, pain: 3, energy: 3, date: '2026-02-30' }, 'impossible date'],
   ];
   for (const [body, label] of badCheckins) {
     r = await api(will, 'POST', '/api/checkin', body);
     check('check-in validation 400: ' + label, r.status === 400, r.status);
   }
-  r = await api(null, 'POST', '/api/checkin', { sleep: 8, soreness: 3, energy: 3 });
+  r = await api(null, 'POST', '/api/checkin', { sleep: 8, pain: 3, energy: 3 });
   check('check-in without login is 401', r.status === 401, r.status);
   r = await api(will, 'GET', '/api/checkin/mine');
   check('failed validations saved nothing', r.status === 200 && r.json.entries.length === 0, r.json);
 
   /* Upsert: one entry per athlete per day; resubmitting edits it. */
-  r = await api(will, 'POST', '/api/checkin', { sleep: 6, soreness: 3, energy: 3 });
+  r = await api(will, 'POST', '/api/checkin', { sleep: 6, pain: 3, energy: 3 });
   check('first check-in creates (201)', r.status === 201 && r.json.created === true, r.json);
   check('sleep exactly 6.0 is NOT flagged', r.json.checkin.flags.length === 0, r.json.checkin);
-  r = await api(will, 'POST', '/api/checkin', { sleep: 5.5, soreness: 3, energy: 3 });
+  r = await api(will, 'POST', '/api/checkin', { sleep: 5.5, pain: 3, energy: 3 });
   check('same-day resubmit edits (200, not created)',
     r.status === 200 && r.json.created === false && r.json.checkin.sleep === 5.5, r.json);
   check('sleep 5.5 IS flagged low-sleep',
     JSON.stringify(r.json.checkin.flags) === JSON.stringify(['low-sleep']), r.json.checkin.flags);
   r = await api(will, 'GET', '/api/checkin/mine');
   check('still exactly one entry after the edit', r.status === 200 && r.json.entries.length === 1, r.json.entries);
-  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4 });
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, pain: 2, energy: 4 });
   check('final fixture values save cleanly with no flags',
     r.status === 200 && r.json.checkin.sleep === 7 && r.json.checkin.flags.length === 0, r.json.checkin);
 
@@ -2603,7 +2659,7 @@ async function main() {
      profileId smuggled into the body is ignored, and Will's data
      is never visible to Wendy. */
   r = await api(wendy, 'POST', '/api/checkin',
-    { sleep: 5.5, soreness: 4, energy: 2, profileId: willP.id });
+    { sleep: 5.5, pain: 9, energy: 2, profileId: willP.id });
   check('wendy check-in saves to HER profile (body profileId ignored)',
     r.status === 201 && r.json.checkin.flags.length === 3, r.json);
   r = await api(wendy, 'GET', '/api/checkin/today');
@@ -2616,53 +2672,67 @@ async function main() {
   const willRow = r.json.rows.find(x => x.profile.id === willP.id);
   check('coach view shows will untouched by wendy submit',
     !!willRow && willRow.checkedIn && willRow.checkin.sleep === 7 && willRow.flags.length === 0, willRow);
-  check('flag boundaries all hit at once (5.5 sleep, 4 soreness, 2 energy)',
+  check('flag boundaries all hit at once (5.5 sleep, pain 9, 2 energy)',
     r.status === 200 && r.json.summary.checkedIn === 2 && r.json.summary.flagged === 1 &&
-    r.json.summary.avgSleep === 6.25 && r.json.summary.avgSoreness === 3 && r.json.summary.avgEnergy === 3,
+    r.json.summary.avgSleep === 6.25 && r.json.summary.avgPain === 5.5 && r.json.summary.avgEnergy === 3,
     r.json.summary);
   const wendyRow = r.json.rows.find(x => x.profile.id === wendyP.id);
   check('wendy row carries all three flags',
-    !!wendyRow && JSON.stringify(wendyRow.flags) === JSON.stringify(['low-sleep', 'high-soreness', 'low-energy']),
+    !!wendyRow && JSON.stringify(wendyRow.flags) === JSON.stringify(['low-sleep', 'high-pain', 'low-energy']),
     wendyRow && wendyRow.flags);
   r = await api(coach, 'GET', '/api/coach/today');
   check('coach today wellness line counts check-ins + flags the right athlete',
     r.status === 200 && r.json.wellness.checkedIn === 2 && r.json.wellness.flagged.length === 1 &&
     r.json.wellness.flagged[0].profileId === wendyP.id, r.json.wellness);
 
-  /* Pain integration: exactly one athlete-reported concern per
-     check-in day, edited not duplicated, removable while untouched. */
+  /* v56 check-in behavior: the old "something hurts" free text is
+     out of the contract — a stray hurts/painText/soreness in the
+     body is ignored, never stored, and files nothing. The head-
+     symptoms answer is what files a concern now: exactly one
+     athlete-reported head concern, and the athlete is held until
+     a coach records clearance. A plain high pain value files
+     nothing either — it only raises the coach-only high-pain flag
+     (pinned on the AMS page further down). */
   r = await api(coach, 'GET', '/api/concerns');
   const concernsBefore = r.json.concerns.length;
   r = await api(will, 'POST', '/api/checkin',
-    { sleep: 7, soreness: 2, energy: 4, hurts: true, painText: 'Right hamstring tight' });
-  check('pain toggle saves on the check-in', r.status === 200 && r.json.checkin.hurts === true, r.json);
+    { sleep: 7, pain: 2, energy: 4, hurts: true, painText: 'Right hamstring tight', soreness: 5 });
+  check('legacy hurts fields are ignored, not stored',
+    r.status === 200 && r.json.checkin.pain === 2 && r.json.checkin.soreness === null &&
+    r.json.checkin.hurts === false && r.json.checkin.painText === '', r.json.checkin);
   r = await api(coach, 'GET', '/api/concerns');
-  const athleteConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
-  check('pain toggle files exactly one athlete-reported concern',
-    r.json.concerns.length === concernsBefore + 1 && athleteConcerns.length === 1 &&
-    athleteConcerns[0].note === 'Right hamstring tight' && athleteConcerns[0].pain === null &&
-    athleteConcerns[0].status === 'new', athleteConcerns);
-  r = await api(will, 'POST', '/api/checkin',
-    { sleep: 7, soreness: 2, energy: 4, hurts: true, painText: 'Left hamstring tight now' });
-  check('editing the same day keeps one check-in', r.status === 200, r.status);
-  r = await api(coach, 'GET', '/api/concerns');
-  const athleteConcerns2 = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
-  check('same-day edit updates the same concern instead of duplicating',
-    athleteConcerns2.length === 1 && athleteConcerns2[0].note === 'Left hamstring tight now', athleteConcerns2);
-  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: false });
-  check('turning pain off saves cleanly', r.status === 200 && r.json.checkin.hurts === false, r.json);
-  r = await api(coach, 'GET', '/api/concerns');
-  check('pain off removes the still-new concern',
+  check('a hurts report no longer files a concern',
+    r.json.concerns.length === concernsBefore &&
     r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete').length === 0,
     r.json.concerns.length);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, pain: 2, energy: 4, headSymptoms: true });
+  check('head-symptoms check-in saves', r.status === 200 && r.json.checkin.headSymptoms === true, r.json);
+  r = await api(coach, 'GET', '/api/concerns');
+  const athleteConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
+  check('head symptoms file exactly one athlete-reported head concern',
+    athleteConcerns.length === 1 && athleteConcerns[0].headRelated === true &&
+    athleteConcerns[0].status === 'new', athleteConcerns);
+  r = await api(will, 'GET', '/api/checkin/today');
+  check('the athlete is held while the head concern is open',
+    r.status === 200 && r.json.held && r.json.held.held === true, r.json.held);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, pain: 2, energy: 4, headSymptoms: true });
+  r = await api(coach, 'GET', '/api/concerns');
+  check('reporting head symptoms again keeps the same single concern',
+    r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete').length === 1,
+    r.json.concerns.length);
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, pain: 2, energy: 4, headSymptoms: false });
+  r = await api(coach, 'GET', '/api/concerns');
+  check('a later edit never withdraws the head concern',
+    r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete').length === 1,
+    r.json.concerns.length);
   r = await api(will, 'GET', '/api/checkin/mine');
-  check('will still has exactly one entry after the pain edits',
+  check('will still has exactly one entry after the head-symptom edits',
     r.status === 200 && r.json.entries.length === 1, r.json.entries && r.json.entries.length);
 
   /* Streak: past-day check-ins stack into a run. */
-  r = await api(will, 'POST', '/api/checkin', { date: yDay, sleep: 8, soreness: 2, energy: 4 });
+  r = await api(will, 'POST', '/api/checkin', { date: yDay, sleep: 8, pain: 2, energy: 4 });
   check('yesterday check-in saves (201)', r.status === 201, r.status);
-  r = await api(will, 'POST', '/api/checkin', { date: y2Day, sleep: 8, soreness: 2, energy: 4 });
+  r = await api(will, 'POST', '/api/checkin', { date: y2Day, sleep: 8, pain: 2, energy: 4 });
   check('day-before check-in saves (201)', r.status === 201, r.status);
   r = await api(will, 'GET', '/api/checkin/mine');
   check('mine returns the last 7 days newest first with a 3-day streak',
@@ -2671,7 +2741,7 @@ async function main() {
 
   /* ---------------- server hardening pass (Oct 24, late) ----------------
      Regression guards for the server audit: host-UTC "today", role
-     changes by non-owners, the pain-concern lifecycle, duplicate
+     changes by non-owners, the head-concern lifecycle, duplicate
      creates, and exports that spreadsheets would execute. */
   const nyToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
   r = await api(coach, 'GET', '/api/coach/today');
@@ -2712,30 +2782,36 @@ async function main() {
   check('the personal log rejects impossible calendar dates', r.status === 400, r.status);
   r = await api(coach, 'POST', '/api/completions', { profileId: jane, date: '2026-11-01' });
   check('a completion cannot be marked on a plan off day', r.status === 400, r.status);
-  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: true, painText: '' });
-  check('hurts with no words still saves the check-in', r.status === 200 || r.status === 201, r.status);
+  /* The head-concern lifecycle, on the concern Will's check-in
+     filed above: it is worked (and closed) from the AMS page now,
+     through the same concern endpoints. */
   r = await api(coach, 'GET', '/api/concerns');
   let willConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
-  check('hurts with no words still files a concern', willConcerns.length === 1, willConcerns);
+  check('the head concern from the check-in is on the books', willConcerns.length === 1, willConcerns);
   const qaConcernId = willConcerns[0].id;
   r = await api(coach, 'PUT', '/api/concerns/' + qaConcernId, { status: 'monitoring' });
   check('coach can move the concern to monitoring', r.status === 200 && r.json.concern.status === 'monitoring', r.json);
-  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: false });
+  r = await api(will, 'POST', '/api/checkin', { sleep: 7, pain: 2, energy: 4, headSymptoms: false });
   r = await api(coach, 'GET', '/api/concerns');
   willConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
-  check('un-flagging keeps a monitored concern (link not severed)',
+  check('a later check-in edit keeps the monitored concern (never withdrawn)',
     willConcerns.length === 1 && willConcerns[0].status === 'monitoring', willConcerns);
-  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: true, painText: 'Still tight' });
-  r = await api(coach, 'GET', '/api/concerns');
-  willConcerns = r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete');
-  check('re-flagging updates the same concern instead of filing a duplicate',
-    willConcerns.length === 1 && willConcerns[0].note === 'Still tight', willConcerns);
-  r = await api(coach, 'PUT', '/api/concerns/' + qaConcernId, { status: 'new' });
-  r = await api(will, 'POST', '/api/checkin', { sleep: 7, soreness: 2, energy: 4, hurts: false });
-  r = await api(coach, 'GET', '/api/concerns');
-  check('lifecycle cleanup: un-flagging a still-new concern removes it',
-    r.json.concerns.filter(c => c.profileId === willP.id && c.source === 'athlete').length === 0,
-    r.json.concerns.length);
+  r = await api(coach, 'PUT', '/api/concerns/' + qaConcernId, { status: 'cleared', disposition: 'Seen by the athletic trainer' });
+  check('a head concern cannot close without a recorded clearance', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/concerns/' + qaConcernId, {
+    status: 'cleared',
+    clearance: { by: 'Dr. Q Example', date: reportToday, note: 'Written clearance received and filed with the school' },
+  });
+  check('a head concern cannot close without a disposition either', r.status === 400, r.status);
+  r = await api(coach, 'PUT', '/api/concerns/' + qaConcernId, {
+    status: 'cleared', disposition: 'Seen by the athletic trainer; written clearance on file',
+    clearance: { by: 'Dr. Q Example', date: reportToday, note: 'Written clearance received and filed with the school' },
+  });
+  check('clearance + disposition closes the head concern',
+    r.status === 200 && r.json.concern.status === 'cleared' && !!r.json.concern.clearance, r.json);
+  r = await api(will, 'GET', '/api/checkin/today');
+  check('the hold lifts once clearance is recorded',
+    r.status === 200 && r.json.held && r.json.held.held === false, r.json.held);
   r = await api(coach, 'POST', '/api/profiles', { firstName: 'Qa', lastName: 'Racer' });
   const qaP = r.json.profile;
   r = await api(coach, 'POST', '/api/meets', { name: 'QA Rename Meet', date: '2026-12-05' });
@@ -2781,7 +2857,7 @@ async function main() {
   check('unlink reports the previous link', r.status === 200 && r.json.wasLinked === true, r.json);
   r = await api(will, 'GET', '/api/me');
   check('unlinked account loses its profileId', r.status === 200 && r.json.profileId === null, r.json);
-  r = await api(will, 'POST', '/api/checkin', { sleep: 8, soreness: 3, energy: 3 });
+  r = await api(will, 'POST', '/api/checkin', { sleep: 8, pain: 3, energy: 3 });
   check('unlinked athlete check-in is blocked again', r.status === 403 && r.json.notLinked === true, r.json);
   r = await api(coach, 'DELETE', '/api/profiles/' + willP.id + '/link');
   check('second unlink is a clean no-op', r.status === 200 && r.json.wasLinked === false, r.json);
@@ -2986,162 +3062,47 @@ async function main() {
       appJs.text.includes("goals: 'coachhub'"));
   }
 
-  /* ---------------- attendance (coach roll-book) ----------------
-     Coach-only daily marks — present / late / excused / absent —
-     in their own store: never a completion alias, never visible
-     to athletes, never on the TV board. Fixtures are a dedicated
-     squad; day counts on a guaranteed-untouched future date are
-     exact for the marked statuses. */
-  check('attendance view is in the served page',
-    pageHtml.text.includes('id="view-attendance"') && pageHtml.text.includes('id="attendance-main"') &&
-    pageHtml.text.includes('data-view="attendance"'));
-  check('attendance wiring is in the served JS',
-    appJs.text.includes("['attendance', 'Attendance']") && appJs.text.includes("attendance: 'coachhub'") &&
-    appJs.text.includes("if (name === 'attendance') renderAttendance();") &&
-    appJs.text.includes('/api/attendance'));
+  /* ---------------- attendance: REMOVED in v56 ----------------
+     At the coach's direction the roll-book feature is gone: no
+     nav entry, no view, no endpoints, no CSV, no AMS block. The
+     stored marks are NOT deleted — the store keeps the attendance
+     collection and backups keep carrying it, pinned below. */
+  check('v56: attendance view is gone from the served page',
+    !pageHtml.text.includes('id="view-attendance"') && !pageHtml.text.includes('id="attendance-main"') &&
+    !pageHtml.text.includes('data-view="attendance"'));
+  check('v56: attendance wiring is gone from the served JS',
+    !appJs.text.includes("['attendance', 'Attendance']") && !appJs.text.includes('renderAttendance') &&
+    !appJs.text.includes('/api/attendance'));
   const attTvStart = appJs.text.indexOf('TV BOARD');
   const attTvEnd = appJs.text.indexOf('/* ---------------- boot', attTvStart);
   const attTvCode = attTvStart >= 0 && attTvEnd > attTvStart ? appJs.text.slice(attTvStart, attTvEnd) : '';
   check('TV board render path never references attendance',
     attTvCode.length > 500 && !attTvCode.toLowerCase().includes('attendance'), attTvCode.length);
-  const attSeg = seg('const wireAttRow', 'const attRowHtml');
-  check('attendance: status taps save in place (no full renderAttendance in the row handler)',
-    attSeg.includes("apiPut('/api/attendance/'") && attSeg.includes('flashSaved(row)') &&
-    attSeg.includes('showRowError(row') && !attSeg.includes('renderAttendance('), attSeg.slice(0, 120));
-
-  r = await api(coach, 'POST', '/api/groups', { name: 'Attendance Squad' });
-  const gAtt = r.json.group.id;
-  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Att', lastName: 'Anna', groupId: gAtt, events: ['sprinter'] });
-  const annaA = r.json.profile.id;
-  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Att', lastName: 'Boris', groupId: gAtt, events: ['sprinter'] });
-  const borisA = r.json.profile.id;
-  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Att', lastName: 'Cleo' });
-  const cleoA = r.json.profile.id;
-
-  /* Auth gates: attendance is coach-only data. */
-  r = await api(null, 'GET', '/api/attendance?date=2026-10-26');
-  check('attendance day without login is 401', r.status === 401, r.status);
-  r = await api(athlete, 'GET', '/api/attendance?date=2026-10-26');
-  check('attendance day for an athlete is 403', r.status === 403, r.status);
-  r = await api(null, 'PUT', '/api/attendance/2026-10-26/' + annaA, { status: 'present' });
-  check('attendance mark without login is 401', r.status === 401, r.status);
-  r = await api(athlete, 'PUT', '/api/attendance/2026-10-26/' + annaA, { status: 'present' });
-  check('attendance mark for an athlete is 403', r.status === 403, r.status);
-  r = await api(athlete, 'POST', '/api/attendance/2026-10-26/mark-all-present', {});
-  check('mark-all-present for an athlete is 403', r.status === 403, r.status);
-  r = await api(null, 'GET', '/api/attendance/summary');
-  check('attendance summary without login is 401', r.status === 401, r.status);
-  r = await api(athlete, 'GET', '/api/attendance/summary');
-  check('attendance summary for an athlete is 403', r.status === 403, r.status);
-
-  /* A fresh (future) day: everyone unmarked, roster composed by group. */
-  const ATT_DAY = '2050-01-03';
-  const attMember = (resp, pid) => {
-    for (const blk of resp.groups.concat([resp.unassigned])) {
-      const m = (blk.members || []).find(x => x.profile.id === pid);
-      if (m) return m;
-    }
-    return null;
-  };
-  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
-  check('attendance: a fresh future day loads (pre-planning is allowed)',
-    r.status === 200 && r.json.date === ATT_DAY, r.status);
-  check('attendance: fresh day counts are all unmarked',
-    r.json.counts.present === 0 && r.json.counts.late === 0 && r.json.counts.excused === 0 &&
-    r.json.counts.absent === 0 && r.json.counts.unmarked > 0, r.json.counts);
-  const attSquad = r.json.groups.find(g => g.group && g.group.id === gAtt);
-  check('attendance: grouped athletes sit under their group, ungrouped under no-group',
-    !!attSquad && attSquad.members.length === 2 &&
-    attMember(r.json, annaA).attendance === null && attMember(r.json, borisA).attendance === null &&
-    !!attMember(r.json, cleoA) && r.json.unassigned.members.some(m => m.profile.id === cleoA), r.json.groups.length);
-
-  /* Mark / change / clear round-trip. */
-  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + annaA, { status: 'present' });
-  check('attendance: marking present saves with who/when',
-    r.status === 200 && r.json.attendance.status === 'present' &&
-    typeof r.json.attendance.updatedBy === 'string' && !!r.json.attendance.updatedAt, r.json);
-  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
-  check('attendance: the saved mark reads back, counts move',
-    attMember(r.json, annaA).attendance.status === 'present' && r.json.counts.present === 1 &&
-    r.json.counts.late === 0, r.json.counts);
-  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + annaA, { status: 'late' });
-  check('attendance: a mark can be changed', r.status === 200 && r.json.attendance.status === 'late', r.json);
-  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
-  check('attendance: the change reads back in counts',
-    r.json.counts.present === 0 && r.json.counts.late === 1, r.json.counts);
-  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + annaA, { status: null });
-  check('attendance: null status clears the mark', r.status === 200 && r.json.cleared === true, r.json);
-  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
-  check('attendance: the cleared athlete is unmarked again',
-    attMember(r.json, annaA).attendance === null && r.json.counts.late === 0, r.json.counts);
-
-  /* Validation. */
-  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + annaA, { status: 'sleepy' });
-  check('attendance: an unknown status is 400', r.status === 400, r.status);
-  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/no-such-profile', { status: 'present' });
-  check('attendance: an unknown athlete is 404', r.status === 404, r.status);
-  r = await api(coach, 'PUT', '/api/attendance/2050-13-40/' + annaA, { status: 'present' });
-  check('attendance: an impossible date is 400', r.status === 400, r.status);
-  r = await api(coach, 'GET', '/api/attendance?date=not-a-date');
-  check('attendance: a malformed day fetch is 400', r.status === 400, r.status);
-  r = await api(coach, 'GET', '/api/attendance?date=2050-02-30');
-  check('attendance: Feb 30 is 400, not rolled over', r.status === 400, r.status);
-  r = await api(coach, 'POST', '/api/attendance/2050-13-40/mark-all-present', {});
-  check('attendance: mark-all on an impossible date is 400', r.status === 400, r.status);
-
-  /* Mark all present fills only the unmarked; existing marks stand. */
-  r = await api(coach, 'PUT', '/api/attendance/' + ATT_DAY + '/' + borisA, { status: 'excused' });
-  check('attendance fixtures: Boris is excused first', r.status === 200, r.status);
-  r = await api(coach, 'POST', '/api/attendance/' + ATT_DAY + '/mark-all-present', {});
-  check('attendance: mark-all-present skips already-marked athletes',
-    r.status === 200 && r.json.skipped === 1 && r.json.marked >= 2, r.json);
-  r = await api(coach, 'GET', '/api/attendance?date=' + ATT_DAY);
-  check('attendance: mark-all filled Anna + Cleo, Boris stays excused',
-    attMember(r.json, annaA).attendance.status === 'present' &&
-    attMember(r.json, cleoA).attendance.status === 'present' &&
-    attMember(r.json, borisA).attendance.status === 'excused' &&
-    r.json.counts.excused === 1, r.json.counts);
-
-  /* Summary math: an exact custom window (late counts as attended). */
-  for (const [d, s] of [['2026-03-02', 'present'], ['2026-03-03', 'late'], ['2026-03-04', 'excused'], ['2026-03-05', 'absent']]) {
-    r = await api(coach, 'PUT', '/api/attendance/' + d + '/' + cleoA, { status: s });
-  }
-  check('attendance fixtures: Cleo has one of each status in March 2026', r.status === 200, r.status);
-  r = await api(coach, 'GET', '/api/attendance/summary?from=2026-03-01&to=2026-03-31');
-  const cleoSum = (r.json.athletes || []).find(a => a.profile.id === cleoA);
-  check('attendance summary: custom window counts are exact',
-    r.status === 200 && !!cleoSum && cleoSum.custom.marked === 4 && cleoSum.custom.present === 1 &&
-    cleoSum.custom.late === 1 && cleoSum.custom.excused === 1 && cleoSum.custom.absent === 1, cleoSum);
-  check('attendance summary: late counts as attended (2 of 4 = 50%)',
-    !!cleoSum && cleoSum.custom.attended === 2 && cleoSum.custom.percent === 50, cleoSum && cleoSum.custom);
-  check('attendance summary: default windows are last30 + season ending today',
-    !!r.json.windows && !!r.json.windows.last30 && !!r.json.windows.season &&
-    r.json.windows.last30.to === r.json.today && r.json.windows.season.to === r.json.today, r.json.windows);
-  r = await api(coach, 'GET', '/api/attendance/summary?from=2026-03-31&to=2026-03-01');
-  check('attendance summary: a backwards custom window is 400', r.status === 400, r.status);
-  r = await api(coach, 'GET', '/api/attendance/summary?from=banana&to=2026-03-01');
-  check('attendance summary: a malformed custom window is 400', r.status === 400, r.status);
-
-  /* Last-30-days window edges: today counts, 30 days ago does not. */
-  const attPad2 = (n) => String(n).padStart(2, '0');
-  const dstrOf = (d) => d.getFullYear() + '-' + attPad2(d.getMonth() + 1) + '-' + attPad2(d.getDate());
-  const attNow = new Date();
-  const todayS2 = dstrOf(attNow);
-  const oldS = dstrOf(new Date(attNow.getFullYear(), attNow.getMonth(), attNow.getDate() - 30));
-  await api(coach, 'PUT', '/api/attendance/' + todayS2 + '/' + annaA, { status: 'present' });
-  await api(coach, 'PUT', '/api/attendance/' + oldS + '/' + annaA, { status: 'absent' });
+  r = await api(coach, 'GET', '/api/attendance');
+  check('v56: GET /api/attendance is 404', r.status === 404, r.status);
   r = await api(coach, 'GET', '/api/attendance/summary');
-  const annaSum = (r.json.athletes || []).find(a => a.profile.id === annaA);
-  check('attendance summary: last30 includes today and excludes 30 days ago',
-    !!annaSum && annaSum.last30.marked === 1 && annaSum.last30.present === 1 &&
-    annaSum.last30.absent === 0 && annaSum.last30.percent === 100, annaSum && annaSum.last30);
-  r = await api(coach, 'POST', '/api/profiles', { firstName: 'Att', lastName: 'Dana' });
-  const danaA = r.json.profile.id;
-  r = await api(coach, 'GET', '/api/attendance/summary');
-  const danaSum = (r.json.athletes || []).find(a => a.profile.id === danaA);
-  check('attendance summary: an athlete with no marks gets zeros and a null percent',
-    !!danaSum && danaSum.last30.marked === 0 && danaSum.last30.percent === null &&
-    danaSum.season.marked === 0 && danaSum.season.percent === null, danaSum);
+  check('v56: the attendance summary report is 404', r.status === 404, r.status);
+  r = await api(coach, 'PUT', '/api/attendance/2027-01-04/' + willP.id, { status: 'present' });
+  check('v56: marking attendance is 404', r.status === 404, r.status);
+  r = await api(coach, 'POST', '/api/attendance/2027-01-04/mark-all-present', {});
+  check('v56: mark-all-present is 404', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/export/attendance.csv');
+  check('v56: the attendance CSV export is 404', r.status === 404, r.status);
+  r = await api(coach, 'GET', '/api/ams/athlete/' + willP.id);
+  check('v56: the AMS athlete payload has no attendance block',
+    r.status === 200 && !('attendance' in r.json), Object.keys(r.json || {}));
+  /* Stored marks survive: seed one the way a pre-v56 backup
+     carries it, then read it back out of a fresh backup export. */
+  r = await api(coach, 'POST', '/api/import/backup', {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    data: { attendance: { '2027-01-04': { [willP.id]: { status: 'present' } } } },
+  });
+  check('v56: a backup carrying attendance still imports', r.status === 200, r.status);
+  r = await api(coach, 'GET', '/api/export/backup');
+  check('v56: stored attendance marks remain in backups untouched',
+    !!(((r.json.data || {}).attendance || {})['2027-01-04'] || {})[willP.id] &&
+    r.json.data.attendance['2027-01-04'][willP.id].status === 'present',
+    (((r.json.data || {}).attendance || {})['2027-01-04']));
 
   /* ---------------- AMS (athlete management system) ----------------
      Coach-side only: a roster table with coach-set status and
@@ -3151,12 +3112,12 @@ async function main() {
      squad; flag windows run off the server's own today (reportToday)
      so the boundaries are exact:
        Amy — 2 flagged check-ins 4-5 days ago (Readiness fires),
-             none in the last 3 days (No check-in fires), 2 absences
-             in 14 days (Attendance fires), 1 open concern (Health
-             fires): all four flags.
+             none in the last 3 days (No check-in fires), 1 open
+             concern (Health fires), a pain-9 check-in inside 7 days
+             (High pain fires): all four flags.
        Ben — exactly 1 flagged check-in yesterday (Readiness does
-             NOT fire), 1 absence (Attendance does NOT fire), one
-             cleared concern (Health does NOT fire): zero flags.
+             NOT fire), one cleared concern (Health does NOT fire),
+             no high pain: zero flags.
        Cid — unlinked with no check-ins at all: NO No check-in flag
              (unlinked athletes get the neutral Not linked state). */
   check('ams view is in the served page',
@@ -3212,28 +3173,37 @@ async function main() {
   r = await api(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123', ageAttested: true });
   const benAcct = cookieOf(r);
 
-  /* Amy: two flagged check-ins, 4 and 5 days ago. */
-  r = await api(amyAcct, 'POST', '/api/checkin', { sleep: 5, soreness: 3, energy: 3, date: addDays(reportToday, -4) });
+  /* Amy: two flagged check-ins, 4 and 5 days ago (low sleep, then
+     high pain). Ben: exactly one flagged check-in, yesterday. */
+  r = await api(amyAcct, 'POST', '/api/checkin', { sleep: 5, pain: 3, energy: 3, date: addDays(reportToday, -4) });
   check('ams fixtures: Amy flagged check-in 4 days ago', r.status === 201, r.status);
-  r = await api(amyAcct, 'POST', '/api/checkin', { sleep: 8, soreness: 5, energy: 3, date: addDays(reportToday, -5) });
+  r = await api(amyAcct, 'POST', '/api/checkin', { sleep: 8, pain: 9, energy: 3, date: addDays(reportToday, -5) });
   check('ams fixtures: Amy flagged check-in 5 days ago', r.status === 201, r.status);
-  /* Ben: exactly one flagged check-in, yesterday. */
-  r = await api(benAcct, 'POST', '/api/checkin', { sleep: 5.5, soreness: 3, energy: 3, date: yDay });
+  r = await api(benAcct, 'POST', '/api/checkin', { sleep: 5.5, pain: 3, energy: 3, date: yDay });
   check('ams fixtures: Ben flagged check-in yesterday', r.status === 201, r.status);
 
-  /* Attendance: Amy absent twice inside 14 days; Ben once. */
-  await api(coach, 'PUT', '/api/attendance/' + addDays(reportToday, -1) + '/' + amyP.id, { status: 'absent' });
-  await api(coach, 'PUT', '/api/attendance/' + addDays(reportToday, -3) + '/' + amyP.id, { status: 'absent' });
-  await api(coach, 'PUT', '/api/attendance/' + addDays(reportToday, -2) + '/' + amyP.id, { status: 'present' });
-  await api(coach, 'PUT', '/api/attendance/' + addDays(reportToday, -5) + '/' + benP.id, { status: 'absent' });
-
-  /* Health: Amy one open concern; Ben one concern, then cleared. */
-  r = await api(coach, 'POST', '/api/concerns', { profileId: amyP.id, area: 'hamstring', side: 'left', feeling: 'tightness', impact: 'modified', started: addDays(reportToday, -2), pain: 5 });
-  check('ams fixtures: Amy open concern filed', r.status === 201 && r.json.concern.status === 'new', r.status);
-  r = await api(coach, 'POST', '/api/concerns', { profileId: benP.id, area: 'ankle', side: 'right', feeling: 'ache', impact: 'none', started: addDays(reportToday, -9), pain: 3 });
-  const benConcern = r.json.concern.id;
-  r = await api(coach, 'PUT', '/api/concerns/' + benConcern, { status: 'cleared' });
-  check('ams fixtures: Ben concern cleared', r.status === 200 && r.json.concern.status === 'cleared', r.json);
+  /* Health: Amy one open concern; Ben one already-cleared concern.
+     v56: seeded by backup import, the way existing records arrive. */
+  const amsConcernSeed = (id, pid, over) => Object.assign({
+    id, profileId: pid, area: 'hamstring', side: 'left', feeling: 'tightness',
+    pain: 5, started: addDays(reportToday, -2), impact: 'modified', note: '',
+    status: 'new', coachNote: '', source: 'coach', reportedBy: null, checkinDate: null,
+    headRelated: false,
+    acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
+    disposition: '', dispositionBy: null, dispositionAt: null, clearance: null,
+    audit: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  }, over);
+  r = await api(coach, 'POST', '/api/import/backup', {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    data: { concerns: {
+      [amyP.id]: [amsConcernSeed('test-concern-ams-amy', amyP.id)],
+      [benP.id]: [amsConcernSeed('test-concern-ams-ben', benP.id, {
+        area: 'ankle', side: 'right', feeling: 'ache', impact: 'none', pain: 3,
+        started: addDays(reportToday, -9), status: 'cleared',
+      })],
+    } },
+  });
+  check('ams fixtures: concerns seeded (Amy open, Ben cleared)', r.status === 200, r.status);
 
   /* Ben's aggregate fixtures: a test result, a meet PR, a goal. */
   r = await api(coach, 'POST', '/api/test-days', { date: '2026-11-09', title: 'AMS Testing', testKeys: ['bench-press'] });
@@ -3271,19 +3241,20 @@ async function main() {
     !!amyRow && amyRow.status === 'active' && amyRow.linked === true &&
     amyRow.profile.linkedEmail === 'amy@test.com' && amyRow.profile.groupName === 'AMS Squad', amyRow);
   check('ams flags: Amy earns all four flags, in order',
-    JSON.stringify(flagKeys(amyRow)) === JSON.stringify(['readiness', 'no-checkin', 'attendance', 'health']),
+    JSON.stringify(flagKeys(amyRow)) === JSON.stringify(['readiness', 'no-checkin', 'health', 'high-pain']),
     flagKeys(amyRow));
   const amyFlag = (k) => amyRow.flags.find(f => f.key === k);
   check('ams flags: readiness carries its count (2 flagged check-ins)',
     amyFlag('readiness').count === 2 && amyFlag('readiness').detail.includes('2 flagged'), amyFlag('readiness'));
   check('ams flags: no-checkin fires with the last check-in 4 days out',
     amyFlag('no-checkin').count === 4 && amyFlag('no-checkin').detail.includes('last 3 days'), amyFlag('no-checkin'));
-  check('ams flags: attendance carries its count (2 absences)',
-    amyFlag('attendance').count === 2 && amyFlag('attendance').detail.includes('2 absences'), amyFlag('attendance'));
   check('ams flags: health carries its count (1 open concern)',
     amyFlag('health').count === 1 && amyFlag('health').detail.includes('1 open concern'), amyFlag('health'));
+  check('ams flags: high pain names the latest report (pain 9, plain language)',
+    amyFlag('high-pain').label === 'High pain reported — check in with this athlete' &&
+    amyFlag('high-pain').detail.includes('Body pain 9/10'), amyFlag('high-pain'));
   const benRow = amsRow(benP.id);
-  check('ams flags: exactly 1 flagged check-in / 1 absence / a cleared concern = NO flags for Ben',
+  check('ams flags: exactly 1 flagged check-in / a cleared concern / no high pain = NO flags for Ben',
     !!benRow && benRow.flags.length === 0, benRow && benRow.flags);
   const cidRow = amsRow(cidP.id);
   check('ams flags: unlinked Cid gets no No check-in flag (neutral Not linked instead)',
@@ -3292,6 +3263,9 @@ async function main() {
   check('ams roster: coach-set status shows on the row',
     !!deeRow && deeRow.status === 'injured' && deeRow.profile.status === 'injured', deeRow);
 
+  r = await api(amyAcct, 'GET', '/api/checkin/mine');
+  check('v56: the coach high-pain label never appears in the athlete\'s own payload',
+    r.status === 200 && !JSON.stringify(r.json).includes('check in with this athlete'), r.status);
   /* Aggregate page: every block present, from the shared helpers. */
   r = await api(coach, 'GET', '/api/ams/athlete/nope');
   check('ams athlete page for an unknown profile is 404', r.status === 404, r.status);
@@ -3301,7 +3275,8 @@ async function main() {
     r.json.linked === true && r.json.linkedEmail === 'ben@test.com' && r.json.flags.length === 0, r.json.profile);
   check('ams athlete page: wellness window (1 check-in, averages, 1 flagged day)',
     r.json.wellness.recent.length === 1 && r.json.wellness.summary.days === 1 &&
-    r.json.wellness.summary.avgSleep === 5.5 && r.json.wellness.summary.flaggedDays === 1 &&
+    r.json.wellness.summary.avgSleep === 5.5 && r.json.wellness.summary.avgPain === 3 &&
+    r.json.wellness.summary.flaggedDays === 1 &&
     r.json.wellness.recent[0].flags.includes('low-sleep'), r.json.wellness.summary);
   check('ams athlete page: testing reuses the report-card block (bench 185x5 -> 216)',
     r.json.testing.length === 1 && r.json.testing[0].testKey === 'bench-press' &&
@@ -3310,11 +3285,8 @@ async function main() {
   check('ams athlete page: meet PRs + recent results',
     r.json.meetPrs.length === 1 && r.json.meetPrs[0].event === '100m' && r.json.meetPrs[0].mark === '11.20' &&
     r.json.recentResults.length === 1 && r.json.recentResults[0].meet === 'AMS Opener', r.json.meetPrs);
-  check('ams athlete page: attendance windows + recent marks',
-    r.json.attendance.last30.absent === 1 && r.json.attendance.last30.marked === 1 &&
-    typeof r.json.attendance.season.marked === 'number' &&
-    r.json.attendance.recent.length === 1 &&
-    r.json.attendance.recent[0].status === 'absent', r.json.attendance);
+  check('ams athlete page: no attendance block (v56 removal)',
+    !('attendance' in r.json), Object.keys(r.json));
   check('ams athlete page: health counts the cleared concern, lists it',
     r.json.health.counts.total === 1 && r.json.health.counts.cleared === 1 &&
     r.json.health.counts.open === 0 && r.json.health.concerns.length === 1 &&
@@ -3326,7 +3298,8 @@ async function main() {
   r = await api(coach, 'GET', '/api/ams/athlete/' + amyP.id);
   check('ams athlete page: Amy wellness trend (2 check-ins, both flagged)',
     r.status === 200 && r.json.wellness.summary.days === 2 && r.json.wellness.summary.flaggedDays === 2 &&
-    r.json.wellness.summary.avgSleep === 6.5 && r.json.flags.length === 4, r.json.wellness.summary);
+    r.json.wellness.summary.avgSleep === 6.5 && r.json.wellness.summary.avgPain === 6 &&
+    r.json.flags.length === 4, r.json.wellness.summary);
 
   /* Coach notes: CRUD + validation. */
   const NOTE_TEXT = 'AMS private note — check on the hamstring before Friday.';
@@ -3788,7 +3761,7 @@ async function main() {
   check('data wiring is in the served JS',
     appJs.text.includes("['data', 'Data']") && appJs.text.includes("data: 'coachhub'") &&
     appJs.text.includes('renderData') && appJs.text.includes('/api/export/backup') &&
-    appJs.text.includes('/api/import/backup') && appJs.text.includes('/api/export/attendance.csv') &&
+    appJs.text.includes('/api/import/backup') && !appJs.text.includes('/api/export/attendance.csv') &&
     appJs.text.includes('/api/export/testing-detail.csv') && appJs.text.includes('/api/export/checkins.csv') &&
     appJs.text.includes('/api/export/records.csv'));
 
@@ -3801,7 +3774,7 @@ async function main() {
   check('backup import without login is 401', r.status === 401, r.status);
   r = await api(ana, 'POST', '/api/import/backup', {});
   check('backup import for an athlete is 403', r.status === 403, r.status);
-  for (const csvPath of ['/api/export/attendance.csv', '/api/export/testing-detail.csv',
+  for (const csvPath of ['/api/export/testing-detail.csv',
     '/api/export/checkins.csv', '/api/export/records.csv']) {
     const noAuth = await apiText(null, csvPath);
     check('GET ' + csvPath + ' without login is 401', noAuth.status === 401, noAuth.status);
@@ -3820,10 +3793,17 @@ async function main() {
   r = await api(coach, 'POST', '/api/profiles', { firstName: '=2+5', lastName: 'Formula', groupId: dataGrp.id });
   check('hostile-name fixture athlete creates', r.status === 201 && !!r.json.profile.id, r.status);
   const hostileP = r.json.profile;
-  r = await api(coach, 'PUT', '/api/attendance/2027-01-04/' + dataP.id, { status: 'present' });
-  check('data fixture attendance mark saves', r.status === 200, r.status);
-  r = await api(coach, 'PUT', '/api/attendance/2027-01-04/' + hostileP.id, { status: 'late' });
-  check('hostile-name attendance mark saves', r.status === 200, r.status);
+  /* v56: attendance marks can no longer be entered in the app —
+     the fixture marks arrive the only way they can now, inside a
+     backup file, exactly as pre-v56 records persist. */
+  r = await api(coach, 'POST', '/api/import/backup', {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    data: { attendance: { '2027-01-04': {
+      [dataP.id]: { status: 'present', updatedAt: '2027-01-04T12:00:00.000Z', updatedBy: 'fixture' },
+      [hostileP.id]: { status: 'late', updatedAt: '2027-01-04T12:00:00.000Z', updatedBy: 'fixture' },
+    } } },
+  });
+  check('data fixture attendance marks seed from a backup import', r.status === 200, r.status);
   r = await api(coach, 'POST', '/api/test-days', { date: '2027-01-05', title: 'Data Day', testKeys: ['back-squat'] });
   check('data fixture test day creates', r.status === 201 && !!r.json.testDay.id, r.status);
   const dataDay = r.json.testDay;
@@ -3845,7 +3825,7 @@ async function main() {
   /* Dated ten days back on purpose: a check-in today would change
      the wellness-today counts the restart block asserts later. */
   const dataCheckinDate = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  r = await api(dataUser, 'POST', '/api/checkin', { date: dataCheckinDate, sleep: 7.5, soreness: 2, energy: 4 });
+  r = await api(dataUser, 'POST', '/api/checkin', { date: dataCheckinDate, sleep: 7.5, pain: 2, energy: 4 });
   check('data fixture check-in saves', r.status === 201 || r.status === 200, r.status);
 
   /* The backup export: envelope, full collection set, no secrets. */
@@ -3877,15 +3857,10 @@ async function main() {
     !bk.text.includes('test-secret') && !bk.text.includes('"logs"'),
     bk.text.slice(0, 120));
 
-  /* The new CSVs: headers, rows, and the formula guard. */
+  /* The new CSVs: headers, rows, and the formula guard. The
+     attendance CSV left with its feature (v56) — a 404 now. */
   let cx = await apiText(coach, '/api/export/attendance.csv');
-  check('attendance CSV downloads with its header',
-    cx.status === 200 && cx.type.includes('text/csv') && cx.disp.includes('attendance.csv') &&
-    cx.text.startsWith('Date,Athlete,Group,Status'), cx.text.slice(0, 60));
-  check('attendance CSV carries the fixture rows',
-    cx.text.includes('2027-01-04,Data Subject,Data Group,present'), cx.text.slice(0, 200));
-  check('attendance CSV neutralizes a formula-looking athlete name',
-    cx.text.includes("'=2+5 Formula,Data Group,late"), cx.text.slice(0, 200));
+  check('v56: attendance CSV is gone (404)', cx.status === 404, cx.status);
   cx = await apiText(coach, '/api/export/testing-detail.csv');
   check('testing detail CSV downloads with the spec header',
     cx.status === 200 && cx.disp.includes('testing-detail.csv') &&
@@ -3893,12 +3868,27 @@ async function main() {
   check('testing detail CSV splits value / weight / reps / est 1RM into columns',
     cx.text.includes('Data Subject,2027-01-05,Back Squat,,200,5,233'), cx.text.slice(0, 200));
   cx = await apiText(coach, '/api/export/checkins.csv');
-  check('check-ins CSV downloads with its header',
+  check('check-ins CSV downloads with its header (Pain column, v56)',
     cx.status === 200 && cx.disp.includes('checkins.csv') &&
-    cx.text.startsWith('Athlete,Date,Sleep (hrs),Soreness,Energy,Something Hurts'), cx.text.slice(0, 80));
-  check('check-ins CSV carries the fixture check-in',
-    cx.text.split('\r\n').some(l => l.startsWith('Data Subject,') && l.includes(',7.5,2,4,no')),
+    cx.text.startsWith('Athlete,Date,Sleep (hrs),Pain,Energy'), cx.text.slice(0, 80));
+  check('check-ins CSV carries the fixture check-in with its pain value',
+    cx.text.split('\r\n').some(l => l.startsWith('Data Subject,') && l.includes(',7.5,2,4')),
     cx.text.slice(0, 200));
+  /* A pre-v56 check-in (soreness, no pain) exports with a blank
+     Pain — its stored values stay in the record and the backups,
+     the sheet just has nothing to put in the new column. */
+  r = await api(coach, 'POST', '/api/import/backup', {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    data: { checkins: { [dataP.id]: { '2026-12-20': {
+      profileId: dataP.id, date: '2026-12-20', sleep: 6, soreness: 4, energy: 3,
+      hurts: false, painText: '', headSymptoms: false, note: '',
+      createdAt: '2026-12-20T12:00:00.000Z', updatedAt: '2026-12-20T12:00:00.000Z',
+    } } } },
+  });
+  check('legacy check-in imports alongside current ones', r.status === 200, r.status);
+  cx = await apiText(coach, '/api/export/checkins.csv');
+  check('check-ins CSV: a pre-v56 row exports a blank Pain',
+    cx.text.split('\r\n').some(l => l.startsWith('Data Subject,2026-12-20,6,,3')), cx.text.slice(0, 200));
   cx = await apiText(coach, '/api/export/records.csv');
   check('school records CSV downloads with its header',
     cx.status === 200 && cx.disp.includes('school-records.csv') &&
@@ -3934,10 +3924,13 @@ async function main() {
   r = await api(coach, 'GET', '/api/profiles');
   check('the imported profile is on the roster',
     r.json.profiles.some(p => p.id === 'data-import-prof'), r.json.profiles.length);
-  cx = await apiText(coach, '/api/export/attendance.csv');
+  r = await api(coach, 'GET', '/api/export/backup');
   check('leaf merge: the imported attendance leaf landed beside the existing ones',
-    cx.text.includes('2027-01-04,Imported Athlete,,excused') &&
-    cx.text.includes('2027-01-04,Data Subject,Data Group,present'), cx.text.slice(0, 200));
+    (((r.json.data || {}).attendance || {})['2027-01-04'] || {})['data-import-prof'] &&
+    r.json.data.attendance['2027-01-04']['data-import-prof'].status === 'excused' &&
+    r.json.data.attendance['2027-01-04'][dataP.id].status === 'present' &&
+    r.json.data.attendance['2027-01-04'][hostileP.id].status === 'late',
+    (((r.json.data || {}).attendance || {})['2027-01-04']));
   r = await api(coach, 'POST', '/api/import/backup', importOne);
   check('re-importing the identical file adds and updates nothing',
     r.status === 200 && r.json.totalAdded === 0 && r.json.totalUpdated === 0, r.json);
@@ -5535,11 +5528,11 @@ async function waitForServer(tries = 60) {
         const lastMon = dAdd(thisMon, -7);
         const inLast = (n) => dAdd(lastMon, n);
         const ci = (cookie, date, body) => dApi(cookie, 'POST', '/api/checkin', Object.assign({ date }, body));
-        let cr = await ci(dAmy, inLast(0), { sleep: 5, soreness: 5, energy: 2 });
+        let cr = await ci(dAmy, inLast(0), { sleep: 5, pain: 9, energy: 2 });
         check('digest fixtures: amy monday check-in saves', cr.status === 201, cr.status);
-        await ci(dAmy, inLast(2), { sleep: 5.5, soreness: 3, energy: 4 });
-        await ci(dAmy, inLast(4), { sleep: 8, soreness: 2, energy: 5 });
-        await ci(dBen, inLast(1), { sleep: 7, soreness: 4, energy: 3 });
+        await ci(dAmy, inLast(2), { sleep: 5.5, pain: 3, energy: 4 });
+        await ci(dAmy, inLast(4), { sleep: 8, pain: 2, energy: 5 });
+        await ci(dBen, inLast(1), { sleep: 7, pain: 8, energy: 3 });
 
         dr = await dApi(dCoach, 'GET', '/api/digest?week=' + inLast(2));
         check('digest normalizes a Wednesday to its Monday',
@@ -5549,11 +5542,11 @@ async function waitForServer(tries = 60) {
         check('digest check-ins: participation is recorded / roster x 7',
           dci.recorded === 4 && dci.possible === 14 && dci.percent === 29 && dci.roster === 2, dci);
         check('digest check-ins: team averages',
-          dci.avgSleep === 6.38 && dci.avgSoreness === 3.5 && dci.avgEnergy === 3.5, dci);
+          dci.avgSleep === 6.38 && dci.avgPain === 5.5 && dci.avgEnergy === 3.5, dci);
         check('digest check-ins: most-flagged first, with the main flag named',
           dci.flaggedCount === 2 && dci.flagged.length === 2 &&
           dci.flagged[0].name === 'Amy Ace' && dci.flagged[0].flaggedDays === 2 && dci.flagged[0].mainFlag === 'low-sleep' &&
-          dci.flagged[1].name === 'Ben Bolt' && dci.flagged[1].mainFlag === 'high-soreness', dci.flagged);
+          dci.flagged[1].name === 'Ben Bolt' && dci.flagged[1].mainFlag === 'high-pain', dci.flagged);
         dr = await dApi(dCoach, 'GET', '/api/digest');
         check('digest default week is the most recent completed week',
           dr.status === 200 && dr.json.week === lastMon && dr.json.checkins.recorded === 4,
@@ -5664,13 +5657,30 @@ async function waitForServer(tries = 60) {
         check('digest performance: no testing leaks into another week',
           dr.json.performance.testing.total === 0, dr.json.performance.testing);
 
-        /* --- health: opened/cleared this week + current snapshot --- */
-        dr = await dApi(dCoach, 'POST', '/api/concerns', { profileId: amyP.id, area: 'knee', side: 'left', feeling: 'ache', impact: 'modified', started: todayS, pain: 5 });
-        check('digest fixtures: concern opens', dr.status === 201, dr.status);
-        dr = await dApi(dCoach, 'POST', '/api/concerns', { profileId: benP.id, area: 'shin', side: 'right', feeling: 'soreness', impact: 'none', started: todayS, pain: 3 });
-        const benConcern = dr.json.concern;
-        dr = await dApi(dCoach, 'PUT', '/api/concerns/' + benConcern.id, { status: 'cleared' });
-        check('digest fixtures: concern clears', dr.status === 200 && dr.json.concern.status === 'cleared', dr.status);
+        /* --- health: opened/cleared this week + current snapshot ---
+           v56: the fixtures arrive by backup import with their
+           statuses and timestamps preset (Amy's open, Ben's already
+           cleared this week) — there is no creation endpoint. */
+        const dNowIso = new Date().toISOString();
+        const dConcernSeed = (id, pid, over) => Object.assign({
+          id, profileId: pid, area: 'knee', side: 'left', feeling: 'ache', pain: 5,
+          started: todayS, impact: 'modified', note: '', status: 'new', coachNote: '',
+          source: 'coach', reportedBy: null, checkinDate: null, headRelated: false,
+          acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
+          disposition: '', dispositionBy: null, dispositionAt: null, clearance: null,
+          clearedAt: null, audit: [], createdAt: dNowIso, updatedAt: dNowIso,
+        }, over);
+        dr = await dApi(dCoach, 'POST', '/api/import/backup', {
+          app: 'sprinter-workout-app', kind: 'backup', version: 1,
+          data: { concerns: {
+            [amyP.id]: [dConcernSeed('digest-concern-amy', amyP.id)],
+            [benP.id]: [dConcernSeed('digest-concern-ben', benP.id, {
+              area: 'shin', side: 'right', feeling: 'soreness', impact: 'none', pain: 3,
+              status: 'cleared', clearedAt: dNowIso,
+            })],
+          } },
+        });
+        check('digest fixtures: concerns seeded (one open, one cleared)', dr.status === 200, dr.status);
         dr = await dApi(dCoach, 'GET', '/api/digest?week=' + todayS);
         check('digest health: opened + cleared this week, with the current snapshot',
           dr.json.health.opened === 2 && dr.json.health.cleared === 1 &&
@@ -6992,7 +7002,7 @@ async function waitForServer(tries = 60) {
       check('weight room ships the shared-display toggle and the "See coach" panel',
         cpJs.text.includes('/api/weight-room/display') && cpJs.text.includes('Shared display') &&
         cpJs.text.includes('See coach'), cpJs.status);
-      check('health view ships the trainer summary and clearance workflow',
+      check('AMS concern card ships the trainer summary and clearance workflow (v56 home)',
         cpJs.text.includes('Copy summary for the athletic trainer') &&
         cpJs.text.includes('HELD — CLEARANCE REQUIRED') && cpJs.text.includes('Audit trail'), cpJs.status);
       check('media editor ships the athlete-video consent guard',
@@ -7015,8 +7025,7 @@ async function waitForServer(tries = 60) {
 
       /* ---- concussion branch (R2) + workflow/audit (R1) ---- */
       cp = await cpApi(cpHal, 'POST', '/api/checkin', {
-        sleep: 7, soreness: 2, energy: 4, hurts: true,
-        painText: 'Headache since the fall at practice', headSymptoms: true,
+        sleep: 7, pain: 2, energy: 4, headSymptoms: true,
       });
       check('head-symptoms check-in is accepted and records the head flag',
         cp.status === 201 && cp.json.checkin.headSymptoms === true, cp.json);
@@ -7077,28 +7086,45 @@ async function waitForServer(tries = 60) {
       cp = await cpApi(cpHal, 'GET', '/api/checkin/today');
       check('the hold lifts once the concern is cleared', cp.json.held.held === false, cp.json.held);
 
-      /* Coach-filed concerns: deletable, and head-related ones
-         follow the same clearance gate (disposition not required). */
+      /* Coach-filed concerns: there is no creation endpoint
+         anymore (v56) — but records a coach filed before v56 stay
+         fully workable: deletable, and head-related ones follow
+         the same clearance gate (disposition not required). They
+         arrive here the way they persist now: in a backup import. */
       cp = await cpApi(cpCoach, 'POST', '/api/concerns', {
         profileId: calP.id, area: 'calf', side: 'left', feeling: 'tightness',
         pain: 4, started: cpToday, impact: 'modified', note: 'Tight calf',
       });
-      check('a coach-filed concern saves', cp.status === 201 && cp.json.concern.headRelated === false, cp.json);
-      const calCid = cp.json.concern.id;
-      cp = await cpApi(cpCoach, 'DELETE', '/api/concerns/' + calCid);
-      check('a coach-filed concern can still be deleted', cp.status === 200, cp.status);
-      cp = await cpApi(cpCoach, 'POST', '/api/concerns', {
-        profileId: calP.id, area: 'other', side: 'na', feeling: 'other',
-        pain: 3, started: cpToday, impact: 'stopped', note: 'Hit in a collision; dizzy', headRelated: true,
+      check('v56: a coach can no longer file a concern (endpoint gone)', cp.status === 404, cp.status);
+      const cpNowIso = new Date().toISOString();
+      const cpConcernSeed = (id, over) => Object.assign({
+        id, profileId: calP.id, area: 'calf', side: 'left', feeling: 'tightness',
+        pain: 4, started: cpToday, impact: 'modified', note: 'Tight calf',
+        status: 'new', coachNote: '', source: 'coach', reportedBy: null, checkinDate: null,
+        headRelated: false,
+        acknowledgedBy: null, acknowledgedByEmail: null, acknowledgedAt: null,
+        disposition: '', dispositionBy: null, dispositionAt: null, clearance: null,
+        audit: [], createdAt: cpNowIso, updatedAt: cpNowIso,
+      }, over);
+      cp = await cpApi(cpCoach, 'POST', '/api/import/backup', {
+        app: 'sprinter-workout-app', kind: 'backup', version: 1,
+        data: { concerns: { [calP.id]: [
+          cpConcernSeed('cp-concern-cal-plain'),
+          cpConcernSeed('cp-concern-cal-head', {
+            area: 'other', side: 'na', feeling: 'other', pain: 3, impact: 'stopped',
+            note: 'Hit in a collision; dizzy', headRelated: true,
+          }),
+        ] } },
       });
-      const calHead = cp.json.concern;
-      check('a coach can file a concern as head-related', cp.status === 201 && calHead.headRelated === true, cp.json);
+      check('pre-existing coach-filed concerns seed from a backup', cp.status === 200, cp.status);
+      cp = await cpApi(cpCoach, 'DELETE', '/api/concerns/cp-concern-cal-plain');
+      check('a coach-filed concern can still be deleted', cp.status === 200, cp.status);
       cp = await cpApi(cpCoach, 'GET', '/api/coach/today');
       check('a coach-filed head concern holds the athlete too',
         (cp.json.heldAthletes || []).some(h => h.profileId === calP.id), cp.json.heldAthletes);
-      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + calHead.id, { status: 'cleared' });
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/cp-concern-cal-head', { status: 'cleared' });
       check('a coach-filed head concern also cannot close without clearance', cp.status === 400, cp.status);
-      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + calHead.id, {
+      cp = await cpApi(cpCoach, 'PUT', '/api/concerns/cp-concern-cal-head', {
         status: 'cleared',
         clearance: { by: 'School Nurse, RN', date: cpToday, note: 'Written clearance from the treating provider received' },
       });
@@ -7109,10 +7135,10 @@ async function waitForServer(tries = 60) {
       for (let i = 4; i >= 0; i--) {
         const d = cpAdd(cpToday, -i);
         await cpApi(cpDot, 'POST', '/api/checkin', {
-          date: d, sleep: 7, soreness: 2, energy: i === 2 ? 5 : 2, hurts: false,
+          date: d, sleep: 7, pain: 2, energy: i === 2 ? 5 : 2,
         });
         await cpApi(cpCal, 'POST', '/api/checkin', {
-          date: d, sleep: 8, soreness: 2, energy: 4, hurts: false,
+          date: d, sleep: 8, pain: 2, energy: 4,
         });
       }
       cp = await cpApi(cpCoach, 'GET', '/api/ams/roster');
@@ -7172,11 +7198,15 @@ async function waitForServer(tries = 60) {
         (cp.json.panels || []).every(pn => pn.profile.name === '' && pn.loads === null) &&
         !sharedJson.includes('Headley') && !sharedJson.includes('Distell') &&
         !sharedJson.includes('"weight":185'), sharedJson.slice(0, 300));
-      cp = await cpApi(cpCoach, 'POST', '/api/concerns', {
-        profileId: dotP.id, area: 'other', side: 'na', feeling: 'other',
-        pain: 3, started: cpToday, impact: 'stopped', note: 'Dizzy after a collision', headRelated: true,
+      /* Dot's hold for the weight-room steps: her today's check-in
+         is re-saved with head symptoms — the one way a hold starts
+         now (v56). */
+      await cpApi(cpDot, 'POST', '/api/checkin', {
+        date: cpToday, sleep: 7, pain: 2, energy: 2, headSymptoms: true,
       });
-      const dotHead = cp.json.concern;
+      cp = await cpApi(cpCoach, 'GET', '/api/concerns');
+      const dotHead = (cp.json.concerns || []).find(c => c.profileId === dotP.id && c.source === 'athlete');
+      check('dot head concern exists from her check-in', !!dotHead && dotHead.headRelated === true, dotHead);
       cp = await cpApi(cpCoach, 'GET', wrUrl);
       const dotSharedPanel = (cp.json.panels || []).find(pn => pn.profile.id === dotP.id);
       check('a held athlete\'s shared panel is a flag with no name and no reason',
@@ -7196,7 +7226,7 @@ async function waitForServer(tries = 60) {
       cp = await cpApi(cpCoach, 'POST', '/api/weight-room/display', { shared: true });
       check('switching back to shared display persists', cp.json.sharedDisplay === true, cp.json);
       cp = await cpApi(cpCoach, 'PUT', '/api/concerns/' + dotHead.id, {
-        status: 'cleared',
+        status: 'cleared', disposition: 'Seen by the athletic trainer; written clearance on file',
         clearance: { by: 'Dr. A Example, MD', date: cpToday, note: 'Written clearance received' },
       });
       check('the held weight-room fixture clears for the retention/export steps',
@@ -7222,12 +7252,10 @@ async function waitForServer(tries = 60) {
         covRow.consent.email === 'cpcoach@test.com' && !!covRow.consent.at, covRow);
 
       /* ---- retention tooling (R11) ---- */
-      await cpApi(cpRae, 'POST', '/api/checkin', { sleep: 7, soreness: 3, energy: 3, hurts: false });
+      /* Rae's one concern comes from her own head-symptoms
+         check-in — the only way concerns are born now (v56). */
+      await cpApi(cpRae, 'POST', '/api/checkin', { sleep: 7, pain: 3, energy: 3, headSymptoms: true });
       await cpApi(cpCoach, 'POST', '/api/ams/athlete/' + raeP.id + '/notes', { text: 'Prefers morning lifts' });
-      await cpApi(cpCoach, 'POST', '/api/concerns', {
-        profileId: raeP.id, area: 'hamstring', side: 'right', feeling: 'tightness',
-        pain: 4, started: cpToday, impact: 'modified', note: 'Tight hamstring',
-      });
       await cpApi(cpCoach, 'POST', '/api/meet-results', { profileId: raeP.id, date: cpAdd(cpToday, -3), meet: 'CP Invite', event: '100m', mark: '12.10' });
       cp = await cpApi(cpCoach, 'PUT', '/api/profiles/' + raeP.id, { archived: true });
       check('retention fixture: athlete archived', cp.status === 200, cp.status);
