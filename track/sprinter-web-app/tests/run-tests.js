@@ -452,8 +452,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v58',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v58"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v59',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v59"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2319,10 +2319,10 @@ async function main() {
      pre-design presentation and the absence of the design-pass
      markers (fonts, 64px Run slab, lane rules, split heads,
      scoreboard hero, flagged-row accents, cascade motion). */
-  check('rollback: system font stacks restored; no Archivo/JetBrains anywhere in the shell',
+  check('rollback: system font stacks restored; no Archivo/JetBrains anywhere in the shell (v59: the display stack is a theme token again, system serif only, cadet default inherit)',
     stylesCss.text.includes('font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto') &&
     !/Archivo|JetBrains/.test(stylesCss.text + pageHtml.text + appJs.text) &&
-    !stylesCss.text.includes('--font-display') && !stylesCss.text.includes('--font-mono') &&
+    stylesCss.text.includes('--font-display: inherit') && !stylesCss.text.includes('--font-mono') &&
     stylesCss.text.includes('--red: #CC0033'));
   check('rollback: no external font fetch anywhere',
     !/fonts\.googleapis|fonts\.gstatic/.test(pageHtml.text + stylesCss.text + appJs.text));
@@ -2377,17 +2377,49 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v58'") &&
-    swJs.text.includes("sprinter-app-v58"));
+    appJs.text.includes("const APP_VERSION = 'v59'") &&
+    swJs.text.includes("sprinter-app-v59"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v58"') &&
-    pageHtml.text.includes('Cadets Sprint · App v58') &&
+    pageHtml.text.includes('data-app-version="v59"') &&
+    pageHtml.text.includes('Cadets Sprint · App v59') &&
     appJs.text.includes('appVersionHtml'));
+
+  /* ---------------- Themes (v59) ----------------
+     AJ asked for visibly different designs: three themes ride
+     one token system. The boot script sets data-theme before
+     first paint (per-device localStorage, cadet default), the
+     CSS carries a token block per non-default theme, and the
+     Account Appearance card applies a pick instantly. The TV
+     board and the Weight Room shared display stay baseline. */
+  const themeCss = stylesCss.text.slice(stylesCss.text.indexOf('Themes (v59)'));
+  check('theme boot script ships in the shell (data-theme set before paint, cadet default)',
+    pageHtml.text.includes("localStorage.getItem('sjc-theme')") &&
+    pageHtml.text.includes("setAttribute('data-theme', t)") &&
+    pageHtml.text.includes("var t = 'cadet'") &&
+    pageHtml.text.indexOf("setAttribute('data-theme', t)") < pageHtml.text.indexOf('/styles.css'));
+  check('all three themes are defined (cadet baseline + floodlight + championship token blocks)',
+    appJs.text.includes("id: 'cadet'") && appJs.text.includes("id: 'floodlight'") &&
+    appJs.text.includes("id: 'championship'") &&
+    themeCss.includes(':root[data-theme="floodlight"]') &&
+    themeCss.includes(':root[data-theme="championship"]') &&
+    themeCss.includes('--bg: #0b0d10') && themeCss.includes('--bg: #faf5ea') &&
+    themeCss.includes('--gold: #b08d3e') && themeCss.includes('Georgia'));
+  check('appearance picker ships (slot in the shell, apply + persist wiring in the JS)',
+    pageHtml.text.includes('id="appearance-slot"') &&
+    appJs.text.includes('function renderAppearance(') && appJs.text.includes('function applyTheme(') &&
+    appJs.text.includes("localStorage.setItem(THEME_KEY, id)") &&
+    appJs.text.includes('data-theme-pick') && appJs.text.includes('theme-preview'));
+  check('broadcast surfaces are pinned to the baseline treatment (TV board + weight-room shared display)',
+    themeCss.includes('body.tv-mode {') && themeCss.includes('.wr-grid.wr-shared {') &&
+    themeCss.includes('--ink: #1c1c1e') && themeCss.includes('--card: #ffffff') &&
+    appJs.text.includes("' wr-shared'"));
+  check('safety treatments keep cadet ink in every theme (held / flagged surfaces are not themed)',
+    themeCss.includes('.ci-held, .ci-notice, .concern-card.flagged, .wellness-row.flagged { color: #1c1c1e; }'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
      Presentation only. The header's dropdown groups and the phone

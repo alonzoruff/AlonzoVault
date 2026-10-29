@@ -32,6 +32,24 @@
   --dur-3: 220ms;
   --ease-std: cubic-bezier(.2, 0, 0, 1);
   --ease-enter: cubic-bezier(0, 0, .2, 1);
+  /* Theme tokens (v59): the surfaces every theme re-skins. The
+     cadet values here are the app's long-standing literals, so
+     the default theme is the pre-theme design unchanged. The
+     floodlight / championship blocks at the end of this file
+     re-declare these (and the palette above) per theme. */
+  --surface: #ffffff;       /* buttons, chips, inputs, segmented rows */
+  --surface-2: #f4f4f6;     /* hover tints, table heads, stat fills */
+  --input-line: #d9dce1;
+  --accent-soft-bg: #fdf0f3;
+  --badge-plain-bg: #eeeeee;
+  --badge-plain-ink: #555555;
+  --code-bg: #f0f0f2;
+  --track-bg: #e9eaed;      /* progress tracks, thumbs, skeletons */
+  --header-bg: #ffffff;
+  --hero-bg: linear-gradient(120deg, #7a001f 0%, #CC0033 52%, #e8003d 100%);
+  --gold: #CC0033;          /* only championship gives this a gold value */
+  --danger-line: #f0c4c0;
+  --font-display: inherit; /* championship swaps headings to a serif stack */
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -48,7 +66,7 @@ body {
 }
 .topbar {
   position: sticky; top: 0; z-index: 20;
-  background: var(--card); border-bottom: 1px solid var(--line);
+  background: var(--header-bg); border-bottom: 1px solid var(--line);
   box-shadow: 0 1px 0 var(--line), 0 6px 16px -12px rgba(20, 22, 26, .25);
 }
 .topbar-inner {
@@ -76,12 +94,12 @@ body {
 }
 .tab {
   display: inline-flex; align-items: center; gap: 7px; min-height: 44px;
-  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   padding: 8px 14px; border-radius: 999px; font-size: 14px; white-space: nowrap; cursor: pointer;
 }
 .tab[hidden] { display: none !important; }
 .mainnav .tab { border-color: transparent; background: transparent; min-height: 40px; padding: 7px 12px; font-weight: 600; }
-@media (hover: hover) { .mainnav .tab:hover { background: #f0f0f3; } }
+@media (hover: hover) { .mainnav .tab:hover { background: var(--surface-2); } }
 .mainnav .tab.active { background: var(--red); border-color: var(--red); color: #fff; }
 .nav-group { position: relative; }
 .nav-group[hidden] { display: none !important; }
@@ -90,7 +108,7 @@ body {
 .nav-menu {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 70;
   min-width: 234px; max-width: min(320px, 88vw); max-height: 70vh; overflow-y: auto;
-  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: var(--shadow-pop); padding: 6px; display: none;
 }
 .nav-group.open .nav-menu { display: block; }
@@ -99,19 +117,19 @@ body {
   padding: 9px 12px; border: 0; border-radius: 8px; background: transparent;
   color: var(--ink); font-size: 14.5px; text-align: left; cursor: pointer;
 }
-@media (hover: hover) { .nav-item:hover { background: #f4f4f6; } }
-.nav-item.active { background: #fdf0f3; color: var(--red-dark); font-weight: 700; }
+@media (hover: hover) { .nav-item:hover { background: var(--surface-2); } }
+.nav-item.active { background: var(--accent-soft-bg); color: var(--red-dark); font-weight: 700; }
 .nav-overview { font-weight: 700; }
 .nav-menu .nav-overview { border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; margin-bottom: 4px; }
 /* The Menu button + sheet exist only on narrow screens. */
 .nav-toggle {
   display: none; align-items: center; gap: 7px; min-height: 44px; padding: 8px 14px;
-  border: 1px solid var(--line); border-radius: 999px; background: #fff;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
   color: var(--ink); font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .nav-toggle svg { width: 19px; height: 19px; display: block; }
 .nav-sheet {
-  border-top: 1px solid var(--line); background: #fff;
+  border-top: 1px solid var(--line); background: var(--card);
   max-height: 72vh; overflow-y: auto; padding: 8px 12px 14px;
 }
 .nav-sheet[hidden] { display: none; }
@@ -134,7 +152,7 @@ body {
 }
 .tab:active, .btn:active, .session-row:active, .menu-item:active,
 .chip:active, .seg-btn:active, .tap-btn:active { transform: scale(.985); }
-.tabbar .tab:active { transform: none; background: #fdf0f3; }
+.tabbar .tab:active { transform: none; background: var(--accent-soft-bg); }
 .tab.active { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
 .tab-icon { display: inline-flex; flex: none; }
 .tab-icon svg { width: 19px; height: 19px; display: block; }
@@ -166,6 +184,9 @@ main { max-width: 880px; margin: 0 auto; padding: 16px max(16px, env(safe-area-i
 .view.active { display: block; }
 h1 { font-size: 28px; font-weight: 800; margin: 6px 0 12px; line-height: 1.22; letter-spacing: -.02em; }
 h2 { font-size: 20px; font-weight: 700; margin: 4px 0 10px; line-height: 1.25; letter-spacing: -.015em; }
+/* Display headings take the theme's display stack: the system
+   stack everywhere except championship, where it is a serif. */
+h1, h2 { font-family: var(--font-display); }
 h3 { font-size: 16.5px; margin: 10px 0 6px; line-height: 1.25; }
 .muted { color: var(--muted); font-size: 14px; }
 .card {
@@ -174,17 +195,17 @@ h3 { font-size: 16.5px; margin: 10px 0 6px; line-height: 1.25; }
   box-shadow: var(--shadow-card);
 }
 .btn {
-  border: 1px solid var(--line); background: #fff; color: var(--ink);
-  padding: 9px 16px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  padding: 9px 16px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer;
   min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
   box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
 }
 .btn.primary { box-shadow: 0 1px 2px rgba(153, 0, 38, .25); }
 a.btn, button.btn { vertical-align: middle; }
 .btn.primary { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; width: 100%; }
-.btn.secondary { background: #fff; }
+.btn.secondary { background: var(--surface); }
 a.btn { display: inline-block; text-decoration: none; }
-.btn.danger { color: var(--high); border-color: #f0c4c0; }
+.btn.danger { color: var(--high); border-color: var(--danger-line); }
 /* Today screen Run button(s): full width of the card (via
    .btn.primary), tall enough to hit across a weight room. */
 .btn.run-today-btn { min-height: 56px; font-size: 17px; font-weight: 700; margin: 0 0 10px; }
@@ -192,7 +213,7 @@ button.back { margin-bottom: 10px; }
 input[type="search"], input[type="text"], input[type="email"], input[type="password"],
 input[type="date"], select, textarea {
   width: 100%; padding: 10px 12px; font-size: 16px; margin: 4px 0 10px;
-  border: 1px solid #d9dce1; border-radius: 10px; background: #fff; color: var(--ink);
+  border: 1px solid var(--input-line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
 }
 input[type="search"]:focus, input[type="text"]:focus, input[type="email"]:focus,
 input[type="password"]:focus, input[type="date"]:focus, select:focus, textarea:focus {
@@ -218,7 +239,7 @@ label { display: block; font-size: 14px; font-weight: 600; margin-top: 6px; }
 }
 .badge.high { background: var(--high-bg); color: var(--high); }
 .badge.low { background: var(--low-bg); color: var(--low); }
-.badge.plain { background: #eee; color: #555; }
+.badge.plain { background: var(--badge-plain-bg); color: var(--badge-plain-ink); }
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 14px; }
 .detail-grid dt { color: var(--muted); }
 .detail-grid dd { margin: 0; font-weight: 600; }
@@ -256,7 +277,7 @@ label { display: block; font-size: 14px; font-weight: 600; margin-top: 6px; }
 .doc h3 { font-size: 16px; margin-top: 14px; }
 .doc table { border-collapse: collapse; width: 100%; font-size: 13px; display: block; overflow-x: auto; }
 .doc th, .doc td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
-.doc code { background: #f0f0f2; padding: 1px 5px; border-radius: 5px; font-size: 13px; }
+.doc code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 13px; }
 .doc blockquote { border-left: 3px solid var(--line); margin: 8px 0; padding: 2px 12px; color: var(--muted); }
 .log-entry .head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .error { color: var(--high); font-size: 14px; }
@@ -276,7 +297,7 @@ details.card summary { cursor: pointer; }
   position: relative; height: 118px; border-radius: var(--radius);
   container-type: inline-size;
   overflow: hidden; margin-bottom: 14px;
-  background: linear-gradient(120deg, #7a001f 0%, #CC0033 52%, #e8003d 100%);
+  background: var(--hero-bg);
   box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .28), var(--shadow-card);
 }
 /* The Today band: the scarlet hero with the view title set into it. */
@@ -935,7 +956,7 @@ details.card summary { cursor: pointer; }
 .hero-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .hero-stat {
   flex: 1 1 0; min-width: 84px; text-align: center;
-  background: #fafafa; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
   padding: 8px 10px;
 }
 .stat-num {
@@ -951,7 +972,7 @@ details.card summary { cursor: pointer; }
    jump when data lands (cold starts on a flaky track-side connection).
    A light sweep (transform only, one small element) says "loading"
    better than a pulse; it only runs when motion is welcome. */
-.skel { background: #e9e9ec; border-radius: var(--radius); margin: 0 0 14px; position: relative; overflow: hidden; }
+.skel { background: var(--track-bg); border-radius: var(--radius); margin: 0 0 14px; position: relative; overflow: hidden; }
 .skel-card { height: 112px; }
 .skel-row { height: 64px; border-radius: var(--radius-sm); }
 .skel-line { height: 14px; border-radius: 7px; margin: 0 0 10px; position: relative; overflow: hidden; }
@@ -1018,8 +1039,8 @@ table.matrix, table.ranked { border-collapse: collapse; width: 100%; font-size: 
 table.matrix th, table.matrix td, table.ranked th, table.ranked td {
   border: 1px solid var(--line); padding: 6px 8px; text-align: left; white-space: nowrap;
 }
-table.matrix thead th, table.ranked thead th { background: #f4f4f6; }
-table.ranked tr.selected td { background: #fdf0f3; }
+table.matrix thead th, table.ranked thead th { background: var(--surface-2); }
+table.ranked tr.selected td { background: var(--accent-soft-bg); }
 table.matrix td:not(:first-child) { text-align: center; }
 .test-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; margin: 8px 0; }
 .rapid-test { border-top: 1px solid var(--line); padding: 10px 0; }
@@ -1295,7 +1316,7 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 /* ---- Videos section: chips + thumbnail grid + in-place player ---- */
 .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
 .chip {
-  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   /* 40px floor: chips live in dense filter rows; 44 would crowd them out */
   padding: 6px 12px; min-height: 40px; border-radius: 999px; font-size: 13px; cursor: pointer; white-space: nowrap;
 }
@@ -1355,7 +1376,7 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .att-seg { padding: 0; overflow: visible; }
 
 /* ---- Inventory (coach): summary strip + item cards ---- */
-.hero-stat.inv-flag { border-color: var(--red); background: #fdf0f3; }
+.hero-stat.inv-flag { border-color: var(--red); background: var(--accent-soft-bg); }
 .hero-stat.inv-flag .stat-num { color: var(--red); }
 .inv-note { font-size: 14px; margin: 6px 0 0; }
 .inv-updated { font-size: 12.5px; margin: 4px 0 0; }
@@ -1371,7 +1392,7 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .seg-btn {
   flex: none; min-height: 44px; padding: 8px 14px;
   border: 1px solid var(--line); border-radius: 999px;
-  background: #fff; color: var(--ink);
+  background: var(--surface); color: var(--ink);
   font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer;
 }
 .seg-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
@@ -1393,7 +1414,7 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .legend-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; flex: none; }
 .grid-table input.grid-in { width: 78px; padding: 6px 8px; }
 .grid-table input.grid-r { width: 62px; margin-left: 4px; }
-.grid-table td.cell-error { background: #fdf0f3; }
+.grid-table td.cell-error { background: var(--accent-soft-bg); }
 .grid-table td.cell-error input { border-color: var(--red); }
 .grid-err-list { color: var(--red-dark); margin: 4px 0; padding-left: 20px; }
 
@@ -1509,7 +1530,7 @@ body.runner-mode { overflow: hidden; }
 .tap-btn {
   min-width: 52px; min-height: 48px; padding: 10px 14px;
   border: 2px solid var(--gray); border-radius: 12px;
-  background: #fff; font-size: 18px; font-weight: 700; cursor: pointer;
+  background: var(--surface); font-size: 18px; font-weight: 700; cursor: pointer;
 }
 .tap-btn.on { background: var(--scarlet); border-color: var(--scarlet); color: #fff; }
 .ci-hurts { font-size: 17px; font-weight: 700; margin-top: 16px; }
@@ -1519,11 +1540,11 @@ body.runner-mode { overflow: hidden; }
 .wellness-row.flagged { background: #fdeef1; border-left: 4px solid var(--scarlet); border-radius: 8px; }
 
 /* GOALS (coach manager + athlete card + report card) */
-.goal-row { padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
+.goal-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .goal-row:last-child { border-bottom: none; }
 .goal-head { font-size: 17px; margin-bottom: 4px; }
 .goal-bar {
-  height: 12px; border-radius: 999px; background: #e5e7eb;
+  height: 12px; border-radius: 999px; background: var(--track-bg);
   overflow: hidden; margin: 6px 0 2px;
 }
 .goal-bar-fill { height: 100%; background: var(--red); border-radius: 999px; }
@@ -1560,7 +1581,7 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
    box so lists never jump while images load. No demo, no box. */
 .row-thumb {
   flex: none; display: block; width: 92px; height: 58px;
-  border-radius: 8px; overflow: hidden; background: #e9eaed;
+  border-radius: 8px; overflow: hidden; background: var(--track-bg);
 }
 .row-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .row-thumb.thumb-sm {
@@ -1606,14 +1627,14 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .wr-steps { list-style: none; margin: 10px 0; padding: 0; counter-reset: wrstep; }
 .wr-step { padding: 7px 10px; border-left: 3px solid transparent; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 15.5px; }
 .wr-step.done { color: var(--muted); }
-.wr-step.current { border-left-color: var(--scarlet); background: #fdf0f3; font-size: 16.5px; }
+.wr-step.current { border-left-color: var(--scarlet); background: var(--accent-soft-bg); font-size: 16.5px; }
 
 /* Compliance pass (v48): check-in safety notice, held banners,
    athletic-trainer summary, concern audit trail. */
 .ci-notice { border: 1px solid var(--line, #d8d8d8); border-left: 4px solid var(--scarlet); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; background: #fdf7f8; }
 .ci-notice p { margin: 4px 0; }
 .ci-held { border: 1px solid #b3261e; border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; background: #fdecea; }
-.at-summary-text { white-space: pre-wrap; font-size: 14px; background: #fafafa; border: 1px solid var(--line, #d8d8d8); border-radius: var(--radius-sm); padding: 10px 12px; }
+.at-summary-text { white-space: pre-wrap; font-size: 14px; background: var(--surface-2); border: 1px solid var(--line, #d8d8d8); border-radius: var(--radius-sm); padding: 10px 12px; }
 .concern-audit { margin-top: 10px; }
 .concern-audit summary { cursor: pointer; font-weight: 600; }
 
@@ -1632,7 +1653,7 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .dev-legend { font-size: 13px; color: var(--muted); }
 .dev-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--band, #999); margin-right: 3px; }
 .dev-report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-top: 12px; }
-.dev-person { border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; background: #fff; }
+.dev-person { border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; background: var(--card); }
 .dev-person.band-edge-ok { border-left-color: #1e7a34; }
 .dev-person.band-edge-watch { border-left-color: #d9a400; }
 .dev-person.band-edge-bad { border-left-color: #b3271e; }
@@ -1643,7 +1664,7 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .dev-pair-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
 .dev-bar-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
 .dev-side { width: 12px; flex: none; font-weight: 700; color: var(--muted); }
-.dev-track { flex: 1; height: 10px; border-radius: 5px; background: #ececf0; overflow: hidden; }
+.dev-track { flex: 1; height: 10px; border-radius: 5px; background: var(--track-bg); overflow: hidden; }
 .dev-fill { display: block; height: 100%; border-radius: 5px; }
 .dev-fill-l { background: var(--gray); }
 .dev-fill-r { background: var(--red); }
@@ -1671,6 +1692,10 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
   }
   body.printing-report .dev-report-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
   body.printing-report .dev-person { break-inside: avoid; border-color: #ccc; }
+  /* Print is paper in every theme: the report's ink and muted
+     tones reset to the cadet print values. */
+  body.printing-report .dev-report { color: #1c1c1e; --muted: #68707b; --line: #e3e3e6; }
+  body.printing-report .dev-person { background: #fff; color: #1c1c1e; }
   body.printing-report .dev-report,
   body.printing-report .dev-report * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { margin: 10mm; }
@@ -1738,7 +1763,7 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .lib-path-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
 .lib-path-head h3 { margin-top: 0; }
 .lib-path-progress { min-width: 170px; flex: 0 1 220px; }
-.lib-path-bar { height: 8px; background: #eee; border-radius: 99px; overflow: hidden; margin-bottom: 4px; }
+.lib-path-bar { height: 8px; background: var(--track-bg); border-radius: 99px; overflow: hidden; margin-bottom: 4px; }
 .lib-path-fill { height: 100%; background: var(--red); border-radius: 99px; }
 .lib-path-steps { list-style: none; padding: 0; margin: 12px 0 0; }
 .lib-path-step { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); }
@@ -1754,8 +1779,8 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 /* ---------------- tap-a-term (v55) ---------------- */
 .term-pop { background: none; border: none; border-bottom: 2px dotted var(--red); color: inherit;
   font: inherit; padding: 0; cursor: pointer; }
-.term-popover { position: fixed; z-index: 1200; background: #fff; border: 1px solid var(--line);
-  border-radius: 12px; box-shadow: 0 12px 34px rgba(0, 0, 0, .22); padding: 14px; }
+.term-popover { position: fixed; z-index: 1200; background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: var(--shadow-pop); padding: 14px; }
 .term-popover p { line-height: 1.5; }
 .term-pop-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 body.tv-mode .term-popover { display: none; }
@@ -1766,13 +1791,13 @@ body.tv-mode .term-popover { display: none; }
    only — scarlet stays the one accent, system type stack unchanged. */
 .menu-count { font-style: normal; font-weight: 700; color: var(--red-dark); }
 .learn-card h2 { margin-top: 0; }
-.wotd { border: 1px solid var(--line); border-left: 5px solid var(--red); border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; background: #fffafa; }
+.wotd { border: 1px solid var(--line); border-left: 5px solid var(--red); border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; background: var(--accent-soft-bg); }
 .wotd-label { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .wotd-term { font-size: 21px; font-weight: 800; color: var(--red-dark); margin: 2px 0 4px; }
 .wotd-def { margin: 0 0 6px; font-size: 14.5px; line-height: 1.5; }
 .wotd-cue { margin: 0 0 10px; font-size: 14px; }
 .learn-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
-.learn-tile { text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; font-size: 15px; color: var(--ink); box-shadow: var(--shadow-card); }
+.learn-tile { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; font-size: 15px; color: var(--ink); box-shadow: var(--shadow-card); }
 .learn-tile strong { display: block; font-size: 15.5px; }
 .learn-tile span { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
 .learn-tile:active { transform: scale(.98); }
@@ -1781,7 +1806,7 @@ body.tv-mode .term-popover { display: none; }
 .learn-fuel span { display: block; font-size: 13.5px; }
 .learn-fuel .btn { flex: 0 0 auto; }
 .ci-week { display: flex; align-items: center; gap: 6px; margin: 10px 0 2px; flex-wrap: wrap; }
-.ci-dot { width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; color: var(--muted); background: #fff; }
+.ci-dot { width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; color: var(--muted); background: var(--surface); }
 .ci-dot.on { background: var(--red); border-color: var(--red); color: #fff; }
 .ci-dot.today { outline: 2px solid var(--red); outline-offset: 1px; }
 .ci-dot.today:not(.on) { color: var(--red-dark); }
@@ -1843,10 +1868,10 @@ details[open] > :not(summary) { animation: fadeUp var(--dur-2) var(--ease-enter)
 
 /* Selected states read as a fine scarlet border + a whisper of
    background shift, not a lift — calmer on long lists. */
-.lib-shelf.active { background: #fdf3f5; }
+.lib-shelf.active { background: var(--accent-soft-bg); }
 .seg-btn.active { box-shadow: 0 1px 3px rgba(153, 0, 38, .28); }
 @media (hover: hover) {
-  .session-row:hover, .menu-item:hover { background: #fafafb; }
+  .session-row:hover, .menu-item:hover { background: var(--surface-2); }
 }
 
 /* Learn tiles join the shared press feedback (they had a snap). */
@@ -1886,3 +1911,170 @@ details[open] > :not(summary) { animation: fadeUp var(--dur-2) var(--ease-enter)
    device stats list keep their weight (they are data, not prose). */
 p strong, p b, li strong, li b, td strong, td b { font-weight: inherit; }
 .dev-stats li strong { font-weight: 700; }
+
+/* ================================================================
+   Themes (v59) — three looks on one token system.
+   ----------------------------------------------------------------
+   AJ asked for visibly different designs, not a refinement: the
+   boot script in index.html sets data-theme on <html> before
+   first paint (localStorage, per device, default cadet), and the
+   Account view's Appearance card switches it with no reload.
+   Cadet is the :root baseline at the top of this file and needs
+   no block here. Everything a theme changes rides the tokens;
+   the few component rules below exist only where a theme changes
+   the treatment itself (header, hero, active nav).
+   Semantic colours are NOT themed: health flags, the device
+   report's green/amber/red bands and the held/safety treatments
+   keep their values in every theme.
+   ================================================================ */
+
+/* ---- floodlight: the dark stadium design. Near-black blue-black
+   ground, raised dark cards, white ink, scarlet accent, sharper
+   corners. Accent text lifts to a light scarlet so it stays
+   readable on the dark surfaces. */
+:root[data-theme="floodlight"] {
+  --red: #CC0033;
+  --red-dark: #ff8fa3;
+  --gray: #8f97a1;
+  --ink: #f2f3f5;
+  --muted: #a3adb8;
+  --line: #2b3038;
+  --bg: #0b0d10;
+  --card: #161a20;
+  --surface: #20252e;
+  --surface-2: #262c37;
+  --input-line: #3a4150;
+  --accent-soft-bg: #33101c;
+  --badge-plain-bg: #262c35;
+  --badge-plain-ink: #c9ccd1;
+  --code-bg: #232833;
+  --track-bg: #262c35;
+  --header-bg: #101216;
+  --hero-bg: linear-gradient(120deg, #101216 0%, #181d24 55%, #232a35 100%);
+  --danger-line: #6e2a26;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .45), 0 2px 10px rgba(0, 0, 0, .35);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .5);
+  --radius: 8px;
+  --radius-sm: 6px;
+}
+/* The header is a dark bar closed by a scarlet rule. */
+:root[data-theme="floodlight"] .topbar { border-bottom: 2px solid var(--red); }
+/* The school wordmark is drawn for light ground: on the dark
+   header it sits on a small light badge so it stays legible. */
+:root[data-theme="floodlight"] .site-logo { background: #eef0f2; border-radius: 6px; padding: 3px 7px; }
+/* The picker's Current marker uses the light scarlet on dark. */
+:root[data-theme="floodlight"] .theme-pick-current { color: var(--red-dark); }
+/* The Today hero reads as a scoreboard panel: deep charcoal, a
+   scarlet base line, and the runner figure lit against it (the
+   figure's near-black strokes/fills lift to a light steel). */
+:root[data-theme="floodlight"] .hero { box-shadow: inset 0 -3px 0 var(--red), var(--shadow-card); }
+:root[data-theme="floodlight"] .hero [stroke="#20242a"] { stroke: #e8eaed; }
+:root[data-theme="floodlight"] .hero [stroke="#4a5158"] { stroke: #9aa3ad; }
+:root[data-theme="floodlight"] .hero [fill="#20242a"] { fill: #e8eaed; }
+
+/* ---- championship: the premium light editorial design. Warm
+   ivory paper, deep scarlet and graphite, a restrained gold
+   accent, softer corners and shadows, serif display headings. */
+:root[data-theme="championship"] {
+  --red: #b3002e;
+  --red-dark: #7f0021;
+  --gray: #8a8172;
+  --ink: #29261f;
+  --muted: #746c5c;
+  --line: #e6dcc4;
+  --bg: #faf5ea;
+  --card: #fffdf6;
+  --surface: #fffdf6;
+  --surface-2: #f3ecda;
+  --input-line: #d8cbab;
+  --accent-soft-bg: #f9e8ea;
+  --badge-plain-bg: #efe7d3;
+  --badge-plain-ink: #5c5546;
+  --code-bg: #f3ecda;
+  --track-bg: #ece2c8;
+  --header-bg: #fffdf6;
+  --hero-bg: linear-gradient(120deg, #7f0021 0%, #a80028 55%, #b3002e 100%);
+  --gold: #b08d3e;
+  --danger-line: #eec5bd;
+  --shadow-card: 0 1px 2px rgba(101, 78, 20, .05), 0 10px 28px -14px rgba(101, 78, 20, .22);
+  --shadow-pop: 0 16px 40px -12px rgba(101, 78, 20, .30), 0 2px 8px rgba(101, 78, 20, .12);
+  --radius: 18px;
+  --radius-sm: 12px;
+  --font-display: Georgia, "Times New Roman", Times, serif;
+}
+/* Active nav trades the scarlet slab for deep scarlet type over
+   a gold rule — the travelling pill and the tab glide stand down,
+   and the lane dividers pick up the gold too. */
+:root[data-theme="championship"] .mainnav .tab.active {
+  background: transparent; border-color: transparent; color: var(--red-dark);
+  box-shadow: inset 0 -3px 0 var(--gold);
+}
+:root[data-theme="championship"] .nav-pill,
+:root[data-theme="championship"] .tab-glide { display: none; }
+:root[data-theme="championship"] .tabbar .tab.active {
+  color: var(--red-dark); box-shadow: inset 0 3px 0 var(--gold);
+}
+:root[data-theme="championship"] .lane-divider .lane-strip {
+  background-image: repeating-linear-gradient(90deg, var(--gold) 0 34px, transparent 34px 56px);
+}
+
+/* ---- Surfaces that never take the device theme ----
+   The warm-up cards and nutrition cards are printed paper
+   designs: they keep their paper colours in every theme. */
+.wu-card, .nu-card {
+  color: #1c1c1e;
+  --red: #CC0033; --red-dark: #990026; --muted: #68707b; --line: #e3e3e6;
+}
+.wu-card h2, .nu-card h2 { font-family: inherit; }
+/* Safety treatments keep cadet ink on their light grounds, so a
+   held athlete and a flagged concern read the same everywhere. */
+.ci-held, .ci-notice, .concern-card.flagged, .wellness-row.flagged { color: #1c1c1e; }
+/* Broadcast surfaces: the TV board and the Weight Room shared
+   display always render in the baseline cadet treatment,
+   whatever theme the device that opened them prefers. The board
+   re-declares the full baseline token set on its body class; the
+   shared grid re-declares it on the grid itself. */
+body.tv-mode {
+  --red: #CC0033; --red-dark: #990026; --gray: #8A939F;
+  --ink: #1c1c1e; --muted: #68707b; --line: #e3e3e6; --bg: #f4f5f7;
+  --card: #ffffff; --surface: #ffffff; --surface-2: #f4f4f6;
+  --input-line: #d9dce1; --accent-soft-bg: #fdf0f3;
+  --badge-plain-bg: #eeeeee; --badge-plain-ink: #555555;
+  --code-bg: #f0f0f2; --track-bg: #e9eaed; --header-bg: #ffffff;
+  --gold: #CC0033; --danger-line: #f0c4c0;
+  --radius: 14px; --radius-sm: 10px; --font-display: inherit;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .06);
+  --shadow-pop: 0 12px 32px rgba(16, 24, 40, .16), 0 2px 6px rgba(16, 24, 40, .08);
+}
+.wr-grid.wr-shared {
+  --red: #CC0033; --red-dark: #990026; --gray: #8A939F;
+  --ink: #1c1c1e; --muted: #68707b; --line: #e3e3e6;
+  --card: #ffffff; --surface: #ffffff; --surface-2: #f4f4f6;
+  --accent-soft-bg: #fdf0f3; --track-bg: #e9eaed;
+  --radius: 14px; --radius-sm: 10px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .06);
+}
+
+/* ---- Appearance picker (Account) ----
+   One tappable preview per theme. The preview mini-card is
+   inline-styled with the theme's real colours, so the picker
+   tells the truth whichever theme is currently on. */
+.theme-pick-list { display: grid; gap: 10px; }
+.theme-pick {
+  display: flex; gap: 12px; align-items: center; width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 10px 12px; cursor: pointer; color: var(--ink); font: inherit; min-height: 44px;
+}
+.theme-pick[aria-pressed="true"] { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
+.theme-preview { flex: none; width: 88px; height: 60px; border-radius: 8px; padding: 7px; }
+.theme-preview-card { display: block; height: 100%; border: 1px solid; border-radius: 5px; padding: 6px 7px; }
+.theme-preview-line { display: block; height: 6px; border-radius: 3px; margin-bottom: 5px; }
+.theme-preview-line.short { width: 58%; margin-bottom: 0; }
+.theme-preview-btn { display: block; width: 42%; height: 8px; border-radius: 4px; margin: 6px 0 5px; }
+.theme-pick-text { flex: 1 1 auto; min-width: 0; }
+.theme-pick-name { display: block; font-size: 15.5px; font-weight: 700; line-height: 1.3; }
+.theme-pick-desc { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 1px; line-height: 1.4; }
+.theme-pick-current {
+  flex: none; font-size: 11px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--red);
+}

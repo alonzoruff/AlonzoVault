@@ -151,11 +151,78 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v58';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v58';
+const APP_VERSION = 'v59';
+const APP_BUILD_LABEL = 'Cadets Sprint · App v59';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
+
+/* ---------------- themes (v59) ----------------
+   Three designs on one token system (styles.css carries the
+   token blocks). The boot script in index.html set data-theme
+   on <html> before first paint; switching here is instant —
+   set the attribute, save the choice per device, repaint the
+   picker. The preview colours below are each theme's real
+   surface/accent values, duplicated from styles.css so the
+   picker can show a theme that is not currently on. The TV
+   board and the Weight Room shared display ignore the device
+   theme: their CSS pins the baseline treatment. */
+const THEME_KEY = 'sjc-theme';
+const THEMES = [
+  { id: 'cadet', name: 'Cadet', meta: '#CC0033',
+    desc: 'The standard look: light, scarlet and white, the way the app has always looked.',
+    bg: '#f4f5f7', card: '#ffffff', line: '#e3e3e6', ink: '#1c1c1e', muted: '#68707b', accent: '#CC0033' },
+  { id: 'floodlight', name: 'Floodlight', meta: '#101216',
+    desc: 'A dark design for the weight room and night meets: near-black, with scarlet under the lights.',
+    bg: '#0b0d10', card: '#161a20', line: '#2b3038', ink: '#f2f3f5', muted: '#a3adb8', accent: '#CC0033' },
+  { id: 'championship', name: 'Championship', meta: '#b3002e',
+    desc: 'A warm paper design with deep scarlet, graphite and a touch of gold: the meet-day program look.',
+    bg: '#faf5ea', card: '#fffdf6', line: '#e6dcc4', ink: '#29261f', muted: '#746c5c', accent: '#b3002e' },
+];
+function currentTheme() {
+  const t = document.documentElement.getAttribute('data-theme');
+  return THEMES.some(x => x.id === t) ? t : 'cadet';
+}
+function syncThemeMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const theme = THEMES.find(x => x.id === currentTheme());
+  if (meta && theme) meta.setAttribute('content', theme.meta);
+}
+function applyTheme(id) {
+  if (!THEMES.some(x => x.id === id)) return;
+  document.documentElement.setAttribute('data-theme', id);
+  try { window.localStorage.setItem(THEME_KEY, id); } catch (_) { /* storage unavailable: applies for this visit only */ }
+  syncThemeMeta();
+  renderAppearance();
+}
+function renderAppearance() {
+  const slot = $('#appearance-slot');
+  if (!slot) return;
+  const cur = currentTheme();
+  slot.innerHTML = `<div class="card">
+    <h2>Appearance</h2>
+    <p class="muted">Pick the design for this device. It changes right away and stays on this phone or iPad. It does not change the app for anyone else, and the TV board always keeps the standard look.</p>
+    <div class="theme-pick-list">${THEMES.map(t => `
+      <button type="button" class="theme-pick" data-theme-pick="${t.id}" aria-pressed="${t.id === cur}">
+        <span class="theme-preview" style="background:${t.bg}">
+          <span class="theme-preview-card" style="background:${t.card};border-color:${t.line}">
+            <span class="theme-preview-line" style="background:${t.ink}"></span>
+            <span class="theme-preview-btn" style="background:${t.accent}"></span>
+            <span class="theme-preview-line short" style="background:${t.muted}"></span>
+          </span>
+        </span>
+        <span class="theme-pick-text">
+          <span class="theme-pick-name">${t.name}</span>
+          <span class="theme-pick-desc">${t.desc}</span>
+        </span>
+        ${t.id === cur ? '<span class="theme-pick-current">Current</span>' : ''}
+      </button>`).join('')}
+    </div>
+  </div>`;
+  slot.querySelectorAll('[data-theme-pick]').forEach(b =>
+    b.addEventListener('click', () => applyTheme(b.dataset.themePick)));
+}
+syncThemeMeta();
 const hadServiceWorkerController = !!(
   'serviceWorker' in navigator && navigator.serviceWorker && navigator.serviceWorker.controller
 );
@@ -2349,7 +2416,7 @@ function renderAccount() {
 function syncAuthUi() {
   const isCoach = !!(state.user && state.user.role === 'coach');
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
-  renderAccount(); renderLog(); renderSeason(); renderHome();
+  renderAccount(); renderAppearance(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderInventory();
   renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderAnnouncements(); renderCustomWorkouts();
   renderPrograms(); renderCalendar();
@@ -7874,7 +7941,7 @@ async function renderWeightRoom() {
       <p class="muted" style="margin-bottom:0">${esc(fmtDate(parseDate(data.date)))} · ${data.panels.length} athlete${data.panels.length === 1 ? '' : 's'} on the floor · updated ${state.wrUpdatedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · re-checks itself every minute while open</p>
     </div>
     ${data.panels.length
-      ? `<div class="wr-grid" data-cols="${esc(state.wrCols)}">${data.panels.map(p => wrPanelHtml(p, floorWorkout, shared)).join('')}</div>`
+      ? `<div class="wr-grid${shared ? ' wr-shared' : ''}" data-cols="${esc(state.wrCols)}">${data.panels.map(p => wrPanelHtml(p, floorWorkout, shared)).join('')}</div>`
       : '<div class="card"><p class="muted">No athletes in this group yet — add them in Roster &amp; Groups.</p></div>'}`;
   const setMode = async (wantShared) => {
     try {

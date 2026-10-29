@@ -12,6 +12,19 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Sprinter">
+<script>
+  /* Theme boot: set the saved theme on <html> before the first
+     paint, so the app never flashes the wrong design. The choice
+     is per device (localStorage); cadet is the default. */
+  (function () {
+    var t = 'cadet';
+    try {
+      var saved = window.localStorage.getItem('sjc-theme');
+      if (saved === 'cadet' || saved === 'floodlight' || saved === 'championship') t = saved;
+    } catch (e) { /* storage unavailable: the default stands */ }
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -809,6 +822,7 @@
     <p class="view-sub muted">Log in or create an account. Coaches manage coach accounts and assistant-coach invites here.</p>
     <p class="muted" id="menu-account-note">Log in or create an account</p>
     <div id="account-main"></div>
+    <div id="appearance-slot"></div>
   </section>
 
   <!-- PRIVACY & SAFETY (everyone signed in) -->
@@ -940,7 +954,7 @@
   <img class="site-logo footer-logo" src="/assets/sjc-logo-header.svg" alt="St. John's College High School">
   <div>St. John's College High School — Cadets Track &amp; Field · Sprinter Workout App</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v58">Cadets Sprint · App v58</div>
+  <div class="app-version" data-app-version="v59">Cadets Sprint · App v59</div>
 </footer>
 
 <script src="/app.js"></script>
