@@ -1288,6 +1288,15 @@ function renderAccount() {
     chip.textContent = 'Not logged in';
     note.textContent = 'Log in or create an account';
     $('#account-main').innerHTML = `
+      <div class="card" id="req-invite-card">
+        <h2>Request an invitation</h2>
+        <p>Membership is <strong>invite-only</strong> during the founding pilot — there is no public sign-up, and every seat starts with a baseline test and a Speed Report.</p>
+        <p class="muted">How it works: Coach AJ adds your email to the invite list. When he does, create your account below with that exact email and you are in — your program, your check-ins, and your numbers all live here from day one. Know Coach AJ? Ask him to put your email on the list.</p>
+        <div class="tw-actions">
+          <button class="btn primary" id="req-goto-register" type="button">I've been invited — create my account</button>
+          <button class="btn secondary" id="req-goto-login" type="button">Member log in</button>
+        </div>
+      </div>
       <form id="login-form" class="card">
         <h2>Log in</h2>
         <label>Email <input type="email" id="li-email" required autocomplete="email"></label>
@@ -1305,6 +1314,16 @@ function renderAccount() {
         <p class="error" id="rg-err"></p>
       </form>
       ${appVersionHtml()}`;
+    const reqReg = $('#req-goto-register');
+    if (reqReg) reqReg.addEventListener('click', () => {
+      const el = document.getElementById('register-form');
+      if (el) { el.scrollIntoView({ block: 'start' }); const em = $('#rg-email'); if (em) em.focus({ preventScroll: true }); }
+    });
+    const reqLogin = $('#req-goto-login');
+    if (reqLogin) reqLogin.addEventListener('click', () => {
+      const el = document.getElementById('login-form');
+      if (el) { el.scrollIntoView({ block: 'start' }); const em = $('#li-email'); if (em) em.focus({ preventScroll: true }); }
+    });
     $('#login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -1765,6 +1784,11 @@ async function renderThisWeek() {
     ? `<p>Latest form check: ${formCheckStatusBadge(fc)} <span class="muted">${esc(fc.context || 'Form check')} · ${esc(formCheckDateLine(fc))}${data.formCheck.pendingCount > 1 ? ` · ${data.formCheck.pendingCount} waiting in the queue` : ''}</span></p>
        <button class="btn secondary" id="tw-formcheck" type="button">Open form checks</button>`
     : '<p class="muted">No form checks sent yet — film a sprint or a lift and send it from My Log for your coach\'s eyes on your technique.</p>';
+  const actionsHtml = `<div class="tw-actions">
+    ${data.checkedInToday ? '' : '<button class="btn secondary" id="tw-checkin" type="button">Do today\'s check-in</button>'}
+    <button class="btn secondary" id="tw-log" type="button">Log a workout</button>
+    <button class="btn secondary" id="tw-fc" type="button">Send a form check</button>
+  </div>`;
   slot.innerHTML = `<div class="card tw-card">
     <h2>This Week</h2>
     ${todayLine}
@@ -1775,7 +1799,21 @@ async function renderThisWeek() {
     ${teaserHtml}
     ${intakeHtml}
     ${fcHtml}
+    ${actionsHtml}
   </div>`;
+  const ciBtn = $('#tw-checkin');
+  if (ciBtn) ciBtn.addEventListener('click', () => {
+    const el = document.getElementById('checkin-slot');
+    if (el) el.scrollIntoView({ block: 'start' });
+  });
+  const logBtn = $('#tw-log');
+  if (logBtn) logBtn.addEventListener('click', () => showView('log'));
+  const fcGoBtn = $('#tw-fc');
+  if (fcGoBtn) fcGoBtn.addEventListener('click', () => {
+    showView('log');
+    const el = document.getElementById('form-checks-slot');
+    if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 60);
+  });
   const spBtn = $('#tw-speed');
   if (spBtn) spBtn.addEventListener('click', () => showView('speedreport'));
   const inBtn = $('#tw-intake');

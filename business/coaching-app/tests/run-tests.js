@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v9 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v9"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v10 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v10"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v9'") &&
-    swJs.text.includes("ruffin-performance-v9"));
+    appJs.text.includes("const APP_VERSION = 'v10'") &&
+    swJs.text.includes("ruffin-performance-v10"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v9"') &&
-    pageHtml.text.includes('Ruffin Performance · App v9') &&
+    pageHtml.text.includes('data-app-version="v10"') &&
+    pageHtml.text.includes('Ruffin Performance · App v10') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----

@@ -1632,6 +1632,55 @@ body.logged-out .primary-nav { display: none !important; }
   background: #101114; border-top: 1px solid var(--line);
   color: #fff; font-size: 15px; font-weight: 750; text-align: center;
 }
+/* ---- v10 landing additions: parent clarity + proof + closing CTA ---- */
+.landing-forline {
+  margin: 0 0 22px; max-width: 52ch; color: #d7dade; font-size: 15.5px; line-height: 1.55;
+}
+.landing-sample-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.landing-sample-tag {
+  color: var(--landing-accent-ink); background: var(--landing-accent);
+  font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px;
+}
+.landing-sample-rows { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; margin: 12px 0 6px; }
+.landing-sample-row {
+  display: grid; grid-template-columns: 1.2fr 1fr auto; align-items: center; gap: 10px;
+  background: #101114; padding: 12px 14px;
+}
+.landing-sample-test { font-weight: 750; color: #fff; font-size: 14.5px; }
+.landing-sample-nums { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14.5px; }
+.landing-sample-nums strong { color: #fff; }
+.landing-sample-delta {
+  color: var(--landing-accent); font-weight: 900; font-variant-numeric: tabular-nums; font-size: 14.5px;
+}
+.landing-sample-note { font-size: 13px; }
+.landing-pilot-strip {
+  border: 1px solid var(--landing-accent); border-radius: var(--radius-sm);
+  background: rgba(214, 243, 106, .08); color: var(--ink);
+  padding: 12px 14px; font-size: 14.5px; margin: 10px 0 4px;
+}
+.landing-tier { position: relative; }
+.landing-tier-pill {
+  position: absolute; top: -10px; right: 12px;
+  background: var(--landing-accent); color: var(--landing-accent-ink);
+  font-size: 10.5px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 999px;
+}
+.landing-tier-bestfor { color: var(--muted); font-size: 13.5px; margin: 0 0 8px; line-height: 1.5; }
+.landing-final { text-align: left; }
+.landing-final .landing-cta {
+  background: var(--landing-accent); border-color: var(--landing-accent);
+  color: var(--landing-accent-ink); font-weight: 900; width: auto; min-height: 50px; padding: 12px 22px;
+}
+@media (hover: hover) {
+  .landing-final .landing-cta:hover { background: #e2ff7d; border-color: #e2ff7d; }
+}
+@media (max-width: 620px) {
+  .landing-final .landing-cta { width: 100%; }
+  .landing-sample-row { grid-template-columns: 1fr auto; }
+  .landing-sample-nums { grid-column: 1; }
+  .landing-sample-delta { grid-column: 2; grid-row: 1; }
+}
 @media (max-width: 620px) {
   .landing-tiers { grid-template-columns: 1fr; }
   .landing-hero {
@@ -1654,6 +1703,8 @@ body.logged-out .primary-nav { display: none !important; }
    The Mon–Sun strip: seven equal cells on the card's dark panel,
    today outlined in the silver accent, completions badged. */
 .tw-card h2 { margin-top: 2px; }
+.tw-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.tw-actions .btn { width: auto; }
 .tw-today { font-size: 16px; }
 .tw-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 10px 0 12px; }
 .tw-day {
