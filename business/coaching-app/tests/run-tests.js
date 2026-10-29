@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v11 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v11"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v12 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v12"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,17 +2373,66 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v11'") &&
-    swJs.text.includes("ruffin-performance-v11"));
+    appJs.text.includes("const APP_VERSION = 'v12'") &&
+    swJs.text.includes("ruffin-performance-v12"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v11"') &&
-    pageHtml.text.includes('Ruffin Performance · App v11') &&
+    pageHtml.text.includes('data-app-version="v12"') &&
+    pageHtml.text.includes('Ruffin Performance · App v12') &&
     appJs.text.includes('appVersionHtml'));
+
+  /* ---------------- Themes (v12): three looks, one token system ---
+     Silverline is the :root baseline; Carbon Lime and Studio are
+     [data-theme] blocks over the shared surface tokens. The boot
+     script restores the saved choice before first paint, the
+     Account picker applies it live, and the TV board pins the
+     baseline tokens so a device theme never reaches the board. */
+  check('shell boots the saved theme before the stylesheet paints',
+    pageHtml.text.includes('<html lang="en" data-theme="silverline">') &&
+    pageHtml.text.includes("localStorage.getItem('rp-theme')") &&
+    pageHtml.text.includes("document.documentElement.setAttribute('data-theme'") &&
+    pageHtml.text.indexOf("getItem('rp-theme')") < pageHtml.text.indexOf('/styles.css'));
+  check('stylesheet carries the Carbon Lime and Studio theme blocks',
+    stylesCss.text.includes('[data-theme="carbon"]') &&
+    stylesCss.text.includes('[data-theme="studio"]') &&
+    stylesCss.text.includes('--bg: #08090a') &&
+    stylesCss.text.includes('--bg: #f4f2ed'));
+  check('the themes genuinely differ in accent, radius and surfaces',
+    /\[data-theme="carbon"\] \{[^}]*--red: #b9e62c/.test(stylesCss.text) &&
+    /\[data-theme="carbon"\] \{[^}]*--radius: 8px/.test(stylesCss.text) &&
+    /\[data-theme="studio"\] \{[^}]*--radius: 20px/.test(stylesCss.text) &&
+    /\[data-theme="studio"\] \{[^}]*--card: #fffefa/.test(stylesCss.text));
+  check('Studio gives the landing hero a light panel and Carbon a lime hero edge',
+    stylesCss.text.includes('[data-theme="studio"] .landing-hero-content') &&
+    stylesCss.text.includes('[data-theme="carbon"] .landing-hero'));
+  const themeBlocks = stylesCss.text.slice(stylesCss.text.indexOf('THEMES (v12)'));
+  check('themes never redefine the semantic colors (health flags + PR deltas stay constant)',
+    themeBlocks.length > 0 && !themeBlocks.includes('--high:') && !themeBlocks.includes('--low:') &&
+    !themeBlocks.includes('#e3c766'));
+  check('TV board pins the Silverline tokens regardless of device theme',
+    /body\.tv-mode \{[^}]*--red: #c9ccd4/.test(stylesCss.text) &&
+    /body\.tv-mode \{[^}]*--radius: 14px/.test(stylesCss.text));
+  check('app JS owns the theme list with all three looks',
+    appJs.text.includes('const THEMES = [') &&
+    appJs.text.includes("id: 'silverline', name: 'Silverline'") &&
+    appJs.text.includes("id: 'carbon', name: 'Carbon Lime'") &&
+    appJs.text.includes("id: 'studio', name: 'Studio'"));
+  check('applyTheme switches live and persists per device (localStorage rp-theme)',
+    appJs.text.includes('function applyTheme(') &&
+    appJs.text.includes("localStorage.setItem('rp-theme', id)") &&
+    appJs.text.includes("document.documentElement.setAttribute('data-theme', id)"));
+  const accountSeg = seg('function renderAccount()', 'function syncAuthUi()');
+  check('Account renders the Appearance picker and wires it',
+    accountSeg.includes('appearanceCardHtml()') && accountSeg.includes('wireAppearance()') &&
+    appJs.text.includes('data-theme-pick') && appJs.text.includes('class="theme-preview"') &&
+    appJs.text.includes('<h2>Appearance</h2>'));
+  check('the theme picker never enters the TV board render path',
+    !tvCode.includes('data-theme-pick') && !tvCode.includes('appearanceCardHtml') &&
+    !tvCode.includes('applyTheme'));
 
   /* ---------------- Cosmetic pass: dropdown header + thumbnails -----
      Presentation only. The header's dropdown groups and the phone

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="silverline">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -12,6 +12,23 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="__BRAND_SHORT__">
+<script>
+/* Appearance boot: put the saved theme on <html> before the
+   stylesheet paints, so the app never flashes the wrong look.
+   Default is Silverline. The picker lives in Account (app.js);
+   this script only restores what the picker saved. */
+(function () {
+  var t = 'silverline';
+  try {
+    var saved = window.localStorage.getItem('rp-theme');
+    if (saved === 'carbon' || saved === 'studio') t = saved;
+  } catch (e) { /* storage unavailable: the default theme applies */ }
+  document.documentElement.setAttribute('data-theme', t);
+  var colors = { silverline: '#0d0d0f', carbon: '#08090a', studio: '#f4f2ee' };
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', colors[t]);
+})();
+</script>
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>

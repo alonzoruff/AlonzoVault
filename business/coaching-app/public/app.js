@@ -138,6 +138,69 @@ const apiPut = (path, body) => api(path, {
 });
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
+/* ---------------- appearance: themes ----------------
+   Three looks over one app. The boot script in index.html has
+   already set data-theme on <html> from the saved choice before
+   first paint; this section owns the list, the Account picker,
+   and keeping the choice saved per device (localStorage only —
+   a theme follows the phone, not the account). Switching is
+   instant and never reloads: the stylesheet reads the tokens. */
+const THEMES = [
+  { id: 'silverline', name: 'Silverline', blurb: 'The standard look. Black and grey, silver accent, the way the app shipped.' },
+  { id: 'carbon', name: 'Carbon Lime', blurb: 'The lab look. Darker rooms, sharper edges, and lime carrying the buttons, tabs and key numbers.' },
+  { id: 'studio', name: 'Studio', blurb: 'The daylight look. Warm white and soft edges, made for bright rooms and showing parents.' },
+];
+const THEME_BAR_COLORS = { silverline: '#0d0d0f', carbon: '#08090a', studio: '#f4f2ee' };
+function currentTheme() {
+  const t = document.documentElement.getAttribute('data-theme');
+  return THEMES.some(x => x.id === t) ? t : 'silverline';
+}
+function applyTheme(id) {
+  if (!THEMES.some(x => x.id === id)) return;
+  document.documentElement.setAttribute('data-theme', id);
+  try { localStorage.setItem('rp-theme', id); } catch (_) { /* private mode: applies for this visit */ }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', THEME_BAR_COLORS[id]);
+  $$('#account-main [data-theme-pick]').forEach(b => {
+    const on = b.dataset.themePick === id;
+    b.classList.toggle('current', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const tag = b.querySelector('.theme-current');
+    if (tag) tag.hidden = !on;
+  });
+}
+function themePreviewHtml(t) {
+  return `<span class="theme-preview" data-theme="${t.id}" aria-hidden="true">
+    <span class="tp-bar"><span class="tp-dot"></span><span class="tp-line"></span></span>
+    <span class="tp-card">
+      <span class="tp-title"></span>
+      <span class="tp-text"></span>
+      <span class="tp-row"><span class="tp-num">10.42</span><span class="tp-btn"></span></span>
+    </span>
+  </span>`;
+}
+function appearanceCardHtml() {
+  const cur = currentTheme();
+  return `<div class="card" id="appearance-card">
+    <h2>Appearance</h2>
+    <p class="muted">Pick the look for this device. It changes right away and stays saved here — every phone and tablet keeps its own choice.</p>
+    <div class="theme-options">${THEMES.map(t => `
+      <button type="button" class="theme-option${t.id === cur ? ' current' : ''}" data-theme-pick="${t.id}" aria-pressed="${t.id === cur ? 'true' : 'false'}">
+        ${themePreviewHtml(t)}
+        <span class="theme-meta">
+          <span class="theme-name">${esc(t.name)}</span>
+          <span class="theme-blurb">${esc(t.blurb)}</span>
+          <span class="theme-current" ${t.id === cur ? '' : 'hidden'}>Current theme</span>
+        </span>
+      </button>`).join('')}
+    </div>
+  </div>`;
+}
+function wireAppearance() {
+  $$('#account-main [data-theme-pick]').forEach(b =>
+    b.addEventListener('click', () => applyTheme(b.dataset.themePick)));
+}
+
 /* ---------------- app version + update delivery ---------------- */
 const APP_VERSION = '__APP_VERSION__';
 const APP_BUILD_LABEL = '__BRAND_NAME__ · App __APP_VERSION__';
@@ -1323,9 +1386,11 @@ function renderAccount() {
       <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Member account: once your coach links this email to your name on the member roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. Your coach runs everything else.'} Your personal log entries and cross-training swaps save to this account.</p>
       <button class="btn" id="acct-logout" type="button">Log out</button>
       ${appVersionHtml()}</div>
+      ${appearanceCardHtml()}
       <div id="coach-accounts"></div>
       <div id="coach-invites"></div>
       <div id="client-invites"></div>`;
+    wireAppearance();
     renderCoachAccounts();
     renderCoachInvites();
     renderClientInvites();

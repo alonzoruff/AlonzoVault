@@ -88,8 +88,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v11',
-  cache: 'ruffin-performance-v11',
+  version: 'v12',
+  cache: 'ruffin-performance-v12',
 };
 
 /* ------------------------------------------------------------------ */
