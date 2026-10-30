@@ -1,6 +1,6 @@
-# Ruffin Performance — coaching membership app
+# Ruffin Speed Lab — coaching membership app
 
-The online membership app for **Ruffin Performance**, AJ Ruffin's own
+The online membership app for **Ruffin Speed Lab**, AJ Ruffin's own
 speed & strength coaching business (brand name and tagline live in one
 place: the `BRAND` block at the top of `server.js` — rename there and
 every surface follows).
@@ -46,3 +46,9 @@ node tests/run-tests.js
 
 Starts the server on a throwaway port with a temporary `DATA_DIR`,
 exercises the API end to end, and cleans up.
+
+## Brand vocabulary
+
+The Lab is the athlete dashboard. Lab Sessions are reusable training programs. Inside the Lab contains technique and coaching videos. Speed Report remains the name of each athlete's individual progress report.
+
+This is a display rebrand. Existing routes, storage keys, backup identifiers and deployment URL remain compatible.
