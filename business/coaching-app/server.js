@@ -85,11 +85,11 @@ const SESSION_DAYS = 30;
 /* a single line of copy on the landing page, nothing more.            */
 /* ------------------------------------------------------------------ */
 const BRAND = {
-  name: 'Ruffin Performance',
-  short: 'RP Training',
-  tagline: 'Speed & strength coaching',
+  name: 'Ruffin Speed Lab',
+  short: 'Speed Lab',
+  tagline: 'Speed • Strength • Athletic Development',
   version: 'v12',
-  cache: 'ruffin-performance-v12',
+  cache: 'ruffin-speed-lab-v12-rebrand',
 };
 
 /* ------------------------------------------------------------------ */
