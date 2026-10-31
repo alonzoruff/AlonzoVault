@@ -84,12 +84,12 @@ async function main() {
   const contentJson = (await api(null, 'GET', '/api/content')).json;
   const vids = contentJson.videoLibrary;
   check('video library serves an array', Array.isArray(vids), typeof vids);
-  check('video library has 102 entries', Array.isArray(vids) && vids.length === 102,
+  check('video library has 300 entries', Array.isArray(vids) && vids.length === 300,
     Array.isArray(vids) ? vids.length : 'not an array');
   if (Array.isArray(vids)) {
     const wantCounts = {
-      'Warm-Ups & Drills': 22, 'Lifts & Weight Room': 25, 'Sprint Mechanics & Speed': 20,
-      'Plyometrics': 10, 'Hip Mobility & Strength': 15, 'Core & Trunk': 5, 'Recovery & Mobility': 5,
+      'Warm-Ups & Drills': 50, 'Lifts & Weight Room': 53, 'Sprint Mechanics & Speed': 48,
+      'Plyometrics': 38, 'Hip Mobility & Strength': 43, 'Core & Trunk': 34, 'Recovery & Mobility': 34,
     };
     const gotCounts = {};
     for (const v of vids) gotCounts[v.category] = (gotCounts[v.category] || 0) + 1;
@@ -98,9 +98,9 @@ async function main() {
       Object.keys(wantCounts).every(k => gotCounts[k] === wantCounts[k]),
       gotCounts);
     const ids = vids.map(v => v.id);
-    const wantIds = Array.from({ length: 102 }, (_, i) => 'VID-' + String(i + 1).padStart(3, '0'));
-    check('video entry ids are unique and complete VID-001..VID-102',
-      new Set(ids).size === 102 && wantIds.every(id => ids.includes(id)), ids.slice(0, 5));
+    const wantIds = Array.from({ length: 300 }, (_, i) => 'VID-' + String(i + 1).padStart(3, '0'));
+    check('video entry ids are unique and complete VID-001..VID-300',
+      new Set(ids).size === 300 && wantIds.every(id => ids.includes(id)), ids.slice(0, 5));
     const urlRe = /^https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})$/;
     check('every video url is canonical watch form with an 11-char id',
       vids.every(v => urlRe.test(v.url || '')), vids.find(v => !urlRe.test(v.url || '')));
@@ -4856,9 +4856,9 @@ async function main() {
     const libCore = new Function(libMatch[1] +
       '\nreturn { buildLibraryIndex, searchLibraryIndex, libTopicCounts };')();
     const idx = libCore.buildLibraryIndex(contentJson, libTopics, []);
-    check('library index covers the whole public library (401 items with no clips)',
-      idx.length === 401 &&
-      idx.filter(i => i.type === 'video').length === 102 &&
+    check('library index covers the whole public library (599 items with no clips)',
+      idx.length === 599 &&
+      idx.filter(i => i.type === 'video').length === 300 &&
       idx.filter(i => i.type === 'definition').length === 138 &&
       idx.filter(i => i.type === 'exercise').length === 85 &&
       idx.filter(i => i.type === 'race').length === 27 &&
@@ -4868,8 +4868,8 @@ async function main() {
       idx.length);
     const counts = libCore.libTopicCounts(idx);
     check('topic shelf counts are computed from the topic map',
-      counts.technique === 134 && counts.racing === 70 && counts.lifting === 108 &&
-      counts.fueling === 7 && counts.recovery === 75 && counts.meetday === 66,
+      counts.technique === 218 && counts.racing === 98 && counts.lifting === 193 &&
+      counts.fueling === 7 && counts.recovery === 132 && counts.meetday === 94,
       counts);
     const sAcc = libCore.searchLibraryIndex(idx, 'acceleration');
     check('library search finds a known definition (Acceleration)',
@@ -4893,9 +4893,9 @@ async function main() {
     const clipIdx = libCore.buildLibraryIndex(contentJson, libTopics,
       [{ id: 'clip-x', title: 'Blocks talk', topic: 'technique', description: 'Set and go.' }]);
     check('coach clips join the index under their topic',
-      clipIdx.length === 402 &&
+      clipIdx.length === 600 &&
       libCore.searchLibraryIndex(clipIdx, 'blocks talk').some(i => i.key === 'clip:clip-x') &&
-      libCore.libTopicCounts(clipIdx).technique === 135,
+      libCore.libTopicCounts(clipIdx).technique === 219,
       clipIdx.length);
   }
   check('library home view markers are in the served page',
