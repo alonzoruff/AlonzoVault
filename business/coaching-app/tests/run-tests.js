@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v12 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v12"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v13 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v13"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2373,16 +2373,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v12'") &&
-    swJs.text.includes("ruffin-performance-v12"));
+    appJs.text.includes("const APP_VERSION = 'v13'") &&
+    swJs.text.includes("ruffin-performance-v13"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v12"') &&
-    pageHtml.text.includes('Ruffin Performance · App v12') &&
+    pageHtml.text.includes('data-app-version="v13"') &&
+    pageHtml.text.includes('Ruffin Performance · App v13') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -2499,11 +2499,19 @@ async function main() {
     pageHtml.text.includes('Member sign in') &&
     pageHtml.text.includes('Founding pilot — membership is invite-only while we launch.'),
     pageHtml.text.slice(0, 120));
-  check('landing shows the membership tiers as information (no checkout)',
-    pageHtml.text.includes('$99') && pageHtml.text.includes('$149') && pageHtml.text.includes('$49') &&
-    pageHtml.text.includes('Membership + Coaching') &&
+  check('landing shows the three Lab tiers with prices and join buttons (no checkout wording)',
+    pageHtml.text.includes('Lab Access') && pageHtml.text.includes('$10') &&
+    pageHtml.text.includes('Lab Training') && pageHtml.text.includes('$49.99') &&
+    pageHtml.text.includes('Lab Pass') && pageHtml.text.includes('$99') &&
+    pageHtml.text.includes('data-join-tier="access"') &&
+    pageHtml.text.includes('data-join-tier="training"') &&
+    pageHtml.text.includes('data-join-tier="pass"') &&
+    !pageHtml.text.includes('$149') &&
     !pageHtml.text.includes('checkout') && !pageHtml.text.includes('stripe'),
     pageHtml.text.slice(0, 120));
+  check('join wiring is in the served JS',
+    appJs.text.includes('[data-join-tier]') && appJs.text.includes('/api/checkout/session') &&
+    appJs.text.includes('data-join-message'));
   check('landing names the coach without school or CSCS claims',
     pageHtml.text.includes('Alonzo') && pageHtml.text.includes('Ruffin') &&
     pageHtml.text.includes('Maryland/DC-area sprint coach') &&
@@ -5229,7 +5237,7 @@ async function main() {
     pageHtml.text.includes('landing-section-number" aria-hidden="true">01') &&
     pageHtml.text.includes('landing-section-number" aria-hidden="true">02') &&
     pageHtml.text.includes('landing-section-number" aria-hidden="true">03') &&
-    pageHtml.text.includes('Memberships from $99/month. Baseline speed assessment included with every membership.'));
+    pageHtml.text.includes('Lab memberships from $10/month. Baseline testing and your Speed Report come with every tier.'));
   check('landing photo hero and lime accent stay scoped to the landing',
     stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
     stylesCss.text.includes('--landing-accent: #d6f36a') &&
@@ -5240,10 +5248,14 @@ async function main() {
     pageHtml.text.includes('Re-tested each block') && pageHtml.text.includes('Speed Report') &&
     pageHtml.text.includes('Health &amp; readiness tracking') &&
     pageHtml.text.includes('filmed by your coach himself'));
-  check('landing tiers describe what the app actually does (cadence as copy + queue, no invented enforcement)',
-    pageHtml.text.includes('One form check per week (extras join the queue)') &&
-    pageHtml.text.includes('Priority form checks (48-hour turnaround)') &&
-    pageHtml.text.includes('no public sign-up'));
+  check('landing tiers state plainly what each tier gets and what upgrading adds',
+    pageHtml.text.includes('No personalized training') &&
+    pageHtml.text.includes('Everything in Lab Access') &&
+    pageHtml.text.includes('Personalized training, built for you') &&
+    pageHtml.text.includes('Form checks with replies from your coach') &&
+    pageHtml.text.includes('Everything in Lab Training') &&
+    pageHtml.text.includes('Live web sessions with your coach') &&
+    pageHtml.text.includes('The opportunity for in-person sessions'));
 
   const twToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
   const twAddD = (ds, n) => {
@@ -6198,6 +6210,9 @@ async function waitForServer(tries = 60) {
       });
       delete coEnvBase.STRIPE_SECRET_KEY;
       delete coEnvBase.STRIPE_PRICE_ID;
+      delete coEnvBase.STRIPE_PRICE_LAB_ACCESS;
+      delete coEnvBase.STRIPE_PRICE_LAB_TRAINING;
+      delete coEnvBase.STRIPE_PRICE_LAB_PASS;
       delete coEnvBase.DOMAIN;
       delete coEnvBase.STRIPE_API_BASE;
       let coLog = '';
@@ -6234,6 +6249,10 @@ async function waitForServer(tries = 60) {
         check('checkout server starts (no Stripe key configured)', await waitCo(), coLog);
         let cr = await coApi('POST', '/api/checkout/session', {});
         check('checkout endpoint is inert without STRIPE_SECRET_KEY (503 JSON)',
+          cr.status === 503 && !!cr.json && cr.json.error === 'Payments are not configured yet.',
+          cr.status + ' ' + JSON.stringify(cr.json));
+        cr = await coApi('POST', '/api/checkout/session', { tier: 'pass' });
+        check('a named tier is still 503 while unconfigured',
           cr.status === 503 && !!cr.json && cr.json.error === 'Payments are not configured yet.',
           cr.status + ' ' + JSON.stringify(cr.json));
         check('no Stripe call is attempted while unconfigured', stubHits.length === 0, stubHits.length);
@@ -6293,6 +6312,56 @@ async function waitForServer(tries = 60) {
           cr.status === 200 && ep['line_items[0][price]'] === 'price_test_123' &&
           ep.success_url === 'https://ruffin-performance.onrender.com/checkout/success?session_id={CHECKOUT_SESSION_ID}' &&
           ep.cancel_url === 'https://ruffin-performance.onrender.com/', ep);
+
+        /* v13: per-tier prices. The body names a tier and only a
+           tier; the server resolves the price from the tier map
+           (env override, else the baked-in default). An unknown
+           tier is a 400 before any Stripe call. */
+        coChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        stubHits = [];
+        coChild = startCo({
+          STRIPE_SECRET_KEY: 'sk_test_stub_key',
+          STRIPE_API_BASE: 'http://127.0.0.1:3223',
+        });
+        check('checkout server restarts for the tier checks', await waitCo(), coLog);
+        const tierPrice = async (tier) => {
+          const before = stubHits.length;
+          const res = await coApi('POST', '/api/checkout/session', { tier });
+          const hit = stubHits[before];
+          return { res, price: hit && hit.params['line_items[0][price]'], hits: stubHits.length - before };
+        };
+        let tp = await tierPrice('access');
+        check('tier access sells the Lab Access price',
+          tp.res.status === 200 && tp.price === 'price_1UWTZpAelNSvNtsvHAVExdYX', tp);
+        tp = await tierPrice('training');
+        check('tier training sells the Lab Training price',
+          tp.res.status === 200 && tp.price === 'price_1UWSwJAelNSvNtsvz0ctLK9z', tp);
+        tp = await tierPrice('pass');
+        check('tier pass sells the Lab Pass price',
+          tp.res.status === 200 && tp.price === 'price_1UWSwiAelNSvNtsv5R2KyEu0', tp);
+        tp = await tierPrice('gold');
+        check('an unknown tier is rejected 400 and never reaches Stripe',
+          tp.res.status === 400 && !!tp.res.json && tp.res.json.error === 'Unknown tier.' && tp.hits === 0, tp);
+        tp = await tierPrice('price_1UWSwiAelNSvNtsv5R2KyEu0');
+        check('a raw price ID sent as the tier is rejected too',
+          tp.res.status === 400 && tp.hits === 0, tp);
+
+        coChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        stubHits = [];
+        coChild = startCo({
+          STRIPE_SECRET_KEY: 'sk_test_stub_key',
+          STRIPE_API_BASE: 'http://127.0.0.1:3223',
+          STRIPE_PRICE_LAB_TRAINING: 'price_override_training',
+        });
+        check('checkout server restarts for the tier env override', await waitCo(), coLog);
+        tp = await tierPrice('training');
+        check('the tier env var overrides the baked-in price',
+          tp.res.status === 200 && tp.price === 'price_override_training', tp);
+        tp = await tierPrice('access');
+        check('other tiers keep their baked-in price under an override',
+          tp.res.status === 200 && tp.price === 'price_1UWTZpAelNSvNtsvHAVExdYX', tp);
       } finally {
         coChild.kill('SIGKILL');
         stub.close();

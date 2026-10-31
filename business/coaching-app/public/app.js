@@ -536,6 +536,35 @@ document.addEventListener('click', (e) => {
 });
 $$('[data-goto]').forEach(b => b.addEventListener('click', () => showView(b.dataset.goto)));
 
+/* ---------------- landing: join a Lab tier ----------------
+   Each tier card carries one join button. It asks the server for a
+   payment page for that tier and sends the visitor there. While
+   payments are not configured the server says so, and that message
+   is shown plainly under the cards instead of leaving a dead
+   button. */
+$$('[data-join-tier]').forEach(b => b.addEventListener('click', async () => {
+  const note = $('[data-join-message]');
+  const showNote = (msg) => { if (note) note.textContent = msg; };
+  b.disabled = true;
+  showNote('One moment…');
+  try {
+    const res = await fetch('/api/checkout/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tier: b.dataset.joinTier }),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data && data.url) {
+      window.location.href = data.url;
+      return;
+    }
+    showNote((data && data.error) || 'Something went wrong. Please try again.');
+  } catch (_) {
+    showNote('Something went wrong. Please try again.');
+  }
+  b.disabled = false;
+}));
+
 /* ---------------- motion helpers ---------------- */
 const LANE_DIVIDER = '<div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>';
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

@@ -6,9 +6,15 @@ exists and creates a hosted Stripe Checkout Session by calling the
 Stripe REST API directly (zero-dependency — no Stripe SDK, no npm
 packages). It is **inert by default**: until `STRIPE_SECRET_KEY` is
 set in the environment it answers `503 {"error":"Payments are not
-configured yet."}` and never attempts a Stripe call. There is no
-paywall, no public join-flow change, and no webhook handler yet —
-those are the remaining Build C steps listed at the bottom.
+configured yet."}` and never attempts a Stripe call. Since v13 the
+endpoint sells the three Lab tiers: the request body names a tier
+(`{ "tier": "access" | "training" | "pass" }`) and the server
+resolves that tier's price itself (see the tier table below) — a raw
+price ID from the client is never accepted, and an unknown tier gets
+a 400 before any Stripe call. The landing page carries the three
+tier cards with a join button per tier. There is no paywall and no
+webhook handler yet — those are the remaining Build C steps listed
+at the bottom.
 
 ## Values to Replace
 
@@ -24,7 +30,10 @@ going live.
 | mode | subscription | Set to "payment" for one-time charges or "subscription" for recurring billing. Memberships are recurring, so it stays "subscription" unless the product type changes. |
 | success_url | https://example.com/checkout/success?session_id={CHECKOUT_SESSION_ID} | Your actual post-payment success page URL — with DOMAIN set it becomes `https://ruffin-performance.onrender.com/checkout/success?session_id={CHECKOUT_SESSION_ID}`. Keep the {CHECKOUT_SESSION_ID} template. |
 | cancel_url | https://example.com/ | Your actual cancel/return page URL — with DOMAIN set it becomes `https://ruffin-performance.onrender.com/`. |
-| line_items[].price | price_... | Your actual Stripe Price ID from the Dashboard (https://dashboard.stripe.com/prices) or API. Set it through the `STRIPE_PRICE_ID` environment variable (see below) — the code falls back to the `price_...` placeholder only while the variable is unset. |
+| line_items[].price | per tier (see below) | Resolved server-side from the tier named in the request body. Each tier's real Price ID is baked in as the default and can be overridden by its env var. A request with no tier keeps the original behavior: `STRIPE_PRICE_ID`, or the `price_...` placeholder while that is unset. |
+| STRIPE_PRICE_LAB_ACCESS (env var) | price_1UWTZpAelNSvNtsvHAVExdYX (baked in) | Lab Access, $10/mo. Set the env var only to override the baked-in Price ID. |
+| STRIPE_PRICE_LAB_TRAINING (env var) | price_1UWSwJAelNSvNtsvz0ctLK9z (baked in) | Lab Training, $49.99/mo. Set the env var only to override the baked-in Price ID. |
+| STRIPE_PRICE_LAB_PASS (env var) | price_1UWSwiAelNSvNtsv5R2KyEu0 (baked in) | Lab Pass, $99/mo. Set the env var only to override the baked-in Price ID. |
 | DOMAIN (env var) | https://example.com (code default) | `https://ruffin-performance.onrender.com` on the live Render service. The success_url and cancel_url are built from it. |
 | STRIPE_SECRET_KEY (env var) | unset (endpoint answers 503) | The live secret key (`sk_live_...`) from the Stripe Dashboard, set only in the host's environment — never in code or in this repo. A test key (`sk_test_...`) works for test-mode runs. |
 | STRIPE_PRICE_ID (env var) | unset (falls back to `price_...`) | The real Price ID of the membership being sold (see the products step below). |
@@ -76,25 +85,37 @@ match exactly). Locally, export them in your shell before
 
 ```bash
 STRIPE_SECRET_KEY=sk_test_...        # secret key — server only, never in code
-STRIPE_PRICE_ID=price_...            # the Price ID the checkout sells
 DOMAIN=https://ruffin-performance.onrender.com
+# Optional overrides — the tier prices are baked in (table above):
+# STRIPE_PRICE_LAB_ACCESS=price_...
+# STRIPE_PRICE_LAB_TRAINING=price_...
+# STRIPE_PRICE_LAB_PASS=price_...
+# STRIPE_PRICE_ID=price_...          # only for requests that name no tier
 # STRIPE_API_BASE=https://api.stripe.com   # default; override only for tests
 ```
 
 On the live host (Render): in the `ruffin-performance` service, open
-**Environment**, add `STRIPE_SECRET_KEY` (live key), `STRIPE_PRICE_ID`
-(real Price ID), and `DOMAIN=https://ruffin-performance.onrender.com`,
-then let the service redeploy/restart so it picks them up. Until
-`STRIPE_SECRET_KEY` is added there, the live endpoint correctly stays
-at 503.
+**Environment**, add `STRIPE_SECRET_KEY` and
+`DOMAIN=https://ruffin-performance.onrender.com`, then let the
+service redeploy/restart so it picks them up. The three
+`STRIPE_PRICE_LAB_*` variables are optional — the tier Price IDs are
+already the code defaults. Until `STRIPE_SECRET_KEY` is added there,
+the live endpoint correctly stays at 503. Note the current tier
+prices are TEST-mode prices, so the key pasted must be the test
+secret key (`sk_test_...`) for these prices to resolve; a live key
+needs live-mode prices first.
 
 ### How the integration works
 
-1. The client calls `POST /api/checkout/session`.
+1. The client calls `POST /api/checkout/session` with a JSON body
+   naming the tier (`{ "tier": "access" }`, `"training"`, or
+   `"pass"`). The landing tier buttons send exactly this.
 2. If `STRIPE_SECRET_KEY` is not set, the server answers
    `503 {"error":"Payments are not configured yet."}` and stops —
-   payments are off.
-3. Otherwise the server POSTs the configured parameters (above) to
+   payments are off. An unknown tier (with a key configured) answers
+   `400 {"error":"Unknown tier."}` and never reaches Stripe.
+3. Otherwise the server resolves the tier's price (env override or
+   baked-in default) and POSTs the configured parameters (above) to
    `https://api.stripe.com/v1/checkout/sessions` with the secret key
    as a Bearer token, form-encoded.
 4. On success the server answers `200 {"url": "<hosted checkout
@@ -112,20 +133,34 @@ No real money moves with test keys.
 
 ### Remaining steps (in order)
 
-1. **Finish Stripe account activation** in the Dashboard: business
-   details, identity verification, and a payout bank account, until
-   the account shows `charges_enabled` true. (The account is
-   currently in test mode with charges off.)
-2. **Create the three products/prices** in Stripe — $99 Membership,
-   $149 Membership + Coaching, $49 Founding Pilot — and note their
-   real Price IDs.
-3. **Set the live env vars on the Render service:**
-   `STRIPE_SECRET_KEY` (live key), `STRIPE_PRICE_ID` (the real Price
-   ID to sell first), and `DOMAIN=https://ruffin-performance.onrender.com`.
-4. **Build the next Build C stage (separate from this endpoint):**
+1. ~~**Finish Stripe account activation**~~ DONE Oct 30, 2026:
+   the account is activated with charges and payouts on, in TEST
+   mode.
+2. ~~**Create the three products/prices**~~ DONE Oct 30, 2026:
+   Lab Access $10/mo (`price_1UWTZpAelNSvNtsvHAVExdYX`), Lab Training
+   $49.99/mo (`price_1UWSwJAelNSvNtsvz0ctLK9z`), Lab Pass $99/mo
+   (`price_1UWSwiAelNSvNtsv5R2KyEu0`) — all TEST-mode prices, now the
+   baked-in defaults in the server's tier map (v13).
+3. **Set the env vars on the Render service:** `STRIPE_SECRET_KEY`
+   (the TEST secret key, `sk_test_...`, matching the test-mode
+   prices above) and `DOMAIN=https://ruffin-performance.onrender.com`.
+   The `STRIPE_PRICE_LAB_*` overrides are optional. This is the only
+   step between the current 503 and working tier checkout buttons.
+4. **NEXT PAYMENT STEP — the 7-day trial** (decided Oct 30, 2026,
+   deliberately NOT in the v13 build): 7 days at the Lab Access
+   level, no card required to start. On the session this means
+   `subscription_data[trial_period_days]=7` for the trial entry path
+   plus `payment_method_collection` set so no card is collected up
+   front for the trial — both change the fixed Checkout Studio
+   parameter set, so they land as their own reviewed change, not
+   silently inside another build.
+5. **Build the next Build C stage (separate from this endpoint):**
    the webhook endpoint (`checkout.session.completed` etc.) with
    `STRIPE_WEBHOOK_SECRET` for fulfillment, plus the paywall and the
    public join flow. Registration stays invite-only until that stage
    ships.
-5. **Resources:** https://support.stripe.com and
+6. **Going live for real money:** create live-mode versions of the
+   three prices, set the `STRIPE_PRICE_LAB_*` env vars (or bake new
+   defaults), and swap in the live secret key.
+7. **Resources:** https://support.stripe.com and
    https://docs.stripe.com/mcp

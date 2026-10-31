@@ -1642,7 +1642,9 @@ body.logged-out .primary-nav { display: none !important; }
 }
 .landing-list { margin: 6px 0 4px; padding-left: 20px; }
 .landing-list li { margin: 6px 0; font-size: 15px; }
-.landing-tiers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+.landing-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0; }
+.landing-join { width: 100%; margin-top: 10px; }
+.landing-join:disabled { opacity: .6; }
 .landing-tier {
   border: 1px solid var(--line); border-radius: var(--radius-sm);
   background: var(--panel-2); padding: 14px 16px;

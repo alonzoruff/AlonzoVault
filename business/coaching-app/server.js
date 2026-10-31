@@ -25,6 +25,12 @@
  *   STRIPE_PRICE_ID The default Stripe Price ID the checkout endpoint
  *                   sells; until it is set the endpoint sends the
  *                   placeholder price_... (see the TODO file).
+ *   STRIPE_PRICE_LAB_ACCESS / STRIPE_PRICE_LAB_TRAINING /
+ *   STRIPE_PRICE_LAB_PASS
+ *                   Per-tier Price IDs for the three Lab tiers. Each
+ *                   has the live tier price baked in as its default;
+ *                   set the env var only to override it (see the
+ *                   TODO file).
  *   DOMAIN          Public base URL of this app, used to build the
  *                   checkout success/cancel URLs (default
  *                   https://example.com — a placeholder; on the live
@@ -88,8 +94,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v12',
-  cache: 'ruffin-performance-v12',
+  version: 'v13',
+  cache: 'ruffin-performance-v13',
 };
 
 /* ------------------------------------------------------------------ */
@@ -3203,6 +3209,21 @@ const cleanEvents = (v) => {
 /* STRIPE_INTEGRATION_TODO.md for the remaining Build C steps.       */
 /* ------------------------------------------------------------------ */
 const STRIPE_API_BASE = process.env.STRIPE_API_BASE || 'https://api.stripe.com';
+/* The three Lab tiers the checkout can sell. The client names a tier
+   and only a tier; the price is resolved here, server-side, from the
+   tier's env override or its baked-in default Price ID. A raw price
+   ID from the client is never accepted. A request that names no tier
+   keeps the original single-price behavior: STRIPE_PRICE_ID, or the
+   documented placeholder while that is unset. */
+const CHECKOUT_TIERS = {
+  access: { env: 'STRIPE_PRICE_LAB_ACCESS', price: 'price_1UWTZpAelNSvNtsvHAVExdYX' },
+  training: { env: 'STRIPE_PRICE_LAB_TRAINING', price: 'price_1UWSwJAelNSvNtsvz0ctLK9z' },
+  pass: { env: 'STRIPE_PRICE_LAB_PASS', price: 'price_1UWSwiAelNSvNtsv5R2KyEu0' },
+};
+function checkoutPriceForTier(tier) {
+  const t = CHECKOUT_TIERS[tier];
+  return process.env[t.env] || t.price;
+}
 /* The Checkout Session parameters as a flat form map, built fresh
    per request so env changes need no code change. The fixed values
    come from the Checkout Studio configuration and must not drift;
@@ -3210,7 +3231,7 @@ const STRIPE_API_BASE = process.env.STRIPE_API_BASE || 'https://api.stripe.com';
    values until real ones are configured (see the TODO file). The
    Studio's integration_identifier / origin_context have no native
    Checkout Session parameter, so they ride along as metadata. */
-function buildCheckoutSessionParams() {
+function buildCheckoutSessionParams(price) {
   const domain = process.env.DOMAIN || 'https://example.com';
   return {
     ui_mode: 'hosted_page',
@@ -3221,7 +3242,7 @@ function buildCheckoutSessionParams() {
     allow_promotion_codes: 'false',
     payment_method_collection: 'always',
     submit_type: 'auto',
-    'line_items[0][price]': process.env.STRIPE_PRICE_ID || 'price_...',
+    'line_items[0][price]': price,
     'line_items[0][quantity]': '1',
     success_url: domain + '/checkout/success?session_id={CHECKOUT_SESSION_ID}',
     cancel_url: domain + '/',
@@ -3229,8 +3250,8 @@ function buildCheckoutSessionParams() {
     'metadata[origin_context]': 'web',
   };
 }
-async function createCheckoutSession() {
-  const form = new URLSearchParams(buildCheckoutSessionParams());
+async function createCheckoutSession(price) {
+  const form = new URLSearchParams(buildCheckoutSessionParams(price));
   const stripeRes = await fetch(STRIPE_API_BASE + '/v1/checkout/sessions', {
     method: 'POST',
     headers: {
@@ -3262,7 +3283,11 @@ async function handleApi(req, res, url) {
   }
 
   /* Membership checkout: creates a hosted Stripe Checkout Session
-     and answers with its URL. Inert by design until the host has
+     and answers with its URL. The body may name one of the Lab tiers
+     ({ tier: 'access' | 'training' | 'pass' }) and the server picks
+     that tier's price; an unknown tier is rejected with 400 before
+     any Stripe call, and a body with no tier keeps the original
+     STRIPE_PRICE_ID behavior. Inert by design until the host has
      STRIPE_SECRET_KEY configured (503, and no Stripe call is made);
      nothing here gates registration or content — the paywall and
      join flow are a later Build C stage. */
@@ -3270,8 +3295,23 @@ async function handleApi(req, res, url) {
     if (!process.env.STRIPE_SECRET_KEY) {
       return sendJson(res, 503, { error: 'Payments are not configured yet.' });
     }
+    let body;
     try {
-      const session = await createCheckoutSession();
+      body = await readBody(req);
+    } catch (_) {
+      return sendJson(res, 400, { error: 'Bad request body.' });
+    }
+    const tier = typeof body.tier === 'string' ? body.tier.trim() : '';
+    let price;
+    if (tier === '') {
+      price = process.env.STRIPE_PRICE_ID || 'price_...';
+    } else if (Object.prototype.hasOwnProperty.call(CHECKOUT_TIERS, tier)) {
+      price = checkoutPriceForTier(tier);
+    } else {
+      return sendJson(res, 400, { error: 'Unknown tier.' });
+    }
+    try {
+      const session = await createCheckoutSession(price);
       return sendJson(res, 200, { url: session.url });
     } catch (err) {
       return sendJson(res, 502, { error: (err && err.stripeMessage) || 'Payment provider unreachable.' });
