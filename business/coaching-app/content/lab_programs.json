@@ -1,0 +1,312 @@
+[
+ {
+  "durationWeeks": 6,
+  "format": "4 training days per week \u00b7 about 60 to 75 minutes per session \u00b7 6 weeks",
+  "id": "winter-base-protocol",
+  "intake": {
+   "note": "One baseline session. Record all three numbers in the app. These are the numbers the program has to move.",
+   "tests": [
+    {
+     "name": "30m sprint",
+     "protocol": "3-point start \u00b7 best of 3",
+     "testKey": null
+    },
+    {
+     "name": "Countermovement jump",
+     "protocol": "Best of 5 \u00b7 logged as Vertical Jump in the testing catalog",
+     "testKey": "vertical-jump"
+    },
+    {
+     "name": "Standing broad jump",
+     "protocol": "Best of 5 \u00b7 logged as Broad Jump in the testing catalog",
+     "testKey": "broad-jump"
+    }
+   ],
+   "title": "Lab Intake"
+  },
+  "name": "Winter Base Protocol \u2014 6-Week Sprint Foundations",
+  "retest": {
+   "note": "Week 6. Use the same three tests, in the same order, on the same surface. Compare each result with the Lab Intake.",
+   "tests": [
+    {
+     "name": "30m sprint",
+     "protocol": "3-point start \u00b7 best of 3",
+     "testKey": null
+    },
+    {
+     "name": "Countermovement jump",
+     "protocol": "Best of 5 \u00b7 logged as Vertical Jump in the testing catalog",
+     "testKey": "vertical-jump"
+    },
+    {
+     "name": "Standing broad jump",
+     "protocol": "Best of 5 \u00b7 logged as Broad Jump in the testing catalog",
+     "testKey": "broad-jump"
+    }
+   ],
+   "title": "Lab Retest"
+  },
+  "sections": [
+   {
+    "intro": "All tempo reps are 100m at roughly 70 percent, controlled and relaxed.",
+    "items": [
+     "Weeks 1\u20132: 2 sets of 6 reps. Jog 50m and walk 50m between reps. Rest 3 minutes between sets.",
+     "Weeks 3\u20134: 2 sets of 8 to 10 reps. Rest 30 seconds between reps and 3 minutes between sets.",
+     "Weeks 5\u20136: Mixed sets, finishing with a 250m rep in the final session each week."
+    ],
+    "title": "Tempo progression"
+   },
+   {
+    "items": [
+     "Weeks 1\u20132: 3 x 8 at a weight that leaves 3 good reps in reserve.",
+     "Weeks 3\u20134: 3 x 8. Add load where week 2 felt clean.",
+     "Weeks 5\u20136: 4 x 6, heavier. Add one rep per set on single-leg work.",
+     "Nordic curls stay eccentric-only for the whole program: 2 x 4 with a 4-second lower, band-assisted as needed."
+    ],
+    "title": "Strength progression"
+   }
+  ],
+  "subtitle": "The flagship off-season program",
+  "summary": "Six weeks of tempo, strength, hills, starts, and low plyometrics. It builds the base that later speed work stands on.",
+  "weeklyLayout": [
+   {
+    "details": [
+     "Sprint drills: A-skip, B-skip, and straight-leg bounds, 2 x 20m each",
+     "Build-ups: 2 x 40m",
+     "Medicine ball throws: overhead backward, between-legs forward, and chest pass, 3 x 5",
+     "Extensive tempo runs using the progression for the week"
+    ],
+    "title": "Day 1 \u2014 Tempo and technique"
+   },
+   {
+    "details": [
+     "Box jumps: 3 x 5",
+     "Hill sprints",
+     "Rear-foot-elevated split squats",
+     "Romanian deadlift",
+     "Barbell hip thrust",
+     "Banded Nordic curl eccentrics paired with seated hip-flexor kicks"
+    ],
+    "title": "Day 2 \u2014 Hills and lower strength"
+   },
+   {
+    "details": [
+     "Hip mobility and ankle strength series: 15 minutes",
+     "Bike or grass tempo at the easier dose",
+     "General strength circuit"
+    ],
+    "title": "Day 3 \u2014 Recovery tempo"
+   },
+   {
+    "details": [
+     "Low plyometrics: 3 x 20m",
+     "3-point starts over 10m",
+     "Tempo runs",
+     "Squat or trap-bar deadlift",
+     "Upper-body push and pull",
+     "Core: sprinter sit-ups, bear-dog shoulder taps, and leg lowers"
+    ],
+    "title": "Day 4 \u2014 Starts and strength"
+   }
+  ],
+  "who": "Any athlete starting an off-season. Lab Access members can follow the plan. Lab Training members get the coached version with programming adjusted as the numbers move."
+ },
+ {
+  "durationWeeks": 4,
+  "format": "Daily prep for 12 to 15 minutes \u00b7 2 strength add-on days per week \u00b7 4 weeks",
+  "id": "hip-ankle-armor-protocol",
+  "intake": {
+   "note": "Complete this check on day 1.",
+   "tests": [
+    {
+     "name": "Knee-to-wall ankle distance",
+     "protocol": "Measure each side",
+     "testKey": null
+    },
+    {
+     "name": "Single-leg balance",
+     "protocol": "Time each side",
+     "testKey": null
+    },
+    {
+     "name": "Single-leg calf raise test",
+     "protocol": "10 reps",
+     "testKey": null
+    }
+   ],
+   "title": "Lab Intake"
+  },
+  "name": "Hip and Ankle Armor Protocol \u2014 4-Week Joint Prep",
+  "retest": {
+   "note": "Complete the same exit check on day 28 and compare it with day 1.",
+   "tests": [
+    {
+     "name": "Knee-to-wall ankle distance",
+     "protocol": "Measure each side",
+     "testKey": null
+    },
+    {
+     "name": "Single-leg balance",
+     "protocol": "Time each side",
+     "testKey": null
+    },
+    {
+     "name": "Single-leg calf raise test",
+     "protocol": "10 reps",
+     "testKey": null
+    }
+   ],
+   "title": "Lab Retest"
+  },
+  "sections": [
+   {
+    "items": [
+     "Week 1: Learn the positions at the lightest dose.",
+     "Week 2: Add a round to the daily flow.",
+     "Week 3: Add load to the single-leg work and slow every eccentric down.",
+     "Week 4: Use the full dose, then complete the exit check."
+    ],
+    "title": "Weekly dose progression"
+   },
+   {
+    "items": [
+     "A band and a step. The daily session takes 12 to 15 minutes."
+    ],
+    "title": "What you need"
+   }
+  ],
+  "subtitle": "Short daily work for hips and ankles",
+  "summary": "Four weeks of daily prep for two areas that can end a sprint season: hips that will not open and ankles that will not hold.",
+  "weeklyLayout": [
+   {
+    "details": [
+     "Hip mobility flow, 2 rounds, slow: 90/90 rotations, hip CARs, deep squat rocks, and couch stretch",
+     "Ankle strength, 2 rounds: bent-knee calf raises, straight-knee calf raises, tibialis raises against a wall, and single-leg balance with reach",
+     "Foot and ankle stiffness: low pogo hops in place, 2 x 20 seconds, with quiet landings"
+    ],
+    "title": "Daily Prep Protocol"
+   },
+   {
+    "details": [
+     "Single-leg Romanian deadlift: 3 x 8",
+     "Rear-foot-elevated split squat: 3 x 8",
+     "Single-leg Swiss ball or slider leg curl: 3 x 6",
+     "Banded Nordic curl eccentrics: 2 x 4 with a 4-second lower",
+     "Seated hip-flexor kicks: 2 x 8 seconds each side"
+    ],
+    "title": "Strength add-on days \u2014 2 per week, about 25 minutes"
+   }
+  ],
+  "who": "Athletes coming off ankle or hip issues, younger athletes building their base, and families who want to know what an athlete should do before speed work."
+ },
+ {
+  "durationWeeks": 4,
+  "format": "3 training days per week \u00b7 timed every week \u00b7 4 weeks",
+  "id": "first-step-protocol",
+  "intake": {
+   "note": "Set the baseline before week 1. Record each number in the app.",
+   "tests": [
+    {
+     "name": "10m sprint",
+     "protocol": "3-point start \u00b7 best of 3",
+     "testKey": null
+    },
+    {
+     "name": "30m sprint",
+     "protocol": "3-point start \u00b7 best of 3",
+     "testKey": null
+    },
+    {
+     "name": "Standing broad jump",
+     "protocol": "Best of 5 \u00b7 logged as Broad Jump in the testing catalog",
+     "testKey": "broad-jump"
+    },
+    {
+     "name": "Countermovement jump",
+     "protocol": "Best of 5 \u00b7 logged as Vertical Jump in the testing catalog",
+     "testKey": "vertical-jump"
+    }
+   ],
+   "title": "Lab Intake"
+  },
+  "name": "First Step Protocol \u2014 4-Week Acceleration and Power",
+  "retest": {
+   "note": "Week 4. Repeat the 10m, 30m, broad jump, and countermovement jump against the Lab Intake.",
+   "tests": [
+    {
+     "name": "10m sprint",
+     "protocol": "3-point start \u00b7 best of 3",
+     "testKey": null
+    },
+    {
+     "name": "30m sprint",
+     "protocol": "3-point start \u00b7 best of 3",
+     "testKey": null
+    },
+    {
+     "name": "Standing broad jump",
+     "protocol": "Best of 5 \u00b7 logged as Broad Jump in the testing catalog",
+     "testKey": "broad-jump"
+    },
+    {
+     "name": "Countermovement jump",
+     "protocol": "Best of 5 \u00b7 logged as Vertical Jump in the testing catalog",
+     "testKey": "vertical-jump"
+    }
+   ],
+   "title": "Lab Retest"
+  },
+  "sections": [
+   {
+    "items": [
+     "Week 1: Pogo hops and low box jumps. Landings come first.",
+     "Week 2: Countermovement jumps and broad jumps, 4 x 4.",
+     "Week 3: Single-leg hops to a stick landing, kept at low volume.",
+     "Week 4: Depth landings from a low box into an immediate jump, 3 x 3. Use this only when the athlete landed cleanly through weeks 1\u20133."
+    ],
+    "title": "Plyometric progression"
+   },
+   {
+    "intro": "The timing rule for every First Step session.",
+    "items": [
+     "Time the Day 1 starts every week. Phone timing is fine. Use timing gates when they are available.",
+     "Log the times in the app with the session.",
+     "If times fall off by more than a few percent inside a session, the session ends.",
+     "Speed work stops when it stops being speed work."
+    ],
+    "title": "The Lab Standard"
+   }
+  ],
+  "subtitle": "For the athlete whose sport is won in the first 10 metres",
+  "summary": "Three sessions a week built around acceleration and power. Every session starts fast while the athlete is fresh, and every week is timed.",
+  "weeklyLayout": [
+   {
+    "details": [
+     "Falling starts and 3-point starts: 8 to 10 reps over 10m",
+     "Use full recovery, about 1 minute per rep",
+     "Medicine ball throws: 4 x 4",
+     "Trap-bar deadlift: 4 x 5"
+    ],
+    "title": "Day 1 \u2014 Acceleration"
+   },
+   {
+    "details": [
+     "Plyometric progression for the week",
+     "Box jumps: 4 x 4",
+     "Hip thrust: 4 x 6",
+     "Upper-body push and pull"
+    ],
+    "title": "Day 2 \u2014 Power"
+   },
+   {
+    "details": [
+     "Starts over 20 to 30m: 5 to 6 reps",
+     "Short tempo set to finish: 6 x 100m at 70 percent",
+     "Core circuit"
+    ],
+    "title": "Day 3 \u2014 Acceleration plus tempo"
+   }
+  ],
+  "who": "Football, soccer, lacrosse, and baseball athletes, plus sprinters who lose the first 10m. It fits Lab Training and Lab Pass best because the timed work is coached closely."
+ }
+]

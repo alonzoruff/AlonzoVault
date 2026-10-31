@@ -684,3 +684,28 @@ elif os.path.exists(igm_out):
           len(json.load(open(igm_out))), "entries")
 else:
     print("instagram movements: none found (the app runs fine without it)")
+
+# Lab programs: Ruffin Performance-only content. Unlike the shared
+# coaching sources above, the file in content/ is the source of
+# truth, so a content refresh preserves it. Validate its shape here
+# so a malformed program fails the build instead of reaching the app.
+lab_programs_out = os.path.join(OUT, "lab_programs.json")
+if os.path.exists(lab_programs_out):
+    lab_programs = json.load(open(lab_programs_out))
+    if not isinstance(lab_programs, list) or not lab_programs:
+        raise SystemExit("lab programs: expected a non-empty list")
+    for program in lab_programs:
+        for field in ("id", "name", "subtitle", "summary", "who", "format"):
+            if not isinstance(program.get(field), str) or not program[field].strip():
+                raise SystemExit("lab programs: %s is missing %s" % (program.get("id"), field))
+        if not isinstance(program.get("weeklyLayout"), list) or not program["weeklyLayout"]:
+            raise SystemExit("lab programs: %s has no weekly layout" % program["id"])
+        if not isinstance(program.get("sections"), list) or not program["sections"]:
+            raise SystemExit("lab programs: %s has no sections" % program["id"])
+        for block_name in ("intake", "retest"):
+            block = program.get(block_name)
+            if not isinstance(block, dict) or not isinstance(block.get("tests"), list) or not block["tests"]:
+                raise SystemExit("lab programs: %s has no %s tests" % (program["id"], block_name))
+    print("lab programs:", len(lab_programs), "entries (Ruffin Performance source preserved)")
+else:
+    print("lab programs: none found (the app runs fine without them)")

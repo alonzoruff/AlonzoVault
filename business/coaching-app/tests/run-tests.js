@@ -135,6 +135,47 @@ async function main() {
     appJs.text.includes('data-vidcat') && appJs.text.includes('vid-search') &&
     appJs.text.includes('i.ytimg.com/vi/') && appJs.text.includes('youtube-nocookie.com/embed/'));
 
+  /* ---------------- Lab programs (v15) ---------------- */
+  check('signed-out content keeps the public payload but withholds the Lab programs',
+    Array.isArray(contentJson.labPrograms) && contentJson.labPrograms.length === 0 &&
+    contentJson.sessions.length === 57, contentJson.labPrograms);
+  check('Lab Programs view markers are in the served page',
+    pageHtml.text.includes('id="view-labprograms"') &&
+    pageHtml.text.includes('data-view="labprograms"') &&
+    pageHtml.text.includes('id="labprograms-main"') &&
+    pageHtml.text.includes('Winter Base, Hip and Ankle Armor, and First Step'), pageHtml.text.slice(0, 120));
+  check('Lab Programs wiring is in the served JS',
+    appJs.text.includes('renderLabPrograms') &&
+    appJs.text.includes('data-lab-program-open') &&
+    appJs.text.includes('data-lab-program-back') &&
+    appJs.text.includes('data-lab-test-action') &&
+    appJs.text.includes("labprograms: 'access'") &&
+    appJs.text.includes("['labprograms', 'Programs']") &&
+    appJs.text.includes("showView('testing')") &&
+    appJs.text.includes("showView('speedreport')"), appJs.text.slice(0, 120));
+  const labCoreMatch = appJs.text.match(/\/\* LABPROGRAMS-BEGIN \*\/([\s\S]*?)\/\* LABPROGRAMS-END \*\//);
+  check('Lab Programs test-link core is extractable for behavior tests', !!labCoreMatch);
+  if (labCoreMatch) {
+    const labCore = new Function(labCoreMatch[1] +
+      '\nreturn { LAB_PROGRAM_TEST_LABELS, labProgramTestLabel, labProgramById };')();
+    check('Lab Programs link only to test types already in the catalog',
+      labCore.labProgramTestLabel('vertical-jump') === 'Vertical Jump' &&
+      labCore.labProgramTestLabel('broad-jump') === 'Broad Jump' &&
+      labCore.labProgramTestLabel('30m-sprint') === '' &&
+      labCore.labProgramTestLabel('knee-to-wall') === '' &&
+      Object.keys(labCore.LAB_PROGRAM_TEST_LABELS).length === 2, labCore.LAB_PROGRAM_TEST_LABELS);
+    check('Lab Programs detail lookup finds a program by id and misses cleanly',
+      labCore.labProgramById([{ id: 'winter-base-protocol' }], 'winter-base-protocol').id === 'winter-base-protocol' &&
+      labCore.labProgramById([{ id: 'winter-base-protocol' }], 'missing') === null);
+  }
+  const labCss = await apiText(null, '/styles.css');
+  check('Lab Programs layout has a phone-width single-column and stacked test rows',
+    labCss.status === 200 && labCss.text.includes('.lab-program-grid') &&
+    labCss.text.includes('@media (max-width: 520px)') &&
+    labCss.text.includes('.lab-program-grid { grid-template-columns: 1fr; }') &&
+    labCss.text.includes('.lab-test-row { align-items: stretch; flex-direction: column; }'),
+    labCss.text.slice(0, 120));
+
   /* ---------------- glossary (Definitions tab) ---------------- */
   const gloss = contentJson.glossary;
   check('glossary serves an array', Array.isArray(gloss), typeof gloss);
@@ -456,8 +497,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v14 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v14"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v15 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v15"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -537,6 +578,61 @@ async function main() {
      features, not the gate (the gate gets its own block below). */
   r = await api(coach, 'PUT', '/api/access/' + r.json.id, { tier: 'pass' });
   check('coach grants the fixture athlete Lab Pass', r.status === 200 && r.json.membership.tier === 'pass', r.json);
+
+  /* The three Lab programs ride the same content payload for a
+     coach and for a member with an active tier. */
+  for (const [who, jar] of [['coach', coach], ['Lab Pass member', athlete]]) {
+    r = await api(jar, 'GET', '/api/content');
+    const labs = r.json.labPrograms || [];
+    const byId = Object.fromEntries(labs.map(p => [p.id, p]));
+    check(who + ' reads all three Lab programs in the content payload',
+      r.status === 200 && labs.length === 3 &&
+      byId['winter-base-protocol'].name === 'Winter Base Protocol — 6-Week Sprint Foundations' &&
+      byId['hip-ankle-armor-protocol'].name === 'Hip and Ankle Armor Protocol — 4-Week Joint Prep' &&
+      byId['first-step-protocol'].name === 'First Step Protocol — 4-Week Acceleration and Power',
+      labs.map(p => p.name));
+    const winter = byId['winter-base-protocol'] || { weeklyLayout: [], sections: [], intake: {}, retest: {} };
+    const armor = byId['hip-ankle-armor-protocol'] || { weeklyLayout: [], sections: [], intake: {}, retest: {} };
+    const first = byId['first-step-protocol'] || { weeklyLayout: [], sections: [], intake: {}, retest: {} };
+    check(who + ': every Lab program carries its layout, progressions, intake, and retest',
+      [winter, armor, first].every(p => p.weeklyLayout.length > 0 && p.sections.length > 0 &&
+        p.intake.title === 'Lab Intake' && p.retest.title === 'Lab Retest' &&
+        p.intake.tests.length > 0 && p.retest.tests.length > 0),
+      labs.map(p => [p.weeklyLayout.length, p.sections.length]));
+    check(who + ': Winter Base carries the weekly layout and tempo and strength progressions',
+      winter.durationWeeks === 6 && winter.weeklyLayout.map(x => x.title).join('|') ===
+        'Day 1 — Tempo and technique|Day 2 — Hills and lower strength|Day 3 — Recovery tempo|Day 4 — Starts and strength' &&
+      winter.sections.some(s => s.title === 'Tempo progression' && s.items.some(x => x.includes('2 sets of 6 reps'))) &&
+      winter.sections.some(s => s.title === 'Strength progression' && s.items.some(x => x.includes('4-second lower'))),
+      winter.sections);
+    check(who + ': Armor carries Daily Prep, the strength add-ons, and the weekly dose progression',
+      armor.durationWeeks === 4 && armor.weeklyLayout.some(x => x.title === 'Daily Prep Protocol') &&
+      armor.weeklyLayout.some(x => x.title.includes('Strength add-on days')) &&
+      armor.sections.some(s => s.title === 'Weekly dose progression' && s.items.some(x => x.includes('Week 4'))),
+      armor.weeklyLayout);
+    check(who + ': First Step carries the plyometric progression and The Lab Standard',
+      first.durationWeeks === 4 && first.weeklyLayout.length === 3 &&
+      first.sections.some(s => s.title === 'Plyometric progression' && s.items.some(x => x.includes('Depth landings'))) &&
+      first.sections.some(s => s.title === 'The Lab Standard' && s.items.some(x => x.includes('session ends'))),
+      first.sections);
+    const keysOf = (p) => (p.intake.tests || []).map(t => t.testKey);
+    check(who + ': intake tests wire only to existing jump test types and keep the rest as content',
+      JSON.stringify(keysOf(winter)) === '[null,"vertical-jump","broad-jump"]' &&
+      JSON.stringify(keysOf(armor)) === '[null,null,null]' &&
+      JSON.stringify(keysOf(first)) === '[null,null,"broad-jump","vertical-jump"]' &&
+      JSON.stringify((winter.retest.tests || []).map(t => t.testKey)) === JSON.stringify(keysOf(winter)) &&
+      JSON.stringify((first.retest.tests || []).map(t => t.testKey)) === JSON.stringify(keysOf(first)),
+      labs.map(p => keysOf(p)));
+    check(who + ': Armor is presented by who it is for, with no separate purchase or trial mechanic',
+      !/standalone purchase|free.trial companion/i.test(JSON.stringify(labs)) &&
+      armor.who.includes('Athletes coming off ankle or hip issues'), armor.who);
+  }
+  r = await api(coach, 'GET', '/api/tests');
+  const catalogKeys = new Set((r.json.tests || []).map(t => t.key));
+  check('the Lab Program logging links resolve to real entries in the testing catalog',
+    r.status === 200 && catalogKeys.has('vertical-jump') && catalogKeys.has('broad-jump') &&
+    !catalogKeys.has('knee-to-wall') && !catalogKeys.has('single-leg-balance') &&
+    !catalogKeys.has('calf-raise-test'), [...catalogKeys]);
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('duplicate email is 409', r.status === 409, r.status);
   r = await api(null, 'POST', '/api/register', { email: 'not-an-email', password: 'testpass123' });
@@ -2378,16 +2474,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v14'") &&
-    swJs.text.includes("ruffin-performance-v14"));
+    appJs.text.includes("const APP_VERSION = 'v15'") &&
+    swJs.text.includes("ruffin-performance-v15"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v14"') &&
-    pageHtml.text.includes('Ruffin Performance · App v14') &&
+    pageHtml.text.includes('data-app-version="v15"') &&
+    pageHtml.text.includes('Ruffin Performance · App v15') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -5665,7 +5761,7 @@ async function waitForServer(tries = 60) {
         /* The gates, tier by tier. No tier first. */
         ar = await acApi(noneM.jar, 'GET', '/api/content');
         check('no-tier member: content is 403 naming the membership need',
-          ar.status === 403 && ar.json.needsTier === 'access' &&
+          ar.status === 403 && ar.json.needsTier === 'access' && ar.json.labPrograms === undefined &&
           /membership/i.test(ar.json.error || ''), ar.json);
         for (const [method, p, body] of [
           ['GET', '/api/checkin/today'], ['POST', '/api/checkin', { sleep: 8, soreness: 2, energy: 3 }],
@@ -5689,6 +5785,12 @@ async function waitForServer(tries = 60) {
         /* Access tier: content family open; training + pass closed. */
         ar = await acApi(accM.jar, 'GET', '/api/content');
         check('access member reads content', ar.status === 200 && !!ar.json.weeks, ar.status);
+        check('access member reads all three Lab programs',
+          Array.isArray(ar.json.labPrograms) && ar.json.labPrograms.length === 3 &&
+          ar.json.labPrograms.some(p => p.name === 'Winter Base Protocol — 6-Week Sprint Foundations') &&
+          ar.json.labPrograms.some(p => p.name === 'Hip and Ankle Armor Protocol — 4-Week Joint Prep') &&
+          ar.json.labPrograms.some(p => p.name === 'First Step Protocol — 4-Week Acceleration and Power'),
+          (ar.json.labPrograms || []).map(p => p.name));
         ar = await acApi(accM.jar, 'GET', '/api/checkin/today');
         check('access member reads check-in state', ar.status === 200 && ar.json.linked === true, ar.json);
         ar = await acApi(accM.jar, 'GET', '/api/my/week');
@@ -5721,6 +5823,8 @@ async function waitForServer(tries = 60) {
         /* Coach is never gated. */
         ar = await acApi(acCoach, 'GET', '/api/content');
         check('coach reads content (never gated)', ar.status === 200, ar.status);
+        check('coach reads all three Lab programs (never gated)',
+          Array.isArray(ar.json.labPrograms) && ar.json.labPrograms.length === 3, ar.json.labPrograms);
         ar = await acApi(acCoach, 'GET', '/api/form-checks');
         check('coach reads the form check queue (never gated)', ar.status === 200, ar.status);
 

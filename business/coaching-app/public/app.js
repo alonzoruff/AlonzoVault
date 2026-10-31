@@ -104,6 +104,7 @@ const state = {
   amsRoster: null,
   progEditId: null,
   progDraft: null,
+  labProgramId: null,
   progApplyId: null,
   progMsg: null,
   calMonth: null,
@@ -390,13 +391,13 @@ function md(src) {
    listener below routes them all. */
 const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
-  library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
+  library: 'train', labprograms: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub',
   livesessions: 'train',
 };
 const GROUP_SUBNAV = {
-  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
   coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['access', 'Access'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
@@ -412,7 +413,7 @@ const GROUP_SUBNAV = {
 const TIER_RANK = { access: 1, training: 2, pass: 3 };
 const TIER_NAMES = { access: 'Lab Access', training: 'Lab Training', pass: 'Lab Pass' };
 const VIEW_TIER_NEED = {
-  library: 'access', season: 'access', cards: 'access', drills: 'access', qtr: 'access',
+  library: 'access', labprograms: 'access', season: 'access', cards: 'access', drills: 'access', qtr: 'access',
   speedreport: 'access', log: 'access',
   videos: 'access', definitions: 'access', exercises: 'access', nutrition: 'access',
   education: 'access', guide: 'access',
@@ -611,6 +612,7 @@ function showView(name) {
   if (name === 'leaderboard') renderLeaderboard();
   if (name === 'speedreport') renderSpeedReport();
   if (name === 'custom') renderCustomWorkouts();
+  if (name === 'labprograms') renderLabPrograms();
   if (name === 'programs') renderPrograms();
   if (name === 'calendar') renderCalendar();
   if (name === 'data') renderData();
@@ -1179,6 +1181,116 @@ function renderQtr() {
   const qtrs = state.content.sessions.filter(s => s.id.startsWith('QTR-'));
   $('#qtr-list').innerHTML = qtrs.map(sessionRow).join('');
   $('#qtr-doc').innerHTML = md(state.content.framework400);
+}
+
+/* ---------------- Lab programs ----------------
+   The three named Lab programs live in the bundled content payload.
+   This view is separate from the coach program builder: members read
+   the program here, while coaches still use Programs in the Coach
+   area to build and apply training templates. Intake and retest rows
+   link into the existing testing flow only when the check already
+   has a test in the catalog. Other checks stay as program content. */
+/* LABPROGRAMS-BEGIN */
+const LAB_PROGRAM_TEST_LABELS = {
+  'vertical-jump': 'Vertical Jump',
+  'broad-jump': 'Broad Jump',
+};
+function labProgramTestLabel(testKey) {
+  return LAB_PROGRAM_TEST_LABELS[testKey] || '';
+}
+function labProgramById(programs, id) {
+  return (Array.isArray(programs) ? programs : []).find(p => p.id === id) || null;
+}
+/* LABPROGRAMS-END */
+function labProgramCardHtml(p) {
+  return `<article class="card lab-program-card">
+    <div class="lab-program-top"><span class="badge plain">${esc(p.durationWeeks)} weeks</span><span class="muted">${esc(p.format)}</span></div>
+    <h2>${esc(p.name)}</h2>
+    <p class="lab-program-subtitle">${esc(p.subtitle)}</p>
+    <p>${esc(p.summary)}</p>
+    <p class="muted">Who it is for: ${esc(p.who)}</p>
+    <button class="btn primary" type="button" data-lab-program-open="${esc(p.id)}">View program</button>
+  </article>`;
+}
+function labProgramTestHtml(test) {
+  const label = labProgramTestLabel(test.testKey);
+  let action = '<span class="badge plain">Program check</span>';
+  if (label && isCoachUser()) {
+    action = `<button class="btn secondary" type="button" data-lab-test-action="${esc(test.testKey)}">Log in Testing</button>`;
+  } else if (label && isAthleteUser()) {
+    action = `<button class="btn secondary" type="button" data-lab-test-action="${esc(test.testKey)}">See your Speed Report</button>`;
+  } else if (label) {
+    action = '<span class="badge plain">In Testing</span>';
+  }
+  return `<div class="lab-test-row">
+    <div><strong>${esc(test.name)}</strong><div class="muted">${esc(test.protocol)}</div>
+    ${label ? `<div class="muted">Uses the existing ${esc(label)} test.</div>` : ''}</div>
+    <div class="lab-test-action">${action}</div>
+  </div>`;
+}
+function labProgramTestingHtml(block) {
+  return `<div class="card lab-testing-card">
+    <h2>${esc(block.title)}</h2>
+    <p>${esc(block.note)}</p>
+    ${block.tests.map(labProgramTestHtml).join('')}
+  </div>`;
+}
+function renderLabPrograms() {
+  const el = $('#labprograms-main');
+  if (!el) return;
+  const programs = (state.content && state.content.labPrograms) || [];
+  const selected = labProgramById(programs, state.labProgramId);
+  if (state.labProgramId && !selected) state.labProgramId = null;
+  if (!programs.length) {
+    el.innerHTML = '<div class="card"><h2>Programs are not loaded</h2><p class="muted">The Lab programs did not load with the app content. Please reload the app.</p></div>';
+    return;
+  }
+  if (!selected) {
+    el.innerHTML = `<div class="lab-program-grid">${programs.map(labProgramCardHtml).join('')}</div>`;
+  } else {
+    el.innerHTML = `
+      <button class="btn secondary back" type="button" data-lab-program-back>← All programs</button>
+      <article class="card lab-program-detail">
+        <div class="lab-program-top"><span class="badge plain">${esc(selected.durationWeeks)} weeks</span><span class="muted">${esc(selected.format)}</span></div>
+        <h2>${esc(selected.name)}</h2>
+        <p class="lab-program-subtitle">${esc(selected.subtitle)}</p>
+        <p>${esc(selected.summary)}</p>
+        <dl class="detail-grid">
+          <dt>Who it is for</dt><dd>${esc(selected.who)}</dd>
+          <dt>Format</dt><dd>${esc(selected.format)}</dd>
+        </dl>
+      </article>
+      <h2>Weekly layout</h2>
+      ${LANE_DIVIDER}
+      ${selected.weeklyLayout.map(block => `<div class="card">
+        <h3>${esc(block.title)}</h3>
+        <ul>${block.details.map(d => `<li>${esc(d)}</li>`).join('')}</ul>
+      </div>`).join('')}
+      ${selected.sections.map(section => `<div class="card">
+        <h2>${esc(section.title)}</h2>
+        ${section.intro ? `<p>${esc(section.intro)}</p>` : ''}
+        <ul>${section.items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
+      </div>`).join('')}
+      <h2>Testing</h2>
+      ${LANE_DIVIDER}
+      ${labProgramTestingHtml(selected.intake)}
+      ${labProgramTestingHtml(selected.retest)}`;
+  }
+  el.querySelectorAll('[data-lab-program-open]').forEach(b => b.addEventListener('click', () => {
+    state.labProgramId = b.dataset.labProgramOpen;
+    renderLabPrograms();
+    window.scrollTo(0, 0);
+  }));
+  const back = el.querySelector('[data-lab-program-back]');
+  if (back) back.addEventListener('click', () => {
+    state.labProgramId = null;
+    renderLabPrograms();
+    window.scrollTo(0, 0);
+  });
+  el.querySelectorAll('[data-lab-test-action]').forEach(b => b.addEventListener('click', () => {
+    if (isCoachUser()) showView('testing');
+    else if (isAthleteUser()) showView('speedreport');
+  }));
 }
 
 /* ---------------- videos ---------------- */
@@ -8233,7 +8345,7 @@ function tvStopTimers() {
 const EMPTY_CONTENT = {
   weeks: [], sessions: [], drills: [], framework400: '',
   videoLibrary: [], glossary: [], exerciseLibrary: [],
-  coachEducation: [], guide: '', season: '', videoUpload: null,
+  coachEducation: [], labPrograms: [], guide: '', season: '', videoUpload: null,
 };
 
 (async function boot() {
@@ -8258,6 +8370,7 @@ const EMPTY_CONTENT = {
   renderDefinitions();
   renderExercises();
   renderEducation();
+  renderLabPrograms();
   $('#guide-doc').innerHTML = md(state.content.guide);
   $('#season-doc').innerHTML = md(state.content.season);
   $('#log-date').value = todayStr();

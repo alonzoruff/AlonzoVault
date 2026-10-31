@@ -1360,6 +1360,21 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .edu-link { margin: 12px 0 0; }
 @media (max-width: 520px) { .edu-list { grid-template-columns: 1fr; } }
 
+/* ---- Lab programs: member-facing program cards and details ---- */
+.lab-program-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--card-gap); align-items: start; }
+.lab-program-card { margin-bottom: 0; }
+.lab-program-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lab-program-subtitle { color: var(--red-dark); font-size: 15px; margin-top: 2px; }
+.lab-program-detail .detail-grid { margin-top: 14px; }
+.lab-test-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 0; border-top: 1px solid var(--line); }
+.lab-test-action { flex: none; }
+.lab-test-action .btn { min-width: 150px; }
+@media (max-width: 520px) {
+  .lab-program-grid { grid-template-columns: 1fr; }
+  .lab-test-row { align-items: stretch; flex-direction: column; }
+  .lab-test-action .btn { width: 100%; }
+}
+
 /* ---- Attendance (coach roll-book): status segmented control ---- */
 .att-row .att-name { flex: 1 1 150px; }
 .att-seg { padding: 0; overflow: visible; }

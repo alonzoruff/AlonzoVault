@@ -94,8 +94,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v14',
-  cache: 'ruffin-performance-v14',
+  version: 'v15',
+  cache: 'ruffin-performance-v15',
 };
 
 /* ------------------------------------------------------------------ */
@@ -580,6 +580,7 @@ function loadContent() {
     glossary: loadGlossary(),
     coachEducation: loadCoachEducation(),
     exerciseLibrary: loadExerciseLibrary(),
+    labPrograms: loadLabPrograms(),
   };
 }
 /* The Videos section library (content/video_library.json). Loaded
@@ -657,6 +658,50 @@ function loadCoachEducation() {
         && fields.every(f => typeof e[f] === 'string' && e[f].trim()));
     }
   } catch (_) { /* no coach education bundled — that is fine */ }
+  return [];
+}
+/* The three Lab programs (content/lab_programs.json). This is
+   Ruffin Performance content, so it lives with this app rather than
+   in the shared workout database. Loaded tolerantly like the other
+   optional libraries: a missing or malformed file serves an empty
+   list, and an entry is kept only when every part the Programs view
+   renders is present and usable. A testKey is either null (the check
+   is program content only) or the key of a test in the existing
+   testing catalog. */
+function loadLabPrograms() {
+  const cleanStrings = (v) => Array.isArray(v)
+    && v.length > 0 && v.every(x => typeof x === 'string' && x.trim());
+  const cleanBlock = (b) => b && typeof b === 'object'
+    && typeof b.title === 'string' && b.title.trim()
+    && cleanStrings(b.details);
+  const cleanSection = (s) => s && typeof s === 'object'
+    && typeof s.title === 'string' && s.title.trim()
+    && cleanStrings(s.items)
+    && (s.intro === undefined || (typeof s.intro === 'string' && !!s.intro.trim()));
+  const cleanTest = (t) => t && typeof t === 'object'
+    && typeof t.name === 'string' && t.name.trim()
+    && typeof t.protocol === 'string' && t.protocol.trim()
+    && (t.testKey === null || (typeof t.testKey === 'string' && !!t.testKey.trim()));
+  const cleanTesting = (x) => x && typeof x === 'object'
+    && typeof x.title === 'string' && x.title.trim()
+    && typeof x.note === 'string' && x.note.trim()
+    && Array.isArray(x.tests) && x.tests.length > 0 && x.tests.every(cleanTest);
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'lab_programs.json'), 'utf8'));
+    if (Array.isArray(parsed)) {
+      return parsed.filter(p => p && typeof p === 'object'
+        && typeof p.id === 'string' && p.id.trim()
+        && typeof p.name === 'string' && p.name.trim()
+        && typeof p.subtitle === 'string' && p.subtitle.trim()
+        && typeof p.summary === 'string' && p.summary.trim()
+        && typeof p.who === 'string' && p.who.trim()
+        && typeof p.format === 'string' && p.format.trim()
+        && Number.isInteger(p.durationWeeks) && p.durationWeeks > 0
+        && Array.isArray(p.weeklyLayout) && p.weeklyLayout.length > 0 && p.weeklyLayout.every(cleanBlock)
+        && Array.isArray(p.sections) && p.sections.length > 0 && p.sections.every(cleanSection)
+        && cleanTesting(p.intake) && cleanTesting(p.retest));
+    }
+  } catch (_) { /* no Lab programs bundled — that is fine */ }
   return [];
 }
 const CONTENT = loadContent();
@@ -3500,6 +3545,15 @@ async function handleApi(req, res, url) {
         error: 'The Lab content needs a membership. Your account does not have an active tier right now — see the Account tab for your membership and your options.',
         needsTier: 'access',
       });
+    }
+    /* The three Lab programs are member content. Signed-out reads
+       keep the established public payload for the landing page and
+       the TV board, but the program collection itself is withheld
+       until the reader is a coach or a member with an active tier. */
+    if (!viewer) {
+      return sendJson(res, 200, Object.assign({}, CONTENT, {
+        labPrograms: [], videoUpload: VIDEO_UPLOAD, brand: BRAND,
+      }));
     }
     return sendJson(res, 200, Object.assign({}, CONTENT, { videoUpload: VIDEO_UPLOAD, brand: BRAND }));
   }
