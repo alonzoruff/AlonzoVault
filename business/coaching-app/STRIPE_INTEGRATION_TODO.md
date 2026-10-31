@@ -12,9 +12,14 @@ endpoint sells the three Lab tiers: the request body names a tier
 resolves that tier's price itself (see the tier table below) — a raw
 price ID from the client is never accepted, and an unknown tier gets
 a 400 before any Stripe call. The landing page carries the three
-tier cards with a join button per tier. There is no paywall and no
-webhook handler yet — those are the remaining Build C steps listed
-at the bottom.
+tier cards with a join button per tier. There is no
+webhook handler yet — that is the remaining Build C step listed at
+the bottom. Since v14 the app HAS the access system the webhook
+will drive: every member account carries `tier`, `membershipStatus`,
+`tierUpdatedAt`, reserved `stripeCustomerId` / `stripeSubscriptionId`
+fields, and a `membershipHistory`; the coach sets tiers by hand on
+the Access page today, and the member APIs enforce the tiers
+server-side. The webhook stage below writes those same fields.
 
 ## Values to Replace
 
@@ -146,8 +151,8 @@ No real money moves with test keys.
    prices above) and `DOMAIN=https://ruffin-performance.onrender.com`.
    The `STRIPE_PRICE_LAB_*` overrides are optional. This is the only
    step between the current 503 and working tier checkout buttons.
-4. **NEXT PAYMENT STEP — the 3-day trial** (decided Oct 30, 2026,
-   deliberately NOT in the v13 build): 7 days at the Lab Access
+4. **NEXT PAYMENT STEP — the 3-day trial** (decided Oct 30, 2026; length corrected by AJ Oct 31, 2026,
+   deliberately NOT in the v13 build): 3 days at the Lab Access
    level, no card required to start. On the session this means
    `subscription_data[trial_period_days]=3` for the trial entry path
    plus `payment_method_collection` set so no card is collected up
@@ -156,9 +161,33 @@ No real money moves with test keys.
    silently inside another build.
 5. **Build the next Build C stage (separate from this endpoint):**
    the webhook endpoint (`checkout.session.completed` etc.) with
-   `STRIPE_WEBHOOK_SECRET` for fulfillment, plus the paywall and the
-   public join flow. Registration stays invite-only until that stage
-   ships.
+   `STRIPE_WEBHOOK_SECRET` for fulfillment, plus the public join
+   flow. Registration stays invite-only until that stage ships. The
+   v14 access system defines exactly what this stage writes:
+   - **Bind checkout to the account.** Checkout sessions carry no
+     account identity today. When a signed-in member checks out,
+     send `client_reference_id` = the member's user id (and/or the
+     account email as `customer_email`) so the webhook can find the
+     account that paid. The tier already travels in the session
+     metadata path the endpoint resolves server-side.
+   - **On `checkout.session.completed` / subscription activation:**
+     find the user by `client_reference_id` (fall back to the
+     customer email), then set the v14 fields on that user record:
+     `tier` from the purchased price's tier, `membershipStatus`
+     'active', `tierUpdatedAt`, `stripeCustomerId` from the
+     session's customer, and `stripeSubscriptionId` from the
+     session's subscription — through the same
+     `applyMembershipChange` path the coach Access page uses, so the
+     change lands in `membershipHistory` (actor 'stripe').
+   - **On Stripe-side cancellation** (`customer.subscription.deleted`,
+     or a subscription ending unpaid): when the account carries a
+     matching `stripeSubscriptionId`, set `membershipStatus` to
+     'cancelled' on the same record — the v14 gates end tier access
+     from that field alone, and the coach Access page already
+     reflects it. The member's in-app Cancel button covers the
+     no-Stripe-subscription case today; once a
+     `stripeSubscriptionId` exists, the cancel action should also
+     cancel the subscription at Stripe so the two never disagree.
 6. **Going live for real money:** create live-mode versions of the
    three prices, set the `STRIPE_PRICE_LAB_*` env vars (or bake new
    defaults), and swap in the live secret key.

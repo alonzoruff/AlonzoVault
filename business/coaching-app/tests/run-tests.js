@@ -456,8 +456,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v13 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v13"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v14 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v14"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -532,6 +532,11 @@ async function main() {
   r = await api(null, 'POST', '/api/register', { email: 'athlete@test.com', password: 'testpass123' });
   check('second account is athlete', r.json.role === 'athlete', r.json.role);
   const athlete = cookieOf(r);
+  /* v14: member APIs are tier-gated — the coach grants the fixture
+     athlete Lab Pass up front so the rest of this flow exercises
+     features, not the gate (the gate gets its own block below). */
+  r = await api(coach, 'PUT', '/api/access/' + r.json.id, { tier: 'pass' });
+  check('coach grants the fixture athlete Lab Pass', r.status === 200 && r.json.membership.tier === 'pass', r.json);
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('duplicate email is 409', r.status === 409, r.status);
   r = await api(null, 'POST', '/api/register', { email: 'not-an-email', password: 'testpass123' });
@@ -2373,16 +2378,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v13'") &&
-    swJs.text.includes("ruffin-performance-v13"));
+    appJs.text.includes("const APP_VERSION = 'v14'") &&
+    swJs.text.includes("ruffin-performance-v14"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v13"') &&
-    pageHtml.text.includes('Ruffin Performance · App v13') &&
+    pageHtml.text.includes('data-app-version="v14"') &&
+    pageHtml.text.includes('Ruffin Performance · App v14') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -2677,6 +2682,7 @@ async function main() {
   r = await api(null, 'POST', '/api/register', { email: 'will@test.com', password: 'testpass123' });
   check('wellness athlete registers as athlete role', r.status === 201 && r.json.role === 'athlete', r.json);
   const will = cookieOf(r);
+  await api(coach, 'PUT', '/api/access/' + r.json.id, { tier: 'pass' });
   r = await api(will, 'GET', '/api/checkin/today');
   check('unlinked athlete check-in state is linked:false, not an error',
     r.status === 200 && r.json.linked === false && r.json.checkin === null, r.json);
@@ -2736,6 +2742,7 @@ async function main() {
   r = await api(null, 'POST', '/api/register', { email: 'wendy@test.com', password: 'testpass123' });
   check('registering a linked email stays athlete role', r.status === 201 && r.json.role === 'athlete', r.json);
   const wendy = cookieOf(r);
+  await api(coach, 'PUT', '/api/access/' + r.json.id, { tier: 'pass' });
   r = await api(wendy, 'GET', '/api/me');
   check('link-before-register binds at registration', r.status === 200 && r.json.profileId === wendyP.id, r.json);
 
@@ -3384,8 +3391,10 @@ async function main() {
   await api(coach, 'POST', '/api/client-invites', { email: 'ben@test.com' });
   r = await api(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123' });
   const amyAcct = cookieOf(r);
+  await api(coach, 'PUT', '/api/access/' + r.json.id, { tier: 'pass' });
   r = await api(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123' });
   const benAcct = cookieOf(r);
+  await api(coach, 'PUT', '/api/access/' + r.json.id, { tier: 'pass' });
   await api(coach, 'PUT', '/api/profiles/' + amyP.id + '/link', { email: 'amy@test.com' });
   await api(coach, 'PUT', '/api/profiles/' + benP.id + '/link', { email: 'ben@test.com' });
 
@@ -4009,6 +4018,7 @@ async function main() {
   r = await api(null, 'POST', '/api/register', { email: 'data@test.com', password: 'testpass123' });
   check('data fixture athlete account registers', r.status === 201, r.status);
   const dataUser = cookieOf(r);
+  await api(coach, 'PUT', '/api/access/' + r.json.id, { tier: 'pass' });
   r = await api(coach, 'PUT', '/api/profiles/' + dataP.id + '/link', { email: 'data@test.com' });
   check('data fixture account links to the profile', r.status === 200, r.status);
   /* Dated ten days back on purpose: a check-in today would change
@@ -4540,7 +4550,13 @@ async function main() {
   for (const em of ['logan@test.com', 'lena@test.com', 'lou@test.com', 'nina@test.com']) {
     await api(coach, 'POST', '/api/client-invites', { email: em });
   }
-  const regMember = async (em) => cookieOf(await api(null, 'POST', '/api/register', { email: em, password: 'testpass123' }));
+  const regMember = async (em) => {
+    const rr = await api(null, 'POST', '/api/register', { email: em, password: 'testpass123' });
+    /* v14: the coach grants each member Lab Pass so this block tests
+       the log, not the tier gate. */
+    await api(coach, 'PUT', '/api/access/' + rr.json.id, { tier: 'pass' });
+    return cookieOf(rr);
+  };
   const logan = await regMember('logan@test.com');
   const lena = await regMember('lena@test.com');
   const lou = await regMember('lou@test.com');
@@ -5033,7 +5049,8 @@ async function main() {
     appJs.text.includes('/api/my/form-checks') && appJs.text.includes('/api/form-checks') &&
     appJs.text.includes("['formcheckqueue', 'Form Checks']") &&
     appJs.text.includes('one form check per week') &&
-    appJs.text.includes('Membership + Coaching members get priority review within 48 hours') &&
+    appJs.text.includes('Lab Pass members get priority review within 48 hours') &&
+    appJs.text.includes('Lab Training includes one form check per week') &&
     appJs.text.includes('Waiting for coach') && appJs.text.includes('sent this week') &&
     appJs.text.includes('uploadDemoVideo'));
   {
@@ -5527,6 +5544,350 @@ async function waitForServer(tries = 60) {
       }
     }
 
+    /* Membership tiers + access control (v14): the tier model, the
+       coach Access page endpoints, the member Account payload and
+       self-cancel, server-side tier gates on the member APIs, Lab
+       Pass live sessions with the in-person request, and the backup
+       round-trip of the new fields. Own server, own store. */
+    {
+      const AC_BASE = 'http://127.0.0.1:3227';
+      const AC2_BASE = 'http://127.0.0.1:3228';
+      const mkApi = (base) => async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { headers['content-type'] = 'application/json'; data = JSON.stringify(body); }
+        const res = await fetch(base + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const acApi = mkApi(AC_BASE);
+      const ac2Api = mkApi(AC2_BASE);
+      const acText = async (base, cookie, p) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        const res = await fetch(base + p, { headers });
+        return { status: res.status, text: await res.text() };
+      };
+      const AC_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-ac-'));
+      const AC2_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-ac2-'));
+      const startAc = (port, dir) => {
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, process.env, { PORT: String(port), DATA_DIR: dir, SESSION_SECRET: 'ac-secret' }),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', () => {});
+        c.stderr.on('data', () => {});
+        return c;
+      };
+      const waitAc = async (base) => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(base + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      let acChild = startAc(3227, AC_DIR);
+      let ac2Child = null;
+      try {
+        check('access server starts', await waitAc(AC_BASE));
+
+        /* Wiring: the two new views and their renderers ship. */
+        const acPage = await acText(AC_BASE, null, '/');
+        const acJs = await acText(AC_BASE, null, '/app.js');
+        check('access + live sessions views are in the served page',
+          acPage.status === 200 && acPage.text.includes('id="view-access"') &&
+          acPage.text.includes('id="access-main"') && acPage.text.includes('data-view="access"') &&
+          acPage.text.includes('id="view-livesessions"') && acPage.text.includes('id="livesessions-main"') &&
+          acPage.text.includes('data-view="livesessions"'), acPage.status);
+        check('access wiring is in the served JS',
+          acJs.text.includes('renderAccess') && acJs.text.includes('/api/access') &&
+          acJs.text.includes('renderLiveSessions') && acJs.text.includes('/api/live-sessions') &&
+          acJs.text.includes('renderMembershipCard') && acJs.text.includes('/api/my/membership') &&
+          acJs.text.includes('nav-locked') && acJs.text.includes('Locked'), acJs.text.length);
+
+        /* Accounts: coach + four members, three linked + tiered. */
+        let ar = await acApi(null, 'POST', '/api/register', { email: 'accoach@test.com', password: 'testpass123' });
+        check('access store: first account is coach', ar.status === 201 && ar.json.role === 'coach', ar.json);
+        const acCoach = cookieOf(ar);
+        const acCoachId = ar.json.id;
+        const memberEmails = ['none-ac@test.com', 'acc-ac@test.com', 'trn-ac@test.com', 'pas-ac@test.com'];
+        for (const em of memberEmails) await acApi(acCoach, 'POST', '/api/client-invites', { email: em });
+        const regAc = async (em) => {
+          const rr = await acApi(null, 'POST', '/api/register', { email: em, password: 'testpass123' });
+          return { jar: cookieOf(rr), id: rr.json.id };
+        };
+        const noneM = await regAc('none-ac@test.com');
+        const accM = await regAc('acc-ac@test.com');
+        const trnM = await regAc('trn-ac@test.com');
+        const pasM = await regAc('pas-ac@test.com');
+        const mkProf = async (firstName, lastName) =>
+          (await acApi(acCoach, 'POST', '/api/profiles', { firstName, lastName, events: ['sprinter'] })).json.profile;
+        const accP = await mkProf('Ann', 'Access');
+        const trnP = await mkProf('Tess', 'Training');
+        const pasP = await mkProf('Pam', 'Pass');
+        await acApi(acCoach, 'PUT', '/api/profiles/' + accP.id + '/link', { email: 'acc-ac@test.com' });
+        await acApi(acCoach, 'PUT', '/api/profiles/' + trnP.id + '/link', { email: 'trn-ac@test.com' });
+        await acApi(acCoach, 'PUT', '/api/profiles/' + pasP.id + '/link', { email: 'pas-ac@test.com' });
+
+        /* Tier model defaults: a new member carries no tier. */
+        ar = await acApi(noneM.jar, 'GET', '/api/my/membership');
+        check('new member membership: tier null, status active, not active access',
+          ar.status === 200 && ar.json.membership.tier === null &&
+          ar.json.membership.status === 'active' && ar.json.membership.active === false &&
+          ar.json.membership);
+        check('membership payload carries the account + the tier catalog',
+          ar.json.account.email === 'none-ac@test.com' && ar.json.account.profileId === null &&
+          Array.isArray(ar.json.tiers) && ar.json.tiers.length === 3 &&
+          ar.json.tiers[0].name === 'Lab Access' && ar.json.tiers[0].priceLabel === '$10/month' &&
+          ar.json.tiers[1].name === 'Lab Training' && ar.json.tiers[2].name === 'Lab Pass' &&
+          ar.json.tiers[2].includes.some(x => x.includes('Live web sessions')), ar.json.tiers);
+        ar = await acApi(noneM.jar, 'GET', '/api/my/membership');
+        check('an unlinked member reads profileName null, not an error',
+          ar.status === 200 && ar.json.account.profileName === null, ar.json.account);
+        ar = await acApi(accM.jar, 'GET', '/api/my/membership');
+        check('a linked member reads their profile name',
+          ar.status === 200 && ar.json.account.profileName === 'Ann Access', ar.json.account);
+        ar = await acApi(acCoach, 'GET', '/api/my/membership');
+        check('coach membership payload is null membership, coach account',
+          ar.status === 200 && ar.json.membership === null && ar.json.account.role === 'coach', ar.json);
+        ar = await acApi(null, 'GET', '/api/my/membership');
+        check('membership payload without login is 401', ar.status === 401, ar.status);
+
+        /* The gates, tier by tier. No tier first. */
+        ar = await acApi(noneM.jar, 'GET', '/api/content');
+        check('no-tier member: content is 403 naming the membership need',
+          ar.status === 403 && ar.json.needsTier === 'access' &&
+          /membership/i.test(ar.json.error || ''), ar.json);
+        for (const [method, p, body] of [
+          ['GET', '/api/checkin/today'], ['POST', '/api/checkin', { sleep: 8, soreness: 2, energy: 3 }],
+          ['GET', '/api/my/week'], ['GET', '/api/my/logs'], ['GET', '/api/my/speed-report'],
+          ['GET', '/api/my/loads'], ['GET', '/api/my/form-checks'], ['GET', '/api/live-sessions'],
+        ]) {
+          ar = await acApi(noneM.jar, method, p, body);
+          check('no-tier member is gated: ' + method + ' ' + p, ar.status === 403, ar.status);
+        }
+        ar = await acApi(noneM.jar, 'GET', '/api/announcements');
+        check('no-tier member still reads announcements', ar.status === 200, ar.status);
+        ar = await acApi(noneM.jar, 'GET', '/api/my/intake');
+        check('no-tier member still reads their intake state', ar.status === 200, ar.status);
+
+        /* Coach grants the three tiers. */
+        ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { tier: 'access' });
+        check('coach sets Lab Access', ar.status === 200 && ar.json.membership.tier === 'access' && ar.json.membership.active === true, ar.json);
+        await acApi(acCoach, 'PUT', '/api/access/' + trnM.id, { tier: 'training' });
+        await acApi(acCoach, 'PUT', '/api/access/' + pasM.id, { tier: 'pass' });
+
+        /* Access tier: content family open; training + pass closed. */
+        ar = await acApi(accM.jar, 'GET', '/api/content');
+        check('access member reads content', ar.status === 200 && !!ar.json.weeks, ar.status);
+        ar = await acApi(accM.jar, 'GET', '/api/checkin/today');
+        check('access member reads check-in state', ar.status === 200 && ar.json.linked === true, ar.json);
+        ar = await acApi(accM.jar, 'GET', '/api/my/week');
+        check('access member reads This Week', ar.status === 200, ar.status);
+        ar = await acApi(accM.jar, 'GET', '/api/my/logs');
+        check('access member reads My Log', ar.status === 200 && ar.json.linked === true, ar.json);
+        ar = await acApi(accM.jar, 'GET', '/api/my/speed-report');
+        check('access member reads their Speed Report', ar.status === 200 && ar.json.linked === true && Array.isArray(ar.json.tests), ar.status);
+        ar = await acApi(accM.jar, 'GET', '/api/my/loads');
+        check('access member: loads are 403 naming Lab Training',
+          ar.status === 403 && ar.json.needsTier === 'training' && /Lab Training/.test(ar.json.error || ''), ar.json);
+        ar = await acApi(accM.jar, 'GET', '/api/my/form-checks');
+        check('access member: form checks are 403', ar.status === 403 && ar.json.needsTier === 'training', ar.json);
+        ar = await acApi(accM.jar, 'POST', '/api/my/form-checks', { videoUrl: 'https://res.cloudinary.com/l8qblw99/video/upload/fc-ac.mp4' });
+        check('access member: form check create is 403', ar.status === 403, ar.status);
+        ar = await acApi(accM.jar, 'GET', '/api/live-sessions');
+        check('access member: live sessions are 403 naming Lab Pass',
+          ar.status === 403 && ar.json.needsTier === 'pass' && /Lab Pass/.test(ar.json.error || ''), ar.json);
+
+        /* Training tier: loads + form checks open; live still closed. */
+        ar = await acApi(trnM.jar, 'GET', '/api/my/loads');
+        check('training member reads loads', ar.status === 200, ar.status);
+        ar = await acApi(trnM.jar, 'POST', '/api/my/form-checks', { videoUrl: 'https://res.cloudinary.com/l8qblw99/video/upload/fc-ac.mp4', note: 'Check my drive phase' });
+        check('training member files a form check', ar.status === 201, ar.status);
+        ar = await acApi(trnM.jar, 'GET', '/api/my/form-checks');
+        check('training member lists their form checks', ar.status === 200 && ar.json.formChecks.length === 1, ar.json);
+        ar = await acApi(trnM.jar, 'GET', '/api/live-sessions');
+        check('training member: live sessions are 403', ar.status === 403 && ar.json.needsTier === 'pass', ar.json);
+
+        /* Coach is never gated. */
+        ar = await acApi(acCoach, 'GET', '/api/content');
+        check('coach reads content (never gated)', ar.status === 200, ar.status);
+        ar = await acApi(acCoach, 'GET', '/api/form-checks');
+        check('coach reads the form check queue (never gated)', ar.status === 200, ar.status);
+
+        /* Coach Access page endpoints. */
+        ar = await acApi(noneM.jar, 'GET', '/api/access');
+        check('access list is 403 for members', ar.status === 403, ar.status);
+        ar = await acApi(null, 'GET', '/api/access');
+        check('access list is 401 logged out', ar.status === 401, ar.status);
+        ar = await acApi(acCoach, 'GET', '/api/access');
+        const rows = ar.json.members || [];
+        const rowFor = (em) => rows.find(x => x.email === em) || {};
+        check('access list shows every member with tier, status, created date',
+          ar.status === 200 && rows.length === 4 &&
+          rowFor('acc-ac@test.com').tier === 'access' && rowFor('acc-ac@test.com').tierName === 'Lab Access' &&
+          rowFor('acc-ac@test.com').priceLabel === '$10/month' && rowFor('acc-ac@test.com').active === true &&
+          rowFor('trn-ac@test.com').tier === 'training' && rowFor('pas-ac@test.com').tier === 'pass' &&
+          rowFor('none-ac@test.com').tier === null && typeof rowFor('none-ac@test.com').createdAt === 'string' &&
+          rowFor('acc-ac@test.com').profileName === 'Ann Access', rows.map(x => x.email + ':' + x.tier));
+        check('access list records the grant in history',
+          (rowFor('acc-ac@test.com').history || []).some(h => h.action === 'set-tier' && h.by === 'coach' && h.tier === 'access'),
+          rowFor('acc-ac@test.com').history);
+        ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { tier: 'gold' });
+        check('setting an unknown tier is 400', ar.status === 400, ar.status);
+        ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, {});
+        check('an access change with neither field is 400', ar.status === 400, ar.status);
+        ar = await acApi(acCoach, 'PUT', '/api/access/nope', { tier: 'access' });
+        check('an access change for an unknown account is 404', ar.status === 404, ar.status);
+        ar = await acApi(acCoach, 'PUT', '/api/access/' + acCoachId, { tier: 'access' });
+        check('a coach account cannot be tiered (400)', ar.status === 400, ar.status);
+        ar = await acApi(noneM.jar, 'PUT', '/api/access/' + accM.id, { tier: 'pass' });
+        check('a member cannot set tiers (403)', ar.status === 403, ar.status);
+
+        /* Tier change applies at once: Access -> Training opens loads. */
+        ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { tier: 'training' });
+        check('coach upgrades Access to Training', ar.status === 200 && ar.json.membership.tier === 'training', ar.json);
+        ar = await acApi(accM.jar, 'GET', '/api/my/loads');
+        check('the upgrade opens loads immediately', ar.status === 200, ar.status);
+
+        /* Coach cancel + reactivate. */
+        ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { status: 'cancelled' });
+        check('coach cancels a membership', ar.status === 200 && ar.json.membership.status === 'cancelled' && ar.json.membership.active === false, ar.json);
+        ar = await acApi(accM.jar, 'GET', '/api/content');
+        check('a cancelled member loses content at once', ar.status === 403, ar.status);
+        ar = await acApi(accM.jar, 'GET', '/api/my/membership');
+        check('the cancelled member still reads their membership (login stays)',
+          ar.status === 200 && ar.json.membership.status === 'cancelled' && ar.json.membership.tier === 'training', ar.json);
+        ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { status: 'active' });
+        check('coach reactivates a membership', ar.status === 200 && ar.json.membership.active === true, ar.json);
+        ar = await acApi(accM.jar, 'GET', '/api/content');
+        check('reactivation restores content (tier was kept)', ar.status === 200, ar.status);
+        ar = await acApi(acCoach, 'GET', '/api/access');
+        const accRowFresh = (ar.json.members || []).find(x => x.email === 'acc-ac@test.com') || {};
+        const accHist = (accRowFresh.history || []).map(h => h.action);
+        check('history records set-tier, cancel, reactivate in order',
+          accHist.join(',') === 'set-tier,set-tier,cancel,reactivate', accHist);
+
+        /* Live sessions: coach CRUD + validation. */
+        ar = await acApi(pasM.jar, 'POST', '/api/live-sessions', { title: 'Nope', startsAt: '2026-11-05T18:00' });
+        check('a member cannot post a live session (403)', ar.status === 403, ar.status);
+        ar = await acApi(acCoach, 'POST', '/api/live-sessions', { title: '', startsAt: '2026-11-05T18:00' });
+        check('a live session without a title is 400', ar.status === 400, ar.status);
+        ar = await acApi(acCoach, 'POST', '/api/live-sessions', { title: 'X', startsAt: 'banana' });
+        check('a live session with a bad date is 400', ar.status === 400, ar.status);
+        ar = await acApi(acCoach, 'POST', '/api/live-sessions', { title: 'X', startsAt: '2026-11-05T18:00', joinLink: 'notaurl' });
+        check('a live session with a bad join link is 400', ar.status === 400, ar.status);
+        ar = await acApi(acCoach, 'POST', '/api/live-sessions', { title: 'Sprint mechanics live', startsAt: '2026-11-05T18:00', joinLink: 'https://meet.example.com/lab', note: 'Bring questions' });
+        check('coach posts a live session', ar.status === 201 && ar.json.session.title === 'Sprint mechanics live', ar.json);
+        const lsId = ar.json.session.id;
+        ar = await acApi(acCoach, 'PUT', '/api/live-sessions/' + lsId, { title: 'Sprint mechanics live + Q and A', startsAt: '2026-11-05T18:30', joinLink: 'https://meet.example.com/lab', note: '' });
+        check('coach edits a live session', ar.status === 200 && ar.json.session.title.includes('Q and A'), ar.json);
+        ar = await acApi(pasM.jar, 'GET', '/api/live-sessions');
+        check('pass member sees the session list and no request yet',
+          ar.status === 200 && ar.json.sessions.length === 1 && ar.json.myRequest === null &&
+          ar.json.sessions[0].joinLink === 'https://meet.example.com/lab', ar.json);
+
+        /* The in-person request: file, dedupe, coach reads, dismiss. */
+        ar = await acApi(pasM.jar, 'POST', '/api/live-sessions/request', {});
+        check('pass member files an in-person request', ar.status === 201 && !!ar.json.request.id, ar.json);
+        const reqId = ar.json.request.id;
+        ar = await acApi(pasM.jar, 'POST', '/api/live-sessions/request', {});
+        check('a second request returns the same open request (200, no duplicate)',
+          ar.status === 200 && ar.json.request.id === reqId, ar.json);
+        ar = await acApi(trnM.jar, 'POST', '/api/live-sessions/request', {});
+        check('a training member cannot file the request (403)', ar.status === 403, ar.status);
+        ar = await acApi(acCoach, 'GET', '/api/live-sessions');
+        check('coach sees the request with the member name',
+          ar.status === 200 && ar.json.requests.length === 1 &&
+          ar.json.requests[0].memberName === 'Pam Pass' && ar.json.requests[0].email === 'pas-ac@test.com', ar.json.requests);
+        ar = await acApi(pasM.jar, 'DELETE', '/api/live-requests/' + reqId);
+        check('a member cannot dismiss requests (403)', ar.status === 403, ar.status);
+        ar = await acApi(acCoach, 'DELETE', '/api/live-requests/' + reqId);
+        check('coach dismisses the request', ar.status === 200, ar.status);
+        ar = await acApi(pasM.jar, 'GET', '/api/live-sessions');
+        check('after dismissal the member can request again (myRequest null)',
+          ar.status === 200 && ar.json.myRequest === null, ar.json);
+
+        /* Member self-cancel: immediate lock, recorded as the member. */
+        ar = await acApi(acCoach, 'POST', '/api/my/membership/cancel', {});
+        check('a coach cannot self-cancel (400)', ar.status === 400, ar.status);
+        ar = await acApi(trnM.jar, 'POST', '/api/my/membership/cancel', {});
+        check('member self-cancel saves', ar.status === 200 && ar.json.membership.status === 'cancelled' && ar.json.membership.active === false, ar.json);
+        ar = await acApi(trnM.jar, 'GET', '/api/my/form-checks');
+        check('self-cancel locks tier features at once', ar.status === 403, ar.status);
+        ar = await acApi(trnM.jar, 'POST', '/api/my/membership/cancel', {});
+        check('self-cancel is idempotent', ar.status === 200 && ar.json.membership.status === 'cancelled', ar.json);
+        ar = await acApi(acCoach, 'GET', '/api/access');
+        const trnRow = (ar.json.members || []).find(x => x.email === 'trn-ac@test.com') || {};
+        const trnLast = (trnRow.history || [])[trnRow.history.length - 1] || {};
+        check('the access page shows the self-cancel, recorded as the member',
+          trnRow.status === 'cancelled' && trnLast.action === 'cancel' && trnLast.by === 'member', trnRow);
+
+        /* Backup: memberships projection + live data ride along. */
+        await acApi(pasM.jar, 'POST', '/api/live-sessions/request', {});
+        const bkAc = JSON.parse((await acText(AC_BASE, acCoach, '/api/export/backup')).text);
+        const ms = bkAc.data.memberships || [];
+        const msFor = (em) => ms.find(x => x.email === em) || {};
+        check('backup carries memberships keyed by email, no credentials',
+          Array.isArray(bkAc.data.memberships) && ms.length === 3 &&
+          msFor('pas-ac@test.com').tier === 'pass' && msFor('pas-ac@test.com').membershipStatus === 'active' &&
+          msFor('trn-ac@test.com').membershipStatus === 'cancelled' &&
+          Array.isArray(msFor('pas-ac@test.com').membershipHistory) &&
+          !JSON.stringify(ms).includes('passwordHash') && !('users' in bkAc.data), ms.map(x => x.email));
+        check('backup carries live sessions + requests',
+          (bkAc.data.liveSessions || []).some(x => x.id === lsId) &&
+          (bkAc.data.liveRequests || []).length === 1 &&
+          bkAc.data.liveRequests[0].email === 'pas-ac@test.com', bkAc.data.liveRequests);
+
+        /* Round-trip: a fresh store imports the memberships onto
+           matching accounts + the live sessions. */
+        ac2Child = startAc(3228, AC2_DIR);
+        check('access import server starts', await waitAc(AC2_BASE));
+        let br = await ac2Api(null, 'POST', '/api/register', { email: 'accoach2@test.com', password: 'testpass123' });
+        const ac2Coach = cookieOf(br);
+        for (const em of ['pas-ac@test.com', 'trn-ac@test.com']) {
+          await ac2Api(ac2Coach, 'POST', '/api/client-invites', { email: em });
+          await ac2Api(null, 'POST', '/api/register', { email: em, password: 'testpass123' });
+        }
+        br = await ac2Api(ac2Coach, 'POST', '/api/import/backup', bkAc);
+        check('import applies memberships onto matching accounts',
+          br.status === 200 && !!br.json.counts.memberships &&
+          (br.json.counts.memberships.added + br.json.counts.memberships.updated) >= 2 &&
+          (br.json.counts.liveSessions.added >= 1), br.json && br.json.counts);
+        br = await ac2Api(ac2Coach, 'GET', '/api/access');
+        const rows2 = br.json.members || [];
+        const row2For = (em) => rows2.find(x => x.email === em) || {};
+        check('imported tiers land: pass active, training cancelled, history carried',
+          row2For('pas-ac@test.com').tier === 'pass' && row2For('pas-ac@test.com').active === true &&
+          row2For('trn-ac@test.com').status === 'cancelled' &&
+          (row2For('pas-ac@test.com').history || []).length >= 1, rows2);
+        br = await ac2Api(ac2Coach, 'GET', '/api/live-sessions');
+        check('imported live session + request land in the new store',
+          (br.json.sessions || []).some(x => x.title.includes('Sprint mechanics')) &&
+          (br.json.requests || []).length === 1, br.json);
+
+        /* Coach deletes the session (cleanup of the CRUD story). */
+        ar = await acApi(acCoach, 'DELETE', '/api/live-sessions/' + lsId);
+        check('coach removes a live session', ar.status === 200, ar.status);
+        ar = await acApi(pasM.jar, 'GET', '/api/live-sessions');
+        check('the removed session leaves the member list', ar.status === 200 && ar.json.sessions.length === 0, ar.json);
+      } finally {
+        acChild.kill('SIGKILL');
+        if (ac2Child) ac2Child.kill('SIGKILL');
+        fs.rmSync(AC_DIR, { recursive: true, force: true });
+        fs.rmSync(AC2_DIR, { recursive: true, force: true });
+      }
+    }
+
     /* Env-seeded invites (COACH_INVITE_EMAILS): a fresh store gets the
        invites, a seeded email registers as coach, and a seeded invite
        the owner removes does NOT come back after a restart with the
@@ -5693,8 +6054,10 @@ async function waitForServer(tries = 60) {
         await dApi(dCoach, 'POST', '/api/client-invites', { email: 'ben@test.com' });
         dr = await dApi(null, 'POST', '/api/register', { email: 'amy@test.com', password: 'testpass123' });
         const dAmy = cookieOf(dr);
+        await dApi(dCoach, 'PUT', '/api/access/' + dr.json.id, { tier: 'pass' });
         dr = await dApi(null, 'POST', '/api/register', { email: 'ben@test.com', password: 'testpass123' });
         const dBen = cookieOf(dr);
+        await dApi(dCoach, 'PUT', '/api/access/' + dr.json.id, { tier: 'pass' });
 
         dr = await dApi(dAmy, 'GET', '/api/digest');
         check('digest is 403 for athletes', dr.status === 403, dr.status);
@@ -6448,10 +6811,13 @@ async function waitForServer(tries = 60) {
       }
       pr = await plApi(null, 'POST', '/api/register', { email: 'esther@test.com', password: 'testpass123' });
       const plEsther = cookieOf(pr);
+      await plApi(plCoach, 'PUT', '/api/access/' + pr.json.id, { tier: 'pass' });
       pr = await plApi(null, 'POST', '/api/register', { email: 'mia@test.com', password: 'testpass123' });
       const plMia = cookieOf(pr);
+      await plApi(plCoach, 'PUT', '/api/access/' + pr.json.id, { tier: 'pass' });
       pr = await plApi(null, 'POST', '/api/register', { email: 'solo@test.com', password: 'testpass123' });
       const plSolo = cookieOf(pr);
+      await plApi(plCoach, 'PUT', '/api/access/' + pr.json.id, { tier: 'pass' });
 
       pr = await plApi(plCoach, 'POST', '/api/groups', { name: 'PL Sprinters' });
       const plGroupA = pr.json.group;
@@ -7287,7 +7653,11 @@ async function waitForServer(tries = 60) {
       for (const em of ['sara-sr@test.com', 'ben-sr@test.com', 'una-sr@test.com']) {
         await srApi(srCoach, 'POST', '/api/client-invites', { email: em });
       }
-      const regSr = async (em) => cookieOf(await srApi(null, 'POST', '/api/register', { email: em, password: 'testpass123' }));
+      const regSr = async (em) => {
+        const rr = await srApi(null, 'POST', '/api/register', { email: em, password: 'testpass123' });
+        await srApi(srCoach, 'PUT', '/api/access/' + rr.json.id, { tier: 'pass' });
+        return cookieOf(rr);
+      };
       const sara = await regSr('sara-sr@test.com');
       const ben = await regSr('ben-sr@test.com');
       const unaSr = await regSr('una-sr@test.com');
@@ -7576,6 +7946,7 @@ async function waitForServer(tries = 60) {
       await fcApi(fcCoach, 'POST', '/api/client-invites', { email: 'wren-week@test.com' });
       fr = await fcApi(null, 'POST', '/api/register', { email: 'wren-week@test.com', password: 'testpass123' });
       const wren = cookieOf(fr);
+      await fcApi(fcCoach, 'PUT', '/api/access/' + fr.json.id, { tier: 'pass' });
       await fcApi(fcCoach, 'PUT', '/api/profiles/' + wrenP.id + '/link', { email: 'wren-week@test.com' });
       const FCW_URL = 'https://res.cloudinary.com/l8qblw99/video/upload/fc-wren.mp4';
       fr = await fcApi(wren, 'POST', '/api/my/form-checks', { videoUrl: FCW_URL, context: 'This week one' });

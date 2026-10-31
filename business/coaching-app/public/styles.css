@@ -2141,3 +2141,21 @@ body.tv-mode {
   text-transform: uppercase; color: var(--red-dark);
 }
 @media (max-width: 520px) { .theme-preview { width: 96px; } }
+
+/* ---- Membership tiers (v14): nav locks + Access page ----
+   A locked nav item stays visible and readable — the member can
+   see what exists and what it would take to open it — it just
+   carries a plain Locked tag and sits dimmed. */
+.nav-locked { opacity: .55; }
+.lock-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 6px;
+  border: 1px solid var(--line); border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; vertical-align: middle;
+}
+.tier-lock-banner { border-color: var(--red); }
+.access-controls {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: end;
+  margin-top: 10px;
+}
+.access-controls label { margin: 0; }

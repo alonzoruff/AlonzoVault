@@ -94,8 +94,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v13',
-  cache: 'ruffin-performance-v13',
+  version: 'v14',
+  cache: 'ruffin-performance-v14',
 };
 
 /* ------------------------------------------------------------------ */
@@ -146,11 +146,115 @@ let db = {
   memberLogs: [],
   formChecks: [],
   floorProgress: {},
+  liveSessions: [],
+  liveRequests: [],
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
    one; anything missing or unrecognized reads as active. */
 const PROFILE_STATUSES = ['active', 'injured', 'inactive'];
+
+/* Membership tiers (v14): the three Lab tiers the checkout sells.
+   The tier lives on the member's account (user.tier), set by the
+   coach on the Access page today and by the Stripe webhook later.
+   MEMBERSHIP_TIERS is the rank order — a higher tier includes
+   everything below it. Prices here are display values for the
+   account and Access pages; the checkout resolves its own Stripe
+   Price IDs from CHECKOUT_TIERS below and the two must agree. */
+const MEMBERSHIP_TIERS = ['access', 'training', 'pass'];
+const TIER_INFO = {
+  access: { name: 'Lab Access', price: 10, priceLabel: '$10/month' },
+  training: { name: 'Lab Training', price: 49.99, priceLabel: '$49.99/month' },
+  pass: { name: 'Lab Pass', price: 99, priceLabel: '$99/month' },
+};
+const TIER_INCLUDES = {
+  access: [
+    'The Lab portal and the training library (Lab Sessions)',
+    'Inside the Lab technique and coaching videos',
+    'Learn content: definitions, the exercise library, nutrition, and coach education',
+    'Your Speed Report, updated at every re-test',
+    'Workout log and daily check-in',
+    'This Week: your training week at a glance',
+  ],
+  training: [
+    'Personalized training, built for you',
+    'Your program adjusted as you progress',
+    'Form checks with replies from your coach',
+    'Your lifting loads, worked out from your own maxes',
+  ],
+  pass: [
+    'Live web sessions with your coach',
+    'The opportunity for in-person sessions',
+  ],
+};
+function tierIncludes(tier) {
+  if (!MEMBERSHIP_TIERS.includes(tier)) return [];
+  const out = [];
+  for (const t of MEMBERSHIP_TIERS) {
+    out.push(...TIER_INCLUDES[t]);
+    if (t === tier) break;
+  }
+  return out;
+}
+/* The tier a member can actually use right now: their recorded
+   tier while the membership is active, else null. A cancelled
+   membership keeps its tier on the record (so reactivating is one
+   tap) but grants nothing. Coaches are never gated — callers use
+   hasTierAccess, which treats a coach as having every tier. */
+function effectiveTier(u) {
+  if (!u || u.role === 'coach') return null;
+  if (u.membershipStatus === 'cancelled') return null;
+  return MEMBERSHIP_TIERS.includes(u.tier) ? u.tier : null;
+}
+function hasTierAccess(u, need) {
+  if (!u) return false;
+  if (u.role === 'coach') return true;
+  const have = effectiveTier(u);
+  if (!have) return false;
+  return MEMBERSHIP_TIERS.indexOf(have) >= MEMBERSHIP_TIERS.indexOf(need);
+}
+/* The member-facing membership shape: what the Account tab shows
+   and what the client nav mirrors its locks from. Stripe ids are
+   deliberately not in here — the coach Access page carries those. */
+function publicMembership(u) {
+  const tier = MEMBERSHIP_TIERS.includes(u.tier) ? u.tier : null;
+  const info = tier ? TIER_INFO[tier] : null;
+  return {
+    tier,
+    tierName: info ? info.name : null,
+    price: info ? info.price : null,
+    priceLabel: info ? info.priceLabel : null,
+    status: u.membershipStatus === 'cancelled' ? 'cancelled' : 'active',
+    active: effectiveTier(u) !== null,
+    tierUpdatedAt: u.tierUpdatedAt || null,
+    includes: tierIncludes(tier),
+  };
+}
+/* One membership change, recorded: every set-tier, cancel, and
+   reactivate lands in the account's history with when, who did it
+   ('coach' or 'member'), and the resulting tier + status. */
+function applyMembershipChange(u, fields, actor, action) {
+  const now = new Date().toISOString();
+  if ('tier' in fields) u.tier = fields.tier;
+  if ('status' in fields) u.membershipStatus = fields.status;
+  u.tierUpdatedAt = now;
+  if (!Array.isArray(u.membershipHistory)) u.membershipHistory = [];
+  u.membershipHistory.push({
+    at: now, by: actor.by, byEmail: actor.email, action,
+    tier: u.tier || null, status: u.membershipStatus,
+  });
+}
+/* The gate every member-facing endpoint runs through. Answers
+   true when the request may proceed; otherwise it has already
+   sent a plain 403 naming the membership that is needed. */
+function tierGate(res, user, need) {
+  if (hasTierAccess(user, need)) return true;
+  sendJson(res, 403, {
+    error: 'This is part of ' + TIER_INFO[need].name + '. Your membership does not include it right now — see the Account tab for your membership and your options.',
+    needsTier: need,
+  });
+  return false;
+}
 
 function migrate() {
   db.users = Array.isArray(db.users) ? db.users : [];
@@ -281,8 +385,24 @@ function migrate() {
   // note, context, status ('pending'|'replied'), reply, createdAt,
   // updatedAt } — a member submits a video for a coach to review.
   db.formChecks = Array.isArray(db.formChecks) ? db.formChecks : [];
+  // Lab Pass live sessions (coach-posted: title, date/time, join
+  // link, note) and the in-person requests members file from that
+  // view ({ id, userId, email, profileId, profileName, createdAt }).
+  db.liveSessions = Array.isArray(db.liveSessions) ? db.liveSessions : [];
+  db.liveRequests = Array.isArray(db.liveRequests) ? db.liveRequests : [];
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
+    // Membership (v14): every account carries the tier fields; a
+    // store written before tiers existed defaults to no tier (no
+    // paid access), status active, no Stripe binding, no history.
+    // The webhook stage fills the Stripe ids later — nothing here
+    // ever invents a tier for an existing account.
+    if (!MEMBERSHIP_TIERS.includes(u.tier)) u.tier = null;
+    if (u.membershipStatus !== 'cancelled') u.membershipStatus = 'active';
+    if (typeof u.tierUpdatedAt !== 'string' || !u.tierUpdatedAt) u.tierUpdatedAt = null;
+    if (typeof u.stripeCustomerId !== 'string' || !u.stripeCustomerId) u.stripeCustomerId = null;
+    if (typeof u.stripeSubscriptionId !== 'string' || !u.stripeSubscriptionId) u.stripeSubscriptionId = null;
+    if (!Array.isArray(u.membershipHistory)) u.membershipHistory = [];
     // The first account is the head coach (owner). Stores written
     // before invites existed have no marker — the first user owns it.
     if (u.isOwner === undefined) u.isOwner = i === 0;
@@ -2982,6 +3102,7 @@ const BACKUP_ARRAY_KEYS = {
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
   announcements: 'id', memberLogs: 'id', formChecks: 'id',
+  liveSessions: 'id', liveRequests: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
@@ -3010,6 +3131,24 @@ function buildBackupData() {
     announcements: db.announcements, memberLogs: db.memberLogs,
     formChecks: db.formChecks,
     floorProgress: db.floorProgress,
+    liveSessions: db.liveSessions, liveRequests: db.liveRequests,
+    /* Membership state rides along WITHOUT the accounts
+       themselves (a backup never carries logins or password
+       hashes): one record per member account that carries any
+       membership data, keyed by email so an import can lay it
+       back onto the account with that email. */
+    memberships: db.users
+      .filter(u => u.role === 'athlete' && (u.tier || u.membershipStatus === 'cancelled'
+        || u.stripeCustomerId || u.stripeSubscriptionId
+        || (Array.isArray(u.membershipHistory) && u.membershipHistory.length)))
+      .map(u => ({
+        email: u.email, tier: u.tier || null,
+        membershipStatus: u.membershipStatus === 'cancelled' ? 'cancelled' : 'active',
+        tierUpdatedAt: u.tierUpdatedAt || null,
+        stripeCustomerId: u.stripeCustomerId || null,
+        stripeSubscriptionId: u.stripeSubscriptionId || null,
+        membershipHistory: Array.isArray(u.membershipHistory) ? u.membershipHistory : [],
+      })),
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -3045,6 +3184,14 @@ function validateBackupData(data) {
   if (data.customWorkoutsSeeded !== undefined
     && typeof data.customWorkoutsSeeded !== 'boolean') {
     return 'The backup\'s "customWorkoutsSeeded" should be true or false.';
+  }
+  if (data.memberships !== undefined) {
+    if (!Array.isArray(data.memberships)) return 'The backup\'s "memberships" should be a list.';
+    for (const rec of data.memberships) {
+      if (!isPlainObj(rec) || typeof rec.email !== 'string' || !rec.email) {
+        return 'A record in "memberships" is missing its email — the file looks damaged.';
+      }
+    }
   }
   return null;
 }
@@ -3107,6 +3254,38 @@ function mergeBackupData(data) {
     const c = { added: 0, updated: 0 };
     mergeLeaves(db[k], data[k], c);
     tally(k, c);
+  }
+  if (data.memberships !== undefined) {
+    const c = { added: 0, updated: 0 };
+    for (const rec of data.memberships) {
+      const email = String(rec.email || '').trim().toLowerCase();
+      const target = email ? db.users.find(u => u.email === email && u.role === 'athlete') : null;
+      if (!target) continue;
+      const next = {
+        tier: MEMBERSHIP_TIERS.includes(rec.tier) ? rec.tier : null,
+        membershipStatus: rec.membershipStatus === 'cancelled' ? 'cancelled' : 'active',
+        tierUpdatedAt: typeof rec.tierUpdatedAt === 'string' && rec.tierUpdatedAt ? rec.tierUpdatedAt : null,
+        stripeCustomerId: typeof rec.stripeCustomerId === 'string' && rec.stripeCustomerId ? rec.stripeCustomerId : null,
+        stripeSubscriptionId: typeof rec.stripeSubscriptionId === 'string' && rec.stripeSubscriptionId ? rec.stripeSubscriptionId : null,
+        membershipHistory: Array.isArray(rec.membershipHistory)
+          ? rec.membershipHistory.filter(isPlainObj) : [],
+      };
+      const had = !!(target.tier || target.membershipStatus === 'cancelled'
+        || target.stripeCustomerId || target.stripeSubscriptionId
+        || (Array.isArray(target.membershipHistory) && target.membershipHistory.length));
+      const cur = {
+        tier: target.tier || null, membershipStatus: target.membershipStatus,
+        tierUpdatedAt: target.tierUpdatedAt || null,
+        stripeCustomerId: target.stripeCustomerId || null,
+        stripeSubscriptionId: target.stripeSubscriptionId || null,
+        membershipHistory: Array.isArray(target.membershipHistory) ? target.membershipHistory : [],
+      };
+      if (JSON.stringify(cur) !== JSON.stringify(next)) {
+        Object.assign(target, next);
+        if (had) c.updated++; else c.added++;
+      }
+    }
+    tally('memberships', c);
   }
   if (data.customWorkoutsSeeded !== undefined) {
     const c = { added: 0, updated: 0 };
@@ -3274,11 +3453,54 @@ async function createCheckoutSession(price) {
 /* ------------------------------------------------------------------ */
 /* API                                                                 */
 /* ------------------------------------------------------------------ */
+function publicLiveSession(x) {
+  return {
+    id: x.id, title: x.title, startsAt: x.startsAt,
+    joinLink: x.joinLink || '', note: x.note || '',
+    createdAt: x.createdAt, updatedAt: x.updatedAt,
+  };
+}
+function publicLiveRequest(r) {
+  return {
+    id: r.id, userId: r.userId, email: r.email,
+    profileId: r.profileId || null, profileName: r.profileName || null,
+    memberName: r.profileName || r.email,
+    createdAt: r.createdAt,
+  };
+}
+function validateLiveSession(body) {
+  const title = clean(body.title, 120);
+  if (!title) return { error: 'A live session needs a title.' };
+  const startsAt = clean(body.startsAt, 40);
+  if (!startsAt || Number.isNaN(Date.parse(startsAt))) {
+    return { error: 'A live session needs a date and time.' };
+  }
+  const joinLink = clean(body.joinLink, 500);
+  if (joinLink && !/^https?:\/\//i.test(joinLink)) {
+    return { error: 'The join link should start with http:// or https://' };
+  }
+  const note = clean(body.note, 300);
+  return { fields: { title, startsAt, joinLink, note } };
+}
+
 async function handleApi(req, res, url) {
   const p = url.pathname;
   const q = url.searchParams;
 
   if (p === '/api/content' && req.method === 'GET') {
+    /* The content payload IS the library, the videos, and the
+       learn content, so it sits behind the tier gate for members:
+       a signed-in member whose membership is not active (no tier,
+       or cancelled) gets the plain 403 below. Signed-out reads
+       stay public (the landing page and the TV board load it
+       before any login) and coaches are never gated. */
+    const viewer = readSession(req);
+    if (viewer && viewer.role !== 'coach' && !effectiveTier(viewer)) {
+      return sendJson(res, 403, {
+        error: 'The Lab content needs a membership. Your account does not have an active tier right now — see the Account tab for your membership and your options.',
+        needsTier: 'access',
+      });
+    }
     return sendJson(res, 200, Object.assign({}, CONTENT, { videoUpload: VIDEO_UPLOAD, brand: BRAND }));
   }
 
@@ -3390,6 +3612,12 @@ async function handleApi(req, res, url) {
       role: firstAccount || coachInvited ? 'coach' : 'athlete',
       isOwner: firstAccount,
       profileId: null,
+      // Membership starts empty: no tier, nothing billed, nothing
+      // to cancel. The coach grants a tier from the Access page
+      // (the Stripe webhook will do it automatically later).
+      tier: null, membershipStatus: 'active', tierUpdatedAt: null,
+      stripeCustomerId: null, stripeSubscriptionId: null,
+      membershipHistory: [],
     };
     // If a coach already linked this email to a roster profile, the
     // new account is born bound to it (daily check-in works at once).
@@ -3429,6 +3657,42 @@ async function handleApi(req, res, url) {
   /* Everything below requires a login. */
   const user = readSession(req);
   if (!user) return sendJson(res, 401, { error: 'Please log in first.' });
+
+  /* ---------- my membership (the Account tab's source) ----------
+     The member reads their own account details and membership
+     here, and cancels from here. Cancelling is the member's own
+     act: it ends tier access at once (the entitlement helper reads
+     status live), keeps the login and all their data, and lands
+     in the membership history the coach sees on the Access page.
+     When the account has a Stripe subscription (webhook stage),
+     cancelling there will also cancel it in Stripe — the status
+     recorded here is the same one that stage writes. */
+  if (p === '/api/my/membership' && req.method === 'GET') {
+    const prof = linkedProfileFor(user);
+    return sendJson(res, 200, {
+      account: {
+        email: user.email, role: user.role, createdAt: user.createdAt || null,
+        profileId: user.profileId || null,
+        profileName: prof ? (prof.firstName + ' ' + prof.lastName).trim() : null,
+      },
+      membership: user.role === 'coach' ? null : publicMembership(user),
+      tiers: MEMBERSHIP_TIERS.map(t => ({
+        key: t, name: TIER_INFO[t].name, price: TIER_INFO[t].price,
+        priceLabel: TIER_INFO[t].priceLabel, includes: tierIncludes(t),
+      })),
+    });
+  }
+
+  if (p === '/api/my/membership/cancel' && req.method === 'POST') {
+    if (user.role === 'coach') {
+      return sendJson(res, 400, { error: 'Coach accounts do not carry a membership to cancel.' });
+    }
+    if (user.membershipStatus !== 'cancelled') {
+      applyMembershipChange(user, { status: 'cancelled' }, { by: 'member', email: user.email }, 'cancel');
+      saveDb();
+    }
+    return sendJson(res, 200, { ok: true, membership: publicMembership(user) });
+  }
 
   /* ---------- the coach's own practice log (unchanged) ---------- */
   if (p === '/api/logs' && req.method === 'GET') {
@@ -3509,6 +3773,7 @@ async function handleApi(req, res, url) {
      request, so writing (or reading) anyone else's check-in is
      impossible by construction. */
   if (p === '/api/checkin/today' && req.method === 'GET') {
+    if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
     const date = todayStr();
     if (!prof) return sendJson(res, 200, { linked: false, date, checkin: null });
@@ -3521,6 +3786,7 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/checkin/mine' && req.method === 'GET') {
+    if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
     if (!prof) return sendJson(res, 200, { linked: false, entries: [], streak: 0 });
     const entries = Object.values(db.checkins[prof.id] || {})
@@ -3531,6 +3797,7 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/checkin' && req.method === 'POST') {
+    if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
     if (prof && prof.archived) {
       return sendJson(res, 403, {
@@ -3611,6 +3878,7 @@ async function handleApi(req, res, url) {
      never write here; their read + delete-for-moderation path is
      the AMS endpoint below the coach gate. */
   if (p === '/api/my/logs' && req.method === 'GET') {
+    if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
     const today = todayStr();
     if (!prof) {
@@ -3630,6 +3898,7 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/my/logs' && req.method === 'POST') {
+    if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
     if (prof && prof.archived) {
       return sendJson(res, 403, {
@@ -3658,6 +3927,7 @@ async function handleApi(req, res, url) {
 
   const myLogMatch = p.match(/^\/api\/my\/logs\/([^/]+)$/);
   if (myLogMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
+    if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
     if (!prof) {
       return sendJson(res, 403, {
@@ -3705,6 +3975,7 @@ async function handleApi(req, res, url) {
      request) and loadsForProfile computes for that one profile,
      so another athlete's load is unreachable by construction. */
   if (p === '/api/my/loads' && req.method === 'GET') {
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (!prof) return sendJson(res, 200, { linked: false, workouts: [] });
     const workouts = [];
@@ -3785,6 +4056,7 @@ async function handleApi(req, res, url) {
      payload goes to the TV board, the leaderboard, or any public
      surface: it is served only here, to the linked member. */
   if (p === '/api/my/speed-report' && req.method === 'GET') {
+    if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
     if (!prof) {
       return sendJson(res, 403, {
@@ -3813,6 +4085,7 @@ async function handleApi(req, res, url) {
      gate: every valid submission is accepted, and weekCount says
      how many the member has sent this Mon-Sun week. */
   if (p === '/api/my/form-checks' && req.method === 'GET') {
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (!prof) {
       return sendJson(res, 403, {
@@ -3829,6 +4102,7 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/my/form-checks' && req.method === 'POST') {
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (prof && prof.archived) {
       return sendJson(res, 403, {
@@ -3875,6 +4149,7 @@ async function handleApi(req, res, url) {
      clear not-linked state (the member-logs pattern) so the home
      card can prompt instead of erroring. */
   if (p === '/api/my/week' && req.method === 'GET') {
+    if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
     if (!prof) return sendJson(res, 200, { linked: false });
     const today = todayStr();
@@ -3924,6 +4199,53 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* ---------- live sessions (Lab Pass) ----------
+     Coach-posted live web sessions plus the in-person opportunity.
+     Reading the list is a Lab Pass entitlement (the coach reads it
+     too, with the requests attached); filing an in-person request
+     is the Pass member's one write here. The coach's create, edit,
+     and delete endpoints live below the coach gate. Entries and
+     requests are plain store collections (db.liveSessions /
+     db.liveRequests) and ride along in backups. */
+  if (p === '/api/live-sessions' && req.method === 'GET') {
+    if (user.role !== 'coach' && !tierGate(res, user, 'pass')) return;
+    const sessions = db.liveSessions.slice()
+      .sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0))
+      .map(publicLiveSession);
+    if (user.role === 'coach') {
+      const requests = db.liveRequests.slice()
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+        .map(publicLiveRequest);
+      return sendJson(res, 200, { isCoach: true, sessions, requests });
+    }
+    const mine = db.liveRequests.find(r => r.userId === user.id) || null;
+    return sendJson(res, 200, {
+      isCoach: false, sessions,
+      myRequest: mine ? publicLiveRequest(mine) : null,
+    });
+  }
+
+  if (p === '/api/live-sessions/request' && req.method === 'POST') {
+    if (user.role === 'coach') {
+      return sendJson(res, 400, { error: 'Coaches post the sessions; the in-person request is a member action.' });
+    }
+    if (!tierGate(res, user, 'pass')) return;
+    const existing = db.liveRequests.find(r => r.userId === user.id);
+    if (existing) {
+      return sendJson(res, 200, { ok: true, created: false, request: publicLiveRequest(existing) });
+    }
+    const prof = linkedProfileFor(user);
+    const rec = {
+      id: crypto.randomUUID(), userId: user.id, email: user.email,
+      profileId: prof ? prof.id : null,
+      profileName: prof ? (prof.firstName + ' ' + prof.lastName).trim() : null,
+      createdAt: new Date().toISOString(),
+    };
+    db.liveRequests.push(rec);
+    saveDb();
+    return sendJson(res, 201, { ok: true, created: true, request: publicLiveRequest(rec) });
+  }
+
   /* ---------- coach announcements (the read side) ----------
      One-way posts from the coaching staff. Everyone signed in
      reads the feed; the server filters it per caller (coaches see
@@ -3957,6 +4279,114 @@ async function handleApi(req, res, url) {
   /* ---------- coach accounts ---------- */
   if (p === '/api/coaches' && req.method === 'GET') {
     return sendJson(res, 200, { users: db.users.map(publicUser) });
+  }
+
+  /* ---------- member access (the coach's Access page) ----------
+     Every member account with the membership it carries: tier,
+     status, when it last changed, its Stripe binding (filled by
+     the webhook stage), and the full change history. The writes
+     are the coach's manual controls — set or change a tier, cancel
+     a membership, reactivate one — and each one is recorded in the
+     account's history with the coach as the actor. Setting a tier
+     also sets the membership active (a coach granting a tier means
+     the member has it), unless the same request says otherwise. */
+  if (p === '/api/access' && req.method === 'GET') {
+    const members = db.users.filter(u => u.role === 'athlete').map(u => {
+      const prof = u.profileId ? profileById(u.profileId) : null;
+      const m = publicMembership(u);
+      return {
+        userId: u.id, email: u.email, createdAt: u.createdAt || null,
+        profileId: u.profileId || null,
+        profileName: prof ? (prof.firstName + ' ' + prof.lastName).trim() : null,
+        tier: m.tier, tierName: m.tierName, priceLabel: m.priceLabel,
+        status: m.status, active: m.active, tierUpdatedAt: m.tierUpdatedAt,
+        stripeCustomerId: u.stripeCustomerId || null,
+        stripeSubscriptionId: u.stripeSubscriptionId || null,
+        history: Array.isArray(u.membershipHistory) ? u.membershipHistory : [],
+      };
+    });
+    return sendJson(res, 200, { members });
+  }
+
+  const accessMatch = p.match(/^\/api\/access\/([^/]+)$/);
+  if (accessMatch && req.method === 'PUT') {
+    const target = db.users.find(u => u.id === decodeURIComponent(accessMatch[1]));
+    if (!target) return sendJson(res, 404, { error: 'Account not found.' });
+    if (target.role === 'coach') {
+      return sendJson(res, 400, { error: 'That is a coach account. Membership applies to member accounts.' });
+    }
+    const body = await readBody(req);
+    const hasTier = Object.prototype.hasOwnProperty.call(body, 'tier');
+    const hasStatus = Object.prototype.hasOwnProperty.call(body, 'status');
+    if (!hasTier && !hasStatus) {
+      return sendJson(res, 400, { error: 'Send a tier, a status, or both.' });
+    }
+    const fields = {};
+    if (hasTier) {
+      const t = body.tier === 'none' ? null : body.tier;
+      if (t !== null && !MEMBERSHIP_TIERS.includes(t)) {
+        return sendJson(res, 400, { error: 'Unknown tier.' });
+      }
+      fields.tier = t;
+    }
+    if (hasStatus) {
+      if (body.status !== 'active' && body.status !== 'cancelled') {
+        return sendJson(res, 400, { error: 'Status must be active or cancelled.' });
+      }
+      fields.status = body.status;
+    }
+    if (hasTier && fields.tier !== null && !hasStatus && target.membershipStatus === 'cancelled') {
+      fields.status = 'active';
+    }
+    let action = 'set-tier';
+    if (fields.status === 'cancelled' && target.membershipStatus !== 'cancelled') action = 'cancel';
+    else if (fields.status === 'active' && target.membershipStatus === 'cancelled') action = 'reactivate';
+    applyMembershipChange(target, fields, { by: 'coach', email: user.email }, action);
+    saveDb();
+    return sendJson(res, 200, { ok: true, membership: publicMembership(target) });
+  }
+
+  /* ---------- live sessions: the coach's writes ----------
+     The read side (members + this same list with requests) is
+     above the gate; creating, editing, and removing sessions and
+     dismissing in-person requests are coach-only, here. */
+  if (p === '/api/live-sessions' && req.method === 'POST') {
+    const body = await readBody(req);
+    const v = validateLiveSession(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const now = new Date().toISOString();
+    const rec = Object.assign({ id: crypto.randomUUID(), createdAt: now, updatedAt: now, createdBy: user.id }, v.fields);
+    db.liveSessions.push(rec);
+    saveDb();
+    return sendJson(res, 201, { ok: true, session: publicLiveSession(rec) });
+  }
+
+  const liveSessionMatch = p.match(/^\/api\/live-sessions\/([^/]+)$/);
+  if (liveSessionMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
+    const id = decodeURIComponent(liveSessionMatch[1]);
+    const idx = db.liveSessions.findIndex(x => x.id === id);
+    if (idx < 0) return sendJson(res, 404, { error: 'Live session not found.' });
+    if (req.method === 'DELETE') {
+      db.liveSessions.splice(idx, 1);
+      saveDb();
+      return sendJson(res, 200, { ok: true });
+    }
+    const body = await readBody(req);
+    const v = validateLiveSession(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    Object.assign(db.liveSessions[idx], v.fields, { updatedAt: new Date().toISOString() });
+    saveDb();
+    return sendJson(res, 200, { ok: true, session: publicLiveSession(db.liveSessions[idx]) });
+  }
+
+  const liveRequestMatch = p.match(/^\/api\/live-requests\/([^/]+)$/);
+  if (liveRequestMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(liveRequestMatch[1]);
+    const idx = db.liveRequests.findIndex(x => x.id === id);
+    if (idx < 0) return sendJson(res, 404, { error: 'Request not found.' });
+    db.liveRequests.splice(idx, 1);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
   }
   const userRoleMatch = p.match(/^\/api\/users\/([^/]+)\/role$/);
   if (userRoleMatch && req.method === 'PUT') {

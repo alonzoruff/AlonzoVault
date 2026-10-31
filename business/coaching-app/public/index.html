@@ -150,7 +150,7 @@
       <ul class="landing-list">
         <li><strong>The library</strong>: your training sessions and a demo library filmed by your coach himself, so every drill and lift looks the way your coach teaches it. Not stock video of strangers.</li>
         <li><strong>Your program, wherever you train</strong>: your training week in the app, set by your coach, with lifting loads calculated from your own tested maxes as you progress.</li>
-        <li><strong>Form checks</strong>: send a video of a sprint or a lift and get your coach's reply right in the app. One form check per week is included with Membership; extra submissions join the queue. Membership + Coaching members get priority review within 48 hours.</li>
+        <li><strong>Form checks</strong>: send a video of a sprint or a lift and get your coach's reply right in the app. One form check per week is included with Lab Training; extra submissions join the queue. Lab Pass members get priority review within 48 hours.</li>
         <li><strong>Health &amp; readiness tracking</strong>: a daily check-in on sleep, soreness, and energy takes 20 seconds. Your coach sees the flags before your next session, so training adjusts to how you actually feel.</li>
         <li><strong>Your own log</strong>: record what you ran and lifted, with effort and notes, so nothing you do away from your coach is invisible to him.</li>
         <li><strong>The Speed Report</strong>: your tests over time, baseline vs. best vs. latest, updated at every re-test.</li>
@@ -307,6 +307,7 @@
       <button type="button" class="menu-item" data-view="records">Club Records <span>The all-time top 10 in every event</span></button>
       <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked</span></button>
       <button type="button" class="menu-item" data-view="speedreport">Speed Report <span>Your own baseline, your personal bests, and how far you have come</span></button>
+      <button type="button" class="menu-item" data-view="livesessions">Live Sessions <span>Live web sessions with your coach, and the in-person opportunity — Lab Pass</span></button>
       <button type="button" class="menu-item" data-view="drills">Warm-Up Drills <span>The 16 standard drills, Parts A &amp; B</span></button>
       <button type="button" class="menu-item" data-view="qtr">400m Training <span>The full 400m framework and the QTR sessions</span></button>
     </div>
@@ -341,6 +342,7 @@
       <button type="button" class="menu-item" data-view="calendar">Team Calendar <span>The whole month at a glance: every group's sessions, meets, and test days</span></button>
       <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
       <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, flags, testing, meets, attendance, health, goals, and private coach notes</span></button>
+      <button type="button" class="menu-item" data-view="access">Access <span>Every member account and its tier — set tiers, cancel, and reactivate memberships</span></button>
       <button type="button" class="menu-item" data-view="formcheckqueue">Form Checks <span>Videos members sent for review — watch, reply in the app, and clear the queue</span></button>
       <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book — present, late, excused, absent — and every athlete's record</span></button>
       <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
@@ -914,6 +916,15 @@
     <div id="ams-main"></div>
   </section>
 
+  <!-- ACCESS (coach) -->
+  <section id="view-access" class="view">
+    <h1>Access</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Every member account and the tier it carries. Set a tier, cancel a membership, or bring one back — changes apply at once and each one is recorded. Coaches only.</p>
+    <div id="access-main"></div>
+  </section>
+
   <!-- FORM CHECK QUEUE (coach) -->
   <section id="view-formcheckqueue" class="view">
     <h1>Form Checks</h1>
@@ -949,6 +960,15 @@
     <div class="subnav-slot"></div>
     <p class="view-sub muted">Your own report: your baseline from your first testing session, your personal bests, and the change since baseline — the page to show a parent.</p>
     <div id="speedreport-main"></div>
+  </section>
+
+  <!-- LIVE SESSIONS -->
+  <section id="view-livesessions" class="view">
+    <h1>Live Sessions</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Live web sessions with your coach, and the opportunity for in-person sessions. Part of Lab Pass.</p>
+    <div id="livesessions-main"></div>
   </section>
 
   <!-- DRILLS -->

@@ -6,6 +6,8 @@ const state = {
   content: null,
   sessions: new Map(),
   user: null,
+  membership: null,
+  membershipData: null,
   logs: [],
   swaps: {},
   week: 1,
@@ -390,13 +392,87 @@ const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub',
+  livesessions: 'train',
 };
 const GROUP_SUBNAV = {
-  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['access', 'Access'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
+/* ---------------- membership tiers (v14) ----------------
+   The nav mirror of the server's entitlement rules. The server is
+   the enforcement (its endpoints answer 403); this layer keeps the
+   member's map honest: anything their tier does not include stays
+   visible in the nav with a plain Locked tag, and opening it shows
+   a locked panel that says which tier it belongs to — recognition
+   over recall, never a mysterious empty page. Coaches and signed
+   out visitors are never locked. state.membership comes from
+   /api/my/membership (see refreshUserData). */
+const TIER_RANK = { access: 1, training: 2, pass: 3 };
+const TIER_NAMES = { access: 'Lab Access', training: 'Lab Training', pass: 'Lab Pass' };
+const VIEW_TIER_NEED = {
+  library: 'access', season: 'access', cards: 'access', drills: 'access', qtr: 'access',
+  speedreport: 'access', log: 'access',
+  videos: 'access', definitions: 'access', exercises: 'access', nutrition: 'access',
+  education: 'access', guide: 'access',
+  livesessions: 'pass',
+};
+function memberTierRank() {
+  if (!isAthleteUser()) return 99;
+  const m = state.membership;
+  if (!m || !m.active || !m.tier) return 0;
+  return TIER_RANK[m.tier] || 0;
+}
+function memberHasTier(need) {
+  return memberTierRank() >= (TIER_RANK[need] || 99);
+}
+function lockedViewsForMember() {
+  if (!isAthleteUser() || !state.membership) return new Set();
+  return new Set(Object.keys(VIEW_TIER_NEED).filter(v => !memberHasTier(VIEW_TIER_NEED[v])));
+}
+function applyMembershipNav() {
+  const locked = lockedViewsForMember();
+  $$('[data-view]').forEach(el => {
+    const v = el.dataset.view;
+    const tag = el.querySelector(':scope > .lock-tag');
+    if (locked.has(v)) {
+      el.classList.add('nav-locked');
+      if (!tag) {
+        const span = document.createElement('span');
+        span.className = 'lock-tag';
+        span.textContent = 'Locked';
+        el.appendChild(span);
+      }
+    } else {
+      el.classList.remove('nav-locked');
+      if (tag) tag.remove();
+    }
+  });
+}
+function clearMemberHomeSlots() {
+  ['checkin-slot', 'memberlog-slot', 'member-logs-slot'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+}
+
+function syncViewLock(name) {
+  $$('.tier-lock-banner').forEach(b => b.remove());
+  if (!isAthleteUser() || !state.membership) return;
+  const need = VIEW_TIER_NEED[name];
+  if (!need || memberHasTier(need)) return;
+  const sec = document.getElementById('view-' + name);
+  if (!sec) return;
+  const div = document.createElement('div');
+  div.className = 'card tier-lock-banner';
+  div.innerHTML = `<h2>Part of ${esc(TIER_NAMES[need])}</h2>
+    <p>Your membership does not include this yet, so there is nothing to show here.</p>
+    <button class="btn primary" type="button">See your membership</button>`;
+  div.querySelector('button').addEventListener('click', () => showView('account'));
+  sec.prepend(div);
+}
+
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
   const activeSection = document.getElementById('view-' + name);
@@ -407,6 +483,7 @@ function renderSubnav(name, area) {
   });
   /* The active pill can sit off the right edge of the scrolling strip on
      phones; scroll the strip (never the page) so it's visible. */
+  applyMembershipNav();
   const actBtn = activeSection ? activeSection.querySelector('.seg-btn.active') : null;
   if (actBtn && actBtn.parentElement) {
     const nav = actBtn.parentElement;
@@ -429,6 +506,7 @@ function navMenuItemsHtml(area) {
 }
 function buildMainNav() {
   $$('.nav-menu').forEach(menu => { menu.innerHTML = navMenuItemsHtml(menu.dataset.menu); });
+  applyMembershipNav();
   const sheet = $('#nav-sheet');
   if (!sheet) return;
   const section = (area) => `
@@ -485,6 +563,7 @@ function showView(name) {
   $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   closeNavMenus();
   renderSubnav(name, area);
+  syncViewLock(name);
   positionTabIndicator();
   /* Stagger the incoming view's cards a breath apart; the cap keeps
      long views snappy. The CSS reads --cd as the riseIn delay. */
@@ -499,8 +578,16 @@ function showView(name) {
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'weightroom') enterWeightRoom(); else exitWeightRoom();
-  if (name === 'home' || name === 'log') { renderCheckin(); renderMemberLogs(); renderFormChecks(); }
-  if (name === 'home') renderThisWeek();
+  const memberKnownLocked = isAthleteUser() && !!state.membership && !memberHasTier('access');
+  if (name === 'home' || name === 'log') {
+    if (memberKnownLocked) clearMemberHomeSlots();
+    else { renderCheckin(); renderMemberLogs(); }
+    renderFormChecks();
+  }
+  if (name === 'home') {
+    if (memberKnownLocked) { const tw = $('#thisweek-slot'); if (tw) tw.innerHTML = ''; }
+    else renderThisWeek();
+  }
   if (name === 'home' || name === 'account') renderMemberIntake();
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
@@ -513,6 +600,8 @@ function showView(name) {
   if (name === 'attendance') renderAttendance();
   if (name === 'ams') renderAms();
   if (name === 'formcheckqueue') renderCoachFormChecks();
+  if (name === 'access') renderAccess();
+  if (name === 'livesessions') renderLiveSessions();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
   if (name === 'digest') renderDigest();
@@ -746,6 +835,30 @@ function openWarmupCard() {
 }
 
 function renderHome() {
+  if (isAthleteUser() && state.membership && !state.membership.active) {
+    const el = $('#home-content');
+    if (el) {
+      el.removeAttribute('aria-busy');
+      const cancelled = state.membership.status === 'cancelled';
+      el.innerHTML = `<div class="card">
+        <h2>${cancelled ? 'Your membership is cancelled' : 'Your membership is not active yet'}</h2>
+        <p>${cancelled
+          ? 'Your tier access has ended. Your account, your log, and your numbers are all still here — rejoin any time and they pick right back up.'
+          : 'Your account is set up, but it does not carry a Lab tier yet, so the training content stays locked. Membership options are on the home page, and your coach can also set your tier.'}</p>
+        <p class="muted">What a membership opens: the training library and Lab Sessions, Inside the Lab videos, learn content, your Speed Report, your workout log and daily check-in, and your week at a glance.</p>
+        <div class="tw-actions">
+          <button class="btn primary" id="home-locked-account" type="button">See your membership</button>
+          <button class="btn secondary" id="home-locked-tiers" type="button">See the tiers</button>
+        </div>
+      </div>`;
+      const a = $('#home-locked-account');
+      if (a) a.addEventListener('click', () => showView('account'));
+      const b = $('#home-locked-tiers');
+      if (b) b.addEventListener('click', () => showView('landing'));
+    }
+    renderAnnouncePanel();
+    return;
+  }
   const c = state.content;
   const t = todayLocal();
   const weeks = c.weeks;
@@ -868,6 +981,15 @@ function renderHome() {
 async function renderHomeLoads() {
   const el = $('#home-loads');
   if (!el) return;
+  if (isAthleteUser() && state.membership && state.membership.active && !memberHasTier('training')) {
+    el.innerHTML = '<h2>Your lifting loads</h2>' + LANE_DIVIDER + `<div class="card">
+      <p>Your lifting loads are part of Lab Training: the weights for each workout, worked out from your own tested maxes.</p>
+      <button class="btn secondary" id="loads-locked-account" type="button">See your membership</button>
+    </div>`;
+    const lb = $('#loads-locked-account');
+    if (lb) lb.addEventListener('click', () => showView('account'));
+    return;
+  }
   let data;
   try { data = await api('/api/my/loads'); } catch (_) { el.innerHTML = ''; return; }
   if (!data.linked || !data.workouts || !data.workouts.length) { el.innerHTML = ''; return; }
@@ -1315,6 +1437,7 @@ function renderEducation() {
 function renderSeason() {
   const weeks = state.content.weeks;
   const wk = weeks.find(w => w.week === state.week) || weeks[0];
+  if (!wk) { const sw = $('#season-week'); if (sw) sw.innerHTML = ''; return; }
   $('#week-jump').value = String(wk.week);
   const violations = spacingViolations();
   const weekBad = DAY_KEYS.filter(dk => violations.has(wk.week + ':' + dk));
@@ -1390,7 +1513,7 @@ function renderLog() {
   }));
 }
 async function refreshUserData() {
-  if (!state.user) { state.logs = []; state.swaps = {}; state.groups = []; return; }
+  if (!state.user) { state.logs = []; state.swaps = {}; state.groups = []; state.membership = null; state.membershipData = null; return; }
   try {
     const [logs, swaps, groups] = await Promise.all([
       api('/api/logs'), api('/api/swaps'),
@@ -1400,6 +1523,12 @@ async function refreshUserData() {
     state.swaps = swaps.swaps || {};
     state.groups = groups.groups || [];
   } catch (_) { state.logs = []; state.swaps = {}; }
+  try {
+    const md = await api('/api/my/membership');
+    state.membershipData = md;
+    state.membership = md.membership || null;
+  } catch (_) { state.membership = null; state.membershipData = null; }
+  applyMembershipNav();
 }
 
 /* ---------------- account ---------------- */
@@ -1416,10 +1545,12 @@ function renderAccount() {
       <button class="btn" id="acct-logout" type="button">Log out</button>
       ${appVersionHtml()}</div>
       ${appearanceCardHtml()}
+      <div id="member-membership"></div>
       <div id="coach-accounts"></div>
       <div id="coach-invites"></div>
       <div id="client-invites"></div>`;
     wireAppearance();
+    renderMembershipCard();
     renderCoachAccounts();
     renderCoachInvites();
     renderClientInvites();
@@ -1493,6 +1624,7 @@ function syncAuthUi() {
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
   renderMemberIntake();
+  applyMembershipNav();
   renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderAnnouncements(); renderCustomWorkouts();
   renderPrograms(); renderCalendar();
   renderWarmupCards();
@@ -1981,7 +2113,7 @@ async function renderThisWeek() {
    profile, so this UI only ever handles the caller's own requests,
    and the coach's reply reads back here. The weekly rhythm is
    copy plus a counter, never a block: standard membership includes
-   one form check per week, Membership + Coaching members get
+   one form check per week, Lab Pass members get
    priority review within 48 hours, and extra submissions still
    join the queue. */
 let fcSelectedFile = null;
@@ -2001,6 +2133,16 @@ async function renderFormChecks() {
   const slot = $('#form-checks-slot');
   if (!slot) return;
   if (!isAthleteUser()) { slot.innerHTML = ''; return; }
+  if (state.membership && !memberHasTier('training')) {
+    slot.innerHTML = `<div class="card">
+      <h2>Form Checks</h2>
+      <p>Form checks are part of Lab Training: send your coach a short video of a drill, a lift, or a session, and get a reply right here in the app.</p>
+      <button class="btn secondary" id="fc-locked-account" type="button">See your membership</button>
+    </div>`;
+    const fb = $('#fc-locked-account');
+    if (fb) fb.addEventListener('click', () => showView('account'));
+    return;
+  }
   let data;
   try {
     data = await api('/api/my/form-checks');
@@ -2028,7 +2170,7 @@ function paintFormChecks(data) {
   const weekCount = data.weekCount || 0;
   slot.innerHTML = `<div class="card">
     <h2>Form Checks</h2>
-    <p class="muted">Send your coach a short video of a drill, a lift, or a session, and get a reply right here in the app. Standard membership includes one form check per week; Membership + Coaching members get priority review within 48 hours.</p>
+    <p class="muted">Send your coach a short video of a drill, a lift, or a session, and get a reply right here in the app. Lab Training includes one form check per week; Lab Pass members get priority review within 48 hours.</p>
     <p class="checkin-streak">${weekCount} form check${weekCount === 1 ? '' : 's'} sent this week</p>
     ${weekCount >= 1 ? '<p class="muted">You have already sent your form check for this week — extra submissions join the queue and may be reviewed the following week.</p>' : ''}
     ${state.fcMsg ? `<p class="muted">${esc(state.fcMsg)}</p>` : ''}
@@ -2115,7 +2257,7 @@ async function renderCoachFormChecks() {
   const pending = data.pendingCount || 0;
   el.innerHTML = `<div class="card">
     <h2>Form check queue ${pending ? `<span class="badge plain">${pending} waiting</span>` : ''}</h2>
-    <p class="muted">Pending first, oldest waiting first. Standard membership includes one form check per week; Membership + Coaching members get priority review within 48 hours — each row shows how many that member has sent this week.</p>
+    <p class="muted">Pending first, oldest waiting first. Lab Training includes one form check per week; Lab Pass members get priority review within 48 hours — each row shows how many that member has sent this week.</p>
     ${checks.length ? checks.map(fc => `
     <div class="roster-row" style="display:block" data-fc-row="${fc.id}">
       <p><strong>${esc(fc.memberName || 'Member')}</strong> · ${esc(formCheckDateLine(fc))} ${formCheckStatusBadge(fc)}</p>
@@ -8082,12 +8224,29 @@ function tvStopTimers() {
 }
 
 /* ---------------- boot ---------------- */
+/* The skeleton a locked member's boot runs on: /api/content
+   answers 403 for a member with no active tier, by design, and the
+   app still has to boot so Home can show its locked state and the
+   Account tab can work. Every content list is empty; the member's
+   real data (check-in, intake, announcements, membership) comes
+   from its own endpoints, not from this payload. */
+const EMPTY_CONTENT = {
+  weeks: [], sessions: [], drills: [], framework400: '',
+  videoLibrary: [], glossary: [], exerciseLibrary: [],
+  coachEducation: [], guide: '', season: '', videoUpload: null,
+};
+
 (async function boot() {
+  try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
   try {
     state.content = await api('/api/content');
   } catch (err) {
-    $('#home-content').innerHTML = '<p class="error">Could not load the app content. Please reload.</p>';
-    return;
+    if (state.user && state.user.role === 'athlete') {
+      state.content = EMPTY_CONTENT;
+    } else {
+      $('#home-content').innerHTML = '<p class="error">Could not load the app content. Please reload.</p>';
+      return;
+    }
   }
   for (const s of state.content.sessions) state.sessions.set(s.id, s);
   state.week = currentWeekNum();
@@ -8102,7 +8261,6 @@ function tvStopTimers() {
   $('#guide-doc').innerHTML = md(state.content.guide);
   $('#season-doc').innerHTML = md(state.content.season);
   $('#log-date').value = todayStr();
-  try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
   try { state.wuOverrides = (await api('/api/warmup-cards')).cards || {}; } catch (_) { state.wuOverrides = {}; }
   await refreshUserData();
   /* syncAuthUi (not the individual renders) is what un-hides the Coach
@@ -8112,3 +8270,301 @@ function tvStopTimers() {
   showAppUpdatedToast();
   renderLibrary();
 })();
+
+/* ---------------- my membership (Account tab) ----------------
+   The member's own page: account details, the membership they
+   carry (tier, price, status, what it includes), and the cancel
+   action. Cancelling asks once, in place, then posts to
+   /api/my/membership/cancel — access ends at once on the server;
+   the login, the log, and the numbers all stay. */
+async function renderMembershipCard() {
+  const el = $('#member-membership');
+  if (!el) return;
+  if (!isAthleteUser()) { el.innerHTML = ''; return; }
+  if (!state.membershipData) {
+    try {
+      const md = await api('/api/my/membership');
+      state.membershipData = md;
+      state.membership = md.membership || null;
+    } catch (_) { el.innerHTML = ''; return; }
+  }
+  const data = state.membershipData;
+  const acct = data.account || {};
+  const m = data.membership || {};
+  const since = acct.createdAt ? fmtDate(parseDate(acct.createdAt.slice(0, 10))) : '';
+  const changed = m.tierUpdatedAt ? fmtDate(parseDate(m.tierUpdatedAt.slice(0, 10))) : '';
+  let membershipHtml;
+  if (m.tier && m.status !== 'cancelled') {
+    membershipHtml = `
+      <p><strong>${esc(m.tierName)}</strong> · ${esc(m.priceLabel || '')}</p>
+      <p>Status: <span class="badge low">Active</span>${changed ? ` <span class="muted">since ${esc(changed)}</span>` : ''}</p>
+      <p class="muted" style="margin-bottom:6px">What your tier includes:</p>
+      <ul class="landing-list">
+        ${(m.includes || []).map(i => `<li>${esc(i)}</li>`).join('')}
+      </ul>
+      <div id="membership-cancel-zone">
+        <button class="btn danger" id="membership-cancel-btn" type="button">Cancel membership</button>
+      </div>`;
+  } else if (m.tier && m.status === 'cancelled') {
+    membershipHtml = `
+      <p><strong>${esc(m.tierName)}</strong> · ${esc(m.priceLabel || '')}</p>
+      <p>Status: <span class="badge high">Cancelled</span>${changed ? ` <span class="muted">since ${esc(changed)}</span>` : ''}</p>
+      <p class="muted">Your tier access has ended. Your account, your log, and your numbers are all still here. To rejoin, pick a tier on the home page or ask your coach.</p>`;
+  } else {
+    membershipHtml = `
+      <p><strong>No membership yet.</strong></p>
+      <p class="muted">Your account does not carry a tier, so the training content stays locked. The tiers:</p>
+      <ul class="landing-list">
+        ${(data.tiers || []).map(t => `<li>${esc(t.name)} · ${esc(t.priceLabel)}</li>`).join('')}
+      </ul>
+      <p class="muted">Join from the tier cards on the home page, or ask your coach to set your tier.</p>`;
+  }
+  el.innerHTML = `
+    <div class="card">
+      <h2>Your account</h2>
+      <p>Email: <strong>${esc(acct.email || '')}</strong></p>
+      <p>Linked profile: <strong>${acct.profileName ? esc(acct.profileName) : 'not linked yet'}</strong></p>
+      ${since ? `<p class="muted">Member since ${esc(since)}</p>` : ''}
+    </div>
+    <div class="card">
+      <h2>Your membership</h2>
+      ${membershipHtml}
+    </div>`;
+  const cancelBtn = $('#membership-cancel-btn');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => {
+    const zone = $('#membership-cancel-zone');
+    if (!zone) return;
+    zone.innerHTML = `
+      <div class="flag">
+        <p><strong>Cancel your membership?</strong></p>
+        <p>Your tier access ends right away: the library, videos, Speed Report, log, and check-in lock until you rejoin. Your account stays, and so do your log and your numbers. If you pay through Stripe, your coach will stop the subscription there too.</p>
+        <p>
+          <button class="btn danger" id="membership-cancel-yes" type="button">Yes, cancel my membership</button>
+          <button class="btn secondary" id="membership-cancel-no" type="button">Keep my membership</button>
+        </p>
+        <p class="error" id="membership-cancel-err"></p>
+      </div>`;
+    $('#membership-cancel-no').addEventListener('click', renderMembershipCard);
+    $('#membership-cancel-yes').addEventListener('click', async () => {
+      try {
+        const r = await apiPost('/api/my/membership/cancel', {});
+        state.membership = r.membership || null;
+        if (state.membershipData) state.membershipData.membership = state.membership;
+        applyMembershipNav();
+        renderMembershipCard();
+        renderHome();
+      } catch (err) {
+        const e = $('#membership-cancel-err');
+        if (e) e.textContent = err.message;
+      }
+    });
+  });
+}
+
+/* ---------------- member access (coach) ----------------
+   The Access page: every member account and the membership it
+   carries, in one table. The coach sets or changes a tier, cancels
+   a membership, or reactivates one; the server records each change
+   in the account's history, and the latest change shows on the row
+   so the page answers "who changed what, when" at a glance. */
+const ACCESS_TIER_OPTIONS = [
+  ['', 'No tier'], ['access', 'Lab Access · $10/month'],
+  ['training', 'Lab Training · $49.99/month'], ['pass', 'Lab Pass · $99/month'],
+];
+async function renderAccess() {
+  const el = $('#access-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Member access lives here.'); return; }
+  let data;
+  try { data = await api('/api/access'); }
+  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const members = data.members || [];
+  const rowHtml = (mb) => {
+    const last = (mb.history || [])[mb.history.length - 1];
+    const lastLine = last
+      ? `<p class="muted">Last change: ${esc(last.action)} · by ${esc(last.by)} · ${esc(fmtDate(parseDate(String(last.at).slice(0, 10))))}</p>`
+      : '<p class="muted">No changes yet.</p>';
+    return `<div class="roster-row" style="display:block" data-access-row="${mb.userId}">
+      <p><strong>${esc(mb.profileName || mb.email)}</strong> · ${esc(mb.email)}</p>
+      <p class="muted">Account created ${mb.createdAt ? esc(fmtDate(parseDate(String(mb.createdAt).slice(0, 10)))) : ''}${mb.profileName ? ' · linked profile: ' + esc(mb.profileName) : ' · not linked to a roster profile'}</p>
+      <p>Tier: <strong>${mb.tierName ? esc(mb.tierName) + ' · ' + esc(mb.priceLabel || '') : 'No tier'}</strong>
+      · Status: ${mb.status === 'cancelled' ? '<span class="badge high">Cancelled</span>' : (mb.active ? '<span class="badge low">Active</span>' : '<span class="badge plain">No access</span>')}
+      ${mb.stripeSubscriptionId ? ' · <span class="muted">Stripe subscription on file</span>' : ''}</p>
+      ${lastLine}
+      <div class="access-controls">
+        <label>Tier
+          <select class="access-tier-select">
+            ${ACCESS_TIER_OPTIONS.map(([v, label]) => `<option value="${v}"${(mb.tier || '') === v ? ' selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </label>
+        <button class="btn primary" data-access-save type="button" style="width:auto">Save tier</button>
+        ${mb.status === 'cancelled'
+          ? '<button class="btn secondary" data-access-reactivate type="button" style="width:auto">Reactivate</button>'
+          : '<button class="btn secondary" data-access-cancel type="button" style="width:auto">Cancel membership</button>'}
+      </div>
+      <p class="error access-err"></p>
+    </div>`;
+  };
+  el.innerHTML = `<div class="card">
+    <h2>Member access</h2>
+    <p class="muted">Every member account and what it can open. Set a tier here and it applies at once; the Stripe webhook will set the same fields when a member pays.</p>
+    ${members.length ? members.map(rowHtml).join('') : '<p class="muted">No member accounts yet. When a member registers with an invited email, they show up here.</p>'}
+  </div>`;
+  el.querySelectorAll('[data-access-row]').forEach(row => {
+    const userId = row.dataset.accessRow;
+    const errEl = row.querySelector('.access-err');
+    const put = async (body) => {
+      try {
+        await apiPut('/api/access/' + encodeURIComponent(userId), body);
+        renderAccess();
+      } catch (err) { if (errEl) errEl.textContent = err.message; }
+    };
+    const save = row.querySelector('[data-access-save]');
+    if (save) save.addEventListener('click', () => {
+      const sel = row.querySelector('.access-tier-select');
+      put({ tier: sel && sel.value ? sel.value : null });
+    });
+    const cancel = row.querySelector('[data-access-cancel]');
+    if (cancel) cancel.addEventListener('click', () => put({ status: 'cancelled' }));
+    const react = row.querySelector('[data-access-reactivate]');
+    if (react) react.addEventListener('click', () => put({ status: 'active' }));
+  });
+}
+
+/* ---------------- live sessions (Lab Pass) ----------------
+   One view, two sides. Pass members read the coach's posted live
+   sessions and can file the in-person request. The coach posts,
+   edits, and removes sessions here, and reads the requests with
+   the member's name and the time they asked. Members below Lab
+   Pass get the locked panel (and the server answers 403 behind
+   it — this paint is the visible half of the same rule). */
+function liveSessionWhen(startsAt) {
+  const d = new Date(startsAt);
+  if (Number.isNaN(d.getTime())) return esc(startsAt);
+  return esc(d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+}
+async function renderLiveSessions() {
+  const el = $('#livesessions-main');
+  if (!el) return;
+  if (isAthleteUser() && state.membership && !memberHasTier('pass')) {
+    el.innerHTML = `<div class="card">
+      <h2>Live Sessions</h2>
+      <p>Live sessions are part of Lab Pass: live web sessions with your coach, plus the opportunity for in-person sessions.</p>
+      <button class="btn secondary" id="ls-locked-account" type="button">See your membership</button>
+    </div>`;
+    const b = $('#ls-locked-account');
+    if (b) b.addEventListener('click', () => showView('account'));
+    return;
+  }
+  let data;
+  try { data = await api('/api/live-sessions'); }
+  catch (err) { el.innerHTML = `<div class="card"><h2>Live Sessions</h2><p class="error">${esc(err.message)}</p></div>`; return; }
+  const sessions = data.sessions || [];
+  const sessionRow = (x) => `<div class="roster-row" style="display:block">
+      <p><strong>${esc(x.title)}</strong> · ${liveSessionWhen(x.startsAt)}</p>
+      ${x.note ? `<p class="muted">${esc(x.note)}</p>` : ''}
+      ${x.joinLink ? `<p><a class="btn secondary" href="${esc(x.joinLink)}" target="_blank" rel="noopener" style="width:auto">Join session</a></p>` : ''}
+      ${data.isCoach ? `<p>
+        <button class="btn secondary" data-ls-edit="${x.id}" type="button" style="width:auto">Edit</button>
+        <button class="btn secondary" data-ls-del="${x.id}" type="button" style="width:auto">Remove</button>
+      </p>
+      <div class="ls-edit-zone" data-ls-edit-zone="${x.id}"></div>` : ''}
+    </div>`;
+  let coachHtml = '';
+  if (data.isCoach) {
+    const reqs = data.requests || [];
+    coachHtml = `<div class="card">
+      <h2>Post a live session</h2>
+      <label>Title <input type="text" id="ls-title" maxlength="120" placeholder="e.g. Sprint mechanics, live Q and A"></label>
+      <label>Date and time <input type="datetime-local" id="ls-starts"></label>
+      <label>Join link <input type="url" id="ls-link" maxlength="500" placeholder="https://"></label>
+      <label>Note (optional) <input type="text" id="ls-note" maxlength="300" placeholder="e.g. Bring your questions from this week"></label>
+      <p class="error" id="ls-err"></p>
+      <button class="btn primary" id="ls-add" type="button" style="width:auto">Add session</button>
+    </div>
+    <div class="card">
+      <h2>In-person requests</h2>
+      ${reqs.length ? reqs.map(r => `<div class="roster-row" style="display:block">
+        <p><strong>${esc(r.memberName || r.email)}</strong> · ${esc(r.email)}</p>
+        <p class="muted">Requested ${esc(fmtDate(parseDate(String(r.createdAt).slice(0, 10))))}</p>
+        <button class="btn secondary" data-ls-req-del="${r.id}" type="button" style="width:auto">Dismiss</button>
+      </div>`).join('') : '<p class="muted">No requests yet. When a Lab Pass member asks for an in-person session, it lands here.</p>'}
+    </div>`;
+  }
+  const memberHtml = data.isCoach ? '' : `<div class="card">
+    <h2>In-person sessions</h2>
+    <p>Lab Pass includes the opportunity for in-person sessions. Ask here and your coach sees the request with your name on it.</p>
+    ${data.myRequest
+      ? `<p><span class="badge low">Requested</span> <span class="muted">on ${esc(fmtDate(parseDate(String(data.myRequest.createdAt).slice(0, 10))))} — your coach will follow up.</span></p>`
+      : '<button class="btn primary" id="ls-request" type="button" style="width:auto">Request an in-person session</button>'}
+    <p class="error" id="ls-req-err"></p>
+  </div>`;
+  el.innerHTML = `<div class="card">
+    <h2>Live Sessions</h2>
+    <p class="muted">Live web sessions with your coach, posted here with the join link as each one is scheduled.</p>
+    ${sessions.length ? sessions.map(sessionRow).join('') : '<p class="muted">No live sessions posted yet. When your coach schedules one, it shows up here.</p>'}
+  </div>
+  ${memberHtml}
+  ${coachHtml}`;
+  const reqBtn = $('#ls-request');
+  if (reqBtn) reqBtn.addEventListener('click', async () => {
+    try {
+      await apiPost('/api/live-sessions/request', {});
+      renderLiveSessions();
+    } catch (err) {
+      const e = $('#ls-req-err');
+      if (e) e.textContent = err.message;
+    }
+  });
+  const addBtn = $('#ls-add');
+  if (addBtn) addBtn.addEventListener('click', async () => {
+    const errEl = $('#ls-err');
+    try {
+      await apiPost('/api/live-sessions', {
+        title: $('#ls-title').value, startsAt: $('#ls-starts').value,
+        joinLink: $('#ls-link').value, note: $('#ls-note').value,
+      });
+      renderLiveSessions();
+    } catch (err) { if (errEl) errEl.textContent = err.message; }
+  });
+  el.querySelectorAll('[data-ls-del]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await api('/api/live-sessions/' + encodeURIComponent(b.dataset.lsDel), { method: 'DELETE' });
+      renderLiveSessions();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-ls-req-del]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await api('/api/live-requests/' + encodeURIComponent(b.dataset.lsReqDel), { method: 'DELETE' });
+      renderLiveSessions();
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-ls-edit]').forEach(b => b.addEventListener('click', () => {
+    const x = sessions.find(y => y.id === b.dataset.lsEdit);
+    const zone = el.querySelector(`[data-ls-edit-zone="${CSS.escape(x.id)}"]`);
+    if (!x || !zone) return;
+    zone.innerHTML = `
+      <label>Title <input type="text" class="ls-e-title" maxlength="120" value="${esc(x.title)}"></label>
+      <label>Date and time <input type="datetime-local" class="ls-e-starts" value="${esc(String(x.startsAt).slice(0, 16))}"></label>
+      <label>Join link <input type="url" class="ls-e-link" maxlength="500" value="${esc(x.joinLink || '')}"></label>
+      <label>Note (optional) <input type="text" class="ls-e-note" maxlength="300" value="${esc(x.note || '')}"></label>
+      <p class="error ls-e-err"></p>
+      <button class="btn primary ls-e-save" type="button" style="width:auto">Save changes</button>`;
+    const saveBtn = zone.querySelector('.ls-e-save');
+    if (saveBtn) saveBtn.addEventListener('click', async () => {
+      try {
+        await apiPut('/api/live-sessions/' + encodeURIComponent(x.id), {
+          title: zone.querySelector('.ls-e-title').value,
+          startsAt: zone.querySelector('.ls-e-starts').value,
+          joinLink: zone.querySelector('.ls-e-link').value,
+          note: zone.querySelector('.ls-e-note').value,
+        });
+        renderLiveSessions();
+      } catch (err) {
+        const e = zone.querySelector('.ls-e-err');
+        if (e) e.textContent = err.message;
+      }
+    });
+  }));
+}
+
