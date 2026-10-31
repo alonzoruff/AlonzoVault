@@ -146,10 +146,10 @@ No real money moves with test keys.
    prices above) and `DOMAIN=https://ruffin-performance.onrender.com`.
    The `STRIPE_PRICE_LAB_*` overrides are optional. This is the only
    step between the current 503 and working tier checkout buttons.
-4. **NEXT PAYMENT STEP — the 7-day trial** (decided Oct 30, 2026,
+4. **NEXT PAYMENT STEP — the 3-day trial** (decided Oct 30, 2026,
    deliberately NOT in the v13 build): 7 days at the Lab Access
    level, no card required to start. On the session this means
-   `subscription_data[trial_period_days]=7` for the trial entry path
+   `subscription_data[trial_period_days]=3` for the trial entry path
    plus `payment_method_collection` set so no card is collected up
    front for the trial — both change the fixed Checkout Studio
    parameter set, so they land as their own reviewed change, not
