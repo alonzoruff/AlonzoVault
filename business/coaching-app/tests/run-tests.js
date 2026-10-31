@@ -158,12 +158,20 @@ async function main() {
   if (labCoreMatch) {
     const labCore = new Function(labCoreMatch[1] +
       '\nreturn { LAB_PROGRAM_TEST_LABELS, labProgramTestLabel, labProgramById };')();
-    check('Lab Programs link only to test types already in the catalog',
+    check('Lab Programs link every program check to a test type in the catalog (v16)',
       labCore.labProgramTestLabel('vertical-jump') === 'Vertical Jump' &&
       labCore.labProgramTestLabel('broad-jump') === 'Broad Jump' &&
-      labCore.labProgramTestLabel('30m-sprint') === '' &&
+      labCore.labProgramTestLabel('10m-sprint') === '10m Sprint' &&
+      labCore.labProgramTestLabel('30m-sprint') === '30m Sprint' &&
+      labCore.labProgramTestLabel('knee-to-wall-left') === 'Knee-to-Wall (Left)' &&
+      labCore.labProgramTestLabel('knee-to-wall-right') === 'Knee-to-Wall (Right)' &&
+      labCore.labProgramTestLabel('single-leg-balance-left') === 'Single-Leg Balance (Left)' &&
+      labCore.labProgramTestLabel('single-leg-balance-right') === 'Single-Leg Balance (Right)' &&
+      labCore.labProgramTestLabel('single-leg-calf-raise-left') === 'Single-Leg Calf Raise (Left)' &&
+      labCore.labProgramTestLabel('single-leg-calf-raise-right') === 'Single-Leg Calf Raise (Right)' &&
       labCore.labProgramTestLabel('knee-to-wall') === '' &&
-      Object.keys(labCore.LAB_PROGRAM_TEST_LABELS).length === 2, labCore.LAB_PROGRAM_TEST_LABELS);
+      labCore.labProgramTestLabel('single-leg-balance') === '' &&
+      Object.keys(labCore.LAB_PROGRAM_TEST_LABELS).length === 10, labCore.LAB_PROGRAM_TEST_LABELS);
     check('Lab Programs detail lookup finds a program by id and misses cleanly',
       labCore.labProgramById([{ id: 'winter-base-protocol' }], 'winter-base-protocol').id === 'winter-base-protocol' &&
       labCore.labProgramById([{ id: 'winter-base-protocol' }], 'missing') === null);
@@ -497,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v15 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v15"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v16 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v16"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -616,13 +624,23 @@ async function main() {
       first.sections.some(s => s.title === 'The Lab Standard' && s.items.some(x => x.includes('session ends'))),
       first.sections);
     const keysOf = (p) => (p.intake.tests || []).map(t => t.testKey);
-    check(who + ': intake tests wire only to existing jump test types and keep the rest as content',
-      JSON.stringify(keysOf(winter)) === '[null,"vertical-jump","broad-jump"]' &&
-      JSON.stringify(keysOf(armor)) === '[null,null,null]' &&
-      JSON.stringify(keysOf(first)) === '[null,null,"broad-jump","vertical-jump"]' &&
+    const ARMOR_KEYS = ['knee-to-wall-left', 'knee-to-wall-right',
+      'single-leg-balance-left', 'single-leg-balance-right',
+      'single-leg-calf-raise-left', 'single-leg-calf-raise-right'];
+    check(who + ': every intake and retest check wires to a catalog test type (v16)',
+      JSON.stringify(keysOf(winter)) === '["30m-sprint","vertical-jump","broad-jump"]' &&
+      JSON.stringify(keysOf(armor)) === JSON.stringify(ARMOR_KEYS) &&
+      JSON.stringify(keysOf(first)) === '["10m-sprint","30m-sprint","broad-jump","vertical-jump"]' &&
       JSON.stringify((winter.retest.tests || []).map(t => t.testKey)) === JSON.stringify(keysOf(winter)) &&
-      JSON.stringify((first.retest.tests || []).map(t => t.testKey)) === JSON.stringify(keysOf(first)),
+      JSON.stringify((armor.retest.tests || []).map(t => t.testKey)) === JSON.stringify(keysOf(armor)) &&
+      JSON.stringify((first.retest.tests || []).map(t => t.testKey)) === JSON.stringify(keysOf(first)) &&
+      [winter, armor, first].every(p => (p.intake.tests || []).concat(p.retest.tests || [])
+        .every(t => typeof t.testKey === 'string' && t.testKey.length > 0)),
       labs.map(p => keysOf(p)));
+    check(who + ': The Lab Standard points at logging the timed starts',
+      first.sections.some(s => s.title === 'The Lab Standard' &&
+        s.items.some(x => x.includes('logged in Testing') && x.includes('Speed Report'))),
+      first.sections.map(s => s.title));
     check(who + ': Armor is presented by who it is for, with no separate purchase or trial mechanic',
       !/standalone purchase|free.trial companion/i.test(JSON.stringify(labs)) &&
       armor.who.includes('Athletes coming off ankle or hip issues'), armor.who);
@@ -631,8 +649,31 @@ async function main() {
   const catalogKeys = new Set((r.json.tests || []).map(t => t.key));
   check('the Lab Program logging links resolve to real entries in the testing catalog',
     r.status === 200 && catalogKeys.has('vertical-jump') && catalogKeys.has('broad-jump') &&
+    catalogKeys.has('10m-sprint') && catalogKeys.has('30m-sprint') &&
+    catalogKeys.has('knee-to-wall-left') && catalogKeys.has('knee-to-wall-right') &&
+    catalogKeys.has('single-leg-balance-left') && catalogKeys.has('single-leg-balance-right') &&
+    catalogKeys.has('single-leg-calf-raise-left') && catalogKeys.has('single-leg-calf-raise-right') &&
     !catalogKeys.has('knee-to-wall') && !catalogKeys.has('single-leg-balance') &&
     !catalogKeys.has('calf-raise-test'), [...catalogKeys]);
+  const catalogByKey = Object.fromEntries((r.json.tests || []).map(t => [t.key, t]));
+  check('the v16 catalog entries carry the right units, kinds, and directions',
+    catalogByKey['10m-sprint'].name === '10m Sprint' && catalogByKey['10m-sprint'].unit === 'sec' &&
+    catalogByKey['10m-sprint'].kind === 'measure' && catalogByKey['10m-sprint'].better === 'lower' &&
+    catalogByKey['30m-sprint'].name === '30m Sprint' && catalogByKey['30m-sprint'].unit === 'sec' &&
+    catalogByKey['30m-sprint'].kind === 'measure' && catalogByKey['30m-sprint'].better === 'lower' &&
+    catalogByKey['knee-to-wall-left'].name === 'Knee-to-Wall (Left)' &&
+    catalogByKey['knee-to-wall-left'].unit === 'in' && catalogByKey['knee-to-wall-left'].kind === 'measure' &&
+    (catalogByKey['knee-to-wall-left'].better || 'higher') === 'higher' &&
+    catalogByKey['knee-to-wall-right'].name === 'Knee-to-Wall (Right)' &&
+    catalogByKey['single-leg-balance-left'].name === 'Single-Leg Balance (Left)' &&
+    catalogByKey['single-leg-balance-left'].unit === 'sec' &&
+    (catalogByKey['single-leg-balance-left'].better || 'higher') === 'higher' &&
+    catalogByKey['single-leg-balance-right'].name === 'Single-Leg Balance (Right)' &&
+    catalogByKey['single-leg-calf-raise-left'].name === 'Single-Leg Calf Raise (Left)' &&
+    catalogByKey['single-leg-calf-raise-left'].unit === 'reps' &&
+    catalogByKey['single-leg-calf-raise-left'].kind === 'reps' &&
+    catalogByKey['single-leg-calf-raise-right'].name === 'Single-Leg Calf Raise (Right)',
+    catalogByKey['10m-sprint']);
   r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   check('duplicate email is 409', r.status === 409, r.status);
   r = await api(null, 'POST', '/api/register', { email: 'not-an-email', password: 'testpass123' });
@@ -843,7 +884,7 @@ async function main() {
 
   /* ---------------- testing tracker ---------------- */
   r = await api(coach, 'GET', '/api/tests');
-  check('battery has 9 preloaded tests', r.json.tests.length === 9, r.json.tests.length);
+  check('battery has 17 preloaded tests', r.json.tests.length === 17, r.json.tests.length);
   check('battery includes hang clean', r.json.tests.some(t => t.key === 'hang-clean'));
   r = await api(coach, 'POST', '/api/tests', { name: 'Medicine Ball Throw', unit: 'ft' });
   check('custom test create is 201', r.status === 201 && r.json.test.custom === true, r.json);
@@ -1156,7 +1197,11 @@ async function main() {
   check('coverage shape: 1 yours, 24 placeholders, and only demo-less tests are none',
     cov.summary.yours === 1 && cov.summary.placeholder === 24 &&
     cov.rows.filter(x => x.status === 'none')
-      .every(x => x.id === 'forty-yard-dash' || covTests.some(t => t.key === x.id && t.custom)), cov.summary);
+      .every(x => x.id === 'forty-yard-dash' ||
+        ['10m-sprint', '30m-sprint', 'knee-to-wall-left', 'knee-to-wall-right',
+          'single-leg-balance-left', 'single-leg-balance-right',
+          'single-leg-calf-raise-left', 'single-leg-calf-raise-right'].includes(x.id) ||
+        covTests.some(t => t.key === x.id && t.custom)), cov.summary);
   const covCustomTest = covTests.find(t => t.custom);
   check('a test with no demo classifies as none',
     !!covCustomTest && !!covRow(covCustomTest.key) && covRow(covCustomTest.key).status === 'none',
@@ -2474,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v15'") &&
-    swJs.text.includes("ruffin-performance-v15"));
+    appJs.text.includes("const APP_VERSION = 'v16'") &&
+    swJs.text.includes("ruffin-performance-v16"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v15"') &&
-    pageHtml.text.includes('Ruffin Performance · App v15') &&
+    pageHtml.text.includes('data-app-version="v16"') &&
+    pageHtml.text.includes('Ruffin Performance · App v16') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -7559,9 +7604,10 @@ async function waitForServer(tries = 60) {
       /* ---- assessment before any custom test: the 40-Yard Dash
          (Build v6) is the battery's own timed test, so Speed leads ---- */
       rp = await rpApi(rpCoach, 'GET', '/api/reports/assessment');
-      check('assessment: the preloaded 40-Yard Dash gives a Speed section before any custom test',
+      check('assessment: the preloaded timed tests give a Speed section before any custom test',
         rp.status === 200 && (rp.json.qualities || []).map(q => q.quality).join(',') === 'speed,power,strength' &&
-        ((rp.json.qualities || []).find(q => q.quality === 'speed') || { tests: [] }).tests.map(t => t.key).join(',') === 'forty-yard-dash',
+        ((rp.json.qualities || []).find(q => q.quality === 'speed') || { tests: [] }).tests.map(t => t.key).join(',') ===
+          'forty-yard-dash,10m-sprint,30m-sprint,single-leg-balance-left,single-leg-balance-right',
         rp.json.qualities);
 
       /* ---- testing fixtures across two periods ---- */
@@ -7649,8 +7695,9 @@ async function waitForServer(tries = 60) {
       const qSpeed = quals.find(q => q.quality === 'speed') || { tests: [], rows: [] };
       const qPower = quals.find(q => q.quality === 'power') || { tests: [], averages: {} };
       const qStrength = quals.find(q => q.quality === 'strength') || { tests: [], averages: {}, counts: {} };
-      check('assessment: the 40-Yard Dash plus the timed custom test are the Speed section; jumps are Power; the five lifts are Strength',
-        qSpeed.tests.map(t => t.key).join(',') === 'forty-yard-dash,' + flyT.key &&
+      check('assessment: the preloaded timed tests plus the timed custom test are the Speed section; jumps are Power; the five lifts are Strength',
+        qSpeed.tests.map(t => t.key).join(',') ===
+          'forty-yard-dash,10m-sprint,30m-sprint,single-leg-balance-left,single-leg-balance-right,' + flyT.key &&
         qPower.tests.map(t => t.key).join(',') === 'vertical-jump,broad-jump' &&
         qStrength.tests.map(t => t.key).join(',') === 'back-squat,trap-bar-deadlift,bench-press,hang-clean,power-clean',
         quals.map(q => q.tests.map(t => t.key)));
@@ -7931,7 +7978,8 @@ async function waitForServer(tries = 60) {
       const srSpeedSara = (srSpeed.rows || []).find(x => x.profileId === saraP) || { marks: {} };
       check('assessment: the 40-Yard Dash is a Speed-quality test with Sara\u2019s best 4.88',
         srQuals.map(q => q.quality).join(',') === 'speed,power,strength' &&
-        srSpeed.tests.map(t => t.key).join(',') === 'forty-yard-dash' &&
+        srSpeed.tests.map(t => t.key).join(',') ===
+          'forty-yard-dash,10m-sprint,30m-sprint,single-leg-balance-left,single-leg-balance-right' &&
         srSpeedSara.marks['forty-yard-dash'] === 4.88, srSpeed);
 
       /* ---- Baseline Testing Kit: one day, exactly the core tests ----
@@ -7975,6 +8023,71 @@ async function waitForServer(tries = 60) {
       check('with no future test day left, next test date is the plan fallback again (null exactly when the scan finds none)',
         (sr.json.nextTestDate ? sr.json.nextTestDate.date : null) === planExpect,
         { got: sr.json.nextTestDate, planExpect });
+
+      /* ---- v16: the Lab program checks are loggable tests ----
+         The five checks the Lab programs intake and retest against
+         (eight catalog entries with the Armor sides) log through the
+         same result flow as everything else, and a member's Speed
+         Report picks them up generically, in each test's own
+         better-direction. */
+      const LAB_KEYS = ['10m-sprint', '30m-sprint',
+        'knee-to-wall-left', 'knee-to-wall-right',
+        'single-leg-balance-left', 'single-leg-balance-right',
+        'single-leg-calf-raise-left', 'single-leg-calf-raise-right'];
+      sr = await srApi(srCoach, 'POST', '/api/test-days', { date: D2, title: 'Lab Intake', testKeys: LAB_KEYS });
+      check('lab checks: a test day can carry all eight new entries', sr.status === 201, sr.status);
+      const labDay1 = sr.json.testDay.id;
+      sr = await srApi(srCoach, 'POST', '/api/results', { profileId: saraP, testDayId: labDay1, testKey: '10m-sprint', value: 0 });
+      check('lab checks: a 10m time of zero is refused like any other timed measure', sr.status === 400, sr.status);
+      sr = await bulk(labDay1, [
+        { profileId: saraP, testKey: '10m-sprint', value: 1.92 },
+        { profileId: saraP, testKey: 'knee-to-wall-left', value: 4 },
+        { profileId: saraP, testKey: 'single-leg-balance-left', value: 30 },
+      ]);
+      check('lab checks: intake saves 3 results (sprint, knee-to-wall, balance)', sr.status === 200 && sr.json.saved === 3, sr.json);
+      sr = await srApi(srCoach, 'POST', '/api/test-days', { date: D3, title: 'Lab Retest', testKeys: LAB_KEYS });
+      const labDay2 = sr.json.testDay.id;
+      sr = await bulk(labDay2, [
+        { profileId: saraP, testKey: '10m-sprint', value: 1.85 },
+        { profileId: saraP, testKey: '30m-sprint', value: 4.35 },
+        { profileId: saraP, testKey: 'knee-to-wall-left', value: 4.5 },
+        { profileId: saraP, testKey: 'knee-to-wall-right', value: 4 },
+        { profileId: saraP, testKey: 'single-leg-balance-left', value: 42 },
+        { profileId: saraP, testKey: 'single-leg-balance-right', value: 35 },
+        { profileId: saraP, testKey: 'single-leg-calf-raise-left', value: 10 },
+        { profileId: saraP, testKey: 'single-leg-calf-raise-right', value: 9 },
+      ]);
+      check('lab checks: retest saves all 8 results', sr.status === 200 && sr.json.saved === 8, sr.json);
+      sr = await srApi(sara, 'GET', '/api/my/speed-report');
+      const labTests = Object.fromEntries((sr.json.tests || []).map(t => [t.testKey, t]));
+      check('lab checks: Sara\u2019s report carries every new test with its unit and direction',
+        LAB_KEYS.every(k => !!labTests[k]) &&
+        labTests['10m-sprint'].unit === 'sec' && labTests['10m-sprint'].better === 'lower' &&
+        labTests['30m-sprint'].unit === 'sec' && labTests['30m-sprint'].better === 'lower' &&
+        labTests['knee-to-wall-left'].unit === 'in' && labTests['knee-to-wall-left'].better === 'higher' &&
+        labTests['single-leg-balance-left'].unit === 'sec' &&
+        labTests['single-leg-calf-raise-left'].unit === 'reps' &&
+        labTests['30m-sprint'].latest.value === 4.35 &&
+        labTests['single-leg-calf-raise-right'].latest.value === 9,
+        Object.keys(labTests));
+      check('lab checks: the 10m reads in its own direction (1.92 baseline, 1.85 latest, improved)',
+        !!labTests['10m-sprint'].baseline && labTests['10m-sprint'].baseline.value === 1.92 &&
+        !!labTests['10m-sprint'].best && labTests['10m-sprint'].best.value === 1.85 &&
+        !!labTests['10m-sprint'].latest && labTests['10m-sprint'].latest.value === 1.85 &&
+        !!labTests['10m-sprint'].changeSinceBaseline &&
+        labTests['10m-sprint'].changeSinceBaseline.improvement === 0.07 &&
+        labTests['10m-sprint'].changeSinceBaseline.improved === true,
+        labTests['10m-sprint']);
+      check('lab checks: knee-to-wall gains read as improvement (4 in to 4.5 in)',
+        !!labTests['knee-to-wall-left'].baseline && labTests['knee-to-wall-left'].baseline.value === 4 &&
+        !!labTests['knee-to-wall-left'].latest && labTests['knee-to-wall-left'].latest.value === 4.5 &&
+        !!labTests['knee-to-wall-left'].changeSinceBaseline &&
+        labTests['knee-to-wall-left'].changeSinceBaseline.improved === true,
+        labTests['knee-to-wall-left']);
+      sr = await srApi(ben, 'GET', '/api/my/speed-report');
+      check('lab checks: isolation \u2014 Ben\u2019s report carries none of Sara\u2019s lab results',
+        sr.status === 200 && !(sr.json.tests || []).some(t => LAB_KEYS.includes(t.testKey)),
+        (sr.json.tests || []).map(t => t.testKey));
 
       /* ---- TV slice safety, from the served bundle ---- */
       const srJs = await srText(null, '/app.js');

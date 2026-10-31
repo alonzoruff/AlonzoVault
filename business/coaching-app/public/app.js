@@ -1187,13 +1187,23 @@ function renderQtr() {
    The three named Lab programs live in the bundled content payload.
    This view is separate from the coach program builder: members read
    the program here, while coaches still use Programs in the Coach
-   area to build and apply training templates. Intake and retest rows
-   link into the existing testing flow only when the check already
-   has a test in the catalog. Other checks stay as program content. */
+   area to build and apply training templates. Every intake and
+   retest check has a test in the catalog (v16 added the sprint and
+   Armor checks), so each row links into the existing testing flow:
+   coaches land in Testing to log it, members land in their Speed
+   Report where the results show. */
 /* LABPROGRAMS-BEGIN */
 const LAB_PROGRAM_TEST_LABELS = {
   'vertical-jump': 'Vertical Jump',
   'broad-jump': 'Broad Jump',
+  '10m-sprint': '10m Sprint',
+  '30m-sprint': '30m Sprint',
+  'knee-to-wall-left': 'Knee-to-Wall (Left)',
+  'knee-to-wall-right': 'Knee-to-Wall (Right)',
+  'single-leg-balance-left': 'Single-Leg Balance (Left)',
+  'single-leg-balance-right': 'Single-Leg Balance (Right)',
+  'single-leg-calf-raise-left': 'Single-Leg Calf Raise (Left)',
+  'single-leg-calf-raise-right': 'Single-Leg Calf Raise (Right)',
 };
 function labProgramTestLabel(testKey) {
   return LAB_PROGRAM_TEST_LABELS[testKey] || '';

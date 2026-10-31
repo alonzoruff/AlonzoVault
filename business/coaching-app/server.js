@@ -94,8 +94,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v15',
-  cache: 'ruffin-performance-v15',
+  version: 'v16',
+  cache: 'ruffin-performance-v16',
 };
 
 /* ------------------------------------------------------------------ */
@@ -721,6 +721,19 @@ const DEFAULT_TESTS = [
   { key: 'forty-yard-dash', name: '40-Yard Dash', unit: 'sec', kind: 'measure', better: 'lower', custom: false },
   { key: 'vertical-jump', name: 'Vertical Jump', unit: 'in', kind: 'measure', custom: false },
   { key: 'broad-jump', name: 'Broad Jump', unit: 'in', kind: 'measure', custom: false },
+  /* The Lab program checks (v16): the sprint and joint-prep tests the
+     three Lab programs intake and retest against. The Armor checks
+     are measured per side and the catalog has no left/right
+     dimension, so each side is its own entry. Knee-to-wall is in
+     inches, the catalog's distance convention (the jumps use it). */
+  { key: '10m-sprint', name: '10m Sprint', unit: 'sec', kind: 'measure', better: 'lower', custom: false },
+  { key: '30m-sprint', name: '30m Sprint', unit: 'sec', kind: 'measure', better: 'lower', custom: false },
+  { key: 'knee-to-wall-left', name: 'Knee-to-Wall (Left)', unit: 'in', kind: 'measure', custom: false },
+  { key: 'knee-to-wall-right', name: 'Knee-to-Wall (Right)', unit: 'in', kind: 'measure', custom: false },
+  { key: 'single-leg-balance-left', name: 'Single-Leg Balance (Left)', unit: 'sec', kind: 'measure', custom: false },
+  { key: 'single-leg-balance-right', name: 'Single-Leg Balance (Right)', unit: 'sec', kind: 'measure', custom: false },
+  { key: 'single-leg-calf-raise-left', name: 'Single-Leg Calf Raise (Left)', unit: 'reps', kind: 'reps', custom: false },
+  { key: 'single-leg-calf-raise-right', name: 'Single-Leg Calf Raise (Right)', unit: 'reps', kind: 'reps', custom: false },
   { key: 'pull-ups', name: 'Pull-ups', unit: 'reps', kind: 'reps', custom: false },
 ];
 function allTests() {

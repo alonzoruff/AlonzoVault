@@ -8,8 +8,8 @@
    "tests": [
     {
      "name": "30m sprint",
-     "protocol": "3-point start \u00b7 best of 3",
-     "testKey": null
+     "protocol": "3-point start \u00b7 best of 3 \u00b7 logged as 30m Sprint in the testing catalog",
+     "testKey": "30m-sprint"
     },
     {
      "name": "Countermovement jump",
@@ -30,8 +30,8 @@
    "tests": [
     {
      "name": "30m sprint",
-     "protocol": "3-point start \u00b7 best of 3",
-     "testKey": null
+     "protocol": "3-point start \u00b7 best of 3 \u00b7 logged as 30m Sprint in the testing catalog",
+     "testKey": "30m-sprint"
     },
     {
      "name": "Countermovement jump",
@@ -116,22 +116,37 @@
   "format": "Daily prep for 12 to 15 minutes \u00b7 2 strength add-on days per week \u00b7 4 weeks",
   "id": "hip-ankle-armor-protocol",
   "intake": {
-   "note": "Complete this check on day 1.",
+   "note": "Complete this check on day 1. Every check is measured on each side, and each side is logged on its own.",
    "tests": [
     {
-     "name": "Knee-to-wall ankle distance",
-     "protocol": "Measure each side",
-     "testKey": null
+     "name": "Knee-to-wall ankle distance (left)",
+     "protocol": "Measure the left side \u00b7 logged as Knee-to-Wall (Left) in the testing catalog",
+     "testKey": "knee-to-wall-left"
     },
     {
-     "name": "Single-leg balance",
-     "protocol": "Time each side",
-     "testKey": null
+     "name": "Knee-to-wall ankle distance (right)",
+     "protocol": "Measure the right side \u00b7 logged as Knee-to-Wall (Right) in the testing catalog",
+     "testKey": "knee-to-wall-right"
     },
     {
-     "name": "Single-leg calf raise test",
-     "protocol": "10 reps",
-     "testKey": null
+     "name": "Single-leg balance (left)",
+     "protocol": "Time the left side \u00b7 logged as Single-Leg Balance (Left) in the testing catalog",
+     "testKey": "single-leg-balance-left"
+    },
+    {
+     "name": "Single-leg balance (right)",
+     "protocol": "Time the right side \u00b7 logged as Single-Leg Balance (Right) in the testing catalog",
+     "testKey": "single-leg-balance-right"
+    },
+    {
+     "name": "Single-leg calf raise test (left)",
+     "protocol": "Up to 10 reps on the left side \u00b7 logged as Single-Leg Calf Raise (Left) in the testing catalog",
+     "testKey": "single-leg-calf-raise-left"
+    },
+    {
+     "name": "Single-leg calf raise test (right)",
+     "protocol": "Up to 10 reps on the right side \u00b7 logged as Single-Leg Calf Raise (Right) in the testing catalog",
+     "testKey": "single-leg-calf-raise-right"
     }
    ],
    "title": "Lab Intake"
@@ -141,19 +156,34 @@
    "note": "Complete the same exit check on day 28 and compare it with day 1.",
    "tests": [
     {
-     "name": "Knee-to-wall ankle distance",
-     "protocol": "Measure each side",
-     "testKey": null
+     "name": "Knee-to-wall ankle distance (left)",
+     "protocol": "Measure the left side \u00b7 logged as Knee-to-Wall (Left) in the testing catalog",
+     "testKey": "knee-to-wall-left"
     },
     {
-     "name": "Single-leg balance",
-     "protocol": "Time each side",
-     "testKey": null
+     "name": "Knee-to-wall ankle distance (right)",
+     "protocol": "Measure the right side \u00b7 logged as Knee-to-Wall (Right) in the testing catalog",
+     "testKey": "knee-to-wall-right"
     },
     {
-     "name": "Single-leg calf raise test",
-     "protocol": "10 reps",
-     "testKey": null
+     "name": "Single-leg balance (left)",
+     "protocol": "Time the left side \u00b7 logged as Single-Leg Balance (Left) in the testing catalog",
+     "testKey": "single-leg-balance-left"
+    },
+    {
+     "name": "Single-leg balance (right)",
+     "protocol": "Time the right side \u00b7 logged as Single-Leg Balance (Right) in the testing catalog",
+     "testKey": "single-leg-balance-right"
+    },
+    {
+     "name": "Single-leg calf raise test (left)",
+     "protocol": "Up to 10 reps on the left side \u00b7 logged as Single-Leg Calf Raise (Left) in the testing catalog",
+     "testKey": "single-leg-calf-raise-left"
+    },
+    {
+     "name": "Single-leg calf raise test (right)",
+     "protocol": "Up to 10 reps on the right side \u00b7 logged as Single-Leg Calf Raise (Right) in the testing catalog",
+     "testKey": "single-leg-calf-raise-right"
     }
    ],
    "title": "Lab Retest"
@@ -208,13 +238,13 @@
    "tests": [
     {
      "name": "10m sprint",
-     "protocol": "3-point start \u00b7 best of 3",
-     "testKey": null
+     "protocol": "3-point start \u00b7 best of 3 \u00b7 logged as 10m Sprint in the testing catalog",
+     "testKey": "10m-sprint"
     },
     {
      "name": "30m sprint",
-     "protocol": "3-point start \u00b7 best of 3",
-     "testKey": null
+     "protocol": "3-point start \u00b7 best of 3 \u00b7 logged as 30m Sprint in the testing catalog",
+     "testKey": "30m-sprint"
     },
     {
      "name": "Standing broad jump",
@@ -235,13 +265,13 @@
    "tests": [
     {
      "name": "10m sprint",
-     "protocol": "3-point start \u00b7 best of 3",
-     "testKey": null
+     "protocol": "3-point start \u00b7 best of 3 \u00b7 logged as 10m Sprint in the testing catalog",
+     "testKey": "10m-sprint"
     },
     {
      "name": "30m sprint",
-     "protocol": "3-point start \u00b7 best of 3",
-     "testKey": null
+     "protocol": "3-point start \u00b7 best of 3 \u00b7 logged as 30m Sprint in the testing catalog",
+     "testKey": "30m-sprint"
     },
     {
      "name": "Standing broad jump",
@@ -270,7 +300,7 @@
     "intro": "The timing rule for every First Step session.",
     "items": [
      "Time the Day 1 starts every week. Phone timing is fine. Use timing gates when they are available.",
-     "Log the times in the app with the session.",
+     "Log the times in the app with the session. The Day 1 starts are timed over 10m and 30m, and both are tests in the catalog, so the times are logged in Testing and show in the Speed Report.",
      "If times fall off by more than a few percent inside a session, the session ends.",
      "Speed work stops when it stops being speed work."
     ],
