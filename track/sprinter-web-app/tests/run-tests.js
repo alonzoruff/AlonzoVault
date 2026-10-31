@@ -453,7 +453,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is bumped to v59',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v59"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v60"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2378,7 +2378,7 @@ async function main() {
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
     appJs.text.includes("const APP_VERSION = 'v59'") &&
-    swJs.text.includes("sprinter-app-v59"));
+    swJs.text.includes("sprinter-app-v60"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
