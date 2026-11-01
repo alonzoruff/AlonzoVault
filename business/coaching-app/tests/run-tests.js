@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v16 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v16"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v17 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v17"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v16'") &&
-    swJs.text.includes("ruffin-performance-v16"));
+    appJs.text.includes("const APP_VERSION = 'v17'") &&
+    swJs.text.includes("ruffin-performance-v17"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v16"') &&
-    pageHtml.text.includes('Ruffin Performance · App v16') &&
+    pageHtml.text.includes('data-app-version="v17"') &&
+    pageHtml.text.includes('Ruffin Performance · App v17') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -8203,6 +8203,357 @@ async function waitForServer(tries = 60) {
       fs.rmSync(FC_DIR, { recursive: true, force: true });
     }
   }
+
+    /* Lab Talk bookings (v17): coach-set availability (one window
+       per weekday, blocked dates, a meeting link), the public slot
+       list, request-and-hold booking, the visitor token status
+       page with the .ics once approved, and the coach Bookings
+       endpoints. Defaults ship with NO hours anywhere. Own server,
+       own store. */
+    {
+      const BK_BASE = 'http://127.0.0.1:3229';
+      const bkApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { headers['content-type'] = 'application/json'; data = JSON.stringify(body); }
+        const res = await fetch(BK_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const bkText = async (cookie, p) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        const res = await fetch(BK_BASE + p, { headers });
+        return { status: res.status, text: await res.text(), type: res.headers.get('content-type') || '' };
+      };
+      const bkCookie = (r) => (r.setCookie[0] || '').split(';')[0];
+      const BK_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-bk-'));
+      const bkChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+        env: Object.assign({}, process.env, {
+          PORT: '3229', DATA_DIR: BK_DIR, SESSION_SECRET: 'booking-secret',
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      bkChild.stdout.on('data', () => {});
+      bkChild.stderr.on('data', () => {});
+      const waitBk = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(BK_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      try {
+        check('booking server starts', await waitBk());
+
+        /* Wiring: the public page, the coach view, the renderers. */
+        const bkPage = await bkText(null, '/');
+        const bkJs = await bkText(null, '/app.js');
+        const bkCss = await bkText(null, '/styles.css');
+        check('booking views are in the served page',
+          bkPage.status === 200 && bkPage.text.includes('id="view-book"') &&
+          bkPage.text.includes('id="book-main"') && bkPage.text.includes('Book a free Lab Talk') &&
+          bkPage.text.includes('id="view-bookings"') && bkPage.text.includes('id="bookings-main"') &&
+          bkPage.text.includes('data-view="bookings"'), bkPage.status);
+        check('booking wiring is in the served JS',
+          bkJs.text.includes('renderBook') && bkJs.text.includes('renderBookings') &&
+          bkJs.text.includes('/api/book/slots') && bkJs.text.includes('/api/bookings') &&
+          bkJs.text.includes('/api/booking-settings') &&
+          bkJs.text.includes("['bookings', 'Bookings']"), bkJs.text.length);
+        check('booking layout has a phone-width slot rule',
+          bkCss.text.includes('.book-slots') &&
+          bkCss.text.includes('.book-slot { flex: 1 1 28%; }'), bkCss.text.slice(0, 80));
+
+        /* New York dates, computed the way the server computes
+           them, so the block is right at any run time. */
+        const nyFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
+        const nyToday = nyFmt.format(new Date());
+        const addDays = (ds, n) => {
+          const [y, m, d] = ds.split('-').map(Number);
+          return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+        };
+        const tomorrow = addDays(nyToday, 1);
+        const dayAfter = addDays(nyToday, 2);
+        const farDay = addDays(nyToday, 20);
+        const tomorrowWeekday = new Date(tomorrow + 'T12:00:00Z').getUTCDay();
+        const icsOf = (iso) => {
+          const d = new Date(iso);
+          const p2 = (n) => String(n).padStart(2, '0');
+          return d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCDate()) + 'T'
+            + p2(d.getUTCHours()) + p2(d.getUTCMinutes()) + p2(d.getUTCSeconds()) + 'Z';
+        };
+
+        /* Defaults: no hours posted anywhere, so nothing is
+           bookable and the coach endpoints refuse the public. */
+        let br = await bkApi(null, 'GET', '/api/book/slots');
+        check('default availability is empty: 14 closed days, nothing bookable',
+          br.status === 200 && br.json.hasAvailability === false &&
+          Array.isArray(br.json.days) && br.json.days.length === 14 &&
+          br.json.days[0].date === nyToday &&
+          br.json.days.every(d => d.open === false && d.slots.length === 0), br.json);
+        br = await bkApi(null, 'POST', '/api/book',
+          { name: 'Too Early', email: 'early@example.com', topic: 'Speed', date: tomorrow, time: '08:00' });
+        check('booking with no hours posted is refused', br.status === 400, br.status);
+        br = await bkApi(null, 'GET', '/api/bookings');
+        check('signed-out coach bookings list is 401', br.status === 401, br.status);
+        br = await bkApi(null, 'GET', '/api/booking-settings');
+        check('signed-out booking settings are 401', br.status === 401, br.status);
+        br = await bkApi(null, 'POST', '/api/bookings/whatever/status', { status: 'approved' });
+        check('signed-out booking status change is 401', br.status === 401, br.status);
+
+        /* Accounts: the owner coach and one invited member. */
+        br = await bkApi(null, 'POST', '/api/register', { email: 'bkcoach@test.com', password: 'testpass123' });
+        check('booking store: first account is coach', br.status === 201 && br.json.role === 'coach', br.json);
+        const bkCoach = bkCookie(br);
+        br = await bkApi(bkCoach, 'POST', '/api/client-invites', { email: 'bkmember@test.com' });
+        check('booking store: member invite lands', br.status === 200 || br.status === 201, br.status);
+        br = await bkApi(null, 'POST', '/api/register', { email: 'bkmember@test.com', password: 'testpass123' });
+        const bkMember = bkCookie(br);
+        check('booking store: member registers', br.status === 201 && br.json.role === 'athlete', br.json);
+
+        br = await bkApi(bkCoach, 'GET', '/api/bookings');
+        check('coach bookings list starts empty', br.status === 200 &&
+          Array.isArray(br.json.bookings) && br.json.bookings.length === 0, br.json);
+        br = await bkApi(bkCoach, 'GET', '/api/booking-settings');
+        check('booking settings default to no hours, no blocks, no link',
+          br.status === 200 && br.json.settings.weekdays.length === 7 &&
+          br.json.settings.weekdays.every(w => w === null) &&
+          br.json.settings.blockedDates.length === 0 && br.json.settings.meetingLink === '', br.json);
+        br = await bkApi(bkMember, 'GET', '/api/bookings');
+        check('member cannot read the bookings list', br.status === 403, br.status);
+        br = await bkApi(bkMember, 'PUT', '/api/booking-settings', { weekdays: [], blockedDates: [], meetingLink: '' });
+        check('member cannot change availability', br.status === 403, br.status);
+        br = await bkApi(bkMember, 'POST', '/api/bookings/whatever/status', { status: 'approved' });
+        check('member cannot change a booking status', br.status === 403, br.status);
+
+        /* Settings validation: every malformed shape is refused. */
+        const allWeek = [0, 1, 2, 3, 4, 5, 6].map(() => ({ start: '08:00', end: '20:00' }));
+        br = await bkApi(bkCoach, 'PUT', '/api/booking-settings',
+          { weekdays: allWeek.slice(0, 6), blockedDates: [], meetingLink: '' });
+        check('settings with six weekdays are refused', br.status === 400, br.status);
+        const backwards = allWeek.map(w => ({ start: w.start, end: w.end }));
+        backwards[2] = { start: '19:00', end: '11:00' };
+        br = await bkApi(bkCoach, 'PUT', '/api/booking-settings',
+          { weekdays: backwards, blockedDates: [], meetingLink: '' });
+        check('a window that ends before it starts is refused', br.status === 400, br.status);
+        br = await bkApi(bkCoach, 'PUT', '/api/booking-settings',
+          { weekdays: allWeek, blockedDates: ['banana'], meetingLink: '' });
+        check('a blocked date that is not a date is refused', br.status === 400, br.status);
+        br = await bkApi(bkCoach, 'PUT', '/api/booking-settings',
+          { weekdays: allWeek, blockedDates: [], meetingLink: 'notaurl' });
+        check('a meeting link that is not a link is refused', br.status === 400, br.status);
+
+        /* The coach posts hours: 8 AM to 8 PM every day, plus the
+           meeting link. */
+        br = await bkApi(bkCoach, 'PUT', '/api/booking-settings',
+          { weekdays: allWeek, blockedDates: [], meetingLink: 'https://meet.example.com/lab-talk' });
+        check('coach posts hours and the meeting link',
+          br.status === 200 && br.json.settings.meetingLink === 'https://meet.example.com/lab-talk' &&
+          br.json.settings.weekdays.every(w => w && w.start === '08:00' && w.end === '20:00'), br.json);
+
+        br = await bkApi(null, 'GET', '/api/book/slots');
+        const tmr = (br.json.days || []).find(d => d.date === tomorrow);
+        const todaySlots = (br.json.days || []).find(d => d.date === nyToday);
+        check('slots follow the posted windows: tomorrow is 24 half-hour slots, 08:00 to 19:30',
+          br.status === 200 && br.json.hasAvailability === true && !!tmr &&
+          tmr.open === true && tmr.weekday === tomorrowWeekday &&
+          tmr.slots.length === 24 && tmr.slots[0].time === '08:00' && tmr.slots[23].time === '19:30',
+          tmr);
+        check('every offered slot is in the future and on a half-hour start',
+          (br.json.days || []).every(d => d.slots.every(s =>
+            Date.parse(s.startsAt) > Date.now() && /:00$|:30$/.test(s.time))) &&
+          !!todaySlots, br.json && br.json.days && br.json.days.length);
+
+        /* Blocked dates override the weekly window. */
+        br = await bkApi(bkCoach, 'PUT', '/api/booking-settings',
+          { weekdays: allWeek, blockedDates: [tomorrow], meetingLink: 'https://meet.example.com/lab-talk' });
+        check('coach blocks tomorrow', br.status === 200 && br.json.settings.blockedDates.includes(tomorrow), br.json);
+        br = await bkApi(null, 'GET', '/api/book/slots');
+        const tmrBlocked = (br.json.days || []).find(d => d.date === tomorrow);
+        const daOpen = (br.json.days || []).find(d => d.date === dayAfter);
+        check('a blocked date offers nothing while its neighbour stays open',
+          !!tmrBlocked && tmrBlocked.open === false && tmrBlocked.slots.length === 0 &&
+          !!daOpen && daOpen.open === true && daOpen.slots.length === 24,
+          { tmrBlocked, daOpen: daOpen && daOpen.slots.length });
+        br = await bkApi(null, 'POST', '/api/book',
+          { name: 'Blocked Out', email: 'blocked@example.com', topic: 'Speed', date: tomorrow, time: '08:00' });
+        check('booking a blocked date is refused', br.status === 400, br.status);
+        br = await bkApi(bkCoach, 'PUT', '/api/booking-settings',
+          { weekdays: allWeek, blockedDates: [], meetingLink: 'https://meet.example.com/lab-talk' });
+        check('coach unblocks tomorrow', br.status === 200 && br.json.settings.blockedDates.length === 0, br.json);
+
+        /* Visitor one books tomorrow 08:00 — the slot holds. */
+        br = await bkApi(null, 'POST', '/api/book',
+          { name: 'Pat Parent', email: 'pat@example.com', athleteName: 'Sam', topic: 'Getting faster for the spring season', date: tomorrow, time: '08:00' });
+        check('a visitor books an open slot and gets a token',
+          br.status === 201 && typeof br.json.token === 'string' && br.json.token.length >= 32 &&
+          br.json.booking.status === 'pending' && br.json.booking.date === tomorrow &&
+          br.json.booking.time === '08:00' && br.json.booking.meetingLink === '' &&
+          br.json.booking.icsPath === null, br.json);
+        const token1 = br.json.token;
+        br = await bkApi(null, 'GET', '/api/book/slots');
+        const tmrHeld = (br.json.days || []).find(d => d.date === tomorrow);
+        check('the held slot leaves the public list',
+          !!tmrHeld && tmrHeld.slots.length === 23 &&
+          !tmrHeld.slots.some(s => s.time === '08:00'), tmrHeld && tmrHeld.slots.length);
+        br = await bkApi(null, 'POST', '/api/book',
+          { name: 'Second In Line', email: 'second@example.com', topic: 'Speed', date: tomorrow, time: '08:00' });
+        check('a second request for a held slot is refused', br.status === 400, br.status);
+
+        /* Forged requests: every shape that is not a real offered
+           slot right now. */
+        const forged = [
+          { name: 'Forge', email: 'forge@example.com', topic: 'X', date: tomorrow, time: '08:15' },
+          { name: 'Forge', email: 'forge@example.com', topic: 'X', date: farDay, time: '08:00' },
+          { name: 'Forge', email: 'forge@example.com', topic: 'X', date: nyToday, time: '00:00' },
+          { name: 'Forge', email: 'not-an-email', topic: 'X', date: tomorrow, time: '11:00' },
+          { name: '', email: 'forge@example.com', topic: 'X', date: tomorrow, time: '11:00' },
+          { name: 'Forge', email: 'forge@example.com', topic: '', date: tomorrow, time: '11:00' },
+        ];
+        for (const f of forged) {
+          br = await bkApi(null, 'POST', '/api/book', f);
+          check('forged booking refused (' + (f.time || '?') + ' on ' + f.date + ', email ' + f.email + ')',
+            br.status === 400, br.status);
+        }
+
+        /* The pending cap: three waiting requests per email. */
+        br = await bkApi(null, 'POST', '/api/book',
+          { name: 'Pat Parent', email: 'pat@example.com', topic: 'Second call', date: tomorrow, time: '08:30' });
+        const token1b = br.json && br.json.token;
+        check('the same visitor books a second slot', br.status === 201 && !!token1b, br.status);
+        br = await bkApi(null, 'POST', '/api/book',
+          { name: 'Pat Parent', email: 'pat@example.com', topic: 'Third call', date: tomorrow, time: '09:00' });
+        const token1c = br.json && br.json.token;
+        check('the same visitor books a third slot', br.status === 201 && !!token1c, br.status);
+        br = await bkApi(null, 'POST', '/api/book',
+          { name: 'Pat Parent', email: 'pat@example.com', topic: 'Fourth call', date: tomorrow, time: '09:30' });
+        check('a fourth pending request from one email is capped', br.status === 429, br.status);
+
+        /* Visitor two, for the leak checks. */
+        br = await bkApi(null, 'POST', '/api/book',
+          { name: 'Vic Visitor', email: 'vic@example.com', athleteName: 'Val', topic: 'College recruiting speed', date: tomorrow, time: '10:00' });
+        check('a second visitor books', br.status === 201 && !!br.json.token, br.status);
+        const token2 = br.json.token;
+
+        /* The status page shows the visitor their own booking and
+           nothing about anyone else. */
+        br = await bkApi(null, 'GET', '/api/book/status/' + token1);
+        const statusJson = JSON.stringify(br.json || {});
+        check('status page shows the pending booking with no meeting link and no calendar file',
+          br.status === 200 && br.json.booking.status === 'pending' &&
+          br.json.booking.meetingLink === '' && br.json.booking.icsPath === null &&
+          br.json.booking.name === 'Pat Parent', br.json);
+        check('status page leaks nothing about the other visitor',
+          !statusJson.includes('Vic Visitor') && !statusJson.includes('vic@example.com') &&
+          !statusJson.includes(token2) && !statusJson.includes('College recruiting'),
+          statusJson.slice(0, 200));
+        br = await bkApi(null, 'GET', '/api/book/status/deadbeefdeadbeef');
+        check('an unknown token gets a clean 404', br.status === 404, br.status);
+        const icsPending = await bkText(null, '/api/book/status/' + token1 + '/ics');
+        check('the calendar file waits for approval', icsPending.status === 403, icsPending.status);
+
+        /* The coach list: pending first, and no visitor tokens. */
+        br = await bkApi(bkCoach, 'GET', '/api/bookings');
+        const coachListJson = JSON.stringify(br.json || {});
+        const vicRow = (br.json.bookings || []).find(b => b.email === 'vic@example.com');
+        check('coach sees all four requests, pending first, tokens nowhere',
+          br.status === 200 && br.json.bookings.length === 4 &&
+          br.json.bookings.every(b => b.status === 'pending') && !!vicRow &&
+          !coachListJson.includes(token1) && !coachListJson.includes(token2),
+          br.json && br.json.bookings && br.json.bookings.length);
+        br = await bkApi(bkMember, 'GET', '/api/bookings');
+        check('member still cannot read bookings once they exist',
+          br.status === 403 && !JSON.stringify(br.json || {}).includes('pat@example.com'), br.status);
+
+        /* Approve visitor two: the status page gains the meeting
+           link and a correct calendar file. */
+        br = await bkApi(bkCoach, 'POST', '/api/bookings/' + vicRow.id + '/status', { status: 'approved' });
+        check('coach approves a request', br.status === 200 && br.json.booking.status === 'approved', br.json);
+        br = await bkApi(null, 'GET', '/api/book/status/' + token2);
+        check('an approved status page carries the meeting link and the calendar path',
+          br.status === 200 && br.json.booking.status === 'approved' &&
+          br.json.booking.meetingLink === 'https://meet.example.com/lab-talk' &&
+          br.json.booking.icsPath === '/api/book/status/' + token2 + '/ics', br.json);
+        const vicStartsAt = br.json.booking.startsAt;
+        const vicEndsAt = br.json.booking.endsAt;
+        check('the approved booking runs exactly 30 minutes',
+          Date.parse(vicEndsAt) - Date.parse(vicStartsAt) === 30 * 60000,
+          { vicStartsAt, vicEndsAt });
+        const ics = await bkText(null, '/api/book/status/' + token2 + '/ics');
+        check('the calendar file has the right start, end, and meeting link',
+          ics.status === 200 && ics.type.includes('text/calendar') &&
+          ics.text.includes('BEGIN:VCALENDAR') &&
+          ics.text.includes('DTSTART:' + icsOf(vicStartsAt)) &&
+          ics.text.includes('DTEND:' + icsOf(vicEndsAt)) &&
+          ics.text.includes('https://meet.example.com/lab-talk'),
+          ics.text.slice(0, 300));
+
+        /* Transitions: only the settled moves are allowed. */
+        br = await bkApi(bkCoach, 'POST', '/api/bookings/' + vicRow.id + '/status', { status: 'completed' });
+        check('an approved booking can be marked completed', br.status === 200 && br.json.booking.status === 'completed', br.json);
+        br = await bkApi(bkCoach, 'POST', '/api/bookings/' + vicRow.id + '/status', { status: 'cancelled' });
+        check('a completed booking cannot move again', br.status === 400, br.status);
+        br = await bkApi(bkCoach, 'GET', '/api/bookings');
+        const patRow = (br.json.bookings || []).find(b => b.email === 'pat@example.com' && b.time === '08:30');
+        br = await bkApi(bkCoach, 'POST', '/api/bookings/' + patRow.id + '/status', { status: 'completed' });
+        check('a pending booking cannot jump to completed', br.status === 400, br.status);
+        br = await bkApi(bkCoach, 'POST', '/api/bookings/' + patRow.id + '/status', { status: 'banana' });
+        check('an unknown status is refused', br.status === 400, br.status);
+        br = await bkApi(bkCoach, 'POST', '/api/bookings/no-such-id/status', { status: 'approved' });
+        check('an unknown booking id is a 404', br.status === 404, br.status);
+
+        /* Declining frees the slot for someone else. */
+        br = await bkApi(bkCoach, 'GET', '/api/bookings');
+        const patNine = (br.json.bookings || []).find(b => b.email === 'pat@example.com' && b.time === '09:00');
+        br = await bkApi(bkCoach, 'POST', '/api/bookings/' + patNine.id + '/status', { status: 'declined' });
+        check('coach declines a request', br.status === 200 && br.json.booking.status === 'declined', br.json);
+        br = await bkApi(null, 'GET', '/api/book/status/' + token1c);
+        check('the declined status page reads declined',
+          br.status === 200 && br.json.booking.status === 'declined', br.json);
+        br = await bkApi(null, 'GET', '/api/book/slots');
+        const tmrFreed = (br.json.days || []).find(d => d.date === tomorrow);
+        check('the declined slot is offered again',
+          !!tmrFreed && tmrFreed.slots.some(s => s.time === '09:00') &&
+          !tmrFreed.slots.some(s => s.time === '08:00'),
+          tmrFreed && tmrFreed.slots.map(s => s.time));
+
+        /* Per-weekday windows: only tomorrow's weekday open, two
+           slots in a one-hour window, everything else closed. */
+        const onlyTomorrow = [0, 1, 2, 3, 4, 5, 6].map(i =>
+          i === tomorrowWeekday ? { start: '11:00', end: '12:00' } : null);
+        br = await bkApi(bkCoach, 'PUT', '/api/booking-settings',
+          { weekdays: onlyTomorrow, blockedDates: [], meetingLink: 'https://meet.example.com/lab-talk' });
+        check('coach narrows hours to one weekday', br.status === 200, br.status);
+        br = await bkApi(null, 'GET', '/api/book/slots');
+        const tmrNarrow = (br.json.days || []).find(d => d.date === tomorrow);
+        const otherOpen = (br.json.days || []).filter(d => d.date !== tomorrow && d.open);
+        check('slot generation respects per-weekday windows exactly',
+          !!tmrNarrow && tmrNarrow.slots.length === 2 &&
+          tmrNarrow.slots[0].time === '11:00' && tmrNarrow.slots[1].time === '11:30' &&
+          otherOpen.every(d => d.weekday === tomorrowWeekday),
+          { tmrNarrow: tmrNarrow && tmrNarrow.slots, otherOpen: otherOpen.map(d => d.date) });
+
+        /* The content payload is unchanged in shape: v17, programs
+           still withheld signed out. */
+        br = await bkApi(null, 'GET', '/api/content');
+        check('content reports v17 with the Lab programs still withheld signed out',
+          br.status === 200 && br.json.brand.version === 'v17' &&
+          Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
+          br.json && br.json.brand);
+      } finally {
+        bkChild.kill('SIGKILL');
+        fs.rmSync(BK_DIR, { recursive: true, force: true });
+      }
+    }
 
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);

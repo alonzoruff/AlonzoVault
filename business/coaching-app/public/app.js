@@ -105,6 +105,9 @@ const state = {
   progEditId: null,
   progDraft: null,
   labProgramId: null,
+  bookToken: null,
+  bookSel: null,
+  bookJustSent: false,
   progApplyId: null,
   progMsg: null,
   calMonth: null,
@@ -393,13 +396,14 @@ const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', labprograms: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub',
   livesessions: 'train',
+  book: 'landing',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['access', 'Access'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['access', 'Access'], ['bookings', 'Bookings'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 /* ---------------- membership tiers (v14) ----------------
    The nav mirror of the server's entitlement rules. The server is
@@ -602,6 +606,8 @@ function showView(name) {
   if (name === 'ams') renderAms();
   if (name === 'formcheckqueue') renderCoachFormChecks();
   if (name === 'access') renderAccess();
+  if (name === 'book') renderBook();
+  if (name === 'bookings') renderBookings();
   if (name === 'livesessions') renderLiveSessions();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
@@ -8389,7 +8395,13 @@ const EMPTY_CONTENT = {
   /* syncAuthUi (not the individual renders) is what un-hides the Coach
      tabs for a coach whose session survived a reload. */
   syncAuthUi();
-  if (state.user) showView('home');
+  /* A visitor following their booking link (?booking=<token>) lands
+     on their booking, signed in or not — the token is the whole
+     credential, and it outranks the usual home view. */
+  const bookTokenParam = new URLSearchParams(window.location.search).get('booking');
+  if (bookTokenParam) state.bookToken = bookTokenParam;
+  if (state.bookToken) showView('book');
+  else if (state.user) showView('home');
   showAppUpdatedToast();
   renderLibrary();
 })();
@@ -8691,3 +8703,261 @@ async function renderLiveSessions() {
   }));
 }
 
+
+/* ---------------- Lab Talk bookings (v17) ----------------
+   The public page: pick an open slot, send the request, and the
+   slot is held while Coach AJ reviews it. The visitor's status
+   link (?booking=<token>) is the whole credential — it shows
+   their booking only, and once the coach approves, the meeting
+   link and calendar file appear there. The coach side lists the
+   requests with approve and decline, and holds the availability
+   settings the public page reads: one window per weekday, blocked
+   dates, and the meeting link. */
+function bookTimeLabel(hhmm) {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm || '');
+  if (!m) return hhmm || '';
+  let h = Number(m[1]);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return h + ':' + m[2] + ' ' + ampm;
+}
+function bookDayLabel(dateStr) {
+  const d = parseDate(dateStr);
+  return d ? fmtDate(d) : dateStr;
+}
+
+async function renderBook() {
+  const el = $('#book-main');
+  if (!el) return;
+  if (state.bookToken) { renderBookStatus(el); return; }
+  let data;
+  try { data = await api('/api/book/slots'); }
+  catch (err) {
+    el.innerHTML = `<div class="card"><h2>Booking is not reachable</h2><p class="error">${esc(err.message)}</p></div>`;
+    return;
+  }
+  const days = data.days || [];
+  if (!data.hasAvailability) {
+    el.innerHTML = `<div class="card">
+      <h2>No open hours right now</h2>
+      <p>No open hours are posted right now. Request an invitation instead and we will set a time together.</p>
+      <button class="btn primary" type="button" id="book-invite-btn" style="width:auto">Request an Invitation</button>
+    </div>`;
+    const b = $('#book-invite-btn');
+    if (b) b.addEventListener('click', () => showView('account'));
+    return;
+  }
+  el.innerHTML = days.map(d => `<div class="card book-day">
+      <h2>${esc(bookDayLabel(d.date))}</h2>
+      ${!d.open
+        ? '<p class="muted">Closed.</p>'
+        : d.slots.length === 0
+          ? '<p class="muted">Every open time that day is taken.</p>'
+          : `<div class="book-slots">${d.slots.map(s => `<button type="button" class="btn secondary book-slot" data-book-slot="${esc(d.date)}|${esc(s.time)}">${esc(bookTimeLabel(s.time))}</button>`).join('')}</div>`}
+    </div>`).join('') + '<div id="book-form-zone"></div>';
+  el.querySelectorAll('[data-book-slot]').forEach(btn => btn.addEventListener('click', () => {
+    const [date, time] = btn.dataset.bookSlot.split('|');
+    state.bookSel = { date, time };
+    el.querySelectorAll('.book-slot').forEach(x => x.classList.toggle('selected', x === btn));
+    renderBookForm();
+  }));
+  /* Coming back to the page keeps a picked slot, if it is still
+     being offered. */
+  if (state.bookSel) {
+    const wanted = state.bookSel.date + '|' + state.bookSel.time;
+    const btn = el.querySelector(`[data-book-slot="${CSS.escape(wanted)}"]`);
+    if (btn) { btn.classList.add('selected'); renderBookForm(); }
+    else state.bookSel = null;
+  }
+}
+
+function renderBookForm() {
+  const zone = $('#book-form-zone');
+  if (!zone || !state.bookSel) return;
+  const { date, time } = state.bookSel;
+  zone.innerHTML = `<div class="card">
+    <h2>Request this Lab Talk</h2>
+    <p><strong>${esc(bookDayLabel(date))} at ${esc(bookTimeLabel(time))}</strong> · 30 minutes · video call</p>
+    <label>Your name <input type="text" id="book-name" maxlength="120" autocomplete="name"></label>
+    <label>Your email <input type="email" id="book-email" maxlength="200" autocomplete="email"></label>
+    <label>Athlete's name (optional) <input type="text" id="book-athlete" maxlength="120"></label>
+    <label>What do you want to talk about? <textarea id="book-topic" rows="3" maxlength="1000" placeholder="Your goals, and anything you want Coach AJ to know before the call"></textarea></label>
+    <p class="error" id="book-err"></p>
+    <button class="btn primary" type="button" id="book-send" style="width:auto">Send the request</button>
+    <p class="muted">Sending holds this time for you while Coach AJ reviews the request. You get a booking link on the next screen. Save it — it is how you check the booking, and it is where the meeting link appears once Coach AJ approves.</p>
+  </div>`;
+  const send = $('#book-send');
+  if (send) send.addEventListener('click', async () => {
+    const errEl = $('#book-err');
+    send.disabled = true;
+    try {
+      const data = await apiPost('/api/book', {
+        name: $('#book-name').value, email: $('#book-email').value,
+        athleteName: $('#book-athlete').value, topic: $('#book-topic').value,
+        date, time,
+      });
+      state.bookToken = data.token;
+      state.bookSel = null;
+      state.bookJustSent = true;
+      try { window.history.replaceState(null, '', '/?booking=' + encodeURIComponent(data.token)); } catch (_) { /* the link is on screen too */ }
+      renderBook();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message;
+      send.disabled = false;
+    }
+  });
+}
+
+async function renderBookStatus(el) {
+  let data;
+  try { data = await api('/api/book/status/' + encodeURIComponent(state.bookToken)); }
+  catch (err) {
+    el.innerHTML = `<div class="card">
+      <h2>We could not find that booking</h2>
+      <p>${esc(err.message)}</p>
+      <button class="btn primary" type="button" id="book-fresh" style="width:auto">See the booking page</button>
+    </div>`;
+    const b = $('#book-fresh');
+    if (b) b.addEventListener('click', () => { state.bookToken = null; try { window.history.replaceState(null, '', '/'); } catch (_) {} renderBook(); });
+    return;
+  }
+  const bk = data.booking;
+  const justSent = state.bookJustSent;
+  state.bookJustSent = false;
+  const link = window.location.origin + '/?booking=' + encodeURIComponent(state.bookToken);
+  let body = '';
+  if (bk.status === 'pending') {
+    body = `<p><span class="badge low">Waiting for Coach AJ</span></p>
+      <p>Your time is held while Coach AJ reviews the request. When he approves it, the meeting link and a calendar file appear on this page. Save the link to this page and check back.</p>`;
+  } else if (bk.status === 'approved') {
+    body = `<p><span class="badge done">Approved</span></p>
+      <p>Your Lab Talk is set. Join the call with the button below when your time comes, and add it to your calendar.</p>
+      ${bk.meetingLink
+        ? `<p><a class="btn primary" href="${esc(bk.meetingLink)}" target="_blank" rel="noopener" style="width:auto">Join the Lab Talk</a></p>`
+        : '<p class="muted">Coach AJ adds the meeting link here before your call.</p>'}
+      ${bk.icsPath ? `<p><a class="btn secondary" href="${esc(bk.icsPath)}" style="width:auto">Add to calendar (.ics)</a></p>` : ''}`;
+  } else if (bk.status === 'declined') {
+    body = `<p><span class="badge plain">Not this time</span></p>
+      <p>Coach AJ could not take this time. Pick another open time and send a new request.</p>`;
+  } else if (bk.status === 'cancelled') {
+    body = `<p><span class="badge plain">Cancelled</span></p>
+      <p>This booking was cancelled. Pick another open time if you still want to talk.</p>`;
+  } else if (bk.status === 'completed') {
+    body = `<p><span class="badge done">Done</span></p>
+      <p>This Lab Talk has already happened. Thanks for talking with Coach AJ.</p>`;
+  }
+  el.innerHTML = `<div class="card">
+    ${justSent
+      ? `<h2>Request sent</h2>
+         <p>This page is your booking link. Save it:</p>
+         <p class="book-link"><code>${esc(link)}</code></p>`
+      : '<h2>Your Lab Talk</h2>'}
+    <p><strong>${esc(bookDayLabel(bk.date))} at ${esc(bookTimeLabel(bk.time))}</strong> · 30 minutes · video call</p>
+    <p class="muted">Booked by ${esc(bk.name)}${bk.athleteName ? ' for ' + esc(bk.athleteName) : ''}</p>
+    ${body}
+    <p>
+      <button class="btn secondary" type="button" id="book-refresh" style="width:auto">Refresh status</button>
+      ${(bk.status === 'declined' || bk.status === 'cancelled')
+        ? '<button class="btn primary" type="button" id="book-again" style="width:auto">Book another time</button>' : ''}
+    </p>
+  </div>`;
+  const refresh = $('#book-refresh');
+  if (refresh) refresh.addEventListener('click', () => renderBook());
+  const again = $('#book-again');
+  if (again) again.addEventListener('click', () => {
+    state.bookToken = null;
+    try { window.history.replaceState(null, '', '/'); } catch (_) {}
+    renderBook();
+  });
+}
+
+async function renderBookings() {
+  const el = $('#bookings-main');
+  if (!el) return;
+  let data, sdata;
+  try {
+    [data, sdata] = await Promise.all([api('/api/bookings'), api('/api/booking-settings')]);
+  } catch (err) {
+    el.innerHTML = `<div class="card"><h2>Bookings</h2><p class="error">${esc(err.message)}</p></div>`;
+    return;
+  }
+  const bookings = data.bookings || [];
+  const settings = sdata.settings || { weekdays: [], blockedDates: [], meetingLink: '' };
+  const actBtn = (b, status, label, primary) =>
+    `<button class="btn ${primary ? 'primary' : 'secondary'}" type="button" style="width:auto" data-bk-act="${status}" data-bk-id="${b.id}">${label}</button>`;
+  const row = (b, actionsHtml) => `<div class="roster-row" style="display:block">
+      <p><strong>${esc(b.name)}</strong> · ${esc(b.email)}</p>
+      <p>${esc(bookDayLabel(b.date))} at ${esc(bookTimeLabel(b.time))} · 30 minutes</p>
+      ${b.athleteName ? `<p class="muted">Athlete: ${esc(b.athleteName)}</p>` : ''}
+      ${b.topic ? `<p class="muted">Wants to talk about: ${esc(b.topic)}</p>` : ''}
+      ${actionsHtml ? `<p>${actionsHtml}</p>` : ''}
+    </div>`;
+  const statusWord = { approved: 'Approved', declined: 'Declined', cancelled: 'Cancelled', completed: 'Completed' };
+  const nowMs = Date.now();
+  const pending = bookings.filter(b => b.status === 'pending');
+  const upcoming = bookings.filter(b => b.status === 'approved' && Date.parse(b.startsAt) > nowMs);
+  const past = bookings.filter(b => b.status !== 'pending' && !(b.status === 'approved' && Date.parse(b.startsAt) > nowMs));
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  el.innerHTML = `<div class="card">
+      <h2>Waiting on you</h2>
+      ${pending.length
+        ? pending.map(b => row(b, actBtn(b, 'approved', 'Approve', true) + ' ' + actBtn(b, 'declined', 'Decline') + ' ' + actBtn(b, 'cancelled', 'Cancel'))).join('')
+        : '<p class="muted">No requests waiting. New Lab Talk requests from the booking page land here.</p>'}
+    </div>
+    <div class="card">
+      <h2>Coming up</h2>
+      ${upcoming.length
+        ? upcoming.map(b => row(b, actBtn(b, 'cancelled', 'Cancel'))).join('')
+        : '<p class="muted">No approved Lab Talks coming up.</p>'}
+    </div>
+    <div class="card">
+      <h2>Past bookings</h2>
+      ${past.length
+        ? past.map(b => row(b,
+            (b.status === 'approved'
+              ? actBtn(b, 'completed', 'Mark completed', true) + ' ' + actBtn(b, 'cancelled', 'Cancel')
+              : `<span class="badge plain">${esc(statusWord[b.status] || b.status)}</span>`))).join('')
+        : '<p class="muted">Nothing here yet.</p>'}
+    </div>
+    <div class="card">
+      <h2>Open hours and settings</h2>
+      <p class="muted">The booking page offers 30 minute Lab Talks inside these hours, New York time. A day with Closed checked offers nothing. Blocked dates override the weekly hours.</p>
+      ${dayNames.map((name, i) => {
+        const w = settings.weekdays[i];
+        return `<div class="book-hours-row">
+          <span class="book-hours-day">${name}</span>
+          <label>From <input type="time" id="bk-start-${i}" value="${esc(w ? w.start : '11:00')}"></label>
+          <label>To <input type="time" id="bk-end-${i}" value="${esc(w ? w.end : '19:00')}"></label>
+          <label><input type="checkbox" id="bk-closed-${i}" ${w ? '' : 'checked'}> Closed</label>
+        </div>`;
+      }).join('')}
+      <label>Blocked dates, one per line (YYYY-MM-DD)
+        <textarea id="bk-blocked" rows="4" placeholder="2026-12-25">${esc((settings.blockedDates || []).join('\n'))}</textarea></label>
+      <label>Meeting link <input type="url" id="bk-meeting" maxlength="500" placeholder="https://" value="${esc(settings.meetingLink || '')}"></label>
+      <p class="muted">Your Meet or Zoom link. It shows only on approved bookings, never on the public page.</p>
+      <p class="error" id="bk-err"></p>
+      <button class="btn primary" type="button" id="bk-save" style="width:auto">Save hours and settings</button>
+    </div>`;
+  el.querySelectorAll('[data-bk-act]').forEach(btn => btn.addEventListener('click', async () => {
+    try {
+      await apiPost('/api/bookings/' + encodeURIComponent(btn.dataset.bkId) + '/status', { status: btn.dataset.bkAct });
+      renderBookings();
+    } catch (err) { alert(err.message); }
+  }));
+  const save = $('#bk-save');
+  if (save) save.addEventListener('click', async () => {
+    const errEl = $('#bk-err');
+    const weekdays = dayNames.map((_, i) => {
+      if ($('#bk-closed-' + i).checked) return null;
+      return { start: $('#bk-start-' + i).value, end: $('#bk-end-' + i).value };
+    });
+    const blockedDates = $('#bk-blocked').value.split('\n').map(s => s.trim()).filter(Boolean);
+    try {
+      await apiPut('/api/booking-settings', {
+        weekdays, blockedDates, meetingLink: $('#bk-meeting').value,
+      });
+      renderBookings();
+    } catch (err) { if (errEl) errEl.textContent = err.message; }
+  });
+}

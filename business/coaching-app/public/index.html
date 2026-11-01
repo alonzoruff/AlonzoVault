@@ -81,6 +81,7 @@
         <p class="landing-forline">For competitive athletes, and the parents who want proof it is working. Train in person in the Maryland/DC area or from anywhere: a real coach, a real program, and numbers at every step.</p>
         <div class="landing-actions">
           <button class="btn landing-cta" type="button" data-goto="account">Request an Invitation <span class="cta-arrow" aria-hidden="true">→</span></button>
+          <button class="btn landing-signin" type="button" data-view="book">Book a free Lab Talk</button>
           <button class="btn landing-signin" type="button" data-goto="account">Member sign in</button>
         </div>
         <p class="landing-pilot-note">Founding pilot: membership is invite-only while we launch.</p>
@@ -234,9 +235,19 @@
       <p>Founding pilot seats are limited and every one starts the same way: an invitation, a baseline test, and a program built on your own numbers.</p>
       <button class="btn landing-cta" type="button" data-goto="account">Request an Invitation <span class="cta-arrow" aria-hidden="true">→</span></button>
       <p class="muted">Invite-only during the founding pilot. If Coach AJ has your email, create your account with it and you are in.</p>
+      <p>Not sure yet? <button class="btn secondary" type="button" data-view="book" style="width:auto">Book a free Lab Talk</button></p>
+      <p class="muted">A Lab Talk is a free 30 minute video call with Coach AJ: your goals, the plans, and which one fits.</p>
     </div>
 
     <p class="landing-footer-strip" data-reveal>Lab memberships from $10/month. Baseline testing and your Speed Report come with every tier.</p>
+  </section>
+
+  <!-- BOOK A LAB TALK (public) -->
+  <section id="view-book" class="view">
+    <h1>Book a free Lab Talk</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">A Lab Talk is a free 30 minute video call with Coach AJ. You talk through your goals, he walks you through the Lab plans, and together you work out which one fits. Pick a time below and send the request. Coach AJ confirms each request himself, so the time is held for you while he reviews it.</p>
+    <div id="book-main"></div>
   </section>
 
   <!-- TODAY -->
@@ -353,6 +364,7 @@
       <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
       <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, flags, testing, meets, attendance, health, goals, and private coach notes</span></button>
       <button type="button" class="menu-item" data-view="access">Access <span>Every member account and its tier — set tiers, cancel, and reactivate memberships</span></button>
+      <button type="button" class="menu-item" data-view="bookings">Bookings <span>Lab Talk requests from the public booking page — approve or decline, and set the open hours</span></button>
       <button type="button" class="menu-item" data-view="formcheckqueue">Form Checks <span>Videos members sent for review — watch, reply in the app, and clear the queue</span></button>
       <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book — present, late, excused, absent — and every athlete's record</span></button>
       <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
@@ -933,6 +945,15 @@
     <div class="subnav-slot"></div>
     <p class="view-sub muted">Every member account and the tier it carries. Set a tier, cancel a membership, or bring one back — changes apply at once and each one is recorded. Coaches only.</p>
     <div id="access-main"></div>
+  </section>
+
+  <!-- BOOKINGS (coach) -->
+  <section id="view-bookings" class="view">
+    <h1>Bookings</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Lab Talk requests from the public booking page, and the hours that page offers. Approve a request and the visitor's booking link shows your meeting link and a calendar file. Coaches only.</p>
+    <div id="bookings-main"></div>
   </section>
 
   <!-- FORM CHECK QUEUE (coach) -->

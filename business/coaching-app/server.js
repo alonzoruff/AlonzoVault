@@ -94,8 +94,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v16',
-  cache: 'ruffin-performance-v16',
+  version: 'v17',
+  cache: 'ruffin-performance-v17',
 };
 
 /* ------------------------------------------------------------------ */
@@ -148,6 +148,8 @@ let db = {
   floorProgress: {},
   liveSessions: [],
   liveRequests: [],
+  bookings: [],
+  bookingSettings: null,
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -390,6 +392,18 @@ function migrate() {
   // view ({ id, userId, email, profileId, profileName, createdAt }).
   db.liveSessions = Array.isArray(db.liveSessions) ? db.liveSessions : [];
   db.liveRequests = Array.isArray(db.liveRequests) ? db.liveRequests : [];
+  // Lab Talk bookings (v17): free 30-minute consult requests from
+  // the public booking page — { id, token, name, email, athleteName,
+  // topic, date, time, startMin, startsAt, endsAt, status,
+  // createdAt, updatedAt }. The token is the visitor's only
+  // credential for their status page. Bookings deliberately do NOT
+  // ride along in backups (tokens are credentials, and bookings are
+  // short-horizon scheduling state). Availability settings are the
+  // coach's: one open window per weekday (null = closed), blocked
+  // specific dates, and one meeting link. The default is NO
+  // availability anywhere — the coach posts hours himself.
+  db.bookings = Array.isArray(db.bookings) ? db.bookings : [];
+  db.bookingSettings = normalizeBookingSettings(db.bookingSettings);
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     // Membership (v14): every account carries the tier fields; a
@@ -3509,6 +3523,213 @@ async function createCheckoutSession(price) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Lab Talk bookings (v17)                                             */
+/* ------------------------------------------------------------------ */
+/* A free 30-minute video call a prospect books from the public
+   page. All slot math runs on America/New_York wall-clock time no
+   matter where the server sits: a booking names a New York date
+   plus minutes since New York midnight, and the UTC instant is
+   derived from the zone's offset at that moment. */
+function isHhmm(s) { return typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s); }
+function hhmmToMin(s) { return isHhmm(s) ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null; }
+function minToHhmm(min) {
+  const p = (n) => String(n).padStart(2, '0');
+  return p(Math.floor(min / 60)) + ':' + p(min % 60);
+}
+/* Settings normalize on every load: anything malformed falls back
+   to closed / empty rather than breaking availability. Called from
+   migrate() at boot, so it sticks to pure helpers on purpose. */
+function normalizeBookingSettings(raw) {
+  const out = { weekdays: [null, null, null, null, null, null, null], blockedDates: [], meetingLink: '' };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  if (Array.isArray(raw.weekdays)) {
+    for (let i = 0; i < 7; i++) {
+      const w = raw.weekdays[i];
+      if (w && typeof w === 'object' && isHhmm(w.start) && isHhmm(w.end)
+        && hhmmToMin(w.start) < hhmmToMin(w.end)) {
+        out.weekdays[i] = { start: w.start, end: w.end };
+      }
+    }
+  }
+  if (Array.isArray(raw.blockedDates)) {
+    const seen = new Set();
+    for (const d of raw.blockedDates) {
+      if (typeof d === 'string' && parseDateStr(d)) seen.add(d);
+    }
+    out.blockedDates = [...seen].sort();
+  }
+  if (typeof raw.meetingLink === 'string') out.meetingLink = raw.meetingLink.trim().slice(0, 500);
+  return out;
+}
+function validateBookingSettings(body) {
+  if (!Array.isArray(body.weekdays) || body.weekdays.length !== 7) {
+    return { error: 'Send one open window (or closed) for each day of the week.' };
+  }
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const weekdays = [];
+  for (let i = 0; i < 7; i++) {
+    const w = body.weekdays[i];
+    if (w === null || w === undefined) { weekdays.push(null); continue; }
+    if (typeof w !== 'object' || !isHhmm(w.start) || !isHhmm(w.end)) {
+      return { error: dayNames[i] + ' needs a start and an end time, like 11:00 and 19:00.' };
+    }
+    if (hhmmToMin(w.start) >= hhmmToMin(w.end)) {
+      return { error: dayNames[i] + ' ends before it starts. The end time has to be after the start time.' };
+    }
+    weekdays.push({ start: w.start, end: w.end });
+  }
+  const blockedDates = [];
+  if (body.blockedDates !== undefined) {
+    if (!Array.isArray(body.blockedDates)) return { error: 'Blocked dates should be a list of dates.' };
+    const seen = new Set();
+    for (const raw of body.blockedDates) {
+      const d = clean(raw, 10);
+      if (!parseDateStr(d)) return { error: '"' + String(raw) + '" is not a date. Use YYYY-MM-DD.' };
+      seen.add(d);
+    }
+    blockedDates.push(...[...seen].sort());
+    if (blockedDates.length > 120) return { error: 'That is too many blocked dates.' };
+  }
+  const meetingLink = clean(body.meetingLink, 500);
+  if (meetingLink && !/^https?:\/\//i.test(meetingLink)) {
+    return { error: 'The meeting link should start with http:// or https://' };
+  }
+  return { settings: { weekdays, blockedDates, meetingLink } };
+}
+const NY_PARTS_FMT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+});
+function nyPartsOf(ms) {
+  const parts = {};
+  for (const part of NY_PARTS_FMT.formatToParts(new Date(ms))) {
+    if (part.type !== 'literal') parts[part.type] = Number(part.value);
+  }
+  return parts;
+}
+/* New York's offset from UTC (wall clock minus UTC) at an instant. */
+function nyOffsetMs(ms) {
+  const p = nyPartsOf(ms);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
+    - Math.floor(ms / 1000) * 1000;
+}
+/* The UTC instant of a New York wall-clock time. Two offset passes
+   keep it right across daylight-saving changes. */
+function nyWallToUtcMs(dateString, minutes) {
+  const d = parseDateStr(dateString);
+  if (!d) return NaN;
+  const guess = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(),
+    Math.floor(minutes / 60), minutes % 60);
+  let utc = guess - nyOffsetMs(guess);
+  const again = guess - nyOffsetMs(utc);
+  if (again !== utc) utc = again;
+  return utc;
+}
+function nyDateOf(ms) {
+  const p = nyPartsOf(ms);
+  const p2 = (n) => String(n).padStart(2, '0');
+  return p.year + '-' + p2(p.month) + '-' + p2(p.day);
+}
+function addDaysStr(dateString, n) {
+  const d = parseDateStr(dateString);
+  if (!d) return null;
+  d.setDate(d.getDate() + n);
+  return dateStr(d);
+}
+const BOOKING_DAYS_AHEAD = 14;
+const BOOKING_SLOT_MINUTES = 30;
+const BOOKING_PENDING_CAP = 3;
+const BOOKING_STATUSES = ['pending', 'approved', 'declined', 'cancelled', 'completed'];
+const BOOKING_TRANSITIONS = {
+  pending: ['approved', 'declined', 'cancelled'],
+  approved: ['cancelled', 'completed'],
+  declined: [], cancelled: [], completed: [],
+};
+function bookingHoldsSlot(b) { return b.status === 'pending' || b.status === 'approved'; }
+/* The next 14 New York days with their bookable slots: a day is
+   open when the coach set a window for its weekday and the date is
+   not blocked; slots step 30 minutes from the window start, and
+   past slots and held slots never appear. */
+function availableBookingDays(nowMs) {
+  const settings = db.bookingSettings;
+  const todayNy = nyDateOf(nowMs);
+  const taken = new Set(db.bookings.filter(bookingHoldsSlot)
+    .map(b => b.date + '|' + b.startMin));
+  const days = [];
+  for (let i = 0; i < BOOKING_DAYS_AHEAD; i++) {
+    const date = addDaysStr(todayNy, i);
+    const d = parseDateStr(date);
+    const weekday = d ? d.getDay() : -1;
+    const win = weekday >= 0 ? settings.weekdays[weekday] : null;
+    const open = !!win && !settings.blockedDates.includes(date);
+    const slots = [];
+    if (open) {
+      const startMin = hhmmToMin(win.start), endMin = hhmmToMin(win.end);
+      for (let t = startMin; t + BOOKING_SLOT_MINUTES <= endMin; t += BOOKING_SLOT_MINUTES) {
+        const startUtc = nyWallToUtcMs(date, t);
+        if (!(startUtc > nowMs)) continue;
+        if (taken.has(date + '|' + t)) continue;
+        slots.push({ time: minToHhmm(t), startMin: t, startsAt: new Date(startUtc).toISOString() });
+      }
+    }
+    days.push({ date, weekday, open, slots });
+  }
+  return days;
+}
+/* What the visitor's status page may see: their own booking only,
+   and the meeting link only once the coach has approved it. */
+function visitorBookingView(b) {
+  const approved = b.status === 'approved';
+  return {
+    name: b.name, athleteName: b.athleteName || '', topic: b.topic || '',
+    date: b.date, time: b.time, startsAt: b.startsAt, endsAt: b.endsAt,
+    status: b.status,
+    meetingLink: approved ? (db.bookingSettings.meetingLink || '') : '',
+    icsPath: approved ? '/api/book/status/' + b.token + '/ics' : null,
+  };
+}
+/* The coach's shape: everything about the request except the
+   visitor's token, which the coach never needs. */
+function coachBookingView(b) {
+  return {
+    id: b.id, name: b.name, email: b.email, athleteName: b.athleteName || '',
+    topic: b.topic || '', date: b.date, time: b.time,
+    startsAt: b.startsAt, endsAt: b.endsAt, status: b.status,
+    createdAt: b.createdAt, updatedAt: b.updatedAt,
+  };
+}
+function icsEscape(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;')
+    .replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+function icsUtc(ms) {
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + 'T'
+    + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + 'Z';
+}
+function bookingIcs(b) {
+  const link = db.bookingSettings.meetingLink || '';
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Ruffin Performance//Lab Talk Booking//EN',
+    'BEGIN:VEVENT',
+    'UID:' + b.id + '@ruffin-performance',
+    'DTSTAMP:' + icsUtc(Date.now()),
+    'DTSTART:' + icsUtc(Date.parse(b.startsAt)),
+    'DTEND:' + icsUtc(Date.parse(b.endsAt)),
+    'SUMMARY:' + icsEscape('Lab Talk with Coach AJ — ' + BRAND.name),
+    'DESCRIPTION:' + icsEscape('Your free 30 minute Lab Talk with Coach AJ.'
+      + (link ? ' Join the call here: ' + link : '')),
+  ];
+  if (link) lines.push('LOCATION:' + icsEscape(link));
+  lines.push('END:VEVENT', 'END:VCALENDAR');
+  return lines.join('\r\n') + '\r\n';
+}
+
+/* ------------------------------------------------------------------ */
 /* API                                                                 */
 /* ------------------------------------------------------------------ */
 function publicLiveSession(x) {
@@ -3642,6 +3863,98 @@ async function handleApi(req, res, url) {
         Object.assign(publicRecord(r), { rank: i + 1 })),
     }));
     return sendJson(res, 200, { board });
+  }
+
+  /* ---------- Lab Talk bookings: the public front door ----------
+     A prospect picks an open slot and sends a request; the request
+     holds the slot while it waits, and the coach approves or
+     declines it from the Bookings page. No account, no login: the
+     visitor's only credential is the unguessable token in the
+     status link they are shown on submit, and that link ever only
+     shows their own booking. There is no email in this app, so
+     nothing here pretends to send one. Availability is coach-set
+     (the writes live below the coach gate); until the coach posts
+     hours, the slots answer is honestly empty. */
+  if (p === '/api/book/slots' && req.method === 'GET') {
+    const days = availableBookingDays(Date.now());
+    return sendJson(res, 200, {
+      days: days.map(d => ({
+        date: d.date, weekday: d.weekday, open: d.open,
+        slots: d.slots.map(s => ({ time: s.time, startsAt: s.startsAt })),
+      })),
+      hasAvailability: days.some(d => d.slots.length > 0),
+    });
+  }
+
+  if (p === '/api/book' && req.method === 'POST') {
+    const body = await readBody(req);
+    const name = clean(body.name, 120);
+    const email = clean(body.email, 200).toLowerCase();
+    const athleteName = clean(body.athleteName, 120);
+    const topic = clean(body.topic, 1000);
+    const date = clean(body.date, 10);
+    const startMin = hhmmToMin(clean(body.time, 5));
+    if (!name) return sendJson(res, 400, { error: 'Please add your name.' });
+    if (!EMAIL_RE.test(email)) {
+      return sendJson(res, 400, { error: 'Please enter a valid email address.' });
+    }
+    if (!topic) {
+      return sendJson(res, 400, { error: 'Please add a sentence about what you want to talk about.' });
+    }
+    /* The slot has to be one the server itself is offering right
+       now — that single check refuses closed days, blocked dates,
+       past times, held slots, and any start that is not a real
+       30-minute slot, however the request was crafted. */
+    const days = availableBookingDays(Date.now());
+    const day = days.find(d => d.date === date);
+    const slot = day && startMin !== null
+      ? day.slots.find(s => s.startMin === startMin) : null;
+    if (!slot) {
+      return sendJson(res, 400, { error: 'That time is not open. Pick one of the times shown on the booking page.' });
+    }
+    const pendingCount = db.bookings
+      .filter(b => b.email === email && b.status === 'pending').length;
+    if (pendingCount >= BOOKING_PENDING_CAP) {
+      return sendJson(res, 429, {
+        error: 'You already have ' + BOOKING_PENDING_CAP + ' requests waiting on Coach AJ. He answers those first — your booking links show where each one stands.',
+      });
+    }
+    const now = new Date().toISOString();
+    const rec = {
+      id: crypto.randomUUID(), token: crypto.randomBytes(24).toString('hex'),
+      name, email, athleteName, topic,
+      date, time: slot.time, startMin: slot.startMin,
+      startsAt: slot.startsAt,
+      endsAt: new Date(Date.parse(slot.startsAt) + BOOKING_SLOT_MINUTES * 60000).toISOString(),
+      status: 'pending', createdAt: now, updatedAt: now,
+    };
+    db.bookings.push(rec);
+    saveDb();
+    return sendJson(res, 201, {
+      ok: true, token: rec.token, pagePath: '/?booking=' + rec.token,
+      booking: visitorBookingView(rec),
+    });
+  }
+
+  const bookStatusMatch = p.match(/^\/api\/book\/status\/([^/]+)(\/ics)?$/);
+  if (bookStatusMatch && req.method === 'GET') {
+    const b = db.bookings.find(x => x.token === decodeURIComponent(bookStatusMatch[1]));
+    if (!b) {
+      return sendJson(res, 404, { error: 'That booking link does not match a booking. Use the exact link from your confirmation.' });
+    }
+    if (bookStatusMatch[2]) {
+      if (b.status !== 'approved') {
+        return sendJson(res, 403, { error: 'The calendar file is ready once Coach AJ approves the booking.' });
+      }
+      const icsBody = bookingIcs(b);
+      res.writeHead(200, {
+        'Content-Type': 'text/calendar; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="lab-talk.ics"',
+        'Content-Length': Buffer.byteLength(icsBody),
+      });
+      return res.end(icsBody);
+    }
+    return sendJson(res, 200, { booking: visitorBookingView(b) });
   }
 
   if (p === '/api/register' && req.method === 'POST') {
@@ -4454,6 +4767,58 @@ async function handleApi(req, res, url) {
     db.liveRequests.splice(idx, 1);
     saveDb();
     return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---------- Lab Talk bookings: the coach's side ----------
+     The Bookings page: pending requests first (oldest waiting
+     first), then upcoming approved calls, then the rest. Status
+     changes follow BOOKING_TRANSITIONS only — a request is
+     approved, declined, or cancelled; an approved call is
+     cancelled or marked completed. Availability settings live here
+     too: the weekday windows, blocked dates, and the one meeting
+     link that approved visitors see. Booking records are coach
+     data — nothing here is reachable by members or visitors. */
+  if (p === '/api/bookings' && req.method === 'GET') {
+    const rank = { pending: 0, approved: 1, completed: 2, declined: 3, cancelled: 4 };
+    const list = db.bookings.slice().sort((a, b) => {
+      const ra = rank[a.status] !== undefined ? rank[a.status] : 5;
+      const rb = rank[b.status] !== undefined ? rank[b.status] : 5;
+      if (ra !== rb) return ra - rb;
+      if (a.status === 'pending') return a.createdAt < b.createdAt ? -1 : 1;
+      return a.startsAt < b.startsAt ? -1 : 1;
+    }).map(coachBookingView);
+    return sendJson(res, 200, { bookings: list });
+  }
+
+  const bookingStatusChange = p.match(/^\/api\/bookings\/([^/]+)\/status$/);
+  if (bookingStatusChange && req.method === 'POST') {
+    const b = db.bookings.find(x => x.id === decodeURIComponent(bookingStatusChange[1]));
+    if (!b) return sendJson(res, 404, { error: 'Booking not found.' });
+    const body = await readBody(req);
+    const next = clean(body.status, 20);
+    if (!BOOKING_STATUSES.includes(next)) {
+      return sendJson(res, 400, { error: 'Unknown booking status.' });
+    }
+    if (!(BOOKING_TRANSITIONS[b.status] || []).includes(next)) {
+      return sendJson(res, 400, { error: 'A ' + b.status + ' booking cannot become ' + next + '.' });
+    }
+    b.status = next;
+    b.updatedAt = new Date().toISOString();
+    saveDb();
+    return sendJson(res, 200, { ok: true, booking: coachBookingView(b) });
+  }
+
+  if (p === '/api/booking-settings' && req.method === 'GET') {
+    return sendJson(res, 200, { settings: db.bookingSettings });
+  }
+
+  if (p === '/api/booking-settings' && req.method === 'PUT') {
+    const body = await readBody(req);
+    const v = validateBookingSettings(body);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    db.bookingSettings = v.settings;
+    saveDb();
+    return sendJson(res, 200, { ok: true, settings: db.bookingSettings });
   }
   const userRoleMatch = p.match(/^\/api\/users\/([^/]+)\/role$/);
   if (userRoleMatch && req.method === 'PUT') {

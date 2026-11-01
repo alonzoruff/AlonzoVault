@@ -2174,3 +2174,25 @@ body.tv-mode {
   margin-top: 10px;
 }
 .access-controls label { margin: 0; }
+
+/* ---------------- Lab Talk bookings (v17) ----------------
+   The public booking page's slot grid and the coach Bookings
+   page's hours rows. Slots wrap on any width; on phones they take
+   roughly a third of the row each so times stay tappable. */
+.book-slots { display: flex; flex-wrap: wrap; gap: 8px; }
+.book-slot { width: auto; }
+.book-slot.selected {
+  background: var(--red); border-color: var(--red); color: var(--accent-ink); font-weight: 600;
+}
+.book-link code { word-break: break-all; }
+.book-hours-row {
+  display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid var(--line);
+}
+.book-hours-row label { margin: 0; }
+.book-hours-day { min-width: 92px; font-weight: 600; }
+@media (max-width: 520px) {
+  .book-slots { gap: 6px; }
+  .book-slot { flex: 1 1 28%; }
+  .book-hours-day { min-width: 100%; }
+}
