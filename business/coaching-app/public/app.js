@@ -401,7 +401,7 @@ const VIEW_AREA = {
   book: 'landing',
 };
 const GROUP_SUBNAV = {
-  train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Speed Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
   coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['access', 'Access'], ['bookings', 'Bookings'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
@@ -683,7 +683,7 @@ function countUp(el) {
    viewport, then stay put. The hidden state only exists under
    html.motion-ok, added here solely when motion is welcome and
    IntersectionObserver exists — no JS or reduced motion means the
-   page is simply composed. The sample Speed Report values stay
+   page is simply composed. The sample Lab Report values stay
    static on purpose: they are labelled sample data, and trust
    beats flash. */
 const revealEls = $$('#view-landing [data-reveal]');
@@ -853,7 +853,7 @@ function renderHome() {
         <p>${cancelled
           ? 'Your tier access has ended. Your account, your log, and your numbers are all still here — rejoin any time and they pick right back up.'
           : 'Your account is set up, but it does not carry a Lab tier yet, so the training content stays locked. Membership options are on the home page, and your coach can also set your tier.'}</p>
-        <p class="muted">What a membership opens: the training library and Lab Sessions, Inside the Lab videos, learn content, your Speed Report, your workout log and daily check-in, and your week at a glance.</p>
+        <p class="muted">What a membership opens: the training library and Lab Sessions, Inside the Lab videos, learn content, your Lab Report, your workout log and daily check-in, and your week at a glance.</p>
         <div class="tw-actions">
           <button class="btn primary" id="home-locked-account" type="button">See your membership</button>
           <button class="btn secondary" id="home-locked-tiers" type="button">See the tiers</button>
@@ -1234,7 +1234,7 @@ function labProgramTestHtml(test) {
   if (label && isCoachUser()) {
     action = `<button class="btn secondary" type="button" data-lab-test-action="${esc(test.testKey)}">Log in Testing</button>`;
   } else if (label && isAthleteUser()) {
-    action = `<button class="btn secondary" type="button" data-lab-test-action="${esc(test.testKey)}">See your Speed Report</button>`;
+    action = `<button class="btn secondary" type="button" data-lab-test-action="${esc(test.testKey)}">See your Lab Report</button>`;
   } else if (label) {
     action = '<span class="badge plain">In Testing</span>';
   }
@@ -1695,7 +1695,7 @@ function renderAccount() {
     $('#account-main').innerHTML = `
       <div class="card" id="req-invite-card">
         <h2>Request an invitation</h2>
-        <p>Membership is <strong>invite-only</strong> during the founding pilot — there is no public sign-up, and every seat starts with a baseline test and a Speed Report.</p>
+        <p>Membership is <strong>invite-only</strong> during the founding pilot — there is no public sign-up, and every seat starts with a baseline test and a Lab Report.</p>
         <p class="muted">How it works: Coach AJ adds your email to the invite list. When he does, create your account below with that exact email and you are in — your program, your check-ins, and your numbers all live here from day one. Know Coach AJ? Ask him to put your email on the list.</p>
         <div class="tw-actions">
           <button class="btn primary" id="req-goto-register" type="button">I've been invited — create my account</button>
@@ -2129,7 +2129,7 @@ function paintMemberLogEditor() {
    own data only (/api/my/week): today's assigned session, the
    Mon–Sun strip with completions, the check-in streak and latest
    readiness snapshot (the server's own flags — the same ones the
-   check-in card shows), the next test date, a Speed Report teaser
+   check-in card shows), the next test date, a Lab Report teaser
    (most recently tested event, best + change vs baseline, with a
    jump to the full report), the intake reminder while intake is
    incomplete, and the latest form-check status. Coaches and
@@ -2179,8 +2179,8 @@ async function renderThisWeek() {
   const teaserChange = t ? srChangeText(t) : '';
   const teaserHtml = t
     ? `<p>Latest progress — <strong>${esc(t.name)}</strong>: best <strong>${esc(srDisplay(t, t.best))}</strong>${teaserChange ? ` · ${esc(teaserChange)}` : ''}</p>
-       <button class="btn secondary" id="tw-speed" type="button">See your Speed Report</button>`
-    : '<p class="muted">Your Speed Report starts with baseline testing — your first test day sets the numbers everything else is measured against.</p>';
+       <button class="btn secondary" id="tw-speed" type="button">See your Lab Report</button>`
+    : '<p class="muted">Your Lab Report starts with baseline testing — your first test day sets the numbers everything else is measured against.</p>';
   const intakeHtml = data.intakeCompleted
     ? ''
     : `<p><strong>Finish your intake.</strong> Your coach needs your intake (and a parent or guardian sign-off if you are under 18) before your program is final — it is right below on this page.</p>
@@ -2580,7 +2580,7 @@ async function renderMemberIntake() {
   });
 }
 
-/* ---------------- Speed Report (member-facing) ----------------
+/* ---------------- Lab Report (member-facing) ----------------
    The report a member shows a parent: their own core-test PRs
    against their own baseline (their earliest recorded result),
    the change since baseline in plain up/down language, a simple
@@ -2649,7 +2649,7 @@ async function renderSpeedReport() {
   const el = $('#speedreport-main');
   if (!el) return;
   if (!isAthleteUser()) {
-    el.innerHTML = `<div class="card"><h2>Speed Report</h2><p class="muted">This is a member's own report — members sign in with their own account to see their baseline, their bests, and how far they have come.</p></div>`;
+    el.innerHTML = `<div class="card"><h2>Lab Report</h2><p class="muted">This is a member's own report — members sign in with their own account to see their baseline, their bests, and how far they have come.</p></div>`;
     return;
   }
   let data;
@@ -2657,7 +2657,7 @@ async function renderSpeedReport() {
     data = await api('/api/my/speed-report');
     state.speedReportData = data;
   } catch (err) {
-    el.innerHTML = `<div class="card"><h2>Speed Report</h2><p class="error">Could not load your Speed Report: ${esc(err.message)}</p><button class="btn secondary" id="sr-retry" type="button">Retry</button></div>`;
+    el.innerHTML = `<div class="card"><h2>Lab Report</h2><p class="error">Could not load your Lab Report: ${esc(err.message)}</p><button class="btn secondary" id="sr-retry" type="button">Retry</button></div>`;
     const rb = el.querySelector('#sr-retry');
     if (rb) rb.addEventListener('click', renderSpeedReport);
     return;
@@ -2671,7 +2671,7 @@ async function renderSpeedReport() {
     : '';
   if (!anyResults) {
     el.innerHTML = `${nextHtml}<div class="card">
-      <h2>Your Speed Report starts with baseline testing</h2>
+      <h2>Your Lab Report starts with baseline testing</h2>
       <p>Baseline testing happens in week 1: your coach times your 40-Yard Dash and measures your Vertical Jump and Broad Jump. Those first marks become your baseline — every test after that is measured against them, so you (and your family) can see exactly how far you have come.</p>
       <p class="muted">No results on file yet. Once your baseline is recorded, your personal bests and your progress will show up here.</p>
     </div>
@@ -4128,7 +4128,7 @@ async function renderTesting() {
     </form>
     <form class="card" id="baseline-form">
       <h2>Baseline Testing Kit</h2>
-      <p class="muted">One click creates a test day titled “Baseline” with exactly the three core tests — 40-Yard Dash, Vertical Jump, Broad Jump — and lands you in the rapid-entry flow for it. A member's baseline is their earliest result, so this is the day every Speed Report measures from. Pick a group to land on that group's grid; if a Baseline day already exists for the date, you are taken to it instead of a duplicate.</p>
+      <p class="muted">One click creates a test day titled “Baseline” with exactly the three core tests — 40-Yard Dash, Vertical Jump, Broad Jump — and lands you in the rapid-entry flow for it. A member's baseline is their earliest result, so this is the day every Lab Report measures from. Pick a group to land on that group's grid; if a Baseline day already exists for the date, you are taken to it instead of a duplicate.</p>
       <div class="filter-row">
         <label>Date <input type="date" id="bl-date" value="${todayStr()}" required></label>
         <label>Group <select id="bl-group">
@@ -8472,7 +8472,7 @@ async function renderMembershipCard() {
     zone.innerHTML = `
       <div class="flag">
         <p><strong>Cancel your membership?</strong></p>
-        <p>Your tier access ends right away: the library, videos, Speed Report, log, and check-in lock until you rejoin. Your account stays, and so do your log and your numbers. If you pay through Stripe, your coach will stop the subscription there too.</p>
+        <p>Your tier access ends right away: the library, videos, Lab Report, log, and check-in lock until you rejoin. Your account stays, and so do your log and your numbers. If you pay through Stripe, your coach will stop the subscription there too.</p>
         <p>
           <button class="btn danger" id="membership-cancel-yes" type="button">Yes, cancel my membership</button>
           <button class="btn secondary" id="membership-cancel-no" type="button">Keep my membership</button>

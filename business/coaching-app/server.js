@@ -94,8 +94,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v17',
-  cache: 'ruffin-performance-v17',
+  version: 'v18',
+  cache: 'ruffin-performance-v18',
 };
 
 /* ------------------------------------------------------------------ */
@@ -174,13 +174,13 @@ const TIER_INCLUDES = {
     'The Lab portal and the training library (Lab Sessions)',
     'Inside the Lab technique and coaching videos',
     'Learn content: definitions, the exercise library, nutrition, and coach education',
-    'Your Speed Report, updated at every re-test',
+    'Your Lab Report, updated at every re-test',
     'Workout log and daily check-in',
     'This Week: your training week at a glance',
   ],
   training: [
-    'Personalized training, built for you',
-    'Your program adjusted as you progress',
+    'A plan built for you, one athlete at a time — not a template everyone follows',
+    'Your plan changes as you train. What you log shapes what your coach programs next',
     'Form checks with replies from your coach',
     'Your lifting loads, worked out from your own maxes',
   ],
@@ -4440,7 +4440,7 @@ async function handleApi(req, res, url) {
     const prof = linkedProfileFor(user);
     if (!prof) {
       return sendJson(res, 403, {
-        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can see your Speed Report.',
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can see your Lab Report.',
         notLinked: true,
       });
     }

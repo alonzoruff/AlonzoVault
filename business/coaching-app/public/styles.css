@@ -1818,7 +1818,7 @@ body.logged-out .primary-nav { display: none !important; }
 .wr-step.done { color: var(--muted); }
 .wr-step.current { border-left-color: var(--scarlet); background: rgba(201, 204, 212, .1); font-size: 16.5px; }
 
-/* Speed Report (member-facing): PR cards a member shows a parent —
+/* Lab Report (member-facing): PR cards a member shows a parent —
    the best mark big, the baseline beneath it, a plain-language
    change line, and a small sparkline trend. Print keeps the cards
    whole so the report prints clean. */

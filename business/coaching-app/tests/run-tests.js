@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v17 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v17"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v18 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v18"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -639,7 +639,7 @@ async function main() {
       labs.map(p => keysOf(p)));
     check(who + ': The Lab Standard points at logging the timed starts',
       first.sections.some(s => s.title === 'The Lab Standard' &&
-        s.items.some(x => x.includes('logged in Testing') && x.includes('Speed Report'))),
+        s.items.some(x => x.includes('logged in Testing') && x.includes('Lab Report'))),
       first.sections.map(s => s.title));
     check(who + ': Armor is presented by who it is for, with no separate purchase or trial mechanic',
       !/standalone purchase|free.trial companion/i.test(JSON.stringify(labs)) &&
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v17'") &&
-    swJs.text.includes("ruffin-performance-v17"));
+    appJs.text.includes("const APP_VERSION = 'v18'") &&
+    swJs.text.includes("ruffin-performance-v18"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v17"') &&
-    pageHtml.text.includes('Ruffin Performance · App v17') &&
+    pageHtml.text.includes('data-app-version="v18"') &&
+    pageHtml.text.includes('Ruffin Performance · App v18') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -4951,7 +4951,7 @@ async function main() {
     pageHtml.text.includes('data-view="speedreport"'));
   check('speed report wiring is in the served JS',
     appJs.text.includes('renderSpeedReport') && appJs.text.includes('/api/my/speed-report') &&
-    appJs.text.includes("['speedreport', 'Speed Report']") &&
+    appJs.text.includes("['speedreport', 'Lab Report']") &&
     appJs.text.includes('Baseline testing happens in week 1') &&
     appJs.text.includes('faster than baseline') && appJs.text.includes('higher than baseline') &&
     appJs.text.includes('Next test:'));
@@ -5371,7 +5371,7 @@ async function main() {
   check('this-week slot is in the served page', pageHtml.text.includes('id="thisweek-slot"'));
   check('this-week wiring is in the served JS',
     appJs.text.includes('renderThisWeek') && appJs.text.includes('/api/my/week') &&
-    appJs.text.includes('See your Speed Report') && appJs.text.includes('check-in streak'));
+    appJs.text.includes('See your Lab Report') && appJs.text.includes('check-in streak'));
   {
     const twTvStart = appJs.text.indexOf('TV BOARD');
     const twTvEnd = appJs.text.indexOf('/* ---------------- boot', twTvStart);
@@ -5395,7 +5395,7 @@ async function main() {
     pageHtml.text.includes('landing-section-number" aria-hidden="true">01') &&
     pageHtml.text.includes('landing-section-number" aria-hidden="true">02') &&
     pageHtml.text.includes('landing-section-number" aria-hidden="true">03') &&
-    pageHtml.text.includes('Lab memberships from $10/month. Baseline testing and your Speed Report come with every tier.'));
+    pageHtml.text.includes('Lab memberships from $10/month. Baseline testing and your Lab Report come with every tier.'));
   check('landing photo hero and lime accent stay scoped to the landing',
     stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
     stylesCss.text.includes('--landing-accent: #d6f36a') &&
@@ -5403,13 +5403,14 @@ async function main() {
   check('landing presents the Measured Speed Loop and the portal contents',
     pageHtml.text.includes('The Measured Speed Loop') &&
     pageHtml.text.includes('Tested at intake') && pageHtml.text.includes('Coached weekly') &&
-    pageHtml.text.includes('Re-tested each block') && pageHtml.text.includes('Speed Report') &&
+    pageHtml.text.includes('Re-tested each block') && pageHtml.text.includes('Lab Report') &&
     pageHtml.text.includes('Health &amp; readiness tracking') &&
     pageHtml.text.includes('filmed by your coach himself'));
   check('landing tiers state plainly what each tier gets and what upgrading adds',
     pageHtml.text.includes('No personalized training') &&
     pageHtml.text.includes('Everything in Lab Access') &&
-    pageHtml.text.includes('Personalized training, built for you') &&
+    pageHtml.text.includes('A plan built for you, one athlete at a time') &&
+    pageHtml.text.includes('What you log shapes what your coach programs next') &&
     pageHtml.text.includes('Form checks with replies from your coach') &&
     pageHtml.text.includes('Everything in Lab Training') &&
     pageHtml.text.includes('Live web sessions with your coach') &&
@@ -8545,13 +8546,136 @@ async function waitForServer(tries = 60) {
         /* The content payload is unchanged in shape: v17, programs
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v17 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v17' &&
+        check('content reports v18 with the Lab programs still withheld signed out',
+          br.status === 200 && br.json.brand.version === 'v18' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
         bkChild.kill('SIGKILL');
         fs.rmSync(BK_DIR, { recursive: true, force: true });
+      }
+    }
+
+    /* Lab Report rename + pricing copy (v18): "Speed Report" is
+       "Lab Report" in every user-facing string — shipped client
+       files and the Lab programs content carry zero occurrences of
+       the old name — while internal identifiers (the speedreport
+       view id, routes, test keys) stay exactly as they were. The
+       pricing presentation gains the content cadence on Lab Access
+       and AJ's personalized-coaching lines on Lab Training (and,
+       through the tier mirror, the Account page), never on Access.
+       Own server, own store. */
+    {
+      const LR_BASE = 'http://127.0.0.1:3230';
+      const lrApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { headers['content-type'] = 'application/json'; data = JSON.stringify(body); }
+        const res = await fetch(LR_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const lrText = async (cookie, p) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        const res = await fetch(LR_BASE + p, { headers });
+        return { status: res.status, text: await res.text() };
+      };
+      const LR_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-lr-'));
+      const lrChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+        env: Object.assign({}, process.env, {
+          PORT: '3230', DATA_DIR: LR_DIR, SESSION_SECRET: 'labreport-secret',
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      lrChild.stdout.on('data', () => {});
+      lrChild.stderr.on('data', () => {});
+      const waitLr = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(LR_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      try {
+        check('lab report server starts', await waitLr());
+
+        /* The absolute sweep over the shipped client and content
+           files: the old name is gone from all of them. */
+        const shippedFiles = ['public/index.html', 'public/app.js', 'public/styles.css', 'content/lab_programs.json'];
+        for (const rel of shippedFiles) {
+          const text = fs.readFileSync(path.join(APP_DIR, rel), 'utf8');
+          check('no "Speed Report" remains in shipped ' + rel,
+            !text.includes('Speed Report') && !text.includes('SPEED REPORT'),
+            rel);
+        }
+
+        const lrPage = await lrText(null, '/');
+        const lrJs = await lrText(null, '/app.js');
+        check('the landing sample report and the member view carry the new name',
+          lrPage.status === 200 && lrPage.text.includes('<h2>Your Lab Report</h2>') &&
+          lrPage.text.includes('<h1>Lab Report</h1>') &&
+          lrJs.text.includes("['speedreport', 'Lab Report']") &&
+          lrJs.text.includes('See your Lab Report'), lrPage.status);
+        check('internal identifiers are unchanged by the rename',
+          lrPage.text.includes('id="view-speedreport"') &&
+          lrPage.text.includes('data-view="speedreport"') &&
+          lrJs.text.includes("speedreport: 'access'") &&
+          lrJs.text.includes("showView('speedreport')"), lrPage.status);
+        check('pricing carries the content cadence lines',
+          lrPage.text.includes('<li>New videos added weekly</li>') &&
+          lrPage.text.includes('<li>New content added regularly</li>'), lrPage.status);
+        check('pricing carries the personalized coaching lines on Lab Training',
+          lrPage.text.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
+          lrPage.text.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
+          lrPage.status);
+
+        /* The full content payload as a coach reads it: the Lab
+           programs speak of the Lab Report, and the old name
+           appears nowhere in the payload. */
+        let lr = await lrApi(null, 'POST', '/api/register', { email: 'lrcoach@test.com', password: 'testpass123' });
+        check('lab report store: first account is coach', lr.status === 201 && lr.json.role === 'coach', lr.json);
+        const lrCoach = (lr.setCookie[0] || '').split(';')[0];
+        lr = await lrApi(lrCoach, 'GET', '/api/content');
+        const lrContentJson = JSON.stringify(lr.json || {});
+        check('coach content payload says Lab Report and never Speed Report',
+          lr.status === 200 && !lrContentJson.includes('Speed Report') &&
+          lrContentJson.includes('Lab Report') &&
+          (lr.json.labPrograms || []).length === 3, lr.status);
+
+        /* The tier mirror behind the Account page: Access names
+           the Lab Report and stays free of the coaching lines;
+           Training carries both of them. */
+        lr = await lrApi(lrCoach, 'GET', '/api/my/membership');
+        const tiers = (lr.json && lr.json.tiers) || [];
+        const accessTier = tiers.find(t => t.key === 'access');
+        const trainingTier = tiers.find(t => t.key === 'training');
+        const passTier = tiers.find(t => t.key === 'pass');
+        check('tier lists mirror the rename and the coaching copy',
+          !!accessTier && !!trainingTier && !!passTier &&
+          accessTier.includes.includes('Your Lab Report, updated at every re-test') &&
+          !accessTier.includes.some(x => x.includes('A plan built for you')) &&
+          !accessTier.includes.some(x => x.includes('What you log shapes')) &&
+          trainingTier.includes.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
+          trainingTier.includes.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
+          tiers.map(t => t.key));
+        check('the membership payload reports v18',
+          lr.status === 200, lr.status);
+        lr = await lrApi(null, 'GET', '/api/content');
+        check('content reports v18', lr.status === 200 && lr.json.brand.version === 'v18',
+          lr.json && lr.json.brand);
+      } finally {
+        lrChild.kill('SIGKILL');
+        fs.rmSync(LR_DIR, { recursive: true, force: true });
       }
     }
 

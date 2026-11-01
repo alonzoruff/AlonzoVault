@@ -300,7 +300,7 @@
     "intro": "The timing rule for every First Step session.",
     "items": [
      "Time the Day 1 starts every week. Phone timing is fine. Use timing gates when they are available.",
-     "Log the times in the app with the session. The Day 1 starts are timed over 10m and 30m, and both are tests in the catalog, so the times are logged in Testing and show in the Speed Report.",
+     "Log the times in the app with the session. The Day 1 starts are timed over 10m and 30m, and both are tests in the catalog, so the times are logged in Testing and show in the Lab Report.",
      "If times fall off by more than a few percent inside a session, the session ends.",
      "Speed work stops when it stops being speed work."
     ],
