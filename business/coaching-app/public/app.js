@@ -662,6 +662,27 @@ $$('[data-join-tier]').forEach(b => b.addEventListener('click', async () => {
   b.disabled = false;
 }));
 
+/* ---------------- landing FAQ accordion (v19) ----------------
+   One answer open at a time, following the nav toggle pattern:
+   the button carries aria-expanded and aria-controls, the panel
+   is hidden while closed. The first answer ships open in the
+   markup, so the section reads fine before this runs. */
+function closeFaqItems(except) {
+  $$('.faq-q').forEach(q => {
+    if (q === except) return;
+    q.setAttribute('aria-expanded', 'false');
+    const p = document.getElementById(q.getAttribute('aria-controls'));
+    if (p) p.hidden = true;
+  });
+}
+$$('.faq-q').forEach(btn => btn.addEventListener('click', () => {
+  const panel = document.getElementById(btn.getAttribute('aria-controls'));
+  const wasOpen = btn.getAttribute('aria-expanded') === 'true';
+  closeFaqItems(btn);
+  btn.setAttribute('aria-expanded', wasOpen ? 'false' : 'true');
+  if (panel) panel.hidden = wasOpen;
+}));
+
 /* ---------------- motion helpers ---------------- */
 const LANE_DIVIDER = '<div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>';
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

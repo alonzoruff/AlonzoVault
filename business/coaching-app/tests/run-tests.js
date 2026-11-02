@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v18 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v18"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v19 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v19"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v18'") &&
-    swJs.text.includes("ruffin-performance-v18"));
+    appJs.text.includes("const APP_VERSION = 'v19'") &&
+    swJs.text.includes("ruffin-performance-v19"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v18"') &&
-    pageHtml.text.includes('Ruffin Performance · App v18') &&
+    pageHtml.text.includes('data-app-version="v19"') &&
+    pageHtml.text.includes('Ruffin Performance · App v19') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -2658,6 +2658,43 @@ async function main() {
   check('join wiring is in the served JS',
     appJs.text.includes('[data-join-tier]') && appJs.text.includes('/api/checkout/session') &&
     appJs.text.includes('data-join-message'));
+  /* Landing FAQ accordion (v19): one card between the tiers and
+     the parents card, eight plain answers, trial and prices
+     stated exactly as locked. */
+  const faqSlice = pageHtml.text.slice(
+    pageHtml.text.indexOf('Questions, answered'), pageHtml.text.indexOf('For parents'));
+  check('landing FAQ card sits between Join the Lab and For parents with all 8 questions',
+    pageHtml.text.indexOf('Questions, answered') > pageHtml.text.indexOf('Join the Lab') &&
+    pageHtml.text.indexOf('Questions, answered') < pageHtml.text.indexOf('For parents') &&
+    faqSlice.includes('Straight answers about training, testing, and joining the Lab.') &&
+    ['What is the Lab?', 'How do I know if I am getting faster?',
+     'What is included in a membership?', 'What does each tier cost?',
+     'Is there a trial?', "Can parents see their athlete's progress?",
+     'Can Coach AJ check my technique?', 'How do I join?']
+      .every(q => faqSlice.includes(q)),
+    faqSlice.slice(0, 120));
+  check('landing FAQ trial answer states 3 days, Lab Access level, and no card',
+    faqSlice.includes('try the Lab for 3 days') &&
+    faqSlice.includes('at the Lab Access level') &&
+    faqSlice.includes('no card is required to start') &&
+    faqSlice.includes('does not include personalized training, live web sessions, or the in-person opportunity'),
+    faqSlice.slice(0, 120));
+  check('landing FAQ tier prices match the locked prices',
+    faqSlice.includes('Lab Access is $10 a month') &&
+    faqSlice.includes('Lab Training is $49.99 a month') &&
+    faqSlice.includes('Lab Pass is $99 a month'),
+    faqSlice.slice(0, 120));
+  check('landing FAQ accordion markup is accessible and wired in the served JS and CSS',
+    (pageHtml.text.match(/class="faq-q"/g) || []).length === 8 &&
+    [1, 2, 3, 4, 5, 6, 7, 8].every(n =>
+      faqSlice.includes('id="faq-q-' + n + '"') &&
+      faqSlice.includes('aria-controls="faq-panel-' + n + '"') &&
+      faqSlice.includes('id="faq-panel-' + n + '"') &&
+      faqSlice.includes('aria-labelledby="faq-q-' + n + '"')) &&
+    faqSlice.includes('aria-expanded="true"') && faqSlice.includes('aria-expanded="false"') &&
+    appJs.text.includes("$$('.faq-q')") && appJs.text.includes('closeFaqItems') &&
+    stylesCss.text.includes('.faq-q') && stylesCss.text.includes('.faq-panel'),
+    faqSlice.slice(0, 120));
   check('landing names the coach without school or CSCS claims',
     pageHtml.text.includes('Alonzo') && pageHtml.text.includes('Ruffin') &&
     pageHtml.text.includes('Maryland/DC-area sprint coach') &&
@@ -8546,8 +8583,8 @@ async function waitForServer(tries = 60) {
         /* The content payload is unchanged in shape: v17, programs
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v18 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v18' &&
+        check('content reports v19 with the Lab programs still withheld signed out',
+          br.status === 200 && br.json.brand.version === 'v19' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8668,10 +8705,10 @@ async function waitForServer(tries = 60) {
           trainingTier.includes.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
           trainingTier.includes.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
           tiers.map(t => t.key));
-        check('the membership payload reports v18',
+        check('the membership payload reports v19',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v18', lr.status === 200 && lr.json.brand.version === 'v18',
+        check('content reports v19', lr.status === 200 && lr.json.brand.version === 'v19',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');

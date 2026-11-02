@@ -1674,6 +1674,28 @@ body.logged-out .primary-nav { display: none !important; }
   background: var(--panel); border-top: 1px solid var(--line);
   color: #fff; font-size: 15px; font-weight: 500; text-align: center;
 }
+/* ---- landing FAQ accordion (v19): one answer open at a time,
+   plain buttons with a plus that turns as the item opens. ---- */
+.landing-faq .faq-list { margin-top: 14px; border-top: 1px solid var(--line); }
+.faq-item { border-bottom: 1px solid var(--line); }
+.faq-q-wrap { margin: 0; }
+.faq-q {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 16px 2px; background: none; border: 0; cursor: pointer;
+  color: var(--ink); font: inherit; font-size: 16px; font-weight: 700;
+  text-align: left; line-height: 1.4;
+}
+.faq-q:focus-visible { outline: 2px solid var(--landing-accent); outline-offset: 2px; }
+.faq-icon {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--landing-accent); font-size: 18px; font-weight: 400; line-height: 1;
+  transition: transform .2s ease;
+}
+.faq-q[aria-expanded="true"] .faq-icon { transform: rotate(45deg); }
+.faq-panel { padding: 0 2px 18px; max-width: 68ch; }
+.faq-panel p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted); }
+.faq-panel[hidden] { display: none; }
 /* ---- v10 landing additions: parent clarity + proof + closing CTA ---- */
 .landing-forline {
   margin: 0 0 22px; max-width: 52ch; color: #d7dade; font-size: 15.5px; line-height: 1.55;
