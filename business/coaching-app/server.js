@@ -37,6 +37,12 @@
  *                   host it is https://ruffin-performance.onrender.com).
  *   STRIPE_API_BASE Stripe API base URL (default
  *                   https://api.stripe.com); overridable for tests.
+ *   STRIPE_WEBHOOK_SECRET  Signing secret (whsec_...) of the Stripe
+ *                   webhook endpoint pointed at /api/stripe/webhook.
+ *                   If not set, the endpoint answers 503 and reads
+ *                   nothing. While the webhook stage is in dry-run
+ *                   it verifies signatures and logs, and writes no
+ *                   member data.
  *   COACH_INVITE_EMAILS  Optional comma-separated emails to seed as
  *                   assistant-coach invites at startup. Seeding is
  *                   idempotent and removal-wins: once an email has
@@ -72,6 +78,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const stripeLib = require('./lib/stripe');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
@@ -94,8 +101,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v19',
-  cache: 'ruffin-performance-v19',
+  version: 'v20',
+  cache: 'ruffin-performance-v20',
 };
 
 /* ------------------------------------------------------------------ */
@@ -150,6 +157,7 @@ let db = {
   liveRequests: [],
   bookings: [],
   bookingSettings: null,
+  inviteRequests: [],
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -404,6 +412,11 @@ function migrate() {
   // availability anywhere — the coach posts hours himself.
   db.bookings = Array.isArray(db.bookings) ? db.bookings : [];
   db.bookingSettings = normalizeBookingSettings(db.bookingSettings);
+  // Invitation requests (v20): public requests from the landing
+  // page — { id, name, email, forWhom, athleteName, tierInterest,
+  // goal, status, createdAt, updatedAt }. Like bookings, invite
+  // requests deliberately do NOT ride along in backups.
+  db.inviteRequests = Array.isArray(db.inviteRequests) ? db.inviteRequests : [];
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     // Membership (v14): every account carries the tier fields; a
@@ -3432,6 +3445,30 @@ function readJsonBody(req, maxBytes) {
     req.on('error', reject);
   });
 }
+/* The exact bytes of a request body, capped. Stripe signs the raw
+   payload, so the webhook route cannot use readBody (which parses
+   and re-shapes JSON). Oversize rejects with status 413 after the
+   stream is drained, like readJsonBody. */
+function readRawBody(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let size = 0, over = false;
+    const chunks = [];
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) { over = true; chunks.length = 0; return; }
+      if (!over) chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (over) {
+        const err = new Error('body too large');
+        err.status = 413;
+        return reject(err);
+      }
+      resolve(Buffer.concat(chunks));
+    });
+    req.on('error', reject);
+  });
+}
 const clean = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const num = (v) => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
@@ -3456,7 +3493,8 @@ const cleanEvents = (v) => {
 /* Stripe API expects. The endpoint is inert until STRIPE_SECRET_KEY */
 /* is configured on the host: with no key it answers 503 and never   */
 /* attempts a Stripe call. There is deliberately no paywall, no join */
-/* flow change, and no webhook handler yet — see                     */
+/* flow change. The webhook receiver (/api/stripe/webhook) is in     */
+/* DRY-RUN: it verifies and logs and writes nothing. See             */
 /* STRIPE_INTEGRATION_TODO.md for the remaining Build C steps.       */
 /* ------------------------------------------------------------------ */
 const STRIPE_API_BASE = process.env.STRIPE_API_BASE || 'https://api.stripe.com';
@@ -3481,10 +3519,20 @@ function checkoutPriceForTier(tier) {
    price / success_url / cancel_url carry the documented placeholder
    values until real ones are configured (see the TODO file). The
    Studio's integration_identifier / origin_context have no native
-   Checkout Session parameter, so they ride along as metadata. */
-function buildCheckoutSessionParams(price) {
+   Checkout Session parameter, so they ride along as metadata.
+
+   Member identity (webhook stage, step 1a): when the caller is a
+   signed-in member, the session also carries who is paying, so the
+   webhook can find the account that paid. client_reference_id is the
+   primary key; metadata[user_id] is repeated on the session AND on
+   the subscription (subscription_data[metadata]) because Stripe can
+   deliver subscription events before checkout.session.completed.
+   customer_email is the fallback. A signed-out caller gets exactly
+   the original parameter set, untouched. The identity always comes
+   from the server's own session read, never from the request body. */
+function buildCheckoutSessionParams(price, identity) {
   const domain = process.env.DOMAIN || 'https://example.com';
-  return {
+  const params = {
     ui_mode: 'hosted_page',
     mode: 'subscription',
     billing_address_collection: 'auto',
@@ -3500,9 +3548,20 @@ function buildCheckoutSessionParams(price) {
     'metadata[integration_identifier]': 'hosted_web_0001',
     'metadata[origin_context]': 'web',
   };
+  if (identity && identity.userId) {
+    params.client_reference_id = identity.userId;
+    if (identity.email) params.customer_email = identity.email;
+    params['metadata[user_id]'] = identity.userId;
+    params['subscription_data[metadata][user_id]'] = identity.userId;
+    if (identity.tier) {
+      params['metadata[tier]'] = identity.tier;
+      params['subscription_data[metadata][tier]'] = identity.tier;
+    }
+  }
+  return params;
 }
-async function createCheckoutSession(price) {
-  const form = new URLSearchParams(buildCheckoutSessionParams(price));
+async function createCheckoutSession(price, identity) {
+  const form = new URLSearchParams(buildCheckoutSessionParams(price, identity));
   const stripeRes = await fetch(STRIPE_API_BASE + '/v1/checkout/sessions', {
     method: 'POST',
     headers: {
@@ -3646,6 +3705,25 @@ const BOOKING_TRANSITIONS = {
   approved: ['cancelled', 'completed'],
   declined: [], cancelled: [], completed: [],
 };
+/* Invitation requests (v20): the public landing page form and the
+   coach's Invitation Requests page. Statuses and transitions mirror
+   the booking pattern, in a smaller set. */
+const INVITE_REQUEST_STATUSES = ['pending', 'invited', 'declined'];
+const INVITE_REQUEST_TRANSITIONS = {
+  pending: ['invited', 'declined'],
+  invited: ['pending'],
+  declined: ['pending'],
+};
+const INVITE_REQUEST_TIERS = ['access', 'training', 'pass', 'unsure'];
+const INVITE_REQUEST_PENDING_CAP = 2;
+function coachInviteRequestView(r) {
+  return {
+    id: r.id, name: r.name, email: r.email, forWhom: r.forWhom,
+    athleteName: r.athleteName || '', tierInterest: r.tierInterest,
+    goal: r.goal || '', status: r.status,
+    createdAt: r.createdAt, updatedAt: r.updatedAt,
+  };
+}
 function bookingHoldsSlot(b) { return b.status === 'pending' || b.status === 'approved'; }
 /* The next 14 New York days with their bookable slots: a day is
    open when the coach set a window for its weekday and the date is
@@ -3798,8 +3876,10 @@ async function handleApi(req, res, url) {
      that tier's price; an unknown tier is rejected with 400 before
      any Stripe call, and a body with no tier keeps the original
      STRIPE_PRICE_ID behavior. Inert by design until the host has
-     STRIPE_SECRET_KEY configured (503, and no Stripe call is made);
-     nothing here gates registration or content — the paywall and
+     STRIPE_SECRET_KEY configured (503, and no Stripe call is made).
+     A signed-in member's checkout also carries their account id (see
+     buildCheckoutSessionParams); a signed-out one is unchanged.
+     Nothing here gates registration or content — the paywall and
      join flow are a later Build C stage. */
   if (p === '/api/checkout/session' && req.method === 'POST') {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -3820,12 +3900,54 @@ async function handleApi(req, res, url) {
     } else {
       return sendJson(res, 400, { error: 'Unknown tier.' });
     }
+    /* Who is paying (step 1a): a signed-in member's account id and
+       email ride on the session so the webhook can find the account.
+       Coaches carry no membership, so a coach session gets no
+       identity; a signed-out caller gets the original parameters. */
+    const buyer = readSession(req);
+    const identity = (buyer && buyer.role !== 'coach')
+      ? { userId: buyer.id, email: buyer.email, tier: tier || null }
+      : null;
     try {
-      const session = await createCheckoutSession(price);
+      const session = await createCheckoutSession(price, identity);
       return sendJson(res, 200, { url: session.url });
     } catch (err) {
       return sendJson(res, 502, { error: (err && err.stripeMessage) || 'Payment provider unreachable.' });
     }
+  }
+
+  /* Stripe webhook receiver (step 1b, DRY-RUN). Stripe calls this
+     with no login, so it sits above the login gate and is trusted
+     only through the signature check on the raw bytes. In this
+     stage it verifies the signature, logs a small summary of the
+     event, and answers 200; it writes nothing to the store. Inert
+     (503, body unread) until STRIPE_WEBHOOK_SECRET is configured.
+     A bad signature gets a plain 400 with no detail; the reason goes
+     to the server log only. */
+  if (p === '/api/stripe/webhook' && req.method === 'POST') {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      return sendJson(res, 503, { error: 'Webhooks are not configured yet.' });
+    }
+    let raw;
+    try {
+      raw = await readRawBody(req, 1024 * 1024);
+    } catch (err) {
+      return sendJson(res, err && err.status === 413 ? 413 : 400, { error: 'Bad request body.' });
+    }
+    const check = stripeLib.verifyWebhookSignature(raw, req.headers['stripe-signature'], webhookSecret);
+    if (!check.ok) {
+      console.warn('[stripe-webhook] rejected: ' + check.reason);
+      return sendJson(res, 400, { error: 'Signature check failed.' });
+    }
+    let event;
+    try {
+      event = JSON.parse(raw.toString('utf8'));
+    } catch (_) {
+      return sendJson(res, 400, { error: 'Bad request body.' });
+    }
+    console.log('[stripe-webhook] dry-run, nothing written: ' + JSON.stringify(stripeLib.describeEvent(event)));
+    return sendJson(res, 200, { received: true, dryRun: true });
   }
 
   /* Warm-up card edits are public to read (the cards themselves are
@@ -3934,6 +4056,62 @@ async function handleApi(req, res, url) {
       ok: true, token: rec.token, pagePath: '/?booking=' + rec.token,
       booking: visitorBookingView(rec),
     });
+  }
+
+  /* ---------- Invitation requests: the public form ----------
+     A visitor asks for an invitation from the landing page. No
+     account, no token, no email is sent: the request sits pending
+     until the coach marks it invited, which adds the email to the
+     member invite list (db.clientInvites) so the person can then
+     register. The website field is a honeypot — a filled value
+     means a bot, so the answer looks like success and nothing is
+     stored. */
+  if (p === '/api/invite-requests' && req.method === 'POST') {
+    const body = await readBody(req);
+    if (typeof body.website === 'string' && body.website.trim() !== '') {
+      return sendJson(res, 201, { ok: true });
+    }
+    const name = clean(body.name, 120);
+    const email = clean(body.email, 200).toLowerCase();
+    const athleteName = clean(body.athleteName, 120);
+    const goal = clean(body.goal, 1000);
+    if (!name) return sendJson(res, 400, { error: 'Please add your name.' });
+    if (!EMAIL_RE.test(email)) {
+      return sendJson(res, 400, { error: 'Please enter a valid email address.' });
+    }
+    let forWhom = 'self';
+    if (body.forWhom !== undefined && body.forWhom !== null && body.forWhom !== '') {
+      forWhom = clean(body.forWhom, 20);
+      if (forWhom !== 'self' && forWhom !== 'child') {
+        return sendJson(res, 400, { error: 'Please say who this request is for.' });
+      }
+    }
+    let tierInterest = 'unsure';
+    if (body.tierInterest !== undefined && body.tierInterest !== null && body.tierInterest !== '') {
+      tierInterest = clean(body.tierInterest, 20);
+      if (!INVITE_REQUEST_TIERS.includes(tierInterest)) {
+        return sendJson(res, 400, { error: 'Please pick the membership that interests you.' });
+      }
+    }
+    if (!goal) {
+      return sendJson(res, 400, { error: 'Please add a sentence about what you are working toward.' });
+    }
+    const pendingCount = db.inviteRequests
+      .filter(r => r.email === email && r.status === 'pending').length;
+    if (pendingCount >= INVITE_REQUEST_PENDING_CAP) {
+      return sendJson(res, 429, {
+        error: 'You already have ' + INVITE_REQUEST_PENDING_CAP + ' requests waiting on Coach AJ. He reviews those first.',
+      });
+    }
+    const now = new Date().toISOString();
+    const rec = {
+      id: crypto.randomUUID(),
+      name, email, forWhom, athleteName, tierInterest, goal,
+      status: 'pending', createdAt: now, updatedAt: now,
+    };
+    db.inviteRequests.push(rec);
+    saveDb();
+    return sendJson(res, 201, { ok: true });
   }
 
   const bookStatusMatch = p.match(/^\/api\/book\/status\/([^/]+)(\/ics)?$/);
@@ -4806,6 +4984,45 @@ async function handleApi(req, res, url) {
     b.updatedAt = new Date().toISOString();
     saveDb();
     return sendJson(res, 200, { ok: true, booking: coachBookingView(b) });
+  }
+
+  /* ---------- Invitation requests: the coach's side ----------
+     The Invitation Requests page: pending first (oldest waiting
+     first), then invited, then declined. Status changes follow
+     INVITE_REQUEST_TRANSITIONS only. Marking a request invited
+     also adds its email to db.clientInvites, which is what lets
+     the person register. */
+  if (p === '/api/invite-requests' && req.method === 'GET') {
+    const rank = { pending: 0, invited: 1, declined: 2 };
+    const list = db.inviteRequests.slice().sort((a, b) => {
+      const ra = rank[a.status] !== undefined ? rank[a.status] : 3;
+      const rb = rank[b.status] !== undefined ? rank[b.status] : 3;
+      if (ra !== rb) return ra - rb;
+      if (a.status === 'pending') return a.createdAt < b.createdAt ? -1 : 1;
+      return a.updatedAt < b.updatedAt ? -1 : 1;
+    }).map(coachInviteRequestView);
+    return sendJson(res, 200, { requests: list });
+  }
+
+  const inviteRequestStatusChange = p.match(/^\/api\/invite-requests\/([^/]+)\/status$/);
+  if (inviteRequestStatusChange && req.method === 'POST') {
+    const r = db.inviteRequests.find(x => x.id === decodeURIComponent(inviteRequestStatusChange[1]));
+    if (!r) return sendJson(res, 404, { error: 'Invitation request not found.' });
+    const body = await readBody(req);
+    const next = clean(body.status, 20);
+    if (!INVITE_REQUEST_STATUSES.includes(next)) {
+      return sendJson(res, 400, { error: 'Unknown invitation request status.' });
+    }
+    if (!(INVITE_REQUEST_TRANSITIONS[r.status] || []).includes(next)) {
+      return sendJson(res, 400, { error: 'A ' + r.status + ' request cannot become ' + next + '.' });
+    }
+    r.status = next;
+    r.updatedAt = new Date().toISOString();
+    if (next === 'invited' && !db.clientInvites.includes(r.email)) {
+      db.clientInvites.push(r.email);
+    }
+    saveDb();
+    return sendJson(res, 200, { ok: true, request: coachInviteRequestView(r) });
   }
 
   if (p === '/api/booking-settings' && req.method === 'GET') {

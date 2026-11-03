@@ -396,14 +396,14 @@ const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', labprograms: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub', inviterequests: 'coachhub',
   livesessions: 'train',
-  book: 'landing',
+  book: 'landing', invite: 'landing',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['access', 'Access'], ['bookings', 'Bookings'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['access', 'Access'], ['bookings', 'Bookings'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 /* ---------------- membership tiers (v14) ----------------
    The nav mirror of the server's entitlement rules. The server is
@@ -608,6 +608,8 @@ function showView(name) {
   if (name === 'access') renderAccess();
   if (name === 'book') renderBook();
   if (name === 'bookings') renderBookings();
+  if (name === 'invite') renderInvite();
+  if (name === 'inviterequests') renderInviteRequests();
   if (name === 'livesessions') renderLiveSessions();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
@@ -8766,7 +8768,7 @@ async function renderBook() {
       <button class="btn primary" type="button" id="book-invite-btn" style="width:auto">Request an Invitation</button>
     </div>`;
     const b = $('#book-invite-btn');
-    if (b) b.addEventListener('click', () => showView('account'));
+    if (b) b.addEventListener('click', () => showView('invite'));
     return;
   }
   el.innerHTML = days.map(d => `<div class="card book-day">
@@ -8981,4 +8983,115 @@ async function renderBookings() {
       renderBookings();
     } catch (err) { if (errEl) errEl.textContent = err.message; }
   });
+}
+
+/* ---------------- invitation requests (v20) ----------------
+   The public form on the invite view and the coach list on the
+   Invitation Requests view. Mirrors the Lab Talk booking code:
+   the public side posts once and shows a plain confirmation, the
+   coach side lists requests and moves them with status buttons. */
+function renderInvite() {
+  const el = $('#invite-main');
+  if (!el) return;
+  el.innerHTML = `<div class="card">
+    <h2>Tell Coach AJ about your goals</h2>
+    <label>Your name <input type="text" id="invite-name" maxlength="120" autocomplete="name"></label>
+    <label>Email <input type="email" id="invite-email" maxlength="200" autocomplete="email"></label>
+    <p class="ci-label">Who is this for?</p>
+    <label><input type="radio" name="invite-for" value="self" checked> Myself</label>
+    <label><input type="radio" name="invite-for" value="child"> My child</label>
+    <label>Athlete name (if you are requesting for your child) <input type="text" id="invite-athlete" maxlength="120"></label>
+    <label>Which membership interests you?
+      <select id="invite-tier">
+        <option value="access">Lab Access $10/mo</option>
+        <option value="training">Lab Training $49.99/mo</option>
+        <option value="pass">Lab Pass $99/mo</option>
+        <option value="unsure" selected>Not sure yet</option>
+      </select>
+    </label>
+    <label>What are you working toward? <textarea id="invite-goal" rows="3" maxlength="1000" placeholder="Your goals, and anything you want Coach AJ to know"></textarea></label>
+    <div class="visually-hidden" aria-hidden="true">
+      <label>Website <input type="text" id="invite-website" name="website" tabindex="-1" autocomplete="off"></label>
+    </div>
+    <p class="error" id="invite-err" role="alert"></p>
+    <button class="btn primary" type="button" id="invite-send" style="width:auto">Send Request</button>
+    <p class="muted">No account or payment is needed to send a request.</p>
+  </div>`;
+  const send = $('#invite-send');
+  if (send) send.addEventListener('click', async () => {
+    const errEl = $('#invite-err');
+    send.disabled = true;
+    try {
+      const forEl = document.querySelector('input[name="invite-for"]:checked');
+      await apiPost('/api/invite-requests', {
+        name: $('#invite-name').value, email: $('#invite-email').value,
+        forWhom: forEl ? forEl.value : 'self',
+        athleteName: $('#invite-athlete').value,
+        tierInterest: $('#invite-tier').value,
+        goal: $('#invite-goal').value,
+        website: $('#invite-website').value,
+      });
+      el.innerHTML = `<div class="card">
+        <h2>Request received</h2>
+        <p>Request received. Coach AJ will review it and reach out if there is a good fit.</p>
+        <p class="muted">No account or payment is needed. If Coach AJ invites your email, you can create your account with that email.</p>
+      </div>`;
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message;
+      send.disabled = false;
+    }
+  });
+}
+
+const INVITE_TIER_LABELS = {
+  access: 'Lab Access $10/mo', training: 'Lab Training $49.99/mo',
+  pass: 'Lab Pass $99/mo', unsure: 'Not sure yet',
+};
+async function renderInviteRequests() {
+  const el = $('#inviterequests-main');
+  if (!el) return;
+  let data;
+  try { data = await api('/api/invite-requests'); }
+  catch (err) {
+    el.innerHTML = `<div class="card"><h2>Invitation Requests</h2><p class="error">${esc(err.message)}</p></div>`;
+    return;
+  }
+  const requests = data.requests || [];
+  const actBtn = (r, status, label, primary) =>
+    `<button class="btn ${primary ? 'primary' : 'secondary'}" type="button" style="width:auto" data-inv-act="${status}" data-inv-id="${r.id}">${label}</button>`;
+  const row = (r, actionsHtml) => `<div class="roster-row" style="display:block">
+      <p><strong>${esc(r.name)}</strong> · ${esc(r.email)}</p>
+      <p class="muted">For: ${r.forWhom === 'child' ? 'My child' : 'Myself'}${r.athleteName ? ' · Athlete: ' + esc(r.athleteName) : ''}</p>
+      <p class="muted">Membership interest: ${esc(INVITE_TIER_LABELS[r.tierInterest] || r.tierInterest || 'Not sure yet')}</p>
+      ${r.goal ? `<p>Working toward: ${esc(r.goal)}</p>` : ''}
+      <p class="muted">${esc(r.createdAt ? fmtDate(parseDate(String(r.createdAt).slice(0, 10))) : '')} · Status: ${esc(r.status)}</p>
+      ${actionsHtml ? `<p>${actionsHtml}</p>` : ''}
+    </div>`;
+  const pending = requests.filter(r => r.status === 'pending');
+  const invited = requests.filter(r => r.status === 'invited');
+  const declined = requests.filter(r => r.status === 'declined');
+  el.innerHTML = `<div class="card">
+      <h2>Waiting on you</h2>
+      ${pending.length
+        ? pending.map(r => row(r, actBtn(r, 'invited', 'Mark Invited', true) + ' ' + actBtn(r, 'declined', 'Decline'))).join('')
+        : '<p class="muted">No requests waiting. New requests from the invitation page land here.</p>'}
+    </div>
+    <div class="card">
+      <h2>Invited</h2>
+      ${invited.length
+        ? invited.map(r => row(r, actBtn(r, 'pending', 'Back to pending'))).join('')
+        : '<p class="muted">No one invited yet.</p>'}
+    </div>
+    <div class="card">
+      <h2>Declined</h2>
+      ${declined.length
+        ? declined.map(r => row(r, actBtn(r, 'pending', 'Back to pending'))).join('')
+        : '<p class="muted">Nothing here yet.</p>'}
+    </div>`;
+  el.querySelectorAll('[data-inv-act]').forEach(btn => btn.addEventListener('click', async () => {
+    try {
+      await apiPost('/api/invite-requests/' + encodeURIComponent(btn.dataset.invId) + '/status', { status: btn.dataset.invAct });
+      renderInviteRequests();
+    } catch (err) { alert(err.message); }
+  }));
 }

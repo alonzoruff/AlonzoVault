@@ -2197,6 +2197,14 @@ body.tv-mode {
 }
 .access-controls label { margin: 0; }
 
+/* ---------------- Invitation requests (v20) ----------------
+   The honeypot field on the public invitation form stays out of
+   sight and out of the tab order; real visitors never see it. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
 /* ---------------- Lab Talk bookings (v17) ----------------
    The public booking page's slot grid and the coach Bookings
    page's hours rows. Slots wrap on any width; on phones they take

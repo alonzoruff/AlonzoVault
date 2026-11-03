@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v19 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v19"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v20 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v20"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v19'") &&
-    swJs.text.includes("ruffin-performance-v19"));
+    appJs.text.includes("const APP_VERSION = 'v20'") &&
+    swJs.text.includes("ruffin-performance-v20"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v19"') &&
-    pageHtml.text.includes('Ruffin Performance · App v19') &&
+    pageHtml.text.includes('data-app-version="v20"') &&
+    pageHtml.text.includes('Ruffin Performance · App v20') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -8583,8 +8583,8 @@ async function waitForServer(tries = 60) {
         /* The content payload is unchanged in shape: v17, programs
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v19 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v19' &&
+        check('content reports v20 with the Lab programs still withheld signed out',
+          br.status === 200 && br.json.brand.version === 'v20' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8705,14 +8705,192 @@ async function waitForServer(tries = 60) {
           trainingTier.includes.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
           trainingTier.includes.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
           tiers.map(t => t.key));
-        check('the membership payload reports v19',
+        check('the membership payload reports v20',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v19', lr.status === 200 && lr.json.brand.version === 'v19',
+        check('content reports v20', lr.status === 200 && lr.json.brand.version === 'v20',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
         fs.rmSync(LR_DIR, { recursive: true, force: true });
+      }
+    }
+
+    /* Invitation requests (v20): the public landing page form, the
+       honeypot and pending cap, and the coach Invitation Requests
+       endpoints — marking a request invited adds the email to the
+       member invite list. Own server, own store. */
+    {
+      const IV_BASE = 'http://127.0.0.1:3231';
+      const ivApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { headers['content-type'] = 'application/json'; data = JSON.stringify(body); }
+        const res = await fetch(IV_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const ivText = async (cookie, p) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        const res = await fetch(IV_BASE + p, { headers });
+        return { status: res.status, text: await res.text() };
+      };
+      const ivCookie = (r) => (r.setCookie[0] || '').split(';')[0];
+      const IV_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-iv-'));
+      const ivEnv = Object.assign({}, process.env, {
+        PORT: '3231', DATA_DIR: IV_DIR, SESSION_SECRET: 'invite-secret',
+      });
+      delete ivEnv.STRIPE_SECRET_KEY;
+      delete ivEnv.STRIPE_API_BASE;
+      const ivChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+        env: ivEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      ivChild.stdout.on('data', () => {});
+      ivChild.stderr.on('data', () => {});
+      const waitIv = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(IV_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      try {
+        check('invite request server starts', await waitIv());
+
+        /* Wiring: landing CTAs, the public view, the coach view. */
+        const ivPage = await ivText(null, '/');
+        const ivJs = await ivText(null, '/app.js');
+        const ivCss = await ivText(null, '/styles.css');
+        check('landing Request an Invitation buttons point at the invite view',
+          (ivPage.text.match(/data-view="invite">Request an Invitation/g) || []).length === 2 &&
+          !ivPage.text.includes('data-goto="account">Request an Invitation'), ivPage.status);
+        check('invite views are in the served page',
+          ivPage.status === 200 && ivPage.text.includes('id="view-invite"') &&
+          ivPage.text.includes('id="invite-main"') && ivPage.text.includes('<h1>Request an Invitation</h1>') &&
+          ivPage.text.includes('Tell Coach AJ a little about your goals.') &&
+          ivPage.text.includes('id="view-inviterequests"') &&
+          ivPage.text.includes('id="inviterequests-main"') &&
+          ivPage.text.includes('data-view="inviterequests"'), ivPage.status);
+        check('invite form fields are in the served JS',
+          ivJs.text.includes('renderInvite') && ivJs.text.includes('renderInviteRequests') &&
+          ivJs.text.includes('/api/invite-requests') &&
+          ivJs.text.includes("['inviterequests', 'Invitation Requests']") &&
+          ivJs.text.includes('id="invite-name"') && ivJs.text.includes('id="invite-email"') &&
+          ivJs.text.includes('name="invite-for"') && ivJs.text.includes('Myself') &&
+          ivJs.text.includes('My child') && ivJs.text.includes('id="invite-athlete"') &&
+          ivJs.text.includes('Athlete name (if you are requesting for your child)') &&
+          ivJs.text.includes('id="invite-tier"') &&
+          ivJs.text.includes('Lab Access $10/mo') && ivJs.text.includes('Lab Training $49.99/mo') &&
+          ivJs.text.includes('Lab Pass $99/mo') && ivJs.text.includes('Not sure yet') &&
+          ivJs.text.includes('id="invite-goal"') && ivJs.text.includes('id="invite-website"') &&
+          ivJs.text.includes('name="website"') && ivJs.text.includes('Send Request') &&
+          ivJs.text.includes('Request received. Coach AJ will review it and reach out if there is a good fit.'),
+          ivJs.text.length);
+        check('invite honeypot style ships in the served CSS',
+          ivCss.text.includes('.visually-hidden'), ivCss.text.slice(0, 80));
+
+        /* Validation: plain 400s, nothing stored. */
+        const validInvite = {
+          name: 'Pat Parent', email: 'pat@example.com', forWhom: 'self',
+          athleteName: '', tierInterest: 'training', goal: 'Get faster over 100m.',
+        };
+        let ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { name: '' }));
+        check('invite request with missing name is 400', ir.status === 400, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { email: 'not-an-email' }));
+        check('invite request with a bad email is 400', ir.status === 400, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { forWhom: 'cousin' }));
+        check('invite request with a bad forWhom is 400', ir.status === 400, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { tierInterest: 'gold' }));
+        check('invite request with a bad tierInterest is 400', ir.status === 400, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { goal: '' }));
+        check('invite request with a missing goal is 400', ir.status === 400, ir.status);
+
+        /* A valid request lands as pending; the same email gets
+           one more, then the cap answers 429. */
+        ir = await ivApi(null, 'POST', '/api/invite-requests', validInvite);
+        check('valid invite request is 201', ir.status === 201 && ir.json && ir.json.ok === true, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { forWhom: 'child', athleteName: 'Sam Parent', tierInterest: 'unsure' }));
+        check('a second pending invite request from the same email is 201', ir.status === 201, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests', validInvite);
+        check('a third pending invite request from the same email is 429', ir.status === 429, ir.status);
+
+        /* Honeypot: success-shaped, nothing stored. */
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { email: 'honey@example.com', website: 'https://spam.example.com' }));
+        check('honeypot invite request answers 201', ir.status === 201 && ir.json && ir.json.ok === true, ir.status);
+
+        /* Accounts: the owner coach and one invited member. */
+        ir = await ivApi(null, 'GET', '/api/invite-requests');
+        check('signed-out invite requests list is 401', ir.status === 401, ir.status);
+        ir = await ivApi(null, 'POST', '/api/register', { email: 'ivcoach@test.com', password: 'testpass123' });
+        check('invite store: first account is coach', ir.status === 201 && ir.json.role === 'coach', ir.json);
+        const ivCoach = ivCookie(ir);
+        ir = await ivApi(ivCoach, 'POST', '/api/client-invites', { email: 'ivmember@test.com' });
+        check('invite store: member invite lands', ir.status === 200 || ir.status === 201, ir.status);
+        ir = await ivApi(null, 'POST', '/api/register', { email: 'ivmember@test.com', password: 'testpass123' });
+        const ivMember = ivCookie(ir);
+        check('invite store: member registers', ir.status === 201 && ir.json.role === 'athlete', ir.json);
+        ir = await ivApi(ivMember, 'GET', '/api/invite-requests');
+        check('member cannot read the invite requests list', ir.status === 403, ir.status);
+
+        /* The coach list: both real requests, pending, honeypot absent. */
+        ir = await ivApi(ivCoach, 'GET', '/api/invite-requests');
+        check('coach invite list holds the two stored requests as pending',
+          ir.status === 200 && Array.isArray(ir.json.requests) && ir.json.requests.length === 2 &&
+          ir.json.requests.every(x => x.email === 'pat@example.com' && x.status === 'pending') &&
+          !ir.json.requests.some(x => x.email === 'honey@example.com'), ir.json);
+        const firstReq = (ir.json.requests || [])[0] || {};
+        check('coach invite list exposes the request fields',
+          !!firstReq.id && firstReq.name === 'Pat Parent' && firstReq.forWhom === 'self' &&
+          firstReq.tierInterest === 'training' && firstReq.goal === 'Get faster over 100m.' &&
+          !!firstReq.createdAt && !!firstReq.updatedAt, firstReq);
+
+        /* Marking invited lets the person register: the email
+           lands on the member invite list. */
+        ir = await ivApi(ivCoach, 'POST', '/api/invite-requests/' + firstReq.id + '/status', { status: 'invited' });
+        check('coach marks a request invited', ir.status === 200 && ir.json.request.status === 'invited', ir.json);
+        ir = await ivApi(ivCoach, 'GET', '/api/client-invites');
+        check('an invited request email appears in the client invites payload',
+          ir.status === 200 && Array.isArray(ir.json.invites) && ir.json.invites.includes('pat@example.com'), ir.json);
+        ir = await ivApi(ivCoach, 'POST', '/api/invite-requests/' + firstReq.id + '/status', { status: 'declined' });
+        check('an invited request cannot jump straight to declined', ir.status === 400, ir.status);
+        ir = await ivApi(ivCoach, 'POST', '/api/invite-requests/' + firstReq.id + '/status', { status: 'pending' });
+        check('an invited request can go back to pending', ir.status === 200 && ir.json.request.status === 'pending', ir.json);
+        ir = await ivApi(ivCoach, 'POST', '/api/invite-requests/' + firstReq.id + '/status', { status: 'declined' });
+        check('coach declines a pending request', ir.status === 200 && ir.json.request.status === 'declined', ir.json);
+        ir = await ivApi(ivCoach, 'POST', '/api/invite-requests/' + firstReq.id + '/status', { status: 'invited' });
+        check('a declined request cannot jump straight to invited', ir.status === 400, ir.status);
+        ir = await ivApi(ivCoach, 'POST', '/api/invite-requests/' + firstReq.id + '/status', { status: 'banana' });
+        check('an unknown invite request status is 400', ir.status === 400, ir.status);
+        ir = await ivApi(ivCoach, 'POST', '/api/invite-requests/no-such-id/status', { status: 'invited' });
+        check('an unknown invite request id is 404', ir.status === 404, ir.status);
+        ir = await ivApi(ivMember, 'POST', '/api/invite-requests/' + firstReq.id + '/status', { status: 'invited' });
+        check('member cannot change an invite request status', ir.status === 403, ir.status);
+
+        /* Checkout stays exactly as configured: inert without a key. */
+        ir = await ivApi(null, 'POST', '/api/checkout/session', {});
+        check('checkout still returns 503 without Stripe configured',
+          ir.status === 503 && !!ir.json && ir.json.error === 'Payments are not configured yet.', ir.status);
+      } finally {
+        ivChild.kill('SIGKILL');
+        fs.rmSync(IV_DIR, { recursive: true, force: true });
       }
     }
 
