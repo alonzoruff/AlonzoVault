@@ -1,0 +1,12 @@
+{
+  "name": "aj-command-portal",
+  "version": "2.0.0",
+  "private": true,
+  "description": "AJ Command Portal: hosted game dashboard with real saved state. Zero dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/portal-tests.js"
+  },
+  "engines": { "node": ">=18" }
+}

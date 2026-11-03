@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AJ Command Portal</title>
+<meta name="theme-color" content="#0c1022">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AJ Portal">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" href="/icon-180.png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="offline" role="status" hidden>Cannot reach the portal right now. Showing the last view.</div>
+<header class="top">
+  <div class="top-row">
+    <span class="pix t">AJ Command Portal</span>
+    <span class="pix lv" id="toplv"></span>
+  </div>
+  <div class="xpline"><div class="bar xp thin" id="topbar"><i></i></div></div>
+</header>
+<main>
+  <section class="view" id="v-world" hidden></section>
+  <section class="view" id="v-party" hidden></section>
+  <section class="view" id="v-stats" hidden></section>
+  <section class="view" id="v-plans" hidden></section>
+  <section class="view" id="v-talk" hidden></section>
+</main>
+<div id="briefing" hidden></div>
+<div id="toasts" role="status" aria-live="polite"></div>
+<nav class="tabs" id="tabs" aria-label="Sections"></nav>
+<script src="/app.js"></script>
+</body>
+</html>
