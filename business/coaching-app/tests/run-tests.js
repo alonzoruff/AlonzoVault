@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v20 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v20"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v21 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v21"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,17 +2519,66 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v20'") &&
-    swJs.text.includes("ruffin-performance-v20"));
+    appJs.text.includes("const APP_VERSION = 'v21'") &&
+    swJs.text.includes("ruffin-performance-v21"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v20"') &&
-    pageHtml.text.includes('Ruffin Performance · App v20') &&
+    pageHtml.text.includes('data-app-version="v21"') &&
+    pageHtml.text.includes('Ruffin Performance · App v21') &&
     appJs.text.includes('appVersionHtml'));
+
+  /* ---------------- Printable Lab Report (v21) ----------------
+     The member Lab Report gains a print header (brand, athlete,
+     most recent testing date — all from the payload the member
+     already receives), a Print / Save as PDF button wired to
+     window.print() under a printing-lab-report body class, and a
+     print-only footer. Printing stays in the member's own browser:
+     no new endpoint, no share link, no public route. */
+  const srSeg = seg('async function renderSpeedReport()', 'function checkinReportHtml');
+  check('printable report: the results branch carries the print header with brand, athlete and latest date',
+    srSeg.includes('sr-print-header') &&
+    srSeg.includes('Ruffin Performance · Speed & strength coaching') &&
+    srSeg.includes('data.athleteName') && srSeg.includes('latestTestDate'),
+    srSeg.slice(0, 120));
+  check('printable report: Print / Save as PDF button is wired to window.print()',
+    srSeg.includes('<button class="btn secondary" id="sr-print" type="button">Print / Save as PDF</button>') &&
+    srSeg.includes("querySelector('#sr-print')") && srSeg.includes('window.print()') &&
+    srSeg.includes("classList.add('printing-lab-report')") &&
+    srSeg.includes("classList.remove('printing-lab-report')"),
+    srSeg.slice(0, 120));
+  check('printable report: print-only footer carries the brand line and a generated-on date',
+    srSeg.includes('sr-print-footer') &&
+    srSeg.includes('Ruffin Performance — Measured speed, not promised speed.') &&
+    srSeg.includes('Generated on') && !srSeg.includes('CSCS'),
+    srSeg.slice(0, 120));
+  check('printable report: print CSS scopes the report, hides chrome and other views, shows the footer',
+    stylesCss.text.includes('@media print') &&
+    stylesCss.text.includes('body.printing-lab-report .topbar') &&
+    stylesCss.text.includes('body.printing-lab-report .mainnav') &&
+    stylesCss.text.includes('body.printing-lab-report main > section { display: none !important; }') &&
+    stylesCss.text.includes('body.printing-lab-report main > section#view-speedreport { display: block !important; }') &&
+    stylesCss.text.includes('body.printing-lab-report #sr-print') &&
+    stylesCss.text.includes('.sr-print-footer { display: none; }') &&
+    stylesCss.text.includes('body.printing-lab-report .sr-print-footer') &&
+    stylesCss.text.includes('break-inside: avoid'),
+    stylesCss.text.slice(0, 120));
+  const v21Content = (await api(null, 'GET', '/api/content')).json;
+  check('printable report: BRAND reports v21 with the v21 cache',
+    !!v21Content.brand && v21Content.brand.version === 'v21' &&
+    v21Content.brand.cache === 'ruffin-performance-v21', v21Content.brand);
+  const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
+  check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
+    (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
+    !serverSrc21.includes('speed-report/share') && !serverSrc21.includes('speed-report/public') &&
+    !/share[^"]*speed-report|speed-report[^"]*share/i.test(serverSrc21),
+    (serverSrc21.split('/api/my/speed-report').length - 1));
+  r = await api(null, 'GET', '/api/my/speed-report');
+  check('printable report: the Lab Report endpoint still requires login signed out',
+    r.status === 401, r.status);
 
   /* ---------------- Themes (v12): three looks, one token system ---
      Silverline is the :root baseline; Carbon Lime and Studio are
@@ -8583,8 +8632,8 @@ async function waitForServer(tries = 60) {
         /* The content payload is unchanged in shape: v17, programs
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v20 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v20' &&
+        check('content reports v21 with the Lab programs still withheld signed out',
+          br.status === 200 && br.json.brand.version === 'v21' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8705,10 +8754,10 @@ async function waitForServer(tries = 60) {
           trainingTier.includes.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
           trainingTier.includes.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
           tiers.map(t => t.key));
-        check('the membership payload reports v20',
+        check('the membership payload reports v21',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v20', lr.status === 200 && lr.json.brand.version === 'v20',
+        check('content reports v21', lr.status === 200 && lr.json.brand.version === 'v21',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');

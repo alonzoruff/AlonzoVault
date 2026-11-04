@@ -1852,9 +1852,50 @@ body.logged-out .primary-nav { display: none !important; }
 .sr-dot { fill: var(--red); }
 .sr-series { list-style: none; margin: 8px 0 0; padding: 0; }
 .sr-series li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); font-size: 14px; }
+/* Printable Lab Report (v21): the header is a normal title area on
+   screen; the footer line is for the printed page only. */
+.sr-print-footer { display: none; }
 @media print {
   .sr-card { break-inside: avoid; }
   .sr-grid { grid-template-columns: 1fr 1fr; }
+}
+/* Print: the Lab Report alone, app chrome and other views hidden,
+   white page with dark text and light card borders. Scoped to the
+   printing-lab-report body class the print button sets, the same
+   pattern as printing-card and printing-report above. */
+@media print {
+  body.printing-lab-report { background: #fff !important; }
+  body.printing-lab-report .topbar,
+  body.printing-lab-report .mainnav,
+  body.printing-lab-report nav,
+  body.printing-lab-report .tabbar,
+  body.printing-lab-report .footer,
+  body.printing-lab-report #media-modal { display: none !important; }
+  body.printing-lab-report main > section { display: none !important; }
+  body.printing-lab-report main > section#view-speedreport { display: block !important; }
+  body.printing-lab-report #view-speedreport > h1,
+  body.printing-lab-report #view-speedreport > .lane-divider,
+  body.printing-lab-report #view-speedreport > .subnav-slot,
+  body.printing-lab-report #view-speedreport > .view-sub,
+  body.printing-lab-report #sr-print,
+  body.printing-lab-report button { display: none !important; }
+  body.printing-lab-report #view-speedreport,
+  body.printing-lab-report #speedreport-main { background: #fff !important; color: #111 !important; }
+  body.printing-lab-report .sr-card {
+    background: #fff !important; color: #111 !important;
+    border: 1px solid #ccc !important; box-shadow: none;
+    break-inside: avoid;
+  }
+  body.printing-lab-report .sr-print-header {
+    background: #fff !important; color: #111 !important;
+    border: 1px solid #ccc !important; box-shadow: none;
+    break-inside: avoid;
+  }
+  body.printing-lab-report .muted { color: #444 !important; }
+  body.printing-lab-report .sr-print-footer {
+    display: block !important; color: #111; font-size: 13px; margin-top: 16px;
+  }
+  @page { size: Letter; margin: 0.5in; }
 }
 
 /* ================================================================

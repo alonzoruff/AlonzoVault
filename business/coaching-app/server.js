@@ -40,9 +40,10 @@
  *   STRIPE_WEBHOOK_SECRET  Signing secret (whsec_...) of the Stripe
  *                   webhook endpoint pointed at /api/stripe/webhook.
  *                   If not set, the endpoint answers 503 and reads
- *                   nothing. While the webhook stage is in dry-run
- *                   it verifies signatures and logs, and writes no
- *                   member data.
+ *                   nothing. Verified events update the member's
+ *                   membership (see processStripeEvent). It needs
+ *                   STRIPE_SECRET_KEY too, to look up a new
+ *                   subscription's price.
  *   COACH_INVITE_EMAILS  Optional comma-separated emails to seed as
  *                   assistant-coach invites at startup. Seeding is
  *                   idempotent and removal-wins: once an email has
@@ -101,8 +102,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v20',
-  cache: 'ruffin-performance-v20',
+  version: 'v21',
+  cache: 'ruffin-performance-v21',
 };
 
 /* ------------------------------------------------------------------ */
@@ -158,6 +159,7 @@ let db = {
   bookings: [],
   bookingSettings: null,
   inviteRequests: [],
+  stripeEvents: [],
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -236,9 +238,26 @@ function publicMembership(u) {
     priceLabel: info ? info.priceLabel : null,
     status: u.membershipStatus === 'cancelled' ? 'cancelled' : 'active',
     active: effectiveTier(u) !== null,
+    /* When a member has asked to stop at the end of the paid period,
+       the membership stays active until then; this is that date
+       (an ISO time), else null. */
+    cancelsAt: u.stripeCancelAt || null,
     tierUpdatedAt: u.tierUpdatedAt || null,
     includes: tierIncludes(tier),
   };
+}
+/* The plain sentence a member sees after asking to cancel a paid
+   subscription. The date is shown in New York time, like the rest
+   of the app. */
+function cancelNotice(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) {
+    return 'Your membership will end when your current period ends. You keep full access until then.';
+  }
+  const when = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric',
+  }).format(d);
+  return 'Your membership will end on ' + when + '. You keep full access until then.';
 }
 /* One membership change, recorded: every set-tier, cancel, and
    reactivate lands in the account's history with when, who did it
@@ -247,7 +266,11 @@ function applyMembershipChange(u, fields, actor, action) {
   const now = new Date().toISOString();
   if ('tier' in fields) u.tier = fields.tier;
   if ('status' in fields) u.membershipStatus = fields.status;
-  u.tierUpdatedAt = now;
+  /* tierUpdatedAt is when the tier or status last changed (it is the
+     "since" date members and coaches see). A history line that
+     changes neither, such as a member asking to cancel at the end of
+     the period, is recorded without moving it. */
+  if ('tier' in fields || 'status' in fields) u.tierUpdatedAt = now;
   if (!Array.isArray(u.membershipHistory)) u.membershipHistory = [];
   u.membershipHistory.push({
     at: now, by: actor.by, byEmail: actor.email, action,
@@ -411,6 +434,10 @@ function migrate() {
   // specific dates, and one meeting link. The default is NO
   // availability anywhere — the coach posts hours himself.
   db.bookings = Array.isArray(db.bookings) ? db.bookings : [];
+  /* Stripe event ids already applied (the webhook's duplicate
+     guard), newest last, capped. Deliberately not in backups. */
+  db.stripeEvents = Array.isArray(db.stripeEvents)
+    ? db.stripeEvents.filter(e => e && typeof e.id === 'string') : [];
   db.bookingSettings = normalizeBookingSettings(db.bookingSettings);
   // Invitation requests (v20): public requests from the landing
   // page — { id, name, email, forWhom, athleteName, tierInterest,
@@ -3346,6 +3373,13 @@ function mergeBackupData(data) {
       const email = String(rec.email || '').trim().toLowerCase();
       const target = email ? db.users.find(u => u.email === email && u.role === 'athlete') : null;
       if (!target) continue;
+      /* Stripe owns an account's membership once it has a
+         subscription: a restore must not roll back the tier, the
+         status, the Stripe ids, or the history Stripe has written
+         there. The whole record is skipped for that account; every
+         other collection and every other account restores as
+         before. */
+      if (target.stripeSubscriptionId) continue;
       const next = {
         tier: MEMBERSHIP_TIERS.includes(rec.tier) ? rec.tier : null,
         membershipStatus: rec.membershipStatus === 'cancelled' ? 'cancelled' : 'active',
@@ -3493,8 +3527,8 @@ const cleanEvents = (v) => {
 /* Stripe API expects. The endpoint is inert until STRIPE_SECRET_KEY */
 /* is configured on the host: with no key it answers 503 and never   */
 /* attempts a Stripe call. There is deliberately no paywall, no join */
-/* flow change. The webhook receiver (/api/stripe/webhook) is in     */
-/* DRY-RUN: it verifies and logs and writes nothing. See             */
+/* flow change. The webhook receiver (/api/stripe/webhook) writes    */
+/* membership changes; see the webhook section below. See            */
 /* STRIPE_INTEGRATION_TODO.md for the remaining Build C steps.       */
 /* ------------------------------------------------------------------ */
 const STRIPE_API_BASE = process.env.STRIPE_API_BASE || 'https://api.stripe.com';
@@ -3579,6 +3613,249 @@ async function createCheckoutSession(price, identity) {
     throw err;
   }
   return session;
+}
+
+/* ------------------------------------------------------------------ */
+/* Stripe webhook: membership writes (step 1c)                         */
+/*                                                                     */
+/* The webhook route verifies the signature (lib/stripe.js) and then   */
+/* hands the event to processStripeEvent. The shape of every handler   */
+/* is the same on purpose:                                             */
+/*   1. read-only checks (duplicate? known account?)                   */
+/*   2. any Stripe lookup (the only await)                             */
+/*   3. re-check, then change the account, record the event, and save  */
+/*      in one synchronous stretch, so nothing else can write between  */
+/* Stripe retries any non-2xx answer, so a transient failure throws    */
+/* (the route answers 500) and everything the event wanted is applied  */
+/* or nothing is.                                                      */
+/* ------------------------------------------------------------------ */
+const STRIPE_EVENT_MEMORY = 1000;
+const STRIPE_ACTOR = { by: 'stripe', email: null };
+
+/* The server's own tier -> Price ID table, never anything a client sent. */
+function stripePriceMap() {
+  const out = {};
+  for (const tier of Object.keys(CHECKOUT_TIERS)) out[tier] = checkoutPriceForTier(tier);
+  return out;
+}
+
+/* One call to Stripe's REST API. A 404 / resource_missing is a clear
+   "that does not exist" (err.gone). Everything else that goes wrong
+   (no key, network, timeout, 5xx, 429, a rejected key) is transient:
+   worth retrying once the cause is fixed. */
+async function stripeRequest(method, apiPath, form) {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    const e = new Error('STRIPE_SECRET_KEY is not set');
+    e.transient = true;
+    throw e;
+  }
+  let res;
+  try {
+    res = await fetch(STRIPE_API_BASE + apiPath, {
+      method,
+      headers: Object.assign({ authorization: 'Bearer ' + key },
+        form ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
+      body: form ? new URLSearchParams(form).toString() : undefined,
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (err) {
+    const e = new Error('Stripe unreachable: ' + (err && err.message));
+    e.transient = true;
+    throw e;
+  }
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = (json && json.error && typeof json.error.message === 'string')
+      ? json.error.message : 'Stripe answered ' + res.status;
+    const e = new Error(msg);
+    e.status = res.status;
+    e.gone = res.status === 404 || !!(json && json.error && json.error.code === 'resource_missing');
+    e.transient = !e.gone;
+    throw e;
+  }
+  return json;
+}
+
+function stripeEventSeen(id) {
+  return db.stripeEvents.some(e => e.id === id);
+}
+
+/* Which member account an event is about. A stored subscription
+   binding wins, then the user id we put on the session and
+   subscription, then the Stripe customer id, then (checkout only)
+   the email, and only when exactly one member account has it. A
+   user id that belongs to a coach matches nothing. */
+function findStripeAccount(ref) {
+  const members = db.users.filter(u => u.role === 'athlete');
+  if (ref.subscriptionId) {
+    const u = members.find(x => x.stripeSubscriptionId === ref.subscriptionId);
+    if (u) return u;
+  }
+  if (ref.userId) {
+    const any = db.users.find(x => x.id === ref.userId);
+    if (any) return any.role === 'athlete' ? any : null;
+  }
+  if (ref.customerId) {
+    const u = members.find(x => x.stripeCustomerId === ref.customerId);
+    if (u) return u;
+  }
+  if (ref.email) {
+    const hits = members.filter(x => x.email === ref.email);
+    if (hits.length === 1) return hits[0];
+  }
+  return null;
+}
+
+/* Change the account, record the event, and save: synchronous on
+   purpose (no await anywhere in here). If the save fails, every
+   in-memory change is undone before the error goes up, so a retry
+   starts from a clean slate. f carries: subscriptionId, customerId,
+   tier (or null), status (or null), cancelAt (undefined = leave
+   alone, null = clear), action (optional), eventId, eventCreated
+   (or null). Returns a short outcome word for the log. */
+function applyStripeFacts(user, f) {
+  const bound = user.stripeSubscriptionId;
+  if (bound && bound !== f.subscriptionId) {
+    /* A different subscription from the one on file. If the one on
+       file has ended (the account is cancelled) this is the member
+       signing up again, so it takes over. If the one on file is
+       still live, a second one is a billing problem for the coach
+       to look at; it is never allowed to overwrite the first. */
+    if (user.membershipStatus !== 'cancelled') {
+      if (f.status !== 'active') return 'ignored-other-subscription';
+      const events = db.stripeEvents.slice();
+      const histLen = user.membershipHistory.length;
+      const snap = { at: user.tierUpdatedAt };
+      try {
+        applyMembershipChange(user, {}, STRIPE_ACTOR, 'second-subscription-ignored');
+        stripeRememberEvent(f.eventId);
+        saveDb();
+      } catch (err) {
+        user.membershipHistory.length = histLen;
+        user.tierUpdatedAt = snap.at;
+        db.stripeEvents = events;
+        throw err;
+      }
+      return 'second-subscription-ignored';
+    }
+  }
+  if (f.status === 'active' && !f.tier && !user.tier) {
+    const e = new Error('no tier for this subscription: its Price ID is not in the tier table');
+    e.transient = true;
+    throw e;
+  }
+
+  const snap = {
+    tier: user.tier, status: user.membershipStatus, at: user.tierUpdatedAt,
+    cust: user.stripeCustomerId, sub: user.stripeSubscriptionId,
+    last: user.stripeLastEventAt, cancelAt: user.stripeCancelAt,
+    histLen: user.membershipHistory.length, events: db.stripeEvents.slice(),
+  };
+  try {
+    const newBinding = user.stripeSubscriptionId !== f.subscriptionId;
+    user.stripeSubscriptionId = f.subscriptionId;
+    if (f.customerId) user.stripeCustomerId = f.customerId;
+    const nextTier = f.tier || user.tier || null;
+    const nextStatus = f.status || user.membershipStatus;
+    const changed = nextTier !== (user.tier || null) || nextStatus !== user.membershipStatus;
+    if (changed || newBinding) {
+      let action = f.action;
+      if (!action) {
+        if (nextStatus === 'cancelled' && user.membershipStatus !== 'cancelled') action = 'cancel';
+        else if (nextStatus === 'active' && user.membershipStatus === 'cancelled') action = 'reactivate';
+        else action = 'set-tier';
+      }
+      applyMembershipChange(user, { tier: nextTier, status: nextStatus }, STRIPE_ACTOR, action);
+    }
+    if (f.cancelAt !== undefined) user.stripeCancelAt = f.cancelAt;
+    if (typeof f.eventCreated === 'number' && f.eventCreated > (user.stripeLastEventAt || 0)) {
+      user.stripeLastEventAt = f.eventCreated;
+    }
+    stripeRememberEvent(f.eventId);
+    saveDb();
+  } catch (err) {
+    user.tier = snap.tier; user.membershipStatus = snap.status; user.tierUpdatedAt = snap.at;
+    user.stripeCustomerId = snap.cust; user.stripeSubscriptionId = snap.sub;
+    user.stripeLastEventAt = snap.last; user.stripeCancelAt = snap.cancelAt;
+    user.membershipHistory.length = snap.histLen;
+    db.stripeEvents = snap.events;
+    throw err;
+  }
+  return 'applied';
+}
+function stripeRememberEvent(id) {
+  db.stripeEvents.push({ id, at: new Date().toISOString() });
+  if (db.stripeEvents.length > STRIPE_EVENT_MEMORY) {
+    db.stripeEvents.splice(0, db.stripeEvents.length - STRIPE_EVENT_MEMORY);
+  }
+}
+
+/* One verified event. Returns an outcome word for the log; throws
+   (err.transient) when Stripe should try again. */
+async function processStripeEvent(event) {
+  const info = stripeLib.describeEvent(event);
+  if (!info.id || !info.type) return 'ignored-malformed';
+  if (stripeEventSeen(info.id)) return 'duplicate';
+  const obj = event.data && event.data.object;
+  const priceMap = stripePriceMap();
+
+  if (info.type === 'checkout.session.completed') {
+    const sf = stripeLib.sessionFacts(obj);
+    if (sf.mode !== 'subscription') return 'ignored-not-a-subscription';
+    if (sf.paymentStatus !== 'paid' && sf.paymentStatus !== 'no_payment_required') return 'ignored-not-paid';
+    if (!stripeLib.isSubscriptionId(sf.subscriptionId)) return 'ignored-no-subscription';
+    const ref = { subscriptionId: sf.subscriptionId, userId: sf.userId, customerId: sf.customerId, email: sf.email };
+    if (!findStripeAccount(ref)) return 'no-matching-account';
+
+    /* The one lookup: the subscription's own price and status, from
+       Stripe, before anything is changed. */
+    let sub;
+    try {
+      sub = await stripeRequest('GET', '/v1/subscriptions/' + sf.subscriptionId);
+    } catch (err) {
+      if (err.gone) return 'ignored-subscription-not-found';
+      throw err;
+    }
+    /* Back in the synchronous stretch: look again, because the
+       store may have changed during the await. */
+    if (stripeEventSeen(info.id)) return 'duplicate';
+    const user = findStripeAccount(ref);
+    if (!user) return 'no-matching-account';
+    const facts = stripeLib.subscriptionFacts(sub, priceMap);
+    if (facts.id !== sf.subscriptionId || !facts.status) return 'ignored-subscription-state';
+    return applyStripeFacts(user, {
+      subscriptionId: facts.id, customerId: facts.customerId || sf.customerId,
+      tier: facts.tier, status: facts.status, cancelAt: facts.cancelAt,
+      action: 'subscribe', eventId: info.id, eventCreated: null,
+    });
+  }
+
+  if (info.type === 'customer.subscription.created'
+    || info.type === 'customer.subscription.updated'
+    || info.type === 'customer.subscription.deleted') {
+    const facts = stripeLib.subscriptionFacts(obj, priceMap);
+    if (!stripeLib.isSubscriptionId(facts.id)) return 'ignored-no-subscription';
+    const deleted = info.type === 'customer.subscription.deleted';
+    const status = deleted ? 'cancelled' : facts.status;
+    if (!status) return 'ignored-subscription-state';
+    const user = findStripeAccount({ subscriptionId: facts.id, userId: facts.userId, customerId: facts.customerId });
+    if (!user) return 'no-matching-account';
+    /* Stripe can deliver events out of order. An event older than
+       the last one applied to this same subscription is dropped. */
+    if (user.stripeSubscriptionId === facts.id && typeof event.created === 'number'
+      && event.created < (user.stripeLastEventAt || 0)) {
+      return 'ignored-stale';
+    }
+    return applyStripeFacts(user, {
+      subscriptionId: facts.id, customerId: facts.customerId,
+      tier: facts.tier, status, cancelAt: deleted ? null : facts.cancelAt,
+      action: info.type === 'customer.subscription.created' ? 'subscribe' : undefined,
+      eventId: info.id, eventCreated: typeof event.created === 'number' ? event.created : null,
+    });
+  }
+
+  return 'ignored-event-type';
 }
 
 /* ------------------------------------------------------------------ */
@@ -3908,6 +4185,15 @@ async function handleApi(req, res, url) {
     const identity = (buyer && buyer.role !== 'coach')
       ? { userId: buyer.id, email: buyer.email, tier: tier || null }
       : null;
+    /* One live subscription per member: a second checkout would
+       bill them twice. A cancelled membership (its subscription has
+       ended) may sign up again. */
+    if (buyer && buyer.role !== 'coach' && buyer.stripeSubscriptionId
+      && buyer.membershipStatus !== 'cancelled') {
+      return sendJson(res, 409, {
+        error: 'You already have a membership, so there is nothing to buy right now. If you want to change your plan, message your coach.',
+      });
+    }
     try {
       const session = await createCheckoutSession(price, identity);
       return sendJson(res, 200, { url: session.url });
@@ -3916,14 +4202,15 @@ async function handleApi(req, res, url) {
     }
   }
 
-  /* Stripe webhook receiver (step 1b, DRY-RUN). Stripe calls this
-     with no login, so it sits above the login gate and is trusted
-     only through the signature check on the raw bytes. In this
-     stage it verifies the signature, logs a small summary of the
-     event, and answers 200; it writes nothing to the store. Inert
-     (503, body unread) until STRIPE_WEBHOOK_SECRET is configured.
-     A bad signature gets a plain 400 with no detail; the reason goes
-     to the server log only. */
+  /* Stripe webhook receiver. Stripe calls this with no login, so it
+     sits above the login gate and is trusted only through the
+     signature check on the raw bytes. A verified event goes to
+     processStripeEvent, which updates the member's membership.
+     Inert (503, body unread) until STRIPE_WEBHOOK_SECRET is
+     configured. A bad signature gets a plain 400 with no detail; the
+     reason goes to the server log only. Anything that should be
+     retried (Stripe unreachable, the disk failing) answers 500, so
+     Stripe sends the event again; everything else answers 200. */
   if (p === '/api/stripe/webhook' && req.method === 'POST') {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret) {
@@ -3946,8 +4233,16 @@ async function handleApi(req, res, url) {
     } catch (_) {
       return sendJson(res, 400, { error: 'Bad request body.' });
     }
-    console.log('[stripe-webhook] dry-run, nothing written: ' + JSON.stringify(stripeLib.describeEvent(event)));
-    return sendJson(res, 200, { received: true, dryRun: true });
+    let outcome;
+    try {
+      outcome = await processStripeEvent(event);
+    } catch (err) {
+      console.error('[stripe-webhook] failed, Stripe will retry: ' + (err && err.message)
+        + ' ' + JSON.stringify(stripeLib.describeEvent(event)));
+      return sendJson(res, 500, { error: 'Could not process this event right now.' });
+    }
+    console.log('[stripe-webhook] ' + outcome + ': ' + JSON.stringify(stripeLib.describeEvent(event)));
+    return sendJson(res, 200, { received: true });
   }
 
   /* Warm-up card edits are public to read (the cards themselves are
@@ -4222,9 +4517,10 @@ async function handleApi(req, res, url) {
      act: it ends tier access at once (the entitlement helper reads
      status live), keeps the login and all their data, and lands
      in the membership history the coach sees on the Access page.
-     When the account has a Stripe subscription (webhook stage),
-     cancelling there will also cancel it in Stripe — the status
-     recorded here is the same one that stage writes. */
+     When the account has a Stripe subscription, cancelling here
+     also cancels it in Stripe, at the end of the paid period; the
+     status then flips to cancelled when Stripe reports the
+     subscription has ended (see processStripeEvent). */
   if (p === '/api/my/membership' && req.method === 'GET') {
     const prof = linkedProfileFor(user);
     return sendJson(res, 200, {
@@ -4244,6 +4540,56 @@ async function handleApi(req, res, url) {
   if (p === '/api/my/membership/cancel' && req.method === 'POST') {
     if (user.role === 'coach') {
       return sendJson(res, 400, { error: 'Coach accounts do not carry a membership to cancel.' });
+    }
+    /* A member with a live Stripe subscription cancels it at Stripe
+       too, at the end of the period they have paid for: they keep
+       their access until then, so the status here stays active and
+       Stripe's own "subscription ended" event is what flips it to
+       cancelled. The one Stripe call happens first; if it fails the
+       member sees a plain error and nothing here has changed. */
+    if (user.membershipStatus !== 'cancelled' && stripeLib.isSubscriptionId(user.stripeSubscriptionId)) {
+      if (user.stripeCancelAt) {
+        return sendJson(res, 200, { ok: true, membership: publicMembership(user), notice: cancelNotice(user.stripeCancelAt) });
+      }
+      const subId = user.stripeSubscriptionId;
+      let sub = null;
+      try {
+        sub = await stripeRequest('POST', '/v1/subscriptions/' + subId, { cancel_at_period_end: 'true' });
+      } catch (err) {
+        /* Stripe says that subscription no longer exists: nothing
+           is left to stop, so fall through to the plain local
+           cancel below. Anything else leaves the account alone. */
+        if (!(err && err.gone)) {
+          console.error('[cancel] Stripe did not confirm the cancellation: ' + (err && err.message));
+          return sendJson(res, 502, { error: 'We could not reach the payment provider just now, so your membership has not been changed. Please try again in a few minutes.' });
+        }
+      }
+      if (sub) {
+        if (sub.cancel_at_period_end !== true) {
+          return sendJson(res, 502, { error: 'The payment provider did not confirm the cancellation, so your membership has not been changed. Please try again in a few minutes.' });
+        }
+        /* After the await: the webhook may have ended this
+           membership, or moved it to another subscription, while
+           the call was in flight. */
+        if (user.stripeSubscriptionId !== subId || user.membershipStatus === 'cancelled') {
+          return sendJson(res, 200, { ok: true, membership: publicMembership(user) });
+        }
+        const facts = stripeLib.subscriptionFacts(sub, stripePriceMap());
+        const prevCancelAt = user.stripeCancelAt;
+        const histLen = user.membershipHistory.length;
+        const prevAt = user.tierUpdatedAt;
+        try {
+          user.stripeCancelAt = facts.cancelAt;
+          applyMembershipChange(user, {}, { by: 'member', email: user.email }, 'cancel-requested');
+          saveDb();
+        } catch (err) {
+          user.stripeCancelAt = prevCancelAt;
+          user.membershipHistory.length = histLen;
+          user.tierUpdatedAt = prevAt;
+          return sendJson(res, 500, { error: 'Something went wrong on our side, so please try again.' });
+        }
+        return sendJson(res, 200, { ok: true, membership: publicMembership(user), notice: cancelNotice(user.stripeCancelAt) });
+      }
     }
     if (user.membershipStatus !== 'cancelled') {
       applyMembershipChange(user, { status: 'cancelled' }, { by: 'member', email: user.email }, 'cancel');
@@ -4858,6 +5204,7 @@ async function handleApi(req, res, url) {
         profileName: prof ? (prof.firstName + ' ' + prof.lastName).trim() : null,
         tier: m.tier, tierName: m.tierName, priceLabel: m.priceLabel,
         status: m.status, active: m.active, tierUpdatedAt: m.tierUpdatedAt,
+        cancelsAt: m.cancelsAt,
         stripeCustomerId: u.stripeCustomerId || null,
         stripeSubscriptionId: u.stripeSubscriptionId || null,
         history: Array.isArray(u.membershipHistory) ? u.membershipHistory : [],

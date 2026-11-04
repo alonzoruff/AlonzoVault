@@ -2701,10 +2701,38 @@ async function renderSpeedReport() {
     <div class="sr-grid">${core.map(srCardHtml).join('')}</div>`;
     return;
   }
+  /* Printable report (v21): a header the printed page carries —
+     brand, athlete, and the most recent testing date from the
+     series already in this payload — plus a print-only footer.
+     Printing uses the member's own browser print, so the report
+     can be saved as a PDF; nothing is shared or sent anywhere. */
+  const latestTestDate = (data.tests || []).reduce((acc, t) => {
+    for (const s of (t.series || [])) if (s.date && (!acc || s.date > acc)) acc = s.date;
+    return acc;
+  }, null);
+  const generatedOn = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   el.innerHTML = `${nextHtml}
+    <div class="card sr-print-header">
+      <h2>Lab Report</h2>
+      <p>__BRAND_NAME__ · __BRAND_TAGLINE__</p>
+      ${data.athleteName ? `<p>${esc(data.athleteName)}${latestTestDate ? ` <span class="muted">· Most recent testing: ${esc(fmtDate(parseDate(latestTestDate)))}</span>` : ''}</p>` : (latestTestDate ? `<p class="muted">Most recent testing: ${esc(fmtDate(parseDate(latestTestDate)))}</p>` : '')}
+      <p><button class="btn secondary" id="sr-print" type="button">Print / Save as PDF</button></p>
+    </div>
     <p class="muted">Measured speed, not promised speed — your personal bests against your own baseline, from the tests your coach has recorded for you.</p>
     <div class="sr-grid">${core.map(srCardHtml).join('')}</div>
-    ${others.length ? `<h2>More tests</h2><div class="sr-grid">${others.map(srCardHtml).join('')}</div>` : ''}`;
+    ${others.length ? `<h2>More tests</h2><div class="sr-grid">${others.map(srCardHtml).join('')}</div>` : ''}
+    <p class="sr-print-footer">Ruffin Performance — Measured speed, not promised speed.<br>Generated on ${esc(generatedOn)}</p>`;
+  const pb = el.querySelector('#sr-print');
+  if (pb) pb.addEventListener('click', () => {
+    document.body.classList.add('printing-lab-report');
+    const cleanup = () => {
+      document.body.classList.remove('printing-lab-report');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(cleanup, 1500);
+    window.print();
+  });
 }
 
 /* Reports → Health: the check-in aggregates block. Shows the
@@ -8433,8 +8461,30 @@ const EMPTY_CONTENT = {
    The member's own page: account details, the membership they
    carry (tier, price, status, what it includes), and the cancel
    action. Cancelling asks once, in place, then posts to
-   /api/my/membership/cancel — access ends at once on the server;
-   the login, the log, and the numbers all stay. */
+   /api/my/membership/cancel. A member with no subscription loses
+   tier access at once; a member who pays by subscription keeps it
+   until the end of the paid period, and the card then shows when
+   it ends (membership.cancelsAt) instead of the cancel button.
+   Either way the login, the log, and the numbers all stay. */
+
+/* The plain sentence for a membership set to end at the close of
+   the paid period. Right after cancelling, the server's own wording
+   (the cancel response's notice) is used; on later loads only the
+   end date is known, so the same sentence is built from it, in New
+   York time like the rest of the app. */
+function membershipEndNotice(m) {
+  if (state.membershipNotice && state.membershipNoticeFor === (m && m.cancelsAt)) {
+    return state.membershipNotice;
+  }
+  const d = m && m.cancelsAt ? new Date(m.cancelsAt) : null;
+  if (!d || Number.isNaN(d.getTime())) {
+    return 'Your membership will end when your current period ends. You keep full access until then.';
+  }
+  const when = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric',
+  }).format(d);
+  return 'Your membership will end on ' + when + '. You keep full access until then.';
+}
 async function renderMembershipCard() {
   const el = $('#member-membership');
   if (!el) return;
@@ -8452,7 +8502,19 @@ async function renderMembershipCard() {
   const since = acct.createdAt ? fmtDate(parseDate(acct.createdAt.slice(0, 10))) : '';
   const changed = m.tierUpdatedAt ? fmtDate(parseDate(m.tierUpdatedAt.slice(0, 10))) : '';
   let membershipHtml;
-  if (m.tier && m.status !== 'cancelled') {
+  if (m.tier && m.status !== 'cancelled' && m.cancelsAt) {
+    membershipHtml = `
+      <p><strong>${esc(m.tierName)}</strong> · ${esc(m.priceLabel || '')}</p>
+      <p>Status: <span class="badge low">Active</span></p>
+      <div class="flag" id="membership-end-notice" role="status">
+        <p>${esc(membershipEndNotice(m))}</p>
+        <p class="muted">If you change your mind, message your coach before then.</p>
+      </div>
+      <p class="muted" style="margin-bottom:6px">What your tier includes:</p>
+      <ul class="landing-list">
+        ${(m.includes || []).map(i => `<li>${esc(i)}</li>`).join('')}
+      </ul>`;
+  } else if (m.tier && m.status !== 'cancelled') {
     membershipHtml = `
       <p><strong>${esc(m.tierName)}</strong> · ${esc(m.priceLabel || '')}</p>
       <p>Status: <span class="badge low">Active</span>${changed ? ` <span class="muted">since ${esc(changed)}</span>` : ''}</p>
@@ -8495,7 +8557,7 @@ async function renderMembershipCard() {
     zone.innerHTML = `
       <div class="flag">
         <p><strong>Cancel your membership?</strong></p>
-        <p>Your tier access ends right away: the library, videos, Lab Report, log, and check-in lock until you rejoin. Your account stays, and so do your log and your numbers. If you pay through Stripe, your coach will stop the subscription there too.</p>
+        <p>If you pay by subscription, your membership stops at the end of the period you have paid for, and you keep full access until then. If your coach gave you access directly, it ends right away, and the library, videos, Lab Report, log, and check-in lock until you rejoin. Either way your account stays, and so do your log and your numbers.</p>
         <p>
           <button class="btn danger" id="membership-cancel-yes" type="button">Yes, cancel my membership</button>
           <button class="btn secondary" id="membership-cancel-no" type="button">Keep my membership</button>
@@ -8504,14 +8566,19 @@ async function renderMembershipCard() {
       </div>`;
     $('#membership-cancel-no').addEventListener('click', renderMembershipCard);
     $('#membership-cancel-yes').addEventListener('click', async () => {
+      const yes = $('#membership-cancel-yes');
+      if (yes) { yes.disabled = true; yes.textContent = 'Cancelling'; }
       try {
         const r = await apiPost('/api/my/membership/cancel', {});
         state.membership = r.membership || null;
         if (state.membershipData) state.membershipData.membership = state.membership;
+        state.membershipNotice = r.notice || '';
+        state.membershipNoticeFor = (r.membership && r.membership.cancelsAt) || null;
         applyMembershipNav();
         renderMembershipCard();
         renderHome();
       } catch (err) {
+        if (yes) { yes.disabled = false; yes.textContent = 'Yes, cancel my membership'; }
         const e = $('#membership-cancel-err');
         if (e) e.textContent = err.message;
       }
@@ -8529,6 +8596,15 @@ const ACCESS_TIER_OPTIONS = [
   ['', 'No tier'], ['access', 'Lab Access · $10/month'],
   ['training', 'Lab Training · $49.99/month'], ['pass', 'Lab Pass · $99/month'],
 ];
+/* A date like "November 23, 2026", in New York time like the rest of
+   the app. Empty when the value is missing or not a date. */
+function accessEndDate(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric',
+  }).format(d);
+}
 async function renderAccess() {
   const el = $('#access-main');
   if (!el) return;
@@ -8547,7 +8623,11 @@ async function renderAccess() {
       <p class="muted">Account created ${mb.createdAt ? esc(fmtDate(parseDate(String(mb.createdAt).slice(0, 10)))) : ''}${mb.profileName ? ' · linked profile: ' + esc(mb.profileName) : ' · not linked to a roster profile'}</p>
       <p>Tier: <strong>${mb.tierName ? esc(mb.tierName) + ' · ' + esc(mb.priceLabel || '') : 'No tier'}</strong>
       · Status: ${mb.status === 'cancelled' ? '<span class="badge high">Cancelled</span>' : (mb.active ? '<span class="badge low">Active</span>' : '<span class="badge plain">No access</span>')}
+      ${mb.active && mb.cancelsAt && accessEndDate(mb.cancelsAt) ? ' <span class="muted">ends ' + esc(accessEndDate(mb.cancelsAt)) + '</span>' : ''}
       ${mb.stripeSubscriptionId ? ' · <span class="muted">Stripe subscription on file</span>' : ''}</p>
+      ${mb.stripeSubscriptionId && mb.status !== 'cancelled' && !mb.cancelsAt
+        ? '<p class="muted">This member pays through Stripe. Cancelling here changes their access in this app only. It does not stop their billing, and a later Stripe update can turn access back on. To end it for good, cancel the subscription in Stripe.</p>'
+        : ''}
       ${lastLine}
       <div class="access-controls">
         <label>Tier
@@ -8565,7 +8645,7 @@ async function renderAccess() {
   };
   el.innerHTML = `<div class="card">
     <h2>Member access</h2>
-    <p class="muted">Every member account and what it can open. Set a tier here and it applies at once; the Stripe webhook will set the same fields when a member pays.</p>
+    <p class="muted">Every member account and what it can open. Set a tier here and it applies at once. When a member pays or cancels through Stripe, the Stripe webhook updates the same fields by itself, and for a member with a Stripe subscription, a change from Stripe replaces a manual one.</p>
     ${members.length ? members.map(rowHtml).join('') : '<p class="muted">No member accounts yet. When a member registers with an invited email, they show up here.</p>'}
   </div>`;
   el.querySelectorAll('[data-access-row]').forEach(row => {
