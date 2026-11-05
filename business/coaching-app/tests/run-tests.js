@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v21 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v21"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v22 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v22"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v21'") &&
-    swJs.text.includes("ruffin-performance-v21"));
+    appJs.text.includes("const APP_VERSION = 'v22'") &&
+    swJs.text.includes("ruffin-performance-v22"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v21"') &&
-    pageHtml.text.includes('Ruffin Performance · App v21') &&
+    pageHtml.text.includes('data-app-version="v22"') &&
+    pageHtml.text.includes('Ruffin Performance · App v22') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2566,10 +2566,10 @@ async function main() {
     stylesCss.text.includes('body.printing-lab-report .sr-print-footer') &&
     stylesCss.text.includes('break-inside: avoid'),
     stylesCss.text.slice(0, 120));
-  const v21Content = (await api(null, 'GET', '/api/content')).json;
-  check('printable report: BRAND reports v21 with the v21 cache',
-    !!v21Content.brand && v21Content.brand.version === 'v21' &&
-    v21Content.brand.cache === 'ruffin-performance-v21', v21Content.brand);
+  const v22Content = (await api(null, 'GET', '/api/content')).json;
+  check('printable report: BRAND reports v22 with the v22 cache',
+    !!v22Content.brand && v22Content.brand.version === 'v22' &&
+    v22Content.brand.cache === 'ruffin-performance-v22', v22Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2579,6 +2579,47 @@ async function main() {
   r = await api(null, 'GET', '/api/my/speed-report');
   check('printable report: the Lab Report endpoint still requires login signed out',
     r.status === 401, r.status);
+
+  /* ---------------- SEO and sharing polish (v22) ----------------
+     Canonical, robots, Open Graph and Twitter cards in the shell
+     head, a JSON-LD Organization + WebSite graph with no prices
+     or offers, and public robots.txt / sitemap.xml files served
+     with their proper content types. */
+  check('SEO (v22): served page contains the canonical link with the exact URL',
+    pageHtml.text.includes('<link rel="canonical" href="https://ruffin-performance.onrender.com/">'),
+    pageHtml.text.slice(0, 120));
+  check('SEO (v22): served page contains the Open Graph tags with the exact image URL',
+    pageHtml.text.includes('og:title') && pageHtml.text.includes('og:description') &&
+    pageHtml.text.includes('og:type') && pageHtml.text.includes('og:url') &&
+    pageHtml.text.includes('og:image') &&
+    pageHtml.text.includes('https://ruffin-performance.onrender.com/assets/hero-sprinter.jpg'),
+    pageHtml.text.slice(0, 120));
+  check('SEO (v22): served page contains the Twitter card tags',
+    pageHtml.text.includes('twitter:card') && pageHtml.text.includes('summary_large_image') &&
+    pageHtml.text.includes('twitter:image') &&
+    pageHtml.text.includes('https://ruffin-performance.onrender.com/assets/hero-sprinter.jpg'),
+    pageHtml.text.slice(0, 120));
+  const seoLdMatch = pageHtml.text.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+  const seoLdRaw = seoLdMatch ? seoLdMatch[1] : '';
+  let seoLd = null;
+  try { seoLd = seoLdRaw ? JSON.parse(seoLdRaw) : null; } catch (_) { seoLd = null; }
+  const seoGraph = seoLd && Array.isArray(seoLd['@graph']) ? seoLd['@graph'] : [];
+  const seoOrg = seoGraph.find(n => n && n['@type'] === 'Organization') || null;
+  const seoSite = seoGraph.find(n => n && n['@type'] === 'WebSite') || null;
+  check('SEO (v22): JSON-LD parses with an Organization named Ruffin Performance and a WebSite node, no price and no CSCS',
+    !!seoLd && !!seoOrg && seoOrg.name === 'Ruffin Performance' && !!seoSite &&
+    !seoLdRaw.includes('$') && !seoLdRaw.includes('CSCS'),
+    seoLdRaw.slice(0, 120));
+  const robotsTxt = await apiText(null, '/robots.txt');
+  check('SEO (v22): GET /robots.txt returns 200 text/plain with Allow and Disallow rules',
+    robotsTxt.status === 200 && robotsTxt.type.includes('text/plain') &&
+    robotsTxt.text.includes('Allow: /') && robotsTxt.text.includes('Disallow: /api/'),
+    { status: robotsTxt.status, type: robotsTxt.type, text: robotsTxt.text.slice(0, 120) });
+  const sitemapXml = await apiText(null, '/sitemap.xml');
+  check('SEO (v22): GET /sitemap.xml returns 200 with the canonical URL and no api paths',
+    sitemapXml.status === 200 && sitemapXml.text.includes('https://ruffin-performance.onrender.com/') &&
+    !sitemapXml.text.includes('/api/'),
+    { status: sitemapXml.status, text: sitemapXml.text.slice(0, 120) });
 
   /* ---------------- Themes (v12): three looks, one token system ---
      Silverline is the :root baseline; Carbon Lime and Studio are
@@ -8632,8 +8673,8 @@ async function waitForServer(tries = 60) {
         /* The content payload is unchanged in shape: v17, programs
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v21 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v21' &&
+        check('content reports v22 with the Lab programs still withheld signed out',
+          br.status === 200 && br.json.brand.version === 'v22' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8754,10 +8795,10 @@ async function waitForServer(tries = 60) {
           trainingTier.includes.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
           trainingTier.includes.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
           tiers.map(t => t.key));
-        check('the membership payload reports v21',
+        check('the membership payload reports v22',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v21', lr.status === 200 && lr.json.brand.version === 'v21',
+        check('content reports v22', lr.status === 200 && lr.json.brand.version === 'v22',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');

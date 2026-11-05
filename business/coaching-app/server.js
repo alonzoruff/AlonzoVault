@@ -102,8 +102,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v21',
-  cache: 'ruffin-performance-v21',
+  version: 'v22',
+  cache: 'ruffin-performance-v22',
 };
 
 /* ------------------------------------------------------------------ */
@@ -8656,6 +8656,8 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
 };
 const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/sw.js']);
 /* Brand tokens in the shell files (index.html, app.js, manifest,
