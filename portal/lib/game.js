@@ -318,6 +318,48 @@ function suggested(db, today) {
   return daily ? { quest: questView(db, daily, today), picked: false } : null;
 }
 
+
+/* ---------- v3 additions: per-land XP, roads, what's next, live stamps ---------- */
+/* XP shown on a land's bar: only one-off AJ quests (the same set that counts toward unlocks).
+   Earned is what was actually paid when the quest was done; total is what the quests pay now. */
+function landXp(db, landId) {
+  const qs = unlockQuests(db.content, landId).filter(isAJ);
+  let earned = 0, total = 0;
+  for (const q of qs) {
+    total += q.xp || 0;
+    const c = db.progress.completions[q.id];
+    if (c) earned += c.xp;
+  }
+  return { xp: earned, xpTotal: total };
+}
+/* The nearest land that is still shut, as one plain sentence. Looks only at ways in from lands
+   that are already open, and picks the one with the fewest quests still to clear. */
+function nextGoal(db, today) {
+  let best = null;
+  for (const land of landList(db.content)) {
+    if (!land.unlock || landOpen(db, land.id)) continue;
+    for (const a of alternatives(db, land)) {
+      if (!landOpen(db, a.land)) continue;
+      const more = Math.max(0, a.need - cleared(db, a.land, today));
+      if (!more) continue;
+      if (!best || more < best.more) best = { land: land.id, name: land.name, from: a.land, fromName: a.name, more };
+    }
+  }
+  if (!best) return null;
+  best.text = 'Clear ' + plural(best.more, 'more quest', 'more quests') + ' in ' + best.fromName + ' to open ' + best.name + '.';
+  return best;
+}
+/* Stamps the app compares between visits to tell when Luna changed something.
+   AJ's own ticks and messages never move them. */
+function liveStamps(db) {
+  let replies = null;
+  for (const m of db.outbox) {
+    if (m.updatedBy && m.updatedBy !== 'AJ' && (!replies || m.updatedAt > replies)) replies = m.updatedAt;
+  }
+  const b = db.content.briefing;
+  return { content: db.content.updatedAt || null, overnight: b.overnightAt || null, replies };
+}
+
 function buildState(db, now) {
   const today = etDate(now);
   const c = db.content;
@@ -331,8 +373,10 @@ function buildState(db, now) {
     const qs = unlockQuests(c, l.id);
     const view = {
       id: l.id, name: l.name, blurb: l.blurb, icon: l.icon, open,
-      cleared: cleared(db, l.id, today), total: qs.length
+      cleared: cleared(db, l.id, today), total: qs.length,
+      from: l.unlock ? l.unlock.anyOf.map((a) => a.land).filter((id) => c.lands[id]) : []
     };
+    Object.assign(view, landXp(db, l.id));
     if (open) {
       view.quests = questsIn(c, l.id).map((q) => questView(db, q, today));
       const at = db.progress.unlocked[l.id];
@@ -398,18 +442,20 @@ function buildState(db, now) {
       name: c.hero.name, title: c.hero.title, level: lv.level, into: lv.into, need: lv.need, xp,
       questsDone: ajOnce.filter((q) => questDone(db, q, today)).length, questsTotal: ajOnce.length,
       landsOpen: lands.filter((l) => l.open).length, landsTotal: lands.length,
-      dial: dialView(db, today)
+      dial: dialView(db, today),
+      xpToNext: lv.need - lv.into, next: nextGoal(db, today)
     },
     briefing, lands, party,
     usage: { snapshot: c.usage.snapshot, services, total, totalLabel: 'about $' + Math.round(total) + ' a month' },
     plans: c.plans, oura: c.oura, outboxText: c.outbox,
     outbox: { messages: msgs, unread: msgs.filter((m) => m.unread).length },
-    updatedAt: c.updatedAt
+    updatedAt: c.updatedAt,
+    live: liveStamps(db)
   };
 }
 
 module.exports = {
   etDate, dayNum, addDays, weekStart, shortDate, levelFor, emptyProgress, totalXP, questsIn, landList, landOpen,
   canComplete, completeQuest, undoQuest, settle, settleUnlocks, settleWeeks, buildState, labelFor, withIds,
-  OUTBOX_STATUSES, FIRST_QUEST_BONUS, WEEK_BONUS, WEEK_NEED, dialView, questDone, isUrgent
+  landXp, nextGoal, liveStamps, OUTBOX_STATUSES, FIRST_QUEST_BONUS, WEEK_BONUS, WEEK_NEED, dialView, questDone, isUrgent
 };

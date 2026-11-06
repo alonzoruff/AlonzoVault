@@ -203,11 +203,11 @@ const landOf = (s, id) => s.lands.find((l) => l.id === id);
       assert.strictEqual((await app.done('s-fix')).status, 200);
       const r = await app.done('s-roster');
       assert.deepStrictEqual(r.json.awarded.unlocked.map((l) => l.id), ['lab']);
-      const r2 = await app.done('l-flyer');
+      const r2 = await app.done('l-render');
       assert.deepStrictEqual(r2.json.awarded.unlocked.map((l) => l.id), ['money']);
     });
     await test('unlocks are permanent: undoing the quest that opened a land does not close it', async () => {
-      const r = await app.call('POST', '/api/quests/l-flyer/undo', { body: {} });
+      const r = await app.call('POST', '/api/quests/l-render/undo', { body: {} });
       assert.strictEqual(r.status, 200);
       assert.ok(landOf(r.json.state, 'money').open);
     });
@@ -247,7 +247,7 @@ const landOf = (s, id) => s.lands.find((l) => l.id === id);
       await app.done('h-sleep');
       const s = await app.state();
       assert.ok(!landOf(s, 'school').open, 'two dailies do not open School and Track');
-      assert.strictEqual(s.hero.questsTotal, 18, 'dailies are not counted as quests to clear');
+      assert.strictEqual(s.hero.questsTotal, 17, 'dailies are not counted as quests to clear');
       assert.strictEqual(landOf(s, 'health').total, 3);
       app.clock.t = noon('2026-11-04');
       assert.strictEqual((await app.done('h-fit')).json.awarded.xp, 5);
@@ -360,6 +360,135 @@ const landOf = (s, id) => s.lands.find((l) => l.id === id);
       await app.luna('PUT', '/api/briefing', { overnight: null });
       assert.strictEqual((await app.state()).briefing.show, false, 'nothing to show means no screen');
       await app.stop();
+    });
+  }
+
+  console.log('\nv3 map data');
+  {
+    const app = await boot();
+    await test('each land reports its XP bar: one-off AJ quests only, earned as paid, total as set now', async () => {
+      let s = await app.state();
+      assert.deepStrictEqual(s.lands.map((l) => [l.id, l.xp, l.xpTotal]),
+        [['health', 0, 35], ['school', 0, 115], ['personal', 0, 30], ['lab', 0, 20], ['money', 0, 75]]);
+      await app.done('h-fit');                                               /* a daily */
+      assert.strictEqual(landOf(await app.state(), 'health').xp, 0, 'dailies are not on the land bar');
+      await app.done('h-days');
+      assert.strictEqual(landOf(await app.state(), 'health').xp, 10);
+      await app.luna('PUT', '/api/quests/h-days', { xp: 50 });
+      s = await app.state();
+      assert.strictEqual(landOf(s, 'health').xp, 10, 'paid XP stays as it was paid');
+      assert.strictEqual(landOf(s, 'health').xpTotal, 75);
+      await app.done('m-phone');                                             /* a deadline done from a locked land */
+      s = await app.state();
+      assert.ok(!landOf(s, 'money').open);
+      assert.strictEqual(landOf(s, 'money').xp, 20);
+    });
+    await test('reopening a completed quest earns nothing, even after Luna raises its XP', async () => {
+      const before = (await app.state()).hero.xp;
+      const r = await app.done('h-days');
+      assert.strictEqual(r.json.alreadyDone, true);
+      assert.strictEqual(r.json.awarded.xp, 0);
+      assert.strictEqual(r.json.state.hero.xp, before);
+    });
+    await test('lands list the lands that lead into them, so the map can draw its roads from data', async () => {
+      const s = await app.state();
+      assert.deepStrictEqual(s.lands.map((l) => [l.id, l.from]),
+        [['health', []], ['school', ['health']], ['personal', ['health']], ['lab', ['school']], ['money', ['lab', 'personal']]]);
+    });
+    await app.stop();
+
+    const b = await boot();
+    await test('hero.next names the nearest shut land in plain words, and ends when all are open', async () => {
+      let h = (await b.state()).hero;
+      assert.strictEqual(h.next.text, 'Clear 2 more quests in Health to open School and Track.');
+      assert.strictEqual(h.xpToNext, 40);
+      await b.done('h-days');
+      h = (await b.state()).hero;
+      assert.strictEqual(h.next.text, 'Clear 1 more quest in Health to open School and Track.');
+      assert.strictEqual(h.xpToNext, 30);
+      await b.done('h-alarm');                                               /* School and Personal open */
+      h = (await b.state()).hero;
+      assert.strictEqual(h.next.text, 'Clear 1 more quest in Personal to open Money and Admin.', 'fewest quests to go wins');
+      assert.strictEqual(h.level, 1);
+      assert.strictEqual(h.xpToNext, 20, '20 of the 40 XP for level 2');
+      await b.done('s-fix'); await b.done('s-roster'); await b.done('l-render');
+      assert.strictEqual((await b.state()).hero.next, null);
+    });
+    await b.stop();
+  }
+
+  console.log('\nlive update stamps');
+  {
+    const app = await boot();
+    const live = async () => (await app.state()).live;
+    const later = () => { app.clock.t = new Date(app.clock.t.getTime() + 60000); };
+    await test('AJ’s own ticks and messages never move the stamps', async () => {
+      const a = await live();
+      later(); await app.done('h-days');
+      later(); await app.call('POST', '/api/outbox', { body: { text: 'Add this quest: call the dentist.' } });
+      assert.deepStrictEqual(await live(), a);
+    });
+    await test('Luna’s content edit, overnight line and reply each move their own stamp', async () => {
+      const a = await live();
+      later(); await app.luna('PUT', '/api/oura', { sleep: 70 });
+      const b = await live();
+      assert.notStrictEqual(b.content, a.content);
+      assert.strictEqual(b.overnight, a.overnight);
+      later(); await app.luna('PUT', '/api/briefing', { overnight: 'Claude shipped the map.' });
+      const c = await live();
+      assert.ok(c.overnight && c.overnight !== a.overnight);
+      assert.strictEqual(c.replies, null);
+      later();
+      const id = (await app.state()).outbox.messages[0].id;
+      await app.luna('POST', '/api/outbox/' + id + '/status', { reply: 'Placed it in Personal.' });
+      const d = await live();
+      assert.notStrictEqual(d.replies, null, 'a reply from Luna sets the replies stamp');
+    });
+    await app.stop();
+  }
+
+  console.log('\nv3 wording and files');
+  {
+    const COPY = require('../public/copy.js');
+    const text = fs.readFileSync(path.join(__dirname, '..', 'public', 'copy.js'), 'utf8');
+    await test('the wording file has no invented land names or XP numbers, and Quick Add says it was sent to Luna', async () => {
+      for (const bad of ['Training Grounds', 'Research Tower', '+75', 'Level 7', 'Level 5']) assert.ok(!text.includes(bad), 'found ' + bad);
+      for (const land of ['Health', 'School and Track', 'Personal', 'The Lab', 'Money and Admin']) assert.ok(!text.includes(land), 'land names come from the server, not the wording file: ' + land);
+      assert.ok(/Sent to Luna/.test(COPY.quickAdd.sent));
+      assert.ok(!/added to the map|is on the map/i.test(COPY.quickAdd.sent));
+    });
+    await test('the approved lines are all there, word for word', async () => {
+      assert.strictEqual(COPY.walking.length, 9); assert.strictEqual(COPY.arriving.length, 8);
+      assert.strictEqual(COPY.idle.length, 6); assert.strictEqual(COPY.finished.length, 8);
+      assert.ok(COPY.walking.includes('One thing at a time.') && COPY.arriving.includes('Your call.') && COPY.idle.includes('Just say the word.') && COPY.finished.includes('Another one down.'));
+      assert.strictEqual(COPY.levelUp.title(4), 'Level 4 reached');
+      assert.strictEqual(COPY.unlock.title('The Lab'), 'New land unlocked: The Lab');
+      assert.strictEqual(COPY.unlock.noQuests, 'You can now add quests here.');
+      assert.strictEqual(COPY.toast.many(3), '3 new updates');
+      assert.strictEqual(COPY.error.save, 'Couldn’t save. Try again.');
+      assert.strictEqual(COPY.quickAdd.message('Call the dentist', 'Personal', 'Tomorrow'), 'Add this quest: Call the dentist. Where: Personal. When: Tomorrow.');
+    });
+    await test('say() never gives the same line twice in a row', async () => {
+      for (const kind of ['walking', 'arriving', 'idle', 'finished', 'levelLines']) {
+        let prev = null;
+        for (let i = 0; i < 300; i++) { const l = COPY.say(kind); assert.notStrictEqual(l, prev, kind); prev = l; }
+      }
+    });
+    await test('the wording and map scripts are served to AJ’s cookie and not to strangers', async () => {
+      const app = await boot();
+      for (const f of ['/copy.js', '/world.js']) {
+        assert.strictEqual((await app.call('GET', f)).status, 200, f);
+        assert.strictEqual((await app.call('GET', f, { as: 'none' })).status, 401, f);
+      }
+      assert.ok(/window/.test((await app.call('GET', '/copy.js')).text));
+      await app.stop();
+    });
+    await test('the map script has no inline style attributes (the page policy blocks them) and no invented land names', async () => {
+      const w = fs.readFileSync(path.join(__dirname, '..', 'public', 'world.js'), 'utf8');
+      assert.ok(!/setAttribute\(\s*['"]style['"]/.test(w), 'setAttribute style');
+      assert.ok(!/style=\\?["']/.test(w), 'style= in markup');
+      assert.ok(!/\.innerHTML\s*=\s*[^'"\s;]/.test(w.replace(/\.innerHTML\s*=\s*['"]{2}/g, '')), 'innerHTML only ever cleared, never filled with data');
+      for (const bad of ['Training Grounds', 'Research Tower', '+75']) assert.ok(!w.includes(bad), bad);
     });
   }
 

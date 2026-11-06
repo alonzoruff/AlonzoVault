@@ -68,45 +68,152 @@
     return cv;
   }
   var OWNER_SPRITE = { Luna: 'moon', Char: 'bubble', Claude: 'terminal' };
+  var Portal = window.Portal = { SPRITES: SPRITES, sprite: sprite, local: local };
 
-  /* ---------- toasts ---------- */
-  function toast(title, text, cls) {
-    var box = $('toasts');
-    var t = el('div', 'toast' + (cls ? ' ' + cls : ''));
-    add(t, el('span', 'pix', title), document.createTextNode(text));
-    box.appendChild(t);
-    while (box.children.length > 4) box.removeChild(box.firstChild);
-    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 5000);
+  /* ---------- top offsets: banners and toasts sit under the sticky header ---------- */
+  function layoutTop() {
+    var hdr = document.querySelector('header.top'), bn = $('banners');
+    var root = document.documentElement.style;
+    root.setProperty('--hdr', (hdr ? hdr.offsetHeight : 56) + 'px');
+    root.setProperty('--bnr', (bn ? bn.offsetHeight : 0) + 'px');
   }
-  function toastsFor(q, r) {
-    var a = r.awarded;
-    if (r.alreadyDone) { toast('Already done', q.title + '.'); return; }
-    toast('Quest done', q.title + (a.xp ? '. +' + a.xp + ' XP.' : '.'));
-    a.bonuses.forEach(function (b) {
-      toast(b.kind === 'first' ? 'First quest bonus' : 'Weekly bonus', '+' + b.xp + ' XP.', 'big');
+  window.addEventListener('resize', layoutTop);
+
+  /* ---------- toasts: good news goes away in about 4 seconds, errors stay until dismissed ---------- */
+  var toasts = {};
+  function removeToast(key) {
+    var t = toasts[key];
+    if (!t) return;
+    clearTimeout(t.timer);
+    if (t.el.parentNode) t.el.parentNode.removeChild(t.el);
+    delete toasts[key];
+  }
+  function toast(kind, text, key) {
+    var box = $('toasts');
+    key = key || (kind + ':' + text);
+    removeToast(key);
+    var isErr = kind === 'error';
+    var t = el('div', 'toast ' + (isErr ? 'err' : 'ok'));
+    t.appendChild(el('span', 'tt', text));
+    if (isErr) {
+      t.setAttribute('role', 'alert');
+      var x = el('button', 'toastx', 'Dismiss'); x.type = 'button';
+      x.addEventListener('click', function () { removeToast(key); layoutTop(); });
+      t.appendChild(x);
+    }
+    box.appendChild(t);
+    toasts[key] = { el: t, timer: isErr ? null : setTimeout(function () { removeToast(key); }, 4000) };
+    var okKeys = Object.keys(toasts).filter(function (k) { return toasts[k].timer; });   /* only good-news toasts are capped; errors stay */
+    while (okKeys.length > 3) removeToast(okKeys.shift());
+  }
+
+  /* ---------- banners: level up and new land. In the page flow, never full screen. ---------- */
+  function banner(kind, title, line) {
+    var box = $('banners');
+    var b = el('div', 'banner ' + kind);
+    var body = el('div', 'bnb');
+    body.appendChild(el('div', 'pix bnt', title));
+    if (line) body.appendChild(el('div', 'bnl', line));
+    var x = el('button', 'bnx', 'Dismiss'); x.type = 'button';
+    function gone() { clearTimeout(timer); if (b.parentNode) b.parentNode.removeChild(b); layoutTop(); }
+    x.addEventListener('click', gone);
+    add(b, body, x);
+    box.appendChild(b);
+    while (box.children.length > 3) box.removeChild(box.firstChild);
+    var timer = setTimeout(gone, 10000);
+    layoutTop();
+  }
+
+  /* ---------- what Luna changed: flags, and one combined toast ---------- */
+  var flags = local('flags') || {};
+  function saveFlags() { local('flags', flags); }
+  Portal.flagFor = function (id) { return flags[id] || null; };
+  Portal.clearFlag = function (id) {
+    if (!flags[id]) return;
+    delete flags[id]; saveFlags();
+    if (S && Portal.world) Portal.world.update(S);
+  };
+  function sigOf(q) {
+    return JSON.stringify([q.title, q.owner, q.land, q.xp || 0, q.detail || '', q.date || '', q.end || '', q.time || '', q.place || '', q.due || '', q.dueLabel || '', q.owner === 'AJ' ? '' : q.label]);
+  }
+  function questSnapshot(st) {
+    var sigs = {}, land = {}, open = {};
+    st.lands.forEach(function (l) {
+      open[l.id] = !!l.open;
+      (l.quests || []).forEach(function (q) { sigs[q.id] = sigOf(q); land[q.id] = l.id; });
     });
-    if (a.levelTo > a.levelFrom) toast('Level up', S.hero.name + ' is now level ' + a.levelTo + '.', 'big');
-    a.unlocked.forEach(function (l) { toast('New land', l.name + ' is open.', 'big'); });
+    (st.today.urgent || []).forEach(function (q) { if (!sigs[q.id]) { sigs[q.id] = sigOf(q); land[q.id] = q.land; } });
+    return { sigs: sigs, land: land, open: open };
+  }
+  /* Compares what the server says now with what this device saw last time. Luna's change
+     stamps decide whether to look; AJ's own ticks and messages never move them. */
+  function liveCheck(st) {
+    var C = window.COPY, lv = st.live || {};
+    var seen = local('liveSeen'), snap = local('qsnap'), cur = questSnapshot(st);
+    var items = [];
+    if (seen && snap) {
+      if (lv.content !== seen.content) {
+        Object.keys(cur.sigs).forEach(function (id) {
+          if (!(id in snap.sigs)) {
+            if (snap.open && snap.open[cur.land[id]] === false) return;     /* only revealed by an unlock */
+            flags[id] = 'fresh';
+            var mine = false;
+            st.lands.forEach(function (l) { (l.quests || []).forEach(function (q) { if (q.id === id && q.owner === 'AJ') mine = true; }); });
+            items.push(mine ? C.toast.lunaAddedTask : C.toast.newQuest);
+          } else if (snap.sigs[id] !== cur.sigs[id]) {
+            flags[id] = 'updated'; items.push(C.toast.questUpdated);
+          }
+        });
+        if (!items.length) items.push(C.toast.fromLuna);
+      }
+      if (lv.replies && lv.replies !== seen.replies) items.push(C.toast.fromLuna);
+    }
+    local('liveSeen', { content: lv.content || null, overnight: lv.overnight || null, replies: lv.replies || null });
+    local('qsnap', cur);
+    if (items.length) {
+      saveFlags();
+      toast('ok', items.length === 1 ? items[0] : C.toast.many(items.length), 'live');
+    }
   }
 
   /* ---------- actions ---------- */
+  function failToast(r, fallback) {
+    if (r.network) toast('error', window.COPY.error.offline, 'offline');
+    else if (r.status >= 500 || !r.json || !r.json.error) toast('error', fallback);
+    else toast('error', r.json.error);          /* a plain sentence from the server, such as "That land is still locked." */
+  }
   function complete(q) {
-    if (busy[q.id]) return;
+    if (busy[q.id]) return Promise.resolve({ ok: false });
     busy[q.id] = true;
-    api('POST', '/api/quests/' + q.id + '/complete', {}).then(function (r) {
+    return api('POST', '/api/quests/' + q.id + '/complete', {}).then(function (r) {
       delete busy[q.id];
-      if (r.network) { toast('No connection', 'Could not reach the portal. Try again.'); return; }
-      if (!r.ok) { toast('Not yet', (r.json && r.json.error) || 'That did not work.'); load(); return; }
-      S = r.json.state; toastsFor(q, r.json); renderAll();
+      if (!r.ok) { failToast(r, window.COPY.error.save); if (!r.network) load(); return { ok: false }; }
+      S = r.json.state;
+      var a = r.json.awarded;
+      renderAll();
+      if (!r.json.alreadyDone) {
+        toast('ok', window.COPY.toast.saved, 'saved');
+        if (a.levelTo > a.levelFrom) banner('level', window.COPY.levelUp.title(a.levelTo), window.COPY.say('levelLines'));
+        a.unlocked.forEach(function (u) {
+          var land = null;
+          S.lands.forEach(function (l) { if (l.id === u.id) land = l; });
+          var line = window.COPY.unlock.via(q.title);
+          if (land && land.total === 0) line += ' ' + window.COPY.unlock.noQuests;
+          banner('unlock', window.COPY.unlock.title(u.name), line);
+        });
+        if (Portal.world) Portal.world.celebrate(q, a);
+      }
+      return { ok: true, awarded: a };
     });
   }
   function undo(q) {
-    if (busy[q.id]) return;
+    if (busy[q.id]) return Promise.resolve({ ok: false });
     busy[q.id] = true;
-    api('POST', '/api/quests/' + q.id + '/undo', {}).then(function (r) {
+    return api('POST', '/api/quests/' + q.id + '/undo', {}).then(function (r) {
       delete busy[q.id];
-      if (!r.ok) { toast('Not now', (r.json && r.json.error) || 'Could not undo.'); load(); return; }
-      S = r.json.state; toast('Undone', q.title + '.'); renderAll();
+      if (!r.ok) { failToast(r, window.COPY.error.save); if (!r.network) load(); return { ok: false }; }
+      S = r.json.state; toast('ok', window.COPY.toast.saved, 'saved'); renderAll();
+      return { ok: true };
     });
   }
 
@@ -202,6 +309,11 @@
       c.appendChild(el('p', 'asof', 'No Oura reading in the portal yet. Luna adds sleep and readiness here.'));
     }
 
+    if (S.briefing && S.briefing.overnight) {
+      var ov = el('div', 'sect'); ov.appendChild(el('h3', 'pix', 'Overnight'));
+      ov.appendChild(el('p', '', S.briefing.overnight.text));
+      c.appendChild(ov);
+    }
     var sect = el('div', 'sect');
     var head = el('h3', 'pix', 'Start here');
     sect.appendChild(head);
@@ -239,33 +351,6 @@
       ps.appendChild(line);
     });
     c.appendChild(ps);
-    return c;
-  }
-  function heroCard() {
-    var h = S.hero;
-    var c = el('article', 'panel hero');
-    c.style.flexWrap = 'wrap';
-    c.appendChild(sprite('hero', 6));
-    var m = el('div', 'meta');
-    add(m, el('h2', 'pix nm', h.name), el('p', 'sub', h.title), el('div', 'pix lvl', 'Level ' + h.level));
-    var lab = el('div', 'barlabel'); add(lab, el('span', '', 'XP'), el('b', '', h.into + ' of ' + h.need));
-    var bar = el('div', 'bar xp'); bar.appendChild(el('i')); bar.firstChild.style.width = Math.round(h.into / h.need * 100) + '%';
-    add(m, lab, bar);
-    var st = el('div', 'herostats');
-    add(st, el('span', 'chip', h.xp + ' XP total'), el('span', 'chip', h.questsDone + ' of ' + h.questsTotal + ' quests done'), el('span', 'chip', h.landsOpen + ' of ' + h.landsTotal + ' lands open'));
-    m.appendChild(st);
-    c.appendChild(m);
-    var d = h.dial;
-    var dw = el('div'); dw.style.flexBasis = '100%';
-    var dial = el('div', 'dial');
-    dial.setAttribute('role', 'img'); dial.setAttribute('aria-label', 'Weekly dial. ' + d.label);
-    d.days.forEach(function (day) {
-      var seg = el('div', 'seg' + (day.kept ? ' kept' : '') + (day.today ? ' today' : '') + (day.future ? ' future' : ''));
-      add(seg, el('i'), document.createTextNode(day.letter));
-      dial.appendChild(seg);
-    });
-    add(dw, el('div', 'k', 'This week'), dial, el('p', 'dialnote', d.label + (d.best ? ' Best week so far: ' + d.best + '.' : '')));
-    c.appendChild(dw);
     return c;
   }
   var expanded = local('lands-open') || {};
@@ -318,16 +403,28 @@
     });
     return card;
   }
+  var wmRoot = null, stripBox = null, listBox = null;
   function renderWorld() {
     var v = $('v-world');
-    v.innerHTML = '';
-    v.appendChild(todayStrip());
-    var h = heroCard(); h.style.marginTop = '14px'; v.appendChild(h);
-    v.appendChild(el('h3', 'pix pixsec', 'The World'));
-    var fid = frontierId();
-    var s = el('div', 'stack');
-    S.lands.forEach(function (l) { s.appendChild(landCard(l, fid)); });
-    v.appendChild(s);
+    if (!wmRoot) {
+      v.innerHTML = '';
+      wmRoot = el('div'); stripBox = el('div'); listBox = el('div');
+      stripBox.style.marginTop = '14px';
+      add(v, wmRoot, stripBox, listBox);
+      Portal.world.mount(wmRoot);
+    }
+    Portal.world.update(S);
+    stripBox.innerHTML = ''; stripBox.appendChild(todayStrip());
+    listBox.innerHTML = '';
+    var d = el('details', 'listview');
+    d.open = !!local('list-open');
+    var sum = el('summary', 'pix pixsec', 'List view');
+    d.appendChild(sum);
+    var fid = frontierId(), st = el('div', 'stack');
+    S.lands.forEach(function (l) { st.appendChild(landCard(l, fid)); });
+    d.appendChild(st);
+    d.addEventListener('toggle', function () { local('list-open', d.open); });
+    listBox.appendChild(d);
   }
 
   /* ---------- party, stats, plans ---------- */
@@ -416,21 +513,32 @@
       flushing = false;
       if (r.ok) {
         pending.shift(); savePending();
+        if (!pending.length) removeToast('sync');
         load().then(function () { if (pending.length) flushPending(); });
         return;
       }
-      if (r.network || r.status >= 500 || r.status === 429) { next.failed = true; savePending(); renderThread(); return; }
+      if (r.network || r.status >= 500 || r.status === 429) {
+        next.failed = true; savePending(); renderThread();
+        toast('error', window.COPY.error.waiting, 'sync');
+        return;
+      }
       pending.shift(); savePending();
-      toast('Not sent', (r.json && r.json.error) || 'That message could not be saved.');
-      renderThread();
+      toast('error', (r.json && r.json.error) || window.COPY.error.save);
+      removeToast('sync'); renderThread();
     });
   }
   function withdraw(m) {
     api('POST', '/api/outbox/' + m.id + '/withdraw', {}).then(function (r) {
-      if (!r.ok) toast('Too late', (r.json && r.json.error) || 'Could not withdraw that.');
+      if (!r.ok) toast('error', (r.json && r.json.error) || window.COPY.error.save);
       load();
     });
   }
+  Portal.sendNote = function (text) {
+    pending.push({ clientId: uid(), text: text, at: new Date().toISOString() });
+    savePending(); renderThread(); flushPending();
+    return Promise.resolve({ queued: true });
+  };
+  Portal.pendingTexts = function () { return pending.map(function (p) { return p.text; }); };
   var composerBuilt = false;
   function buildTalk() {
     var v = $('v-talk'); v.innerHTML = '';
@@ -598,13 +706,23 @@
     var a = el('a', 'btn', 'Go to the front page'); a.href = '/'; a.style.display = 'inline-flex'; a.style.alignItems = 'center'; a.style.textDecoration = 'none';
     m.appendChild(a); document.body.appendChild(m);
   }
+  var wasDown = false;
   function load() {
     return api('GET', '/api/state').then(function (r) {
       if (r.status === 401) { lockedNotice(); return; }
-      if (!r.ok) { $('offline').hidden = false; return; }
+      if (!r.ok) {
+        $('offline').hidden = false; wasDown = true;
+        if (r.network) toast('error', window.COPY.error.offline, 'offline');
+        else toast('error', window.COPY.error.load, 'loadfail');
+        return;
+      }
       $('offline').hidden = true;
+      removeToast('offline'); removeToast('loadfail');
+      if (wasDown) { wasDown = false; toast('ok', window.COPY.toast.upToDate, 'live'); }
       S = r.json;
+      liveCheck(S);
       if (!ready) { ready = true; renderAll(); startUp(); } else renderAll();
+      layoutTop();
     });
   }
   function startUp() {
@@ -614,10 +732,13 @@
     show(start);
     flushPending();
   }
-  setInterval(function () { if (!document.hidden) { load(); flushPending(); } }, 25000);
+  setInterval(function () { if (!document.hidden) { load(); flushPending(); } }, 30000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { load(); flushPending(); } });
   window.addEventListener('online', function () { load(); flushPending(); });
+  Portal.state = function () { return S; };
+  Portal.complete = complete; Portal.undo = undo;
+  Portal.toast = function (kind, text, key) { toast(kind === 'error' ? 'error' : 'ok', text, key); };
   $('v-world').appendChild(el('p', 'note', 'Opening the portal...'));
   $('v-world').hidden = false;
-  load();
+  document.addEventListener('DOMContentLoaded', function () { layoutTop(); load(); });
 })();
