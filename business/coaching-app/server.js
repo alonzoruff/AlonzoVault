@@ -102,8 +102,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v22',
-  cache: 'ruffin-performance-v22',
+  version: 'v23',
+  cache: 'ruffin-performance-v23',
 };
 
 /* ------------------------------------------------------------------ */
@@ -6471,7 +6471,7 @@ async function handleApi(req, res, url) {
     }
     if (!isPlainObj(body) || body.app !== 'ruffin-performance-app' || body.kind !== 'backup'
       || !isPlainObj(body.data)) {
-      return sendJson(res, 400, { error: 'That is not a sprinter app backup file.' });
+      return sendJson(res, 400, { error: 'That is not a Ruffin Performance backup file.' });
     }
     /* Everything is validated before anything is merged: a bad
        collection refuses the whole import with the store untouched. */

@@ -1,4 +1,4 @@
-/* Sprinter Workout App — front end (vanilla JS, no build step). */
+/* Ruffin Performance — front end (vanilla JS, no build step). */
 'use strict';
 
 /* ---------------- state ---------------- */
@@ -3674,7 +3674,7 @@ async function renderCoachInvites() {
       <p class="muted">An invited coach shares full access to this team's data — roster, testing, weekly numbers, and health concerns. Invite by email; when they create an account with that email, they land as a coach.</p>`;
     if (isOwner) {
       html += `<form id="invite-form">
-        <label>Email <input type="email" id="invite-email" required autocomplete="email" placeholder="assistant@school.edu"></label>
+        <label>Email <input type="email" id="invite-email" required autocomplete="email" placeholder="assistant@example.com"></label>
         <button class="btn primary" type="submit">Invite coach</button>
         <p class="error" id="invite-err"></p>
       </form>`;
@@ -7346,7 +7346,7 @@ async function renderData() {
   main.innerHTML = `
     <div class="card">
       <h3>Full backup</h3>
-      <p class="muted">One JSON file with the whole team dataset: roster and groups, assignments and completions, testing, weekly numbers, health concerns, inventory, warm-up card edits, meet results, school records, goals, check-ins, attendance, coach notes, custom workouts, programs, and announcements. Accounts and passwords are never in the file.</p>
+      <p class="muted">One JSON file with the whole team dataset: roster and groups, assignments and completions, testing, weekly numbers, health concerns, inventory, warm-up card edits, meet results, club records, goals, check-ins, attendance, coach notes, custom workouts, programs, and announcements. Accounts and passwords are never in the file.</p>
       <p><a class="btn" href="/api/export/backup">Download full backup</a></p>
     </div>
     <div class="card">
@@ -7360,7 +7360,7 @@ async function renderData() {
       <p>
         <a class="btn secondary" href="/api/export/attendance.csv">Attendance</a>
         <a class="btn secondary" href="/api/export/checkins.csv">Check-ins</a>
-        <a class="btn secondary" href="/api/export/records.csv">School records</a>
+        <a class="btn secondary" href="/api/export/records.csv">Club records</a>
       </p>
       <p>
         <a class="btn secondary" href="/api/export/testing-detail.csv">Testing results (full detail)</a>
@@ -7391,7 +7391,7 @@ async function renderData() {
     }
     if (!parsed || parsed.app !== 'ruffin-performance-app' || parsed.kind !== 'backup'
       || !parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) {
-      box.innerHTML = '<p class="error">That is not a sprinter app backup file.</p>';
+      box.innerHTML = '<p class="error">That is not a Ruffin Performance backup file.</p>';
       return;
     }
     pendingBackup = parsed;

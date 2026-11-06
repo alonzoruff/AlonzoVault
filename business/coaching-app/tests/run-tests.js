@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v22 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v22"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v23 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v23"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v22'") &&
-    swJs.text.includes("ruffin-performance-v22"));
+    appJs.text.includes("const APP_VERSION = 'v23'") &&
+    swJs.text.includes("ruffin-performance-v23"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v22"') &&
-    pageHtml.text.includes('Ruffin Performance · App v22') &&
+    pageHtml.text.includes('data-app-version="v23"') &&
+    pageHtml.text.includes('Ruffin Performance · App v23') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2566,10 +2566,10 @@ async function main() {
     stylesCss.text.includes('body.printing-lab-report .sr-print-footer') &&
     stylesCss.text.includes('break-inside: avoid'),
     stylesCss.text.slice(0, 120));
-  const v22Content = (await api(null, 'GET', '/api/content')).json;
-  check('printable report: BRAND reports v22 with the v22 cache',
-    !!v22Content.brand && v22Content.brand.version === 'v22' &&
-    v22Content.brand.cache === 'ruffin-performance-v22', v22Content.brand);
+  const v23Content = (await api(null, 'GET', '/api/content')).json;
+  check('printable report: BRAND reports v23 with the v23 cache',
+    !!v23Content.brand && v23Content.brand.version === 'v23' &&
+    v23Content.brand.cache === 'ruffin-performance-v23', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2620,6 +2620,37 @@ async function main() {
     sitemapXml.status === 200 && sitemapXml.text.includes('https://ruffin-performance.onrender.com/') &&
     !sitemapXml.text.includes('/api/'),
     { status: sitemapXml.status, text: sitemapXml.text.slice(0, 120) });
+
+  /* ---------------- Member App Brand Cleanup (v23) ----------------
+     The warm-up cards carry the Ruffin Performance brand through the
+     BRAND substitution tokens, member-facing copy uses club and
+     training language instead of school language, and the export and
+     backup strings match the brand. The served brand line was
+     verified by curl: applyBrand substitutes the tagline literally,
+     so the served span reads "Speed & strength coaching" with a raw
+     & (not &amp;); the check normalizes &amp; to & so it asserts the
+     exact served wording either way. */
+  const v23PageNormalized = pageHtml.text.replaceAll('&amp;', '&');
+  check('v23: all three warm-up card brand lines carry the Ruffin Performance brand',
+    (pageHtml.text.match(/class="wu-brand"/g) || []).length === 3 &&
+    (v23PageNormalized.split('Ruffin Performance <span>// Speed & strength coaching</span>').length - 1) === 3,
+    (pageHtml.text.match(/class="wu-brand"/g) || []).length);
+  check('v23: served page and app JS contain no school strings (case-insensitive)',
+    !pageHtml.text.toLowerCase().includes('st. john') &&
+    !pageHtml.text.toLowerCase().includes('cadets') &&
+    !pageHtml.text.toLowerCase().includes('school records') &&
+    !appJs.text.toLowerCase().includes('st. john') &&
+    !appJs.text.toLowerCase().includes('cadets') &&
+    !appJs.text.toLowerCase().includes('school records'));
+  check('v23: nutrition wording is member language, not school language',
+    !pageHtml.text.includes('refill it at school') &&
+    !pageHtml.text.includes('before school') &&
+    !pageHtml.text.includes('high school athletes') &&
+    !pageHtml.text.includes('school rules govern'));
+  check('v23: app JS carries the Club records export label and the Ruffin Performance backup wording',
+    appJs.text.includes('Club records') &&
+    appJs.text.includes('Ruffin Performance backup file') &&
+    !appJs.text.includes('assistant@school.edu'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
      Silverline is the :root baseline; Carbon Lime and Studio are
@@ -2841,14 +2872,16 @@ async function main() {
         !(text.replace(/sjc-demos/g, '').match(/sjc/i) || []).length, rel);
       text = text.replace(/sjc-demos/g, '');
     }
+    const textLower = text.toLowerCase();
     for (const bad of [...FORBIDDEN_STRINGS, ...FORBIDDEN_NAMES]) {
-      if (text.includes(bad)) dirty.push(rel + ' contains ' + JSON.stringify(bad));
+      if (textLower.includes(bad.toLowerCase())) dirty.push(rel + ' contains ' + JSON.stringify(bad));
     }
     if (/sjc/i.test(text)) dirty.push(rel + ' contains an sjc string');
   }
   check('sanitization: no school strings or athlete names in shipped files', dirty.length === 0, dirty);
+  const servedTextsLower = [pageHtml.text, appJs.text, stylesCss.text].map(t => t.toLowerCase());
   const servedDirty = [...FORBIDDEN_STRINGS, ...FORBIDDEN_NAMES]
-    .filter(bad => pageHtml.text.includes(bad) || appJs.text.includes(bad) || stylesCss.text.includes(bad));
+    .filter(bad => servedTextsLower.some(t => t.includes(bad.toLowerCase())));
   check('sanitization: served bundle is clean too', servedDirty.length === 0, servedDirty);
 
   check('rollback: Today hero is the decorative pre-design hero (no scoreboard panel)',
@@ -8673,8 +8706,8 @@ async function waitForServer(tries = 60) {
         /* The content payload is unchanged in shape: v17, programs
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v22 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v22' &&
+        check('content reports v23 with the Lab programs still withheld signed out',
+          br.status === 200 && br.json.brand.version === 'v23' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8795,10 +8828,10 @@ async function waitForServer(tries = 60) {
           trainingTier.includes.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
           trainingTier.includes.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
           tiers.map(t => t.key));
-        check('the membership payload reports v22',
+        check('the membership payload reports v23',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v22', lr.status === 200 && lr.json.brand.version === 'v22',
+        check('content reports v23', lr.status === 200 && lr.json.brand.version === 'v23',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
