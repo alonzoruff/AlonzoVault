@@ -102,8 +102,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v23',
-  cache: 'ruffin-performance-v23',
+  version: 'v24',
+  cache: 'ruffin-performance-v24',
 };
 
 /* ------------------------------------------------------------------ */
@@ -2044,13 +2044,19 @@ function memberLogSummaryFor(profileId, today) {
    how many a member has sent in the current Mon-Sun week so the
    member sees the rhythm and the coach can prioritize by eye. */
 function publicFormCheck(fc) {
+  const reply = (fc.reply && typeof fc.reply === 'object' && !Array.isArray(fc.reply))
+    ? { text: fc.reply.text || '', at: fc.reply.at || null } : null;
+  const replySeenAt = fc.replySeenAt || null;
+  const replyUnread = fc.status === 'replied' && !!reply &&
+    !(typeof replySeenAt === 'string' && typeof reply.at === 'string' && replySeenAt >= reply.at);
   return {
     id: fc.id, profileId: fc.profileId,
     videoUrl: fc.videoUrl || '',
     note: fc.note || '', context: fc.context || '',
     status: fc.status === 'replied' ? 'replied' : 'pending',
-    reply: (fc.reply && typeof fc.reply === 'object' && !Array.isArray(fc.reply))
-      ? { text: fc.reply.text || '', at: fc.reply.at || null } : null,
+    reply,
+    replySeenAt,
+    replyUnread,
     createdAt: fc.createdAt, updatedAt: fc.updatedAt,
   };
 }
@@ -5025,7 +5031,7 @@ async function handleApi(req, res, url) {
     if (v.error) return sendJson(res, 400, { error: v.error });
     const now = new Date().toISOString();
     const fc = Object.assign(
-      { id: crypto.randomUUID(), profileId: prof.id, status: 'pending', reply: null, createdAt: now, updatedAt: now },
+      { id: crypto.randomUUID(), profileId: prof.id, status: 'pending', reply: null, replySeenAt: null, createdAt: now, updatedAt: now },
       v.fields
     );
     db.formChecks.push(fc);
@@ -5034,6 +5040,28 @@ async function handleApi(req, res, url) {
       ok: true, formCheck: publicFormCheck(fc),
       weekCount: formCheckWeekCount(prof.id, todayStr()),
     });
+  }
+
+  const myFormCheckSeenMatch = p.match(/^\/api\/my\/form-checks\/([^/]+)\/seen$/);
+  if (myFormCheckSeenMatch && req.method === 'POST') {
+    if (!tierGate(res, user, 'training')) return;
+    const prof = linkedProfileFor(user);
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups), then you can send a form check.',
+        notLinked: true,
+      });
+    }
+    const fc = db.formChecks.find(x => x.id === decodeURIComponent(myFormCheckSeenMatch[1]) && x.profileId === prof.id);
+    if (!fc) return sendJson(res, 404, { error: 'Form check not found.' });
+    if (!fc.reply) {
+      return sendJson(res, 200, { ok: true, formCheck: publicFormCheck(fc) });
+    }
+    const now = new Date().toISOString();
+    fc.replySeenAt = now;
+    fc.updatedAt = now;
+    saveDb();
+    return sendJson(res, 200, { ok: true, formCheck: publicFormCheck(fc) });
   }
 
   /* ---------- member "This Week" home (member-facing, own data only) ----------
@@ -5095,11 +5123,22 @@ async function handleApi(req, res, url) {
       nextTestDate: nextTestDateInfo(),
       speedTeaser,
       intakeCompleted: hasCompletedIntake(prof),
-      formCheck: {
-        latest: checks.length ? checks[0] : null,
-        pendingCount: checks.filter(fc => fc.status === 'pending').length,
-        weekCount: formCheckWeekCount(prof.id, today),
-      },
+      formCheck: (() => {
+        const canTraining = hasTierAccess(user, 'training');
+        const unread = canTraining ? checks.filter(fc => fc.replyUnread) : [];
+        const firstUnread = unread.length ? unread[0] : null;
+        return {
+          latest: checks.length ? checks[0] : null,
+          pendingCount: checks.filter(fc => fc.status === 'pending').length,
+          weekCount: formCheckWeekCount(prof.id, today),
+          unreadReplyCount: canTraining ? unread.length : 0,
+          unreadLatest: firstUnread ? {
+            id: firstUnread.id,
+            context: firstUnread.context || '',
+            replyAt: firstUnread.reply ? firstUnread.reply.at : null,
+          } : null,
+        };
+      })(),
     });
   }
 
@@ -6296,6 +6335,7 @@ async function handleApi(req, res, url) {
     const now = new Date().toISOString();
     fc.reply = { text, at: now };
     fc.status = 'replied';
+    fc.replySeenAt = null;
     fc.updatedAt = now;
     saveDb();
     return sendJson(res, 200, { ok: true, formCheck: publicFormCheck(fc) });

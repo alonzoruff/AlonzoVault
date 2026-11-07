@@ -2209,10 +2209,17 @@ async function renderThisWeek() {
     : `<p><strong>Finish your intake.</strong> Your coach needs your intake (and a parent or guardian sign-off if you are under 18) before your program is final — it is right below on this page.</p>
        <button class="btn secondary" id="tw-intake" type="button">Go to my intake</button>`;
   const fc = data.formCheck && data.formCheck.latest;
-  const fcHtml = fc
+  const unreadReplyCount = data.formCheck && data.formCheck.unreadReplyCount ? data.formCheck.unreadReplyCount : 0;
+  const unreadLatest = data.formCheck && data.formCheck.unreadLatest ? data.formCheck.unreadLatest : null;
+  const unreadContext = unreadLatest && unreadLatest.context ? unreadLatest.context : (fc && fc.context ? fc.context : '');
+  const fcHtml = unreadReplyCount > 0
+    ? `<p><strong>Coach feedback ready</strong></p>
+       <p>Your coach replied to your form check${unreadContext ? ` (${esc(unreadContext)})` : ''}. Take a look before your next session.</p>
+       <button class="btn secondary" id="tw-fc-unread" type="button">View reply</button>`
+    : (fc
     ? `<p>Latest form check: ${formCheckStatusBadge(fc)} <span class="muted">${esc(fc.context || 'Form check')} · ${esc(formCheckDateLine(fc))}${data.formCheck.pendingCount > 1 ? ` · ${data.formCheck.pendingCount} waiting in the queue` : ''}</span></p>
        <button class="btn secondary" id="tw-formcheck" type="button">Open form checks</button>`
-    : '<p class="muted">No form checks sent yet — film a sprint or a lift and send it from My Log for your coach\'s eyes on your technique.</p>';
+    : '<p class="muted">No form checks sent yet — film a sprint or a lift and send it from My Log for your coach\'s eyes on your technique.</p>');
   const actionsHtml = `<div class="tw-actions">
     ${data.checkedInToday ? '' : '<button class="btn secondary" id="tw-checkin" type="button">Do today\'s check-in</button>'}
     <button class="btn secondary" id="tw-log" type="button">Log a workout</button>
@@ -2252,6 +2259,12 @@ async function renderThisWeek() {
   });
   const fcBtn = $('#tw-formcheck');
   if (fcBtn) fcBtn.addEventListener('click', () => showView('log'));
+  const unreadBtn = $('#tw-fc-unread');
+  if (unreadBtn) unreadBtn.addEventListener('click', () => {
+    showView('log');
+    const el = document.getElementById('form-checks-slot');
+    if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 60);
+  });
 }
 
 /* ---------------- member form checks ----------------
@@ -2340,6 +2353,22 @@ function paintFormChecks(data) {
       ${fc.reply ? `<p><strong>Coach reply:</strong> ${esc(fc.reply.text)}</p>` : '<p class="muted">No reply yet — your coach reviews the queue in order.</p>'}
     </div>`).join('') : '<p class="muted">No form checks sent yet — your first one takes under a minute.</p>'}
   </div>`;
+  for (const fc of checks) {
+    if (fc.reply && fc.replyUnread) {
+      const seenId = fc.id;
+      apiPost('/api/my/form-checks/' + encodeURIComponent(seenId) + '/seen', {})
+        .then((res) => {
+          fc.replyUnread = false;
+          if (res && res.formCheck) {
+            fc.replySeenAt = res.formCheck.replySeenAt || null;
+            fc.replyUnread = false;
+          } else {
+            fc.replySeenAt = new Date().toISOString();
+          }
+        })
+        .catch(() => { /* silent: marking seen must never break the list */ });
+    }
+  }
   const fileInput = $('#fc-file');
   if (fileInput) fileInput.addEventListener('change', () => {
     const file = fileInput.files && fileInput.files[0];

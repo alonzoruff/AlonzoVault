@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v23 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v23"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v24 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v24"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v23'") &&
-    swJs.text.includes("ruffin-performance-v23"));
+    appJs.text.includes("const APP_VERSION = 'v24'") &&
+    swJs.text.includes("ruffin-performance-v24"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v23"') &&
-    pageHtml.text.includes('Ruffin Performance · App v23') &&
+    pageHtml.text.includes('data-app-version="v24"') &&
+    pageHtml.text.includes('Ruffin Performance · App v24') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2567,9 +2567,9 @@ async function main() {
     stylesCss.text.includes('break-inside: avoid'),
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
-  check('printable report: BRAND reports v23 with the v23 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v23' &&
-    v23Content.brand.cache === 'ruffin-performance-v23', v23Content.brand);
+  check('printable report: BRAND reports v24 with the v24 cache',
+    !!v23Content.brand && v23Content.brand.version === 'v24' &&
+    v23Content.brand.cache === 'ruffin-performance-v24', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -5513,6 +5513,89 @@ async function main() {
       fc.status === 'replied' && fc.reply && fc.reply.text.startsWith('Updated:')) &&
     !bkFc.data.formChecks.some(fc => fc.id === fcSecondId) &&
     !('users' in bkFc.data), bkFc.data.formChecks && bkFc.data.formChecks.length);
+
+  /* ---------------- Coach Feedback Ready (v24) ----------------
+     A coach reply is unread until the member has actually seen it
+     painted in their form check list and the client posts seen.
+     Viewing the list or This Week through the API alone never
+     marks it seen. Fern's first check is already replied above. */
+  check('v24: served JS carries the Coach feedback ready reminder and the seen endpoint',
+    appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
+    appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
+  check('v24: served page and JS version stamps are v24',
+    pageHtml.text.includes('data-app-version="v24"') &&
+    appJs.text.includes("const APP_VERSION = 'v24'") &&
+    swJs.text.includes('ruffin-performance-v24'));
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('v24: a fresh reply is unread on the member list',
+    r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
+    r.json.formChecks.find(fc => fc.id === fcFirstId).replyUnread === true &&
+    r.json.formChecks.find(fc => fc.id === fcFirstId).replySeenAt === null,
+    r.json.formChecks && r.json.formChecks.find(fc => fc.id === fcFirstId));
+  r = await api(fern, 'GET', '/api/my/week');
+  check('v24: This Week counts the unread reply and names it as latest unread',
+    r.status === 200 && !!r.json.formCheck && r.json.formCheck.unreadReplyCount >= 1 &&
+    !!r.json.formCheck.unreadLatest && r.json.formCheck.unreadLatest.id === fcFirstId &&
+    r.json.formCheck.unreadLatest.context === 'Block starts' &&
+    typeof r.json.formCheck.unreadLatest.replyAt === 'string', r.json.formCheck);
+  const v24UnreadBefore = r.json.formCheck.unreadReplyCount;
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('v24: GET form checks alone does not mark the reply seen',
+    r.status === 200 && r.json.formChecks.find(fc => fc.id === fcFirstId).replyUnread === true, r.json.formChecks);
+  r = await api(fern, 'GET', '/api/my/week');
+  check('v24: GET This Week alone does not mark the reply seen',
+    r.status === 200 && r.json.formCheck.unreadReplyCount === v24UnreadBefore &&
+    !!r.json.formCheck.unreadLatest && r.json.formCheck.unreadLatest.id === fcFirstId, r.json.formCheck);
+  r = await api(null, 'POST', '/api/my/form-checks/' + fcFirstId + '/seen', {});
+  check('v24: unauthenticated POST seen is 401', r.status === 401, r.status);
+  r = await api(unaFc, 'POST', '/api/my/form-checks/' + fcFirstId + '/seen', {});
+  check('v24: unlinked member POST seen is 403 notLinked',
+    r.status === 403 && r.json.notLinked === true, r.json);
+  r = await api(blair, 'POST', '/api/my/form-checks/' + fcFirstId + '/seen', {});
+  check('v24: another member POST seen on someone else\'s form check is 404',
+    r.status === 404, r.status);
+  r = await api(fern, 'GET', '/api/my/week');
+  check('v24: another member\'s seen attempt does not change the owner unread state',
+    r.status === 200 && r.json.formCheck.unreadReplyCount === v24UnreadBefore, r.json.formCheck);
+  await new Promise(resolve => setTimeout(resolve, 15));
+  r = await api(fern, 'POST', '/api/my/form-checks/' + fcFirstId + '/seen', {});
+  check('v24: owner POST seen returns 200 and the reply is no longer unread',
+    r.status === 200 && r.json.ok === true && !!r.json.formCheck &&
+    r.json.formCheck.id === fcFirstId && r.json.formCheck.replyUnread === false &&
+    typeof r.json.formCheck.replySeenAt === 'string', r.json);
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('v24: after seen, the member list shows replyUnread false',
+    r.status === 200 && r.json.formChecks.find(fc => fc.id === fcFirstId).replyUnread === false, r.json.formChecks);
+  r = await api(fern, 'GET', '/api/my/week');
+  check('v24: after seen, This Week unread count drops to 0 and unreadLatest is null',
+    r.status === 200 && r.json.formCheck.unreadReplyCount === 0 &&
+    r.json.formCheck.unreadLatest === null, r.json.formCheck);
+  r = await api(fern, 'POST', '/api/my/form-checks/' + fcFirstId + '/seen', {});
+  check('v24: POST seen is idempotent (second call 200)',
+    r.status === 200 && r.json.ok === true && r.json.formCheck.replyUnread === false, r.json);
+  r = await api(fern, 'POST', '/api/my/form-checks', { videoUrl: FC_URL_2, note: 'Pending seen check', context: 'Pending check' });
+  check('v24: a pending form check can be created for the seen no-reply case',
+    r.status === 201 && !!r.json.formCheck && r.json.formCheck.reply === null, r.json);
+  const fcPendingSeenId = r.json.formCheck.id;
+  r = await api(fern, 'POST', '/api/my/form-checks/' + fcPendingSeenId + '/seen', {});
+  check('v24: POST seen on a check with no reply is 200 and leaves it unchanged',
+    r.status === 200 && r.json.ok === true && !!r.json.formCheck &&
+    r.json.formCheck.id === fcPendingSeenId && r.json.formCheck.reply === null &&
+    r.json.formCheck.replyUnread === false, r.json);
+  r = await api(coach, 'DELETE', '/api/form-checks/' + fcPendingSeenId);
+  check('v24: pending seen fixture is cleaned up', r.status === 200, r.status);
+  await new Promise(resolve => setTimeout(resolve, 15));
+  r = await api(coach, 'POST', '/api/form-checks/' + fcFirstId + '/reply', { text: 'Updated again: keep the hips tall on the first step.' });
+  check('v24: coach updating the reply after it was seen saves',
+    r.status === 200 && !!r.json.formCheck && r.json.formCheck.replyUnread === true &&
+    r.json.formCheck.replySeenAt === null, r.json);
+  r = await api(fern, 'GET', '/api/my/form-checks');
+  check('v24: the updated reply is unread again for the member',
+    r.status === 200 && r.json.formChecks.find(fc => fc.id === fcFirstId).replyUnread === true, r.json.formChecks);
+  r = await api(fern, 'GET', '/api/my/week');
+  check('v24: This Week shows the updated reply as unread again',
+    r.status === 200 && r.json.formCheck.unreadReplyCount >= 1 &&
+    !!r.json.formCheck.unreadLatest && r.json.formCheck.unreadLatest.id === fcFirstId, r.json.formCheck);
 
   /* ---------------- member "This Week" home + landing rewrite (Build v8) ----------------
      /api/my/week assembles the member's home card from data that
@@ -8706,8 +8789,8 @@ async function waitForServer(tries = 60) {
         /* The content payload is unchanged in shape: v17, programs
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v23 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v23' &&
+        check('content reports v24 with the Lab programs still withheld signed out',
+          br.status === 200 && br.json.brand.version === 'v24' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8828,10 +8911,10 @@ async function waitForServer(tries = 60) {
           trainingTier.includes.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
           trainingTier.includes.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
           tiers.map(t => t.key));
-        check('the membership payload reports v23',
+        check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v23', lr.status === 200 && lr.json.brand.version === 'v23',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v24',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
