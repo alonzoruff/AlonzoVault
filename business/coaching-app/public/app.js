@@ -416,6 +416,40 @@ const GROUP_SUBNAV = {
    /api/my/membership (see refreshUserData). */
 const TIER_RANK = { access: 1, training: 2, pass: 3 };
 const TIER_NAMES = { access: 'Lab Access', training: 'Lab Training', pass: 'Lab Pass' };
+/* What each tier adds, in the same plain words the landing tier
+   cards use. Display only — the server's entitlements decide what
+   actually opens; this list just tells the member what they would
+   get, on the locked panel and (later) the account card. */
+const TIER_ADDS = {
+  access: ['Lab Sessions and the Inside the Lab library', 'Your workout log and daily check-in', 'Your Lab Report at every retest'],
+  training: ['Personalized training built for you', 'Program adjustments as you progress', 'Form checks with a coach reply'],
+  pass: ['Live web sessions with your coach', 'The opportunity for in-person sessions'],
+};
+const LOCK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+/* Redesign Stage 2 (v26): one empty state and one locked panel for
+   the whole app, so a screen with nothing to show always reads the
+   same way — what this is, one plain line, at most one next step. */
+function emptyState({ title, body, action }) {
+  return `<div class="empty">
+    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+    <h3>${esc(title)}</h3>
+    <p class="muted">${esc(body)}</p>
+    ${action ? `<button class="btn secondary" type="button" data-goto="${esc(action.view)}">${esc(action.label)}</button>` : ''}
+  </div>`;
+}
+function lockedPanelHtml(need) {
+  const adds = TIER_ADDS[need] || [];
+  return `<svg class="locked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <h2>Part of ${esc(TIER_NAMES[need])}</h2>
+    <p>Your membership does not include this yet, so there is nothing to show here.</p>
+    ${adds.length ? `<p class="locked-adds-label">What ${esc(TIER_NAMES[need])} adds</p>
+    <ul class="locked-adds">${adds.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
+    <button class="btn secondary" type="button">See membership options</button>`;
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-goto]');
+  if (b) showView(b.dataset.goto);
+});
 const VIEW_TIER_NEED = {
   library: 'access', labprograms: 'access', season: 'access', cards: 'access', drills: 'access', qtr: 'access',
   speedreport: 'access', log: 'access',
@@ -446,7 +480,7 @@ function applyMembershipNav() {
       if (!tag) {
         const span = document.createElement('span');
         span.className = 'lock-tag';
-        span.textContent = 'Locked';
+        span.innerHTML = LOCK_ICON + ' ' + esc(TIER_NAMES[VIEW_TIER_NEED[v]] || 'Locked');
         el.appendChild(span);
       }
     } else {
@@ -471,9 +505,7 @@ function syncViewLock(name) {
   if (!sec) return;
   const div = document.createElement('div');
   div.className = 'card tier-lock-banner';
-  div.innerHTML = `<h2>Part of ${esc(TIER_NAMES[need])}</h2>
-    <p>Your membership does not include this yet, so there is nothing to show here.</p>
-    <button class="btn primary" type="button">See your membership</button>`;
+  div.innerHTML = lockedPanelHtml(need);
   div.querySelector('button').addEventListener('click', () => showView('account'));
   sec.prepend(div);
 }
@@ -2044,7 +2076,7 @@ function paintMemberLogsList(data) {
       ${memberLogMetaLine(l) ? `<p class="muted">${esc(memberLogMetaLine(l))}</p>` : ''}
       ${(l.entries || []).length ? `<p class="muted">${l.entries.map(e => esc(e.exercise) + (e.detail ? ' — ' + esc(e.detail) : '')).join('<br>')}</p>` : ''}
       ${l.note ? `<p class="muted">${esc(l.note)}</p>` : ''}
-    </div>`).join('') : '<p class="muted">No workouts logged yet — your first log takes under a minute.</p>'}
+    </div>`).join('') : emptyState({ title: 'No sessions logged yet', body: 'Log a session after practice and it will show up here.' })}
   </div>`;
   $('#ml-add').addEventListener('click', () => {
     const today = dateStrOf(todayLocal());
@@ -2354,7 +2386,7 @@ function paintFormChecks(data) {
       ${formCheckVideoHtml(fc)}
       ${fc.note ? `<p class="muted">Your note: ${esc(fc.note)}</p>` : ''}
       ${fc.reply ? `<p><strong>Coach reply:</strong> ${esc(fc.reply.text)}</p>` : '<p class="muted">No reply yet — your coach reviews the queue in order.</p>'}
-    </div>`).join('') : '<p class="muted">No form checks sent yet — your first one takes under a minute.</p>'}
+    </div>`).join('') : emptyState({ title: 'Nothing sent yet', body: 'Send a short clip and your coach will reply here.', action: { label: 'Send a form check', view: 'log' } })}
   </div>`;
   for (const fc of checks) {
     if (fc.reply && fc.replyUnread) {
@@ -2452,7 +2484,7 @@ async function renderCoachFormChecks() {
         <button class="btn primary" data-fc-reply="${fc.id}" type="button" style="width:auto">${fc.reply ? 'Update reply' : 'Save reply'}</button>
         <button class="btn secondary" data-fc-del="${fc.id}" type="button" style="width:auto">Delete</button>
       </p>
-    </div>`).join('') : '<p class="muted">You\'re all caught up. When a member sends a video, it lands here.</p>'}
+    </div>`).join('') : emptyState({ title: 'Nothing waiting right now', body: 'You\'re all caught up. When a member sends a video, it lands here.' })}
   </div>`;
   el.querySelectorAll('[data-fc-reply]').forEach(b => b.addEventListener('click', async () => {
     const row = b.closest('[data-fc-row]');
@@ -9038,7 +9070,7 @@ async function renderBookings() {
       <h2>Waiting on you</h2>
       ${pending.length
         ? pending.map(b => row(b, actBtn(b, 'approved', 'Approve', true) + ' ' + actBtn(b, 'declined', 'Decline') + ' ' + actBtn(b, 'cancelled', 'Cancel'))).join('')
-        : '<p class="muted">No requests waiting. New Lab Talk requests from the booking page land here.</p>'}
+        : emptyState({ title: 'Nothing waiting right now', body: 'New Lab Talk requests from the booking page land here.' })}
     </div>
     <div class="card">
       <h2>Coming up</h2>
@@ -9186,7 +9218,7 @@ async function renderInviteRequests() {
       <h2>Waiting on you</h2>
       ${pending.length
         ? pending.map(r => row(r, actBtn(r, 'invited', 'Mark Invited', true) + ' ' + actBtn(r, 'declined', 'Decline'))).join('')
-        : '<p class="muted">No requests waiting. New requests from the invitation page land here.</p>'}
+        : emptyState({ title: 'Nothing waiting right now', body: 'New requests from the invitation page land here.' })}
     </div>
     <div class="card">
       <h2>Invited</h2>

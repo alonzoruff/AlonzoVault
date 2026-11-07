@@ -75,6 +75,7 @@
   --warn-bg: #2a2113;
   --warn-line: #57451c;
   --shadow-bar: 0 -1px 0 var(--line), 0 -8px 24px -12px rgba(0, 0, 0, .6);
+  --shadow-bar-top: 0 1px 0 var(--line), 0 8px 24px -12px rgba(0, 0, 0, .6);
   --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
   --fs-xs: 12px; --fs-sm: 14px; --fs-base: 16px; --fs-md: 18px; --fs-lg: 22px;
   --fs-xl: clamp(24px, 4vw + 8px, 28px);
@@ -100,7 +101,7 @@ body {
 .topbar {
   position: sticky; top: 0; z-index: 20;
   background: var(--header-bg); border-bottom: 1px solid var(--line);
-  box-shadow: 0 1px 0 var(--line), 0 6px 16px -12px rgba(20, 22, 26, .25);
+  box-shadow: var(--shadow-bar-top);
 }
 .topbar-inner {
   max-width: 880px; margin: 0 auto; padding: 8px max(16px, env(safe-area-inset-right)) 2px max(16px, env(safe-area-inset-left));
@@ -197,7 +198,7 @@ body {
   .tabbar {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
     background: var(--card); border-top: 1px solid var(--line);
-    box-shadow: 0 -2px 14px rgba(20, 22, 26, .07);
+    box-shadow: var(--shadow-bar);
     padding-bottom: env(safe-area-inset-bottom);
   }
   .tabbar .tab {
@@ -236,6 +237,22 @@ a.btn, button.btn { vertical-align: middle; }
 .btn.primary { background: var(--red); border-color: var(--red); color: var(--accent-ink); font-weight: 600; width: 100%; }
 .btn.secondary { background: var(--surface-hover); }
 a.btn { display: inline-flex; text-decoration: none; }
+@media (min-width: 641px) {
+  .btn.primary { width: auto; min-width: 12rem; }
+  .btn.run-today-btn, .ci-save { width: 100%; }
+}
+.btn.quiet {
+  background: transparent; border-color: transparent; color: var(--accent-strong);
+  box-shadow: none;
+}
+@media (hover: hover) { .btn.quiet:hover { text-decoration: underline; } }
+.btn[aria-busy="true"] { pointer-events: none; }
+.btn[aria-busy="true"]::after {
+  content: ""; width: 14px; height: 14px; margin-left: 8px; flex: none;
+  border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%;
+  animation: btnSpin .7s linear infinite;
+}
+@keyframes btnSpin { to { transform: rotate(360deg); } }
 .btn.danger { color: var(--danger); border-color: #5a3532; border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 .btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
 /* Today screen Run button(s): full width of the card (via
@@ -255,6 +272,14 @@ input[type="datetime-local"]:focus, select:focus, textarea:focus {
   border-color: var(--red); box-shadow: 0 0 0 3px var(--focus-ring); outline: none;
 }
 label { display: block; font-size: var(--fs-sm); font-weight: 600; margin-top: 6px; }
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23868d96' stroke-width='2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
+input[type="checkbox"], input[type="radio"] {
+  width: 24px; height: 24px; accent-color: var(--accent); flex: none;
+}
 .filters input[type="search"] { margin-top: 0; }
 .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .filter-row select, .filter-row .btn { flex: 1 1 140px; width: auto; }
@@ -2059,6 +2084,37 @@ html.ind-on .tabbar .tab.active::before { opacity: 0; }
 .view p strong, .view li strong { font-weight: 400; }
 
 /* ================================================================
+   REDESIGN STAGE 2 (v26) — shared components: the field set, the
+   one empty state, the one locked panel, status chips. Screens
+   adopt these instead of drawing their own versions. ========== */
+fieldset { border: 0; padding: 0; margin: 0 0 var(--sp-5); min-width: 0; }
+legend {
+  font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted); padding: 0; margin-bottom: var(--sp-3);
+}
+.field-help { font-size: var(--fs-sm); color: var(--muted); margin: 2px 0 0; font-weight: 400; }
+.field-error { color: var(--danger); font-size: var(--fs-sm); margin: 4px 0 0; }
+input.field-invalid, select.field-invalid, textarea.field-invalid { border-color: var(--danger); }
+.empty { text-align: center; padding: var(--sp-5) var(--sp-4); }
+.empty-icon { width: 40px; height: 40px; color: var(--muted); margin-bottom: var(--sp-2); }
+.empty h3 { margin: 0 0 4px; }
+.empty p { margin: 0 auto var(--sp-3); max-width: 44ch; }
+.status-chip {
+  display: inline-block; padding: 2px 9px; border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 700; vertical-align: middle;
+  background: var(--chip-bg); color: var(--chip-ink);
+}
+.status-chip.ok { background: var(--low-bg); color: var(--low); }
+.tier-lock-banner { text-align: left; }
+.locked-icon { width: 28px; height: 28px; color: var(--muted); margin-bottom: var(--sp-2); }
+.locked-adds-label {
+  font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted); margin: var(--sp-3) 0 4px;
+}
+.locked-adds { margin: 0 0 var(--sp-4); padding-left: 20px; }
+.locked-adds li { margin: 2px 0; }
+
+/* ================================================================
    THEMES (v12) — three looks over one surface system.
    The boot script in index.html sets data-theme on <html> before
    first paint; the Account picker (app.js) switches it live and
@@ -2226,6 +2282,7 @@ html.ind-on .tabbar .tab.active::before { opacity: 0; }
   --ok: var(--low);
   --warn: #8a6510; --warn-bg: #fbf1d6; --warn-line: #e6cf8a;
   --shadow-bar: 0 -1px 0 var(--line), 0 -10px 30px -18px rgba(74, 68, 54, .3);
+  --shadow-bar-top: 0 1px 0 var(--line), 0 10px 30px -18px rgba(74, 68, 54, .3);
 }
 [data-theme="studio"] #view-landing {
   --landing-accent: #74920c;
@@ -2316,12 +2373,12 @@ body.tv-mode {
    A locked nav item stays visible and readable — the member can
    see what exists and what it would take to open it — it just
    carries a plain Locked tag and sits dimmed. */
-.nav-locked { opacity: .55; }
+.nav-locked { color: var(--muted); }
 .lock-tag {
-  display: inline-block; margin-left: 6px; padding: 1px 6px;
-  border: 1px solid var(--line); border-radius: 999px;
-  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; vertical-align: middle;
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 1px 7px;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .02em;
+  vertical-align: middle; white-space: nowrap;
 }
 .tier-lock-banner { border-color: var(--red); }
 .access-controls {
