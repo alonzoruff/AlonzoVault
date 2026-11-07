@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Govee Lights</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="clock">
+    <div id="clock-time">--:--</div>
+    <div id="clock-date"></div>
+  </div>
+  <div class="topbar-right">
+    <div id="updated-line">Loading…</div>
+    <button id="all-off" class="all-off" type="button">All off</button>
+  </div>
+</header>
+
+<div id="setup-panel" class="setup" hidden>
+  <h1>Setup needed</h1>
+  <p>This site is running, but the server does not have its Govee API key yet,
+     so it cannot see your lights.</p>
+  <p>On Render, open this service, go to <strong>Environment</strong>, and add
+     <strong>GOVEE_API_KEY</strong> with the key from your Govee email
+     (the same paste-the-key step as the Stripe key). The service restarts
+     on its own and your lights appear here.</p>
+</div>
+
+<div id="notice" class="notice" hidden></div>
+<main id="groups" class="groups"></main>
+<p id="empty" class="empty" hidden>Loading your lights…</p>
+
+<script src="/app.js"></script>
+</body>
+</html>

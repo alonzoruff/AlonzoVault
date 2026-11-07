@@ -1,0 +1,1 @@
+{"description":"Wall dashboard site for AJ's Govee lights. Zero-dependency Node server with a cached Govee snapshot so the page never waits on Govee's slow API.","engines":{"node":">=18"},"main":"server.js","name":"govee-lights","private":true,"scripts":{"start":"node server.js","test":"node tests/run-tests.js"},"version":"1.0.0"}

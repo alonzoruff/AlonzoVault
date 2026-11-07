@@ -1,0 +1,18 @@
+# Render blueprint for the Govee Lights site.
+# Render sets PORT itself; do not add it here.
+services:
+  - type: web
+    name: govee-lights
+    env: node
+    # Starter keeps the service awake. The free plan spins down when idle,
+    # which makes the wall iPad's first load slow (see DEPLOY.md).
+    plan: starter
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      # sync: false = Render prompts for the value at deploy time and never
+      # stores it in this repo. Paste the Govee API key from the Govee email.
+      - key: GOVEE_API_KEY
+        sync: false
+      - key: GOVEE_REFRESH_MS
+        value: "30000"
