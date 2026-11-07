@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v26 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v26"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v27 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v27"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v26'") &&
-    swJs.text.includes("ruffin-performance-v26"));
+    appJs.text.includes("const APP_VERSION = 'v27'") &&
+    swJs.text.includes("ruffin-performance-v27"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v26"') &&
-    pageHtml.text.includes('Ruffin Performance · App v26') &&
+    pageHtml.text.includes('data-app-version="v27"') &&
+    pageHtml.text.includes('Ruffin Performance · App v27') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2567,9 +2567,9 @@ async function main() {
     stylesCss.text.includes('break-inside: avoid'),
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
-  check('printable report: BRAND reports v26 with the v26 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v26' &&
-    v23Content.brand.cache === 'ruffin-performance-v26', v23Content.brand);
+  check('printable report: BRAND reports v27 with the v27 cache',
+    !!v23Content.brand && v23Content.brand.version === 'v27' &&
+    v23Content.brand.cache === 'ruffin-performance-v27', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -5525,9 +5525,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v26"') &&
-    appJs.text.includes("const APP_VERSION = 'v26'") &&
-    swJs.text.includes('ruffin-performance-v26'));
+    pageHtml.text.includes('data-app-version="v27"') &&
+    appJs.text.includes("const APP_VERSION = 'v27'") &&
+    swJs.text.includes('ruffin-performance-v27'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -5641,9 +5641,9 @@ async function main() {
     pageHtml.text.includes('landing-section-number" aria-hidden="true">02') &&
     pageHtml.text.includes('landing-section-number" aria-hidden="true">03') &&
     pageHtml.text.includes('Lab memberships from $10/month. Baseline testing and your Lab Report come with every tier.'));
-  check('landing photo hero and lime accent stay scoped to the landing',
+  check('landing photo hero and silver accent stay scoped to the landing',
     stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
-    stylesCss.text.includes('--landing-accent: #d6f36a') &&
+    stylesCss.text.includes('--landing-accent: #e4e6eb') &&
     stylesCss.text.includes('.landing-hero .landing-cta'));
   check('landing presents the Measured Speed Loop and the portal contents',
     pageHtml.text.includes('The Measured Speed Loop') &&
@@ -8792,7 +8792,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v26' &&
+          br.status === 200 && br.json.brand.version === 'v27' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8916,7 +8916,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v26',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v27',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');

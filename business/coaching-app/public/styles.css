@@ -128,7 +128,7 @@ body {
 }
 .mainnav .tab { border-color: transparent; background: transparent; min-height: 40px; padding: 7px 12px; font-weight: 600; }
 @media (hover: hover) { .mainnav .tab:hover { background: var(--surface-hover); } }
-.mainnav .tab.active { background: var(--red); border-color: var(--red); color: var(--accent-ink); }
+.mainnav .tab.active { background: transparent; border-color: transparent; color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
 .nav-group { position: relative; }
 .nav-group[hidden] { display: none !important; }
 .nav-chev { font-size: 10px; opacity: .65; transition: transform var(--dur-ui) var(--ease-std); }
@@ -193,7 +193,7 @@ body {
 .tabbar { display: none; }
 @media (max-width: 900px) {
   .topbar .mainnav { display: none; }
-  .nav-toggle { display: inline-flex; }
+  .nav-toggle { display: none; }
   body { padding-bottom: calc(78px + env(safe-area-inset-bottom)); } /* clearance so the tab bar never covers content */
   .tabbar {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
@@ -205,7 +205,7 @@ body {
     flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center;
     gap: 2px; min-height: 58px; padding: 6px 2px 5px;
     border: none; border-radius: 0; background: transparent; color: var(--muted);
-    font-size: 11.5px; font-weight: 600; position: relative;
+    font-size: var(--fs-xs); font-weight: 600; position: relative;
   }
   .tabbar .tab .tab-icon svg { width: 23px; height: 23px; }
   .tabbar .tab.active { background: transparent; border-color: transparent; color: var(--red); }
@@ -427,8 +427,11 @@ details.card summary { cursor: pointer; }
 /* Starting blocks + start line, parked at the left of the band */
 .blocks { position: absolute; left: calc(10% - 52px); bottom: 24px; width: 58px; opacity: .95; }
 @media (max-width: 560px) {
-  .runner { height: 74px; }
-  .blocks { left: calc(10% - 46px); }
+  .hero { height: 88px; }
+  .runner { height: 60px; bottom: 16px; }
+  .blocks { left: calc(10% - 46px); bottom: 16px; }
+  .hero-caption { top: 10px; }
+  .hero-caption h1 { font-size: 21px; }
 }
 @keyframes athleteMove {
   0% { transform: translate(0px, 0.50px) rotate(-1.00deg); }
@@ -1650,7 +1653,7 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
    carries its own Member sign in button, and the Account view holds
    the forms. ================================================================ */
 body.logged-out .primary-nav { display: none !important; }
-#view-landing { --landing-accent: #d6f36a; --landing-accent-ink: #11130a; --landing-accent-hover: #e2ff7d; }
+#view-landing { --landing-accent: #e4e6eb; --landing-accent-ink: #101216; --landing-accent-hover: #f4f5f7; }
 .landing-hero {
   position: relative; overflow: hidden; text-align: left;
   min-height: 620px; margin: -16px -16px 0; padding: 52px 48px;
@@ -1709,7 +1712,7 @@ body.logged-out .primary-nav { display: none !important; }
   display: flex; flex-direction: column; justify-content: center; gap: 7px;
 }
 .landing-measure-label {
-  color: var(--landing-accent); font-size: 11.5px; font-weight: 900;
+  color: var(--landing-accent); font-size: var(--fs-xs); font-weight: 900;
   letter-spacing: .16em; text-transform: uppercase;
 }
 .landing-measure-value { color: #fff; font-size: 29px; font-weight: 900; line-height: 1; }
@@ -1722,21 +1725,21 @@ body.logged-out .primary-nav { display: none !important; }
 .landing-list { margin: 6px 0 4px; padding-left: 20px; }
 .landing-list li { margin: 6px 0; font-size: 15px; }
 .landing-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0; }
-.landing-join { width: 100%; margin-top: 10px; }
+.landing-join { width: 100%; margin-top: auto; }
 .landing-join:disabled { opacity: .6; }
 .landing-tier {
-  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  border: 1px solid var(--line); border-radius: var(--r-control);
   background: var(--panel-2); padding: 14px 16px;
 }
 .landing-tier h3 { margin: 0 0 4px; }
-.landing-price { font-size: 30px; font-weight: 800; margin: 2px 0 8px; color: var(--ink); }
-.landing-price span { font-size: 15px; font-weight: 600; color: var(--muted); }
-.landing-tier .landing-list { padding-left: 18px; }
+.landing-price { font-size: var(--fs-data); font-weight: 800; margin: 2px 0 8px; color: var(--ink); }
+.landing-price span { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+.landing-tier .landing-list { padding-left: 18px; margin-bottom: 12px; }
 .landing-tier .landing-list li { font-size: 14px; }
 .landing-footer-strip {
   margin: 18px -16px -40px; padding: 18px 22px;
   background: var(--panel); border-top: 1px solid var(--line);
-  color: #fff; font-size: 15px; font-weight: 500; text-align: center;
+  color: var(--ink); font-size: 15px; font-weight: 500; text-align: center;
 }
 /* ---- landing FAQ accordion (v19): one answer open at a time,
    plain buttons with a plus that turns as the item opens. ---- */
@@ -1745,7 +1748,7 @@ body.logged-out .primary-nav { display: none !important; }
 .faq-q-wrap { margin: 0; }
 .faq-q {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding: 16px 2px; background: none; border: 0; cursor: pointer;
+  padding: 16px 2px; min-height: 56px; background: none; border: 0; cursor: pointer;
   color: var(--ink); font: inherit; font-size: 16px; font-weight: 700;
   text-align: left; line-height: 1.4;
 }
@@ -1758,7 +1761,7 @@ body.logged-out .primary-nav { display: none !important; }
 }
 .faq-q[aria-expanded="true"] .faq-icon { transform: rotate(45deg); }
 .faq-panel { padding: 0 2px 18px; max-width: 68ch; }
-.faq-panel p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted); }
+.faq-panel p { margin: 0; font-size: var(--fs-base); line-height: 1.6; color: var(--muted); }
 .faq-panel[hidden] { display: none; }
 /* ---- v10 landing additions: parent clarity + proof + closing CTA ---- */
 .landing-forline {
@@ -1784,10 +1787,10 @@ body.logged-out .primary-nav { display: none !important; }
 .landing-sample-note { font-size: 13px; }
 .landing-pilot-strip {
   border: 1px solid var(--landing-accent); border-radius: var(--radius-sm);
-  background: rgba(214, 243, 106, .08); color: var(--ink);
+  background: rgba(214, 243, 106, .08); background: color-mix(in srgb, var(--landing-accent) 10%, transparent); color: var(--ink);
   padding: 12px 14px; font-size: 14.5px; margin: 10px 0 4px;
 }
-.landing-tier { position: relative; }
+.landing-tier { position: relative; display: flex; flex-direction: column; }
 .landing-tier-pill {
   position: absolute; top: -10px; right: 12px;
   background: var(--landing-accent); color: var(--landing-accent-ink);
@@ -1812,7 +1815,7 @@ body.logged-out .primary-nav { display: none !important; }
 @media (max-width: 620px) {
   .landing-tiers { grid-template-columns: 1fr; }
   .landing-hero {
-    min-height: 640px; padding: 38px 24px; align-items: flex-end;
+    min-height: min(640px, calc(100svh - 56px)); padding: 38px 24px; align-items: flex-end;
     background:
       linear-gradient(0deg, rgba(5, 5, 6, .97) 0%, rgba(5, 5, 6, .88) 48%, rgba(5, 5, 6, .28) 78%),
       linear-gradient(90deg, rgba(5, 5, 6, .5) 0%, rgba(5, 5, 6, 0) 72%),
@@ -1823,8 +1826,9 @@ body.logged-out .primary-nav { display: none !important; }
   .landing-subline { font-size: 18px; }
   .landing-actions { align-items: stretch; flex-direction: column; }
   .landing-hero .btn { width: 100%; }
-  .landing-measures { grid-template-columns: 1fr; }
-  .landing-measure { min-height: 88px; }
+  .landing-measures { grid-template-columns: repeat(3, 1fr); }
+  .landing-measure { min-height: 0; padding: 14px 12px; }
+  .landing-measure-value { font-size: var(--fs-lg); }
 }
 
 /* ---- This Week member home card (v8) ----
@@ -2024,7 +2028,7 @@ html.motion-ok .landing-card.rv-in .landing-tier:nth-child(2) { animation-delay:
 
 /* ---- report data typography: the improvement chip reads as a
    chip, the best mark carries the row, prices align on a grid. -- */
-.landing-sample-delta { background: rgba(214, 243, 106, .1); padding: 3px 9px; border-radius: 999px; }
+.landing-sample-delta { background: rgba(214, 243, 106, .1); background: color-mix(in srgb, var(--landing-accent) 12%, transparent); padding: 3px 9px; border-radius: 999px; }
 .landing-sample-nums strong { font-size: 16.5px; font-weight: 800; letter-spacing: -.01em; }
 .landing-price { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 
@@ -2082,6 +2086,34 @@ html.ind-on .tabbar .tab.active::before { opacity: 0; }
    stop shouting. Data displays are not prose: the sample report's
    best marks live outside p/li and keep their weight above. ---- */
 .view p strong, .view li strong { font-weight: 400; }
+
+/* ================================================================
+   REDESIGN STAGE 3 (v27) — landing text link, home one-liners,
+   and the phone nav sheet as a true bottom sheet over a scrim. == */
+.landing-talk-line { margin: 14px 0 0; color: #f2f3f5; font-size: 15px; }
+.landing-textlink {
+  background: none; border: 0; padding: 0; cursor: pointer; font: inherit;
+  color: var(--landing-accent); text-decoration: underline; text-underline-offset: 3px;
+}
+.landing-signin-link { margin-left: auto; flex: none; }
+.landing-hero .landing-signin-link { min-height: 40px; padding: 6px 10px; }
+.home-log-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tw-set { font-size: 15px; }
+.nav-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .5); }
+.nav-scrim[hidden] { display: none; }
+@media (max-width: 900px) {
+  .nav-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 65;
+    border-top: 1px solid var(--line);
+    border-radius: var(--r-card) var(--r-card) 0 0;
+    box-shadow: var(--shadow-pop);
+    max-height: 78vh; padding: 10px 12px calc(14px + env(safe-area-inset-bottom));
+  }
+  .nav-sheet::before {
+    content: ""; display: block; width: 40px; height: 4px; border-radius: 2px;
+    background: var(--line-strong); margin: 2px auto 8px;
+  }
+}
 
 /* ================================================================
    REDESIGN STAGE 2 (v26) — shared components: the field set, the
@@ -2285,9 +2317,9 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --shadow-bar-top: 0 1px 0 var(--line), 0 10px 30px -18px rgba(74, 68, 54, .3);
 }
 [data-theme="studio"] #view-landing {
-  --landing-accent: #74920c;
+  --landing-accent: #5b7309;
   --landing-accent-ink: #ffffff;
-  --landing-accent-hover: #86a812;
+  --landing-accent-hover: #6d8811;
 }
 [data-theme="studio"] .landing-hero-content {
   background: rgba(255, 254, 249, .94);
@@ -2310,10 +2342,10 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   background: transparent; border-color: rgba(27, 28, 31, .45); color: var(--ink);
 }
 [data-theme="studio"] .landing-measure-value,
-[data-theme="studio"] .landing-sample-test,
-[data-theme="studio"] .landing-footer-strip { color: var(--ink); }
+[data-theme="studio"] .landing-sample-test { color: var(--ink); }
 [data-theme="studio"] .landing-sample-nums strong { color: var(--ink); }
 [data-theme="studio"] .landing-forline { color: var(--muted); }
+[data-theme="studio"] .landing-talk-line { color: var(--ink); }
 
 /* ---- The TV board is a fixed display, not a device preference:
    it keeps the Silverline treatment in every theme by pinning the

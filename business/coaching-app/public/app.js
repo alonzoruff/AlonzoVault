@@ -569,6 +569,9 @@ function closeNavMenus() {
   if (sheet && !sheet.hidden) sheet.hidden = true;
   const toggle = $('#nav-toggle');
   if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  const tm = $('#tab-more'); if (tm) tm.setAttribute('aria-expanded', 'false');
+  const scrim = $('#nav-scrim');
+  if (scrim) scrim.hidden = true;
 }
 buildMainNav();
 $$('.nav-group-btn').forEach(btn => btn.addEventListener('click', (e) => {
@@ -579,13 +582,30 @@ $$('.nav-group-btn').forEach(btn => btn.addEventListener('click', (e) => {
   if (group && !wasOpen) { group.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
 }));
 const navToggleBtn = $('#nav-toggle');
+function openNavSheet() {
+  const sheet = $('#nav-sheet');
+  if (!sheet) return;
+  sheet.hidden = false;
+  const scrim = $('#nav-scrim');
+  if (scrim) scrim.hidden = false;
+}
 if (navToggleBtn) navToggleBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   const sheet = $('#nav-sheet');
   const willOpen = !!(sheet && sheet.hidden);
   closeNavMenus();
-  if (willOpen) { sheet.hidden = false; navToggleBtn.setAttribute('aria-expanded', 'true'); }
+  if (willOpen) { openNavSheet(); navToggleBtn.setAttribute('aria-expanded', 'true'); }
 });
+const tabMoreBtn = $('#tab-more');
+if (tabMoreBtn) tabMoreBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const sheet = $('#nav-sheet');
+  const willOpen = !!(sheet && sheet.hidden);
+  closeNavMenus();
+  if (willOpen) { openNavSheet(); tabMoreBtn.setAttribute('aria-expanded', 'true'); }
+});
+const navScrimEl = $('#nav-scrim');
+if (navScrimEl) navScrimEl.addEventListener('click', () => closeNavMenus());
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-view]')) { closeNavMenus(); return; }
   if (!e.target.closest('.mainnav') && !e.target.closest('.nav-sheet') && !e.target.closest('#nav-toggle')) closeNavMenus();
@@ -1136,7 +1156,8 @@ function renderHomeLogs() {
   const el = $('#home-logs');
   if (!el) return;
   if (!state.logs.length) { el.innerHTML = '<p class="muted">No entries yet. Add your first one in My Log.</p>'; return; }
-  el.innerHTML = state.logs.slice(0, 3).map(logEntryHtml).join('');
+  const l = state.logs[0];
+  el.innerHTML = `<p class="home-log-line"><strong>${esc(fmtDate(parseDate(l.date)))}</strong> · ${esc(l.title)} <button class="btn secondary" type="button" data-goto="log">Open My Log</button></p>`;
 }
 
 /* ---------------- day card (shared by home + season) ---------------- */
@@ -1807,6 +1828,7 @@ function syncAuthUi() {
   document.body.classList.toggle('logged-out', !state.user);
   const isCoach = !!(state.user && state.user.role === 'coach');
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
+  $$('.learn-tab').forEach(t => { t.hidden = isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
   renderMemberIntake();
@@ -1942,6 +1964,7 @@ async function renderCheckin() {
       </div>`;
     }
   }
+  syncHomePrimary();
 }
 
 /* ---------------- member workout logs ----------------
@@ -2193,6 +2216,24 @@ function paintMemberLogEditor() {
    incomplete, and the latest form-check status. Coaches and
    signed-out visitors get nothing here — the coach's own Today
    summary lives further down the home view. */
+/* Home carries exactly one filled button: finish the intake first,
+   then save today's check-in, then start today's session. Each of
+   the renders that own those buttons calls this when it finishes. */
+function syncHomePrimary() {
+  const intakeBtn = document.getElementById('tw-intake');
+  const ciSave = document.getElementById('ci-save');
+  const runBtn = document.querySelector('#view-home .run-today-btn');
+  let winner = null;
+  if (intakeBtn) winner = intakeBtn;
+  else if (ciSave && !(state.checkinToday && state.checkinToday.checkin)) winner = ciSave;
+  else if (runBtn) winner = runBtn;
+  [intakeBtn, ciSave, runBtn].forEach(b => {
+    if (!b) return;
+    const on = b === winner;
+    b.classList.toggle('primary', on);
+    b.classList.toggle('secondary', !on);
+  });
+}
 async function renderThisWeek() {
   const slot = $('#thisweek-slot');
   if (!slot) return;
@@ -2260,9 +2301,16 @@ async function renderThisWeek() {
     <button class="btn secondary" id="tw-log" type="button">Log a workout</button>
     <button class="btn secondary" id="tw-fc" type="button">Send a form check</button>
   </div>`;
+  const twTodayIdx = (data.week || []).findIndex(d => d.isToday);
+  const twTodayEntry = twTodayIdx >= 0 ? data.week[twTodayIdx] : null;
+  const twTomorrow = twTodayIdx >= 0 ? data.week[twTodayIdx + 1] : null;
+  const setHtml = (data.checkedInToday && twTodayEntry && twTodayEntry.completed)
+    ? `<p class="tw-set"><strong>You're set for today.</strong>${twTomorrow ? ` <span class="muted">Tomorrow: ${twTomorrow.sessionId ? esc(twTomorrow.sessionId) : 'Rest'}</span>` : ''}</p>`
+    : '';
   slot.innerHTML = `<div class="card tw-card">
     <h2>This Week</h2>
     ${todayLine}
+    ${setHtml}
     ${weekHtml}
     ${streakHtml}
     ${readinessHtml}
@@ -2300,6 +2348,7 @@ async function renderThisWeek() {
     const el = document.getElementById('form-checks-slot');
     if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 60);
   });
+  syncHomePrimary();
 }
 
 /* ---------------- member form checks ----------------
@@ -7280,14 +7329,17 @@ async function renderMyGoals() {
     <h2>My Goals</h2>
     ${data.goals.length
       ? '<p class="muted">The target marks your coach set for you — and how close your PR is getting.</p>'
-        + data.goals.map(g => `
+        + data.goals.slice(0, 2).map(g => `
         <div class="goal-row">
           <div class="goal-head"><strong>${esc(g.eventName)}</strong> <span class="muted">Target: <strong>${esc(g.targetText)}</strong></span>
           ${g.achieved ? '<span class="badge star">GOAL HIT ★</span>' : ''}</div>
           ${goalProgressInner(g)}
         </div>`).join('')
       : '<p class="muted">No goals set yet — when your coach sets a target mark for you, it shows up here with your progress toward it.</p>'}
+    ${data.goals.length > 2 ? '<p><button class="btn secondary" id="home-goals-all" type="button">See all goals</button></p>' : ''}
   </div>`;
+  const ga = $('#home-goals-all');
+  if (ga) ga.addEventListener('click', () => showView('goals'));
 }
 
 /* ================================================================
@@ -7322,7 +7374,8 @@ async function renderAnnouncePanel() {
   let data;
   try { data = await api('/api/announcements'); }
   catch (_) { slot.innerHTML = ''; return; }
-  const posts = (data.announcements || []).slice(0, 5);
+  const allPosts = data.announcements || [];
+  const posts = allPosts.slice(0, 1);
   if (!posts.length) {
     slot.innerHTML = isCoachUser()
       ? `<div class="card"><h2>Announcements</h2><p class="muted">No announcements yet — post the first one for the team.</p><p><button class="btn secondary" id="ann-panel-new" type="button">New announcement</button></p></div>`
@@ -7330,10 +7383,13 @@ async function renderAnnouncePanel() {
   } else {
     slot.innerHTML = `<h2>Announcements</h2>${LANE_DIVIDER}`
       + posts.map(a => announcePostHtml(a, false)).join('')
+      + (allPosts.length > 1 ? '<p><button class="btn secondary" id="ann-panel-all" type="button">See all announcements</button></p>' : '')
       + (isCoachUser() ? '<p><button class="btn secondary" id="ann-panel-new" type="button">New announcement</button></p>' : '');
   }
   const nb = $('#ann-panel-new');
   if (nb) nb.addEventListener('click', () => showView('announce'));
+  const ab = $('#ann-panel-all');
+  if (ab) ab.addEventListener('click', () => showView('announce'));
 }
 
 /* ---------------- data: backup, restore, spreadsheets ----------------
