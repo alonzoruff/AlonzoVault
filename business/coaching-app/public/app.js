@@ -575,7 +575,10 @@ function showView(name) {
   if (!prefersReducedMotion) {
     const activeView = document.getElementById('view-' + name);
     if (activeView) activeView.querySelectorAll('.card').forEach((c, i) => {
-      c.style.setProperty('--cd', Math.min(i, 6) * 45 + 'ms');
+      /* Redesign v25: only the first four cards rise in; later
+         cards are simply there, so long views settle at once. */
+      if (i < 4) { c.classList.remove('no-rise'); c.style.setProperty('--cd', i * 45 + 'ms'); }
+      else { c.classList.add('no-rise'); c.style.removeProperty('--cd'); }
     });
   }
   /* The TV board takes over the whole screen: body.tv-mode hides

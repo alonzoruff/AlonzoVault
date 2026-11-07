@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v24 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v24"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v25 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v25"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v24'") &&
-    swJs.text.includes("ruffin-performance-v24"));
+    appJs.text.includes("const APP_VERSION = 'v25'") &&
+    swJs.text.includes("ruffin-performance-v25"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v24"') &&
-    pageHtml.text.includes('Ruffin Performance · App v24') &&
+    pageHtml.text.includes('data-app-version="v25"') &&
+    pageHtml.text.includes('Ruffin Performance · App v25') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2567,9 +2567,9 @@ async function main() {
     stylesCss.text.includes('break-inside: avoid'),
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
-  check('printable report: BRAND reports v24 with the v24 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v24' &&
-    v23Content.brand.cache === 'ruffin-performance-v24', v23Content.brand);
+  check('printable report: BRAND reports v25 with the v25 cache',
+    !!v23Content.brand && v23Content.brand.version === 'v25' &&
+    v23Content.brand.cache === 'ruffin-performance-v25', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2677,9 +2677,11 @@ async function main() {
     stylesCss.text.includes('[data-theme="studio"] .landing-hero-content') &&
     stylesCss.text.includes('[data-theme="carbon"] .landing-hero'));
   const themeBlocks = stylesCss.text.slice(stylesCss.text.indexOf('THEMES (v12)'));
-  check('themes never redefine the semantic colors (health flags + PR deltas stay constant)',
-    themeBlocks.length > 0 && !themeBlocks.includes('--high:') && !themeBlocks.includes('--low:') &&
-    !themeBlocks.includes('#e3c766'));
+  check('themes keep signal hues constant (only Studio restates light-mode shades, v25 redesign)',
+    themeBlocks.length > 0 &&
+    !/\[data-theme="silverline"\] \{[^}]*--high:/.test(themeBlocks) &&
+    !/\[data-theme="carbon"\] \{[^}]*--high:/.test(themeBlocks) &&
+    themeBlocks.includes('--high: #b23b2e') && themeBlocks.includes('--low: #2a7340'));
   check('TV board pins the Silverline tokens regardless of device theme',
     /body\.tv-mode \{[^}]*--red: #c9ccd4/.test(stylesCss.text) &&
     /body\.tv-mode \{[^}]*--radius: 14px/.test(stylesCss.text));
@@ -5523,9 +5525,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v24"') &&
-    appJs.text.includes("const APP_VERSION = 'v24'") &&
-    swJs.text.includes('ruffin-performance-v24'));
+    pageHtml.text.includes('data-app-version="v25"') &&
+    appJs.text.includes("const APP_VERSION = 'v25'") &&
+    swJs.text.includes('ruffin-performance-v25'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -8790,7 +8792,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v24' &&
+          br.status === 200 && br.json.brand.version === 'v25' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8914,7 +8916,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v24',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v25',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
