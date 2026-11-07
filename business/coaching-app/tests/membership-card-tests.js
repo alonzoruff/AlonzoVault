@@ -34,6 +34,7 @@ const code = [
   APP.match(/^function parseDate\(s\).*$/m)[0],
   APP.match(/^function fmtDate\(d\).*$/m)[0],
   between(APP, 'function membershipEndNotice(m) {', '/* ---------------- member access (coach)'),
+  between(APP, 'const TIER_ADDS = {', 'const LOCK_ICON'),
 ].join('\n');
 const serverCancelNotice = between(SERVER, 'function cancelNotice(iso) {', '\n}\n') + '\n}\n';
 

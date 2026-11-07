@@ -196,7 +196,7 @@ function appearanceCardHtml() {
         <span class="theme-meta">
           <span class="theme-name">${esc(t.name)}</span>
           <span class="theme-blurb">${esc(t.blurb)}</span>
-          <span class="theme-current" ${t.id === cur ? '' : 'hidden'}>Current theme</span>
+          <span class="theme-current" ${t.id === cur ? '' : 'hidden'}>✓ Current theme</span>
         </span>
       </button>`).join('')}
     </div>
@@ -403,7 +403,7 @@ const VIEW_AREA = {
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['access', 'Access'], ['bookings', 'Bookings'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['attendance', 'Attendance'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['health', 'Aches & Pains'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 /* ---------------- membership tiers (v14) ----------------
    The nav mirror of the server's entitlement rules. The server is
@@ -606,6 +606,10 @@ if (tabMoreBtn) tabMoreBtn.addEventListener('click', (e) => {
 });
 const navScrimEl = $('#nav-scrim');
 if (navScrimEl) navScrimEl.addEventListener('click', () => closeNavMenus());
+$$('#log-seg [data-seg]').forEach(b => b.addEventListener('click', () => {
+  state.logSeg = b.dataset.seg;
+  applyLogSeg();
+}));
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-view]')) { closeNavMenus(); return; }
   if (!e.target.closest('.mainnav') && !e.target.closest('.nav-sheet') && !e.target.closest('#nav-toggle')) closeNavMenus();
@@ -1745,14 +1749,14 @@ function renderAccount() {
   if (state.user) {
     chip.innerHTML = `${esc(state.user.email)} · <button class="btn secondary" id="chip-logout" type="button" style="padding:2px 10px">Log out</button>`;
     note.textContent = 'Logged in as ' + state.user.email;
-    $('#account-main').innerHTML = `<div class="card">
+    $('#account-main').innerHTML = `<div id="member-membership"></div>
+      <div class="card">
       <p>Logged in as <strong>${esc(state.user.email)}</strong>.</p>
       <p>${state.user.role === 'coach' ? '<span class="badge high">COACH ACCOUNT</span>' : '<span class="badge low">NOT A COACH ACCOUNT</span>'}</p>
       <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Member account: once your coach links this email to your name on the member roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. Your coach runs everything else.'} Your personal log entries and cross-training swaps save to this account.</p>
       <button class="btn" id="acct-logout" type="button">Log out</button>
       ${appVersionHtml()}</div>
       ${appearanceCardHtml()}
-      <div id="member-membership"></div>
       <div id="coach-accounts"></div>
       <div id="coach-invites"></div>
       <div id="client-invites"></div>`;
@@ -1945,12 +1949,26 @@ async function renderCheckin() {
             hurts: $('#ci-hurts').checked, painText: $('#ci-hurts').checked ? $('#ci-pain').value : '', note: $('#ci-note').value,
           });
           state.ciMsg = 'Saved — your coaches can see it. ✓';
+          state.ciEditing = false;
           await renderCheckin();
           renderThisWeek();
         } catch (err) { alert(err.message); }
       });
     }
   }
+  if (slot && today.linked && today.checkin && !state.ciEditing) {
+    const c = today.checkin;
+    slot.innerHTML = `<div class="card checkin-card">
+      <h2>Daily Check-In <span class="badge low">DONE TODAY ✓</span></h2>
+      <p>Checked in today — slept ${esc(String(c.sleep))} hrs · soreness ${esc(String(c.soreness))}/5 · energy ${esc(String(c.energy))}/5${c.hurts ? ' · something hurts' : ''}</p>
+      ${mine && mine.streak ? `<p class="checkin-streak">🔥 Checked in ${mine.streak} day${mine.streak === 1 ? '' : 's'} in a row</p>` : ''}
+      ${state.ciMsg ? `<p class="muted">${esc(state.ciMsg)}</p>` : ''}
+      <p><button class="btn quiet" id="ci-edit" type="button">Edit today's check-in</button></p>
+    </div>`;
+    const eb = $('#ci-edit');
+    if (eb) eb.addEventListener('click', () => { state.ciEditing = true; renderCheckin(); });
+  }
+  applyLogSeg();
   if (hist) {
     if (!mine || !mine.linked) {
       hist.innerHTML = '';
@@ -2052,6 +2070,7 @@ function memberLogPrefillForAssignment(a) {
   return prefill;
 }
 function openMemberLogEditor(prefill) {
+  state.logSeg = 'log';
   state.memberLogEdit = Object.assign({
     id: null, date: dateStrOf(todayLocal()), sessionCode: '', title: '',
     status: 'done', rpe: '', durationMin: '', entries: [], note: '',
@@ -2073,6 +2092,26 @@ function openMemberLogEditorFromLog(l) {
     note: l.note || '',
   });
 }
+/* My Log in four segments (redesign stage 4): the log form, the
+   history, form checks, and check-ins share one view; the segment
+   only chooses which slot is on screen. Renders repaint their slot
+   and call this so the choice survives. */
+function applyLogSeg() {
+  const seg = state.logSeg || 'log';
+  $$('#log-seg [data-seg]').forEach(b => {
+    const on = b.dataset.seg === seg;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const bar = $('#log-seg');
+  if (bar) bar.hidden = !isAthleteUser();
+  const show = (id, on) => { const n = document.getElementById(id); if (n) n.hidden = !on; };
+  show('member-logs-slot', seg === 'log' || seg === 'history');
+  show('ml-log-block', seg === 'log');
+  show('ml-history-block', seg === 'history');
+  show('form-checks-slot', seg === 'formchecks');
+  show('checkin-history', seg === 'checkins');
+}
 function paintMemberLogsList(data) {
   const slot = $('#member-logs-slot');
   if (!slot) return;
@@ -2085,12 +2124,15 @@ function paintMemberLogsList(data) {
     return;
   }
   const logs = data.logs || [];
-  slot.innerHTML = `<div class="card">
+  slot.innerHTML = `<div class="card" id="ml-log-block">
     <h2>My workout logs</h2>
     <p class="muted">Your coach sees these — they're how your coach follows your training between sessions. Everything here is yours: edit or delete anything you wrote.</p>
     <button class="btn primary" id="ml-add" type="button" style="width:auto">Log a workout</button>
     ${state.mlMsg ? `<p class="muted">${esc(state.mlMsg)}</p>` : ''}
     <div id="ml-editor"></div>
+  </div>
+  <div class="card" id="ml-history-block">
+    <h2>History</h2>
     ${logs.length ? logs.map(l => `
     <div class="roster-row" style="display:block">
       <p><strong>${esc(fmtDate(parseDate(l.date)))}</strong> · ${esc(l.title)} ${memberLogStatusBadge(l)}
@@ -2101,6 +2143,7 @@ function paintMemberLogsList(data) {
       ${l.note ? `<p class="muted">${esc(l.note)}</p>` : ''}
     </div>`).join('') : emptyState({ title: 'No sessions logged yet', body: 'Log a session after practice and it will show up here.' })}
   </div>`;
+  applyLogSeg();
   $('#ml-add').addEventListener('click', () => {
     const today = dateStrOf(todayLocal());
     const already = logs.some(l => l.date === today);
@@ -2144,10 +2187,17 @@ function paintMemberLogEditor() {
     </div>`;
   slot.innerHTML = `<div class="card" style="margin-top:12px">
     <h3>${ed.id ? 'Edit workout log' : 'Log a workout'}</h3>
-    <label>Date <input type="date" id="ml-date" value="${esc(ed.date)}"></label>
-    <label>Session code (optional) <input type="text" id="ml-code" maxlength="40" value="${esc(ed.sessionCode || '')}" placeholder="e.g. ACC-01"></label>
-    <label>Title <input type="text" id="ml-title" maxlength="120" value="${esc(ed.title || '')}" placeholder="What did you train?"></label>
-    <div class="filter-row">
+    <fieldset>
+      <legend>What you did</legend>
+      <label>Date <input type="date" id="ml-date" value="${esc(ed.date)}"></label>
+      <label>Session code (optional) <input type="text" id="ml-code" maxlength="40" value="${esc(ed.sessionCode || '')}" placeholder="e.g. ACC-01"></label>
+      <label>Title <input type="text" id="ml-title" maxlength="120" value="${esc(ed.title || '')}" placeholder="What did you train?"></label>
+      <div id="ml-entries">${(ed.entries || []).map(rowHtml).join('')}</div>
+      <button class="btn secondary" id="ml-add-row" type="button" style="width:auto">Add an exercise</button>
+    </fieldset>
+    <fieldset>
+      <legend>Results</legend>
+      <div class="filter-row">
       <label>Status <select id="ml-status">
         <option value="done" ${ed.status === 'done' ? 'selected' : ''}>Done</option>
         <option value="partial" ${ed.status === 'partial' ? 'selected' : ''}>Partial — didn't finish it all</option>
@@ -2156,16 +2206,25 @@ function paintMemberLogEditor() {
         <option value="">—</option>
         ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${String(ed.rpe) === String(n) ? 'selected' : ''}>${n}${n === 1 ? ' — easy' : ''}${n === 10 ? ' — max effort' : ''}</option>`).join('')}
       </select></label>
-      <label>Minutes (optional) <input type="number" id="ml-duration" min="1" max="600" value="${esc(ed.durationMin === '' || ed.durationMin == null ? '' : String(ed.durationMin))}" placeholder="e.g. 45"></label>
-    </div>
-    <div id="ml-entries">${(ed.entries || []).map(rowHtml).join('')}</div>
-    <button class="btn secondary" id="ml-add-row" type="button" style="width:auto">Add an exercise</button>
-    <label>Note (optional) <input type="text" id="ml-note" maxlength="500" value="${esc(ed.note || '')}" placeholder="Anything your coach should know"></label>
-    <p>
-      <button class="btn primary" id="ml-save" type="button" style="width:auto">${ed.id ? 'Save changes' : 'Save log'}</button>
+      <label>Minutes (optional) <input type="number" id="ml-duration" inputmode="decimal" min="1" max="600" value="${esc(ed.durationMin === '' || ed.durationMin == null ? '' : String(ed.durationMin))}" placeholder="e.g. 45"></label>
+      </div>
+    </fieldset>
+    ${ed.note
+      ? `<label>Note (optional) <input type="text" id="ml-note" maxlength="500" value="${esc(ed.note)}" placeholder="Anything your coach should know"></label>`
+      : `<button class="btn quiet" id="ml-note-toggle" type="button">Add a note</button>
+      <div id="ml-note-wrap" hidden><label>Note (optional) <input type="text" id="ml-note" maxlength="500" value="" placeholder="Anything your coach should know"></label></div>`}
+    <div class="ml-savebar">
+      <button class="btn primary" id="ml-save" type="button">${ed.id ? 'Save changes' : 'Save log'}</button>
       <button class="btn secondary" id="ml-cancel" type="button" style="width:auto">Cancel</button>
-    </p>
+      <p class="error" id="ml-err"></p>
+    </div>
   </div>`;
+  const noteToggle = $('#ml-note-toggle');
+  if (noteToggle) noteToggle.addEventListener('click', () => {
+    const wrap = $('#ml-note-wrap');
+    if (wrap) { wrap.hidden = false; const inp = $('#ml-note'); if (inp) inp.focus(); }
+    noteToggle.hidden = true;
+  });
   $('#ml-add-row').addEventListener('click', () => {
     collectMemberLogRows();
     state.memberLogEdit.entries.push({ exercise: '', detail: '' });
@@ -2193,15 +2252,21 @@ function paintMemberLogEditor() {
       rpe: $('#ml-rpe').value === '' ? null : parseInt($('#ml-rpe').value, 10),
       durationMin: $('#ml-duration').value === '' ? null : parseInt($('#ml-duration').value, 10),
       entries: (cur.entries || []).filter(e => (e.exercise || '').trim()),
-      note: $('#ml-note').value,
+      note: $('#ml-note') ? $('#ml-note').value : '',
     };
     try {
       if (cur.id) await apiPut('/api/my/logs/' + encodeURIComponent(cur.id), payload);
       else await apiPost('/api/my/logs', payload);
       state.memberLogEdit = null;
       state.mlMsg = 'Saved — your coach can see it. ✓';
-      renderMemberLogs();
-    } catch (err) { alert(err.message); }
+      await renderMemberLogs();
+      const savedRow = document.querySelector('#member-logs-slot .roster-row');
+      if (savedRow) flashSaved(savedRow);
+    } catch (err) {
+      const e = $('#ml-err');
+      if (e) e.textContent = err.message;
+      else alert(err.message);
+    }
   });
 }
 
@@ -2329,6 +2394,7 @@ async function renderThisWeek() {
   if (logBtn) logBtn.addEventListener('click', () => showView('log'));
   const fcGoBtn = $('#tw-fc');
   if (fcGoBtn) fcGoBtn.addEventListener('click', () => {
+    state.logSeg = 'formchecks';
     showView('log');
     const el = document.getElementById('form-checks-slot');
     if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 60);
@@ -2341,9 +2407,10 @@ async function renderThisWeek() {
     if (el) el.scrollIntoView({ block: 'start' });
   });
   const fcBtn = $('#tw-formcheck');
-  if (fcBtn) fcBtn.addEventListener('click', () => showView('log'));
+  if (fcBtn) fcBtn.addEventListener('click', () => { state.logSeg = 'formchecks'; showView('log'); });
   const unreadBtn = $('#tw-fc-unread');
   if (unreadBtn) unreadBtn.addEventListener('click', () => {
+    state.logSeg = 'formchecks';
     showView('log');
     const el = document.getElementById('form-checks-slot');
     if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 60);
@@ -2370,8 +2437,16 @@ function formCheckVideoHtml(fc) {
 }
 function formCheckStatusBadge(fc) {
   return fc.status === 'replied'
-    ? '<span class="badge low">Replied</span>'
-    : '<span class="badge plain">Waiting for coach</span>';
+    ? '<span class="status-chip ok">Reviewed</span>'
+    : '<span class="status-chip">Waiting for coach</span>';
+}
+function fcWaitHtml(fc) {
+  if (fc.status === 'replied' || !fc.createdAt) return '';
+  const then = new Date(fc.createdAt).getTime();
+  if (Number.isNaN(then)) return '';
+  const hrs = Math.max(0, Math.floor((Date.now() - then) / 36e5));
+  const label = hrs < 1 ? 'sent under an hour ago' : (hrs < 48 ? `sent ${hrs}h ago` : `sent ${Math.floor(hrs / 24)}d ago`);
+  return hrs >= 48 ? ` · <span class="fc-wait-late">${label}</span>` : ` · ${label}`;
 }
 function formCheckDateLine(fc) {
   const d = String(fc.createdAt || '').slice(0, 10);
@@ -2434,7 +2509,7 @@ function paintFormChecks(data) {
       <p><strong>${esc(fc.context || 'Form check')}</strong> · ${esc(formCheckDateLine(fc))} ${formCheckStatusBadge(fc)}</p>
       ${formCheckVideoHtml(fc)}
       ${fc.note ? `<p class="muted">Your note: ${esc(fc.note)}</p>` : ''}
-      ${fc.reply ? `<p><strong>Coach reply:</strong> ${esc(fc.reply.text)}</p>` : '<p class="muted">No reply yet — your coach reviews the queue in order.</p>'}
+      ${fc.reply ? `<blockquote class="fc-reply-quote"><strong>Coach reply</strong><br>${esc(fc.reply.text)}</blockquote>` : '<p class="muted">No reply yet — your coach reviews the queue in order.</p>'}
     </div>`).join('') : emptyState({ title: 'Nothing sent yet', body: 'Send a short clip and your coach will reply here.', action: { label: 'Send a form check', view: 'log' } })}
   </div>`;
   for (const fc of checks) {
@@ -2453,6 +2528,7 @@ function paintFormChecks(data) {
         .catch(() => { /* silent: marking seen must never break the list */ });
     }
   }
+  applyLogSeg();
   const fileInput = $('#fc-file');
   if (fileInput) fileInput.addEventListener('change', () => {
     const file = fileInput.files && fileInput.files[0];
@@ -2525,12 +2601,12 @@ async function renderCoachFormChecks() {
     ${checks.length ? checks.map(fc => `
     <div class="roster-row" style="display:block" data-fc-row="${fc.id}">
       <p><strong>${esc(fc.memberName || 'Member')}</strong> · ${esc(formCheckDateLine(fc))} ${formCheckStatusBadge(fc)}</p>
-      <p class="muted">${fc.weekCount || 0} form check${(fc.weekCount || 0) === 1 ? '' : 's'} sent this week${fc.context ? ' · ' + esc(fc.context) : ''}</p>
+      <p class="muted">${fc.weekCount || 0} form check${(fc.weekCount || 0) === 1 ? '' : 's'} sent this week${fc.context ? ' · ' + esc(fc.context) : ''}${fcWaitHtml(fc)}</p>
       ${formCheckVideoHtml(fc)}
       ${fc.note ? `<p class="muted">Member note: ${esc(fc.note)}</p>` : ''}
       <label>Your reply <textarea class="fc-reply-text" rows="3" maxlength="2000" placeholder="What to fix, what looked good, what to try next">${fc.reply ? esc(fc.reply.text) : ''}</textarea></label>
       <p>
-        <button class="btn primary" data-fc-reply="${fc.id}" type="button" style="width:auto">${fc.reply ? 'Update reply' : 'Save reply'}</button>
+        <button class="btn primary" data-fc-reply="${fc.id}" type="button" style="width:auto">${fc.reply ? 'Update feedback' : 'Send feedback'}</button>
         <button class="btn secondary" data-fc-del="${fc.id}" type="button" style="width:auto">Delete</button>
       </p>
     </div>`).join('') : emptyState({ title: 'Nothing waiting right now', body: 'You\'re all caught up. When a member sends a video, it lands here.' })}
@@ -2732,15 +2808,15 @@ function srDisplay(t, point) {
 function srChangeText(t) {
   const c = t.changeSinceBaseline;
   if (!c || !t.baseline || !t.latest) return '';
-  if (c.improvement === 0) return 'Same as baseline';
+  if (c.improvement === 0) return '→ Same as baseline';
   const amt = fmtNum(Math.abs(c.improvement)) + (t.unit === 'sec' ? 's' : ' ' + t.unit);
   if (t.better === 'lower') {
-    return c.improved ? amt + ' faster than baseline' : amt + ' slower than baseline';
+    return c.improved ? '↓ ' + amt + ' faster than baseline' : '↑ ' + amt + ' slower than baseline';
   }
   if (t.unit === 'in') {
-    return c.improved ? amt + ' higher than baseline' : amt + ' lower than baseline';
+    return c.improved ? '↑ ' + amt + ' higher than baseline' : '↓ ' + amt + ' lower than baseline';
   }
-  return c.improved ? amt + ' better than baseline' : amt + ' below baseline';
+  return c.improved ? '↑ ' + amt + ' better than baseline' : '↓ ' + amt + ' below baseline';
 }
 function srSparkline(t) {
   const pts = (t.series || []).filter(s => s.display !== null && s.display !== undefined);
@@ -2755,7 +2831,7 @@ function srSparkline(t) {
     return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
   });
   const line = coords.map(c => c.join(',')).join(' ');
-  const dots = coords.map((c, i) => `<circle cx="${c[0]}" cy="${c[1]}" r="3" class="sr-dot"><title>${esc(pts[i].date)}: ${esc(fmtNum(pts[i].display))} ${esc(t.unit)}</title></circle>`).join('');
+  const dots = coords.map((c, i) => `<circle cx="${c[0]}" cy="${c[1]}" r="${i === coords.length - 1 ? 4.5 : 3}" class="sr-dot"><title>${esc(pts[i].date)}: ${esc(fmtNum(pts[i].display))} ${esc(t.unit)}</title></circle>`).join('');
   return `<svg class="sr-spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trend for ${esc(t.name)}"><polyline points="${line}" class="sr-line" fill="none"/>${dots}</svg>`;
 }
 function srCardHtml(t) {
@@ -2767,14 +2843,15 @@ function srCardHtml(t) {
     </div>`;
   }
   const change = srChangeText(t);
-  const seriesList = (t.series || []).length > 1
-    ? `<ul class="sr-series">${t.series.map(s => `<li><span>${esc(fmtDate(parseDate(s.date)))}</span><strong>${esc(fmtNum(s.display))} ${esc(t.unit)}</strong></li>`).join('')}</ul>`
-    : '';
+  const seriesRows = (t.series || []).map(s => `<li><span>${esc(fmtDate(parseDate(s.date)))}</span><strong>${esc(fmtNum(s.display))} ${esc(t.unit)}</strong></li>`).join('');
+  const seriesList = (t.series || []).length > 3
+    ? `<div class="sr-series-wrap"><button class="btn quiet" type="button" data-sr-toggle>All results (${t.series.length})</button><ul class="sr-series" hidden>${seriesRows}</ul></div>`
+    : ((t.series || []).length > 1 ? `<ul class="sr-series">${seriesRows}</ul>` : '');
   return `<div class="card sr-card">
     <h3>${esc(t.name)}</h3>
     <p class="sr-best">${esc(srDisplay(t, t.best))}</p>
     <p class="muted">Personal best${t.best && t.best.date ? ' · ' + esc(fmtDate(parseDate(t.best.date))) : ''}</p>
-    <p>Baseline: <strong>${esc(srDisplay(t, t.baseline))}</strong>${t.baseline && t.baseline.date ? ` <span class="muted">(${esc(fmtDate(parseDate(t.baseline.date)))})</span>` : ''}</p>
+    <p class="sr-base">Baseline: <strong>${esc(srDisplay(t, t.baseline))}</strong>${t.baseline && t.baseline.date ? ` <span class="muted">(${esc(fmtDate(parseDate(t.baseline.date)))})</span>` : ''}</p>
     ${t.latest ? `<p>Latest: <strong>${esc(srDisplay(t, t.latest))}</strong>${t.latest.date ? ` <span class="muted">(${esc(fmtDate(parseDate(t.latest.date)))})</span>` : ''}</p>` : ''}
     ${change ? `<p class="delta ${t.changeSinceBaseline && t.changeSinceBaseline.improvement > 0 ? 'good' : (t.changeSinceBaseline && t.changeSinceBaseline.improvement < 0 ? 'bad' : 'flat')}">${esc(change)}</p>` : ''}
     ${srSparkline(t)}
@@ -2846,6 +2923,12 @@ async function renderSpeedReport() {
     setTimeout(cleanup, 1500);
     window.print();
   });
+  el.querySelectorAll('[data-sr-toggle]').forEach(b => b.addEventListener('click', () => {
+    const ul = b.parentElement ? b.parentElement.querySelector('.sr-series') : null;
+    if (!ul) return;
+    ul.hidden = !ul.hidden;
+    b.textContent = ul.hidden ? 'All results (' + ul.children.length + ')' : 'Hide results';
+  }));
 }
 
 /* Reports → Health: the check-in aggregates block. Shows the
@@ -8621,33 +8704,45 @@ async function renderMembershipCard() {
   const m = data.membership || {};
   const since = acct.createdAt ? fmtDate(parseDate(acct.createdAt.slice(0, 10))) : '';
   const changed = m.tierUpdatedAt ? fmtDate(parseDate(m.tierUpdatedAt.slice(0, 10))) : '';
+  const upgradingHtml = (m.tier && m.status !== 'cancelled' && m.tier !== 'pass')
+    ? `<p class="muted" style="margin-bottom:6px">What upgrading adds:</p>
+      <ul class="landing-list">
+        ${(TIER_ADDS[m.tier === 'access' ? 'training' : 'pass'] || []).map(i => `<li>${esc(i)}</li>`).join('')}
+      </ul>
+      <p><button class="btn secondary" type="button" data-goto="landing">See membership options</button></p>`
+    : '';
   let membershipHtml;
   if (m.tier && m.status !== 'cancelled' && m.cancelsAt) {
     membershipHtml = `
-      <p><strong>${esc(m.tierName)}</strong> · ${esc(m.priceLabel || '')}</p>
+      <p class="mc-head"><span class="mc-tier">${esc(m.tierName)}</span> <span class="mc-price">${esc(m.priceLabel || '')}</span></p>
       <p>Status: <span class="badge low">Active</span></p>
       <div class="flag" id="membership-end-notice" role="status">
         <p>${esc(membershipEndNotice(m))}</p>
         <p class="muted">If you change your mind, message your coach before then.</p>
       </div>
-      <p class="muted" style="margin-bottom:6px">What your tier includes:</p>
-      <ul class="landing-list">
-        ${(m.includes || []).map(i => `<li>${esc(i)}</li>`).join('')}
-      </ul>`;
+      <details class="mc-details">
+        <summary>What your tier includes</summary>
+        <ul class="landing-list">
+          ${(m.includes || []).map(i => `<li>${esc(i)}</li>`).join('')}
+        </ul>
+      </details>`;
   } else if (m.tier && m.status !== 'cancelled') {
     membershipHtml = `
-      <p><strong>${esc(m.tierName)}</strong> · ${esc(m.priceLabel || '')}</p>
+      <p class="mc-head"><span class="mc-tier">${esc(m.tierName)}</span> <span class="mc-price">${esc(m.priceLabel || '')}</span></p>
       <p>Status: <span class="badge low">Active</span>${changed ? ` <span class="muted">since ${esc(changed)}</span>` : ''}</p>
-      <p class="muted" style="margin-bottom:6px">What your tier includes:</p>
-      <ul class="landing-list">
-        ${(m.includes || []).map(i => `<li>${esc(i)}</li>`).join('')}
-      </ul>
+      <details class="mc-details">
+        <summary>What your tier includes</summary>
+        <ul class="landing-list">
+          ${(m.includes || []).map(i => `<li>${esc(i)}</li>`).join('')}
+        </ul>
+      </details>
+      ${upgradingHtml}
       <div id="membership-cancel-zone">
-        <button class="btn danger" id="membership-cancel-btn" type="button">Cancel membership</button>
+        <button class="btn quiet danger" id="membership-cancel-btn" type="button">Cancel membership</button>
       </div>`;
   } else if (m.tier && m.status === 'cancelled') {
     membershipHtml = `
-      <p><strong>${esc(m.tierName)}</strong> · ${esc(m.priceLabel || '')}</p>
+      <p class="mc-head"><span class="mc-tier">${esc(m.tierName)}</span> <span class="mc-price">${esc(m.priceLabel || '')}</span></p>
       <p>Status: <span class="badge high">Cancelled</span>${changed ? ` <span class="muted">since ${esc(changed)}</span>` : ''}</p>
       <p class="muted">Your tier access has ended. Your account, your log, and your numbers are all still here. To rejoin, pick a tier on the home page or ask your coach.</p>`;
   } else {
@@ -8660,15 +8755,15 @@ async function renderMembershipCard() {
       <p class="muted">Join from the tier cards on the home page, or ask your coach to set your tier.</p>`;
   }
   el.innerHTML = `
+    <div class="card membership-card">
+      <h2>Your membership</h2>
+      ${membershipHtml}
+    </div>
     <div class="card">
       <h2>Your account</h2>
       <p>Email: <strong>${esc(acct.email || '')}</strong></p>
       <p>Linked profile: <strong>${acct.profileName ? esc(acct.profileName) : 'not linked yet'}</strong></p>
       ${since ? `<p class="muted">Member since ${esc(since)}</p>` : ''}
-    </div>
-    <div class="card">
-      <h2>Your membership</h2>
-      ${membershipHtml}
     </div>`;
   const cancelBtn = $('#membership-cancel-btn');
   if (cancelBtn) cancelBtn.addEventListener('click', () => {
@@ -8725,6 +8820,7 @@ function accessEndDate(iso) {
     timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric',
   }).format(d);
 }
+let accessMsgOnce = null;
 async function renderAccess() {
   const el = $('#access-main');
   if (!el) return;
@@ -8749,7 +8845,9 @@ async function renderAccess() {
         ? '<p class="muted">This member pays through Stripe. Cancelling here changes their access in this app only. It does not stop their billing, and a later Stripe update can turn access back on. To end it for good, cancel the subscription in Stripe.</p>'
         : ''}
       ${lastLine}
-      <div class="access-controls">
+      ${accessMsgOnce && accessMsgOnce.id === mb.userId ? `<p class="ok-note">${esc(accessMsgOnce.text)}</p>` : ''}
+      <p><button class="btn secondary" data-access-change type="button" style="width:auto">Change</button></p>
+      <div class="access-controls" hidden>
         <label>Tier
           <select class="access-tier-select">
             ${ACCESS_TIER_OPTIONS.map(([v, label]) => `<option value="${v}"${(mb.tier || '') === v ? ' selected' : ''}>${label}</option>`).join('')}
@@ -8764,6 +8862,11 @@ async function renderAccess() {
     </div>`;
   };
   el.innerHTML = `<div class="card">
+    <h2>What each tier opens</h2>
+    <p class="muted">The reference for the rows below. The server enforces the gating; this card only explains it.</p>
+    ${[['access', 'Lab Access'], ['training', 'Lab Training'], ['pass', 'Lab Pass']].map(([k, name]) => `<p><strong>${name}</strong></p><ul class="landing-list">${(TIER_ADDS[k] || []).map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}
+  </div>
+  <div class="card">
     <h2>Member access</h2>
     <p class="muted">Every member account and what it can open. Set a tier here and it applies at once. When a member pays or cancels through Stripe, the Stripe webhook updates the same fields by itself, and for a member with a Stripe subscription, a change from Stripe replaces a manual one.</p>
     ${members.length ? members.map(rowHtml).join('') : '<p class="muted">No member accounts yet. When a member registers with an invited email, they show up here.</p>'}
@@ -8771,22 +8874,33 @@ async function renderAccess() {
   el.querySelectorAll('[data-access-row]').forEach(row => {
     const userId = row.dataset.accessRow;
     const errEl = row.querySelector('.access-err');
-    const put = async (body) => {
+    const put = async (body, msg) => {
       try {
         await apiPut('/api/access/' + encodeURIComponent(userId), body);
+        if (msg) accessMsgOnce = { id: userId, text: msg };
         renderAccess();
       } catch (err) { if (errEl) errEl.textContent = err.message; }
     };
+    const chg = row.querySelector('[data-access-change]');
+    if (chg) chg.addEventListener('click', () => {
+      const c = row.querySelector('.access-controls');
+      if (c) { c.hidden = !c.hidden; chg.textContent = c.hidden ? 'Change' : 'Close'; }
+    });
     const save = row.querySelector('[data-access-save]');
     if (save) save.addEventListener('click', () => {
       const sel = row.querySelector('.access-tier-select');
-      put({ tier: sel && sel.value ? sel.value : null });
+      const opt = ACCESS_TIER_OPTIONS.find(([v]) => v === (sel ? sel.value : ''));
+      const nameEl = row.querySelector('p strong');
+      const who = nameEl ? nameEl.textContent : 'Member';
+      const tierLabel = opt ? opt[1].split(' · ')[0] : 'No tier';
+      put({ tier: sel && sel.value ? sel.value : null }, 'Moved ' + who + ' to ' + tierLabel + '.');
     });
     const cancel = row.querySelector('[data-access-cancel]');
     if (cancel) cancel.addEventListener('click', () => put({ status: 'cancelled' }));
     const react = row.querySelector('[data-access-reactivate]');
     if (react) react.addEventListener('click', () => put({ status: 'active' }));
   });
+  accessMsgOnce = null;
 }
 
 /* ---------------- live sessions (Lab Pass) ----------------
@@ -9276,18 +9390,17 @@ async function renderInviteRequests() {
         ? pending.map(r => row(r, actBtn(r, 'invited', 'Mark Invited', true) + ' ' + actBtn(r, 'declined', 'Decline'))).join('')
         : emptyState({ title: 'Nothing waiting right now', body: 'New requests from the invitation page land here.' })}
     </div>
-    <div class="card">
-      <h2>Invited</h2>
+    <details class="card">
+      <summary>Done (${invited.length + declined.length})</summary>
+      <h3>Invited</h3>
       ${invited.length
         ? invited.map(r => row(r, actBtn(r, 'pending', 'Back to pending'))).join('')
         : '<p class="muted">No one invited yet.</p>'}
-    </div>
-    <div class="card">
-      <h2>Declined</h2>
+      <h3>Declined</h3>
       ${declined.length
         ? declined.map(r => row(r, actBtn(r, 'pending', 'Back to pending'))).join('')
         : '<p class="muted">Nothing here yet.</p>'}
-    </div>`;
+    </details>`;
   el.querySelectorAll('[data-inv-act]').forEach(btn => btn.addEventListener('click', async () => {
     try {
       await apiPost('/api/invite-requests/' + encodeURIComponent(btn.dataset.invId) + '/status', { status: btn.dataset.invAct });

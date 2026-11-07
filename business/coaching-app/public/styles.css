@@ -1914,7 +1914,7 @@ body.logged-out .primary-nav { display: none !important; }
    whole so the report prints clean. */
 .sr-grid { display: grid; gap: var(--card-gap); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); align-items: start; }
 .sr-card { margin-bottom: 0; }
-.sr-best { font-size: 30px; font-weight: 800; margin: 2px 0; letter-spacing: -.01em; }
+.sr-best { font-size: var(--fs-data); font-weight: 800; margin: 2px 0; letter-spacing: -.01em; }
 .sr-spark { width: 100%; height: 44px; display: block; margin: 8px 0 4px; }
 .sr-line { stroke: var(--red); stroke-width: 2; }
 .sr-dot { fill: var(--red); }
@@ -2086,6 +2086,51 @@ html.ind-on .tabbar .tab.active::before { opacity: 0; }
    stop shouting. Data displays are not prose: the sample report's
    best marks live outside p/li and keep their weight above. ---- */
 .view p strong, .view li strong { font-weight: 400; }
+
+/* ================================================================
+   REDESIGN STAGE 4 (v28) — task screens and coach screens: log
+   segments and sticky save, check-in tap rows, Lab Report cards,
+   membership card, grouped coach hub. ========================== */
+.ci-taps { display: flex; gap: 8px; }
+.ci-taps .tap-btn { flex: 1 1 0; min-width: 0; min-height: 48px; }
+.ml-savebar {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px;
+}
+.ml-savebar .error { flex-basis: 100%; margin: 0; }
+.ml-savebar:empty { display: none; }
+@media (max-width: 900px) {
+  .ml-savebar {
+    position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 5;
+    background: var(--surface-pop); border: 1px solid var(--line);
+    border-radius: var(--r-card); box-shadow: var(--shadow-bar); padding: 10px;
+  }
+  .ml-savebar .btn.primary { flex: 1 1 auto; }
+}
+#log-seg { margin-bottom: 12px; }
+.sr-card h3 {
+  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+}
+.sr-base { font-size: var(--fs-sm); color: var(--muted); }
+.sr-series-wrap { margin-top: 8px; }
+.membership-card { background: var(--panel-2); border-top: 3px solid var(--accent); border-radius: var(--r-card); }
+.mc-head { margin: 4px 0; }
+.mc-tier { font-size: var(--fs-lg); font-weight: 800; }
+.mc-price { font-size: var(--fs-md); color: var(--muted); }
+.mc-details { margin: 10px 0; }
+.mc-details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+.btn.quiet.danger { color: var(--danger); }
+#membership-cancel-zone { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
+.menu-group-label {
+  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .1em;
+  color: var(--muted); margin: 18px 0 6px;
+}
+.menu-group-label:first-child { margin-top: 2px; }
+.fc-reply-quote {
+  margin: 8px 0; padding: 10px 12px; border-left: 3px solid var(--accent);
+  background: var(--surface-2); border-radius: 0 var(--r-inner) var(--r-inner) 0;
+}
+.fc-wait-late { color: var(--warn); font-weight: 700; }
+details.card > summary { cursor: pointer; font-weight: 700; min-height: 32px; }
 
 /* ================================================================
    REDESIGN STAGE 3 (v27) — landing text link, home one-liners,

@@ -31,6 +31,7 @@ const code = [
   APP.match(/^function parseDate\(s\).*$/m)[0],
   APP.match(/^function fmtDate\(d\).*$/m)[0],
   between('const ACCESS_TIER_OPTIONS = [', '/* ---------------- live sessions (Lab Pass)'),
+  between('const TIER_ADDS = {', 'const LOCK_ICON'),
 ].join('\n');
 
 let passed = 0;
