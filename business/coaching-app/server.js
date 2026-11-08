@@ -102,8 +102,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v28',
-  cache: 'ruffin-performance-v28',
+  version: 'v29',
+  cache: 'ruffin-performance-v29',
 };
 
 /* ------------------------------------------------------------------ */
@@ -5108,6 +5108,36 @@ async function handleApi(req, res, url) {
       if (!speedTeaser || t.latest.date > speedTeaser.latest.date) speedTeaser = t;
     }
     const checks = formChecksFor(prof.id);
+    /* One nudge at most, from the member's own data: a check-in
+       streak of 2+ that is still missing today comes first; after
+       that, a training gap of 4+ days with at least one missed
+       scheduled day in it. Planned rest is never nagged — a gap
+       day only counts as missed when a session was assigned, the
+       day was not an off day, and no completion was recorded. */
+    const streakNow = checkinStreak(prof.id);
+    let nudge = null;
+    if (streakNow >= 2 && !byDate[today]) {
+      nudge = { kind: 'streak', streak: streakNow };
+    } else {
+      const trainDates = new Set(memberLogsFor(prof.id).map(l => l.date));
+      const completionPrefix = prof.id + '|';
+      for (const k of Object.keys(db.completions)) {
+        if (k.startsWith(completionPrefix)) trainDates.add(k.slice(completionPrefix.length));
+      }
+      const sortedTrain = [...trainDates].sort();
+      const lastTraining = sortedTrain.length ? sortedTrain[sortedTrain.length - 1] : null;
+      if (lastTraining) {
+        const daysSince = Math.round((parseDateStr(today) - parseDateStr(lastTraining)) / 86400000);
+        if (daysSince >= 4) {
+          let missed = false;
+          for (let ds = addDaysStr(lastTraining, 1); ds && ds <= today; ds = addDaysStr(ds, 1)) {
+            const ga = resolveAssignment(prof.groupId, ds);
+            if (ga.sessionId && !ga.isOff && !completionFor(prof.id, ds)) { missed = true; break; }
+          }
+          if (missed) nudge = { kind: 'quiet', daysSince, lastDate: lastTraining };
+        }
+      }
+    }
     return sendJson(res, 200, {
       linked: true, profileId: prof.id,
       athleteName: prof.firstName + ' ' + prof.lastName,
@@ -5119,6 +5149,7 @@ async function handleApi(req, res, url) {
       week,
       checkinStreak: checkinStreak(prof.id),
       checkedInToday: !!byDate[today],
+      nudge,
       latestCheckin,
       nextTestDate: nextTestDateInfo(),
       speedTeaser,

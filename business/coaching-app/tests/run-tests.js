@@ -505,8 +505,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is the RP v28 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v28"), swJs.text.slice(0, 80));
+  check('service worker cache is the RP v29 cache',
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v29"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v28'") &&
-    swJs.text.includes("ruffin-performance-v28"));
+    appJs.text.includes("const APP_VERSION = 'v29'") &&
+    swJs.text.includes("ruffin-performance-v29"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v28"') &&
-    pageHtml.text.includes('Ruffin Performance · App v28') &&
+    pageHtml.text.includes('data-app-version="v29"') &&
+    pageHtml.text.includes('Ruffin Performance · App v29') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2567,9 +2567,9 @@ async function main() {
     stylesCss.text.includes('break-inside: avoid'),
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
-  check('printable report: BRAND reports v28 with the v28 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v28' &&
-    v23Content.brand.cache === 'ruffin-performance-v28', v23Content.brand);
+  check('printable report: BRAND reports v29 with the v29 cache',
+    !!v23Content.brand && v23Content.brand.version === 'v29' &&
+    v23Content.brand.cache === 'ruffin-performance-v29', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -5525,9 +5525,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v28"') &&
-    appJs.text.includes("const APP_VERSION = 'v28'") &&
-    swJs.text.includes('ruffin-performance-v28'));
+    pageHtml.text.includes('data-app-version="v29"') &&
+    appJs.text.includes("const APP_VERSION = 'v29'") &&
+    swJs.text.includes('ruffin-performance-v29'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -5766,6 +5766,92 @@ async function main() {
   check('leaderboard payload carries no this-week/readiness data',
     r.status === 200 && !JSON.stringify(r.json).includes('latestCheckin') &&
     !JSON.stringify(r.json).includes('checkinStreak') && !JSON.stringify(r.json).includes(wrenFcId), r.status);
+
+  /* ---------------- Streak & Consistency Nudges (v29) ----------------
+     /api/my/week carries ONE nudge at most, computed from the
+     caller's own check-ins, member logs and completions: a check-in
+     streak of 2+ with no check-in today wins first; otherwise a
+     member whose last training was 4+ days ago with a missed
+     scheduled day in the gap hears about the quiet stretch.
+     Completed days and planned rest are never nagged. Stella's
+     today check-in is cleaned up by archiving her profile at the
+     end, so the post-restart wellness count (today's check-ins
+     across the active roster) still sees only its own fixtures. */
+  check('v29: served JS carries the nudge rendering',
+    appJs.text.includes('Keep your streak going') && appJs.text.includes('It has been a few days') &&
+    appJs.text.includes('tw-nudge-checkin') && appJs.text.includes('tw-nudge-log'),
+    appJs.text.slice(0, 80));
+
+  r = await api(coach, 'POST', '/api/groups', { name: 'Nudge Squad' });
+  const nudgeGroup = r.json.group;
+  const mkNudgeMember = async (first, last, email) => {
+    const pr = (await api(coach, 'POST', '/api/profiles', { firstName: first, lastName: last, groupId: nudgeGroup.id, events: ['sprinter'] })).json.profile;
+    await api(coach, 'POST', '/api/client-invites', { email });
+    const jar = await regMember(email);
+    await api(coach, 'PUT', '/api/profiles/' + pr.id + '/link', { email });
+    return { prof: pr, jar };
+  };
+  const stella = await mkNudgeMember('Stella', 'Streak', 'stella-nudge@test.com');
+  const quinn = await mkNudgeMember('Quinn', 'Quiet', 'quinn-nudge@test.com');
+  const rae = await mkNudgeMember('Rae', 'Rest', 'rae-nudge@test.com');
+  const bothM = await mkNudgeMember('Both', 'Nudge', 'both-nudge@test.com');
+  const ned = await mkNudgeMember('Ned', 'New', 'ned-nudge@test.com');
+  check('v29 fixtures: five nudge members registered and linked',
+    !!stella.prof.id && !!quinn.prof.id && !!rae.prof.id && !!bothM.prof.id && !!ned.prof.id);
+
+  /* A missed scheduled day in every Nudge Squad gap below: a coach
+     override on the shared group, two days back. Rae completes it
+     (and every other gap day she can) in her own fixture. */
+  r = await api(coach, 'POST', '/api/assignments/override', { groupId: nudgeGroup.id, date: twAddD(twToday, -2), sessionId: 'SE-02' });
+  check('v29 fixtures: override sets a scheduled day inside the gap', r.status === 200, r.status);
+
+  /* (1) Streak nudge: check-ins yesterday + the day before, none today. */
+  await api(stella.jar, 'POST', '/api/checkin', { date: twAddD(twToday, -2), sleep: 8, soreness: 2, energy: 4 });
+  await api(stella.jar, 'POST', '/api/checkin', { date: twAddD(twToday, -1), sleep: 8, soreness: 2, energy: 4 });
+  r = await api(stella.jar, 'GET', '/api/my/week');
+  check('v29: streak nudge appears at streak 2 with no check-in today',
+    r.status === 200 && !!r.json.nudge && r.json.nudge.kind === 'streak' && r.json.nudge.streak === 2, r.json.nudge);
+
+  /* (2) Checking in today clears the streak nudge. */
+  await api(stella.jar, 'POST', '/api/checkin', { date: twToday, sleep: 8, soreness: 2, energy: 4 });
+  r = await api(stella.jar, 'GET', '/api/my/week');
+  check('v29: streak nudge absent after checking in today',
+    r.status === 200 && r.json.nudge === null && r.json.checkedInToday === true, r.json.nudge);
+  r = await api(coach, 'PUT', '/api/profiles/' + stella.prof.id, { archived: true });
+  check('v29 cleanup: the streak fixture is archived (keeps the restart wellness count on its own fixtures)',
+    r.status === 200 && r.json.profile.archived === true, r.status);
+
+  /* (3) Quiet nudge: last log 5 days ago, the override day missed. */
+  await api(quinn.jar, 'POST', '/api/my/logs', { date: twAddD(twToday, -5), title: 'Quinn last session' });
+  r = await api(quinn.jar, 'GET', '/api/my/week');
+  check('v29: quiet nudge appears after 5 days with a missed scheduled day',
+    r.status === 200 && !!r.json.nudge && r.json.nudge.kind === 'quiet' &&
+    r.json.nudge.daysSince === 5 && r.json.nudge.lastDate === twAddD(twToday, -5), r.json.nudge);
+
+  /* (4) No quiet nudge when every gap day was completed or a rest
+     day: Rae logs 5 days ago, then the coach marks every gap day
+     complete — off days refuse (400, ignored here), the rest land,
+     so no scheduled day in her gap stands missed. */
+  await api(rae.jar, 'POST', '/api/my/logs', { date: twAddD(twToday, -5), title: 'Rae last session' });
+  for (let off = -4; off <= 0; off++) {
+    await api(coach, 'POST', '/api/completions', { profileId: rae.prof.id, date: twAddD(twToday, off) });
+  }
+  r = await api(rae.jar, 'GET', '/api/my/week');
+  check('v29: quiet nudge absent when the gap days were completed or rest days',
+    r.status === 200 && r.json.nudge === null, r.json.nudge);
+
+  /* (5) Streak wins when both conditions hold. */
+  await api(bothM.jar, 'POST', '/api/checkin', { date: twAddD(twToday, -2), sleep: 8, soreness: 2, energy: 4 });
+  await api(bothM.jar, 'POST', '/api/checkin', { date: twAddD(twToday, -1), sleep: 8, soreness: 2, energy: 4 });
+  await api(bothM.jar, 'POST', '/api/my/logs', { date: twAddD(twToday, -5), title: 'Both last session' });
+  r = await api(bothM.jar, 'GET', '/api/my/week');
+  check('v29: streak nudge wins over the quiet nudge when both apply',
+    r.status === 200 && !!r.json.nudge && r.json.nudge.kind === 'streak' && r.json.nudge.streak === 2, r.json.nudge);
+
+  /* (6) No training history and no streak: no nudge. */
+  r = await api(ned.jar, 'GET', '/api/my/week');
+  check('v29: nudge is null for a member with no training history and no streak',
+    r.status === 200 && 'nudge' in r.json && r.json.nudge === null, r.json.nudge);
 
   return { coach, inventoryId: invBlocks, seedId: seed.id, willCookie: will, willProfileId: willP.id, backup: bkEnv, dataProfileId: dataP.id, deviceProfileId: danaD };
 }
@@ -8792,7 +8878,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v28' &&
+          br.status === 200 && br.json.brand.version === 'v29' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -8916,7 +9002,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v28',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v29',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');

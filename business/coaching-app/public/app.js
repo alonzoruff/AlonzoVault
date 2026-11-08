@@ -2329,6 +2329,15 @@ async function renderThisWeek() {
   const streakHtml = data.checkinStreak > 0
     ? `<p class="checkin-streak">${data.checkinStreak}-day check-in streak</p>`
     : '<p class="muted">No check-in streak yet — today\'s check-in, right below, starts one.</p>';
+  const nudgeHtml = data.nudge && data.nudge.kind === 'streak'
+    ? `<p><strong>Keep your streak going</strong></p>
+       <p>You have checked in ${esc(String(data.nudge.streak))} days in a row. Get today's check-in done and keep it moving.</p>
+       <button class="btn secondary" id="tw-nudge-checkin" type="button">Do today's check-in</button>`
+    : (data.nudge && data.nudge.kind === 'quiet'
+    ? `<p><strong>It has been a few days</strong></p>
+       <p>Your last logged session was ${esc(String(data.nudge.daysSince))} days ago. When you are ready, pick up with today's session in My Log.</p>
+       <button class="btn secondary" id="tw-nudge-log" type="button">Open My Log</button>`
+    : '');
   const readinessHtml = lc
     ? `<p>Latest check-in (${esc(fmtDate(parseDate(lc.date)))}): slept <strong>${esc(String(lc.sleep))}h</strong> · soreness <strong>${esc(String(lc.soreness))}/5</strong> · energy <strong>${esc(String(lc.energy))}/5</strong> ${lc.flags && lc.flags.length
       ? lc.flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ')
@@ -2378,6 +2387,7 @@ async function renderThisWeek() {
     ${setHtml}
     ${weekHtml}
     ${streakHtml}
+    ${nudgeHtml}
     ${readinessHtml}
     ${nextHtml}
     ${teaserHtml}
@@ -2390,6 +2400,13 @@ async function renderThisWeek() {
     const el = document.getElementById('checkin-slot');
     if (el) el.scrollIntoView({ block: 'start' });
   });
+  const nudgeCiBtn = $('#tw-nudge-checkin');
+  if (nudgeCiBtn) nudgeCiBtn.addEventListener('click', () => {
+    const el = document.getElementById('checkin-slot');
+    if (el) el.scrollIntoView({ block: 'start' });
+  });
+  const nudgeLogBtn = $('#tw-nudge-log');
+  if (nudgeLogBtn) nudgeLogBtn.addEventListener('click', () => showView('log'));
   const logBtn = $('#tw-log');
   if (logBtn) logBtn.addEventListener('click', () => showView('log'));
   const fcGoBtn = $('#tw-fc');
