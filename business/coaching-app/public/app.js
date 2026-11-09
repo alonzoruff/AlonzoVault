@@ -9096,10 +9096,41 @@ function bookDayLabel(dateStr) {
   return d ? fmtDate(d) : dateStr;
 }
 
-async function renderBook() {
+/* The public booking page is Coach AJ's Calendly 30-minute event,
+   embedded inline. Calendly holds the availability, confirms the
+   time and emails both sides. A visitor with an older Lab Talk
+   status link (?booking=<token>) still sees that booking. */
+const CALENDLY_URL = '__CALENDLY_URL__';
+function renderBook() {
   const el = $('#book-main');
   if (!el) return;
   if (state.bookToken) { renderBookStatus(el); return; }
+  /* Match Calendly's colors to the page's own background, whatever
+     theme the visitor picked. */
+  const bg = getComputedStyle(document.body).backgroundColor;
+  const rgb = (bg.match(/\d+(\.\d+)?/g) || [255, 255, 255]).slice(0, 3).map(Number);
+  const dark = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) < 128;
+  const params = new URLSearchParams({
+    embed_domain: window.location.hostname,
+    embed_type: 'Inline',
+    hide_gdpr_banner: '1',
+  });
+  if (dark) {
+    params.set('background_color', rgb.map(v => Math.round(v).toString(16).padStart(2, '0')).join(''));
+    params.set('text_color', 'ffffff');
+  }
+  const src = CALENDLY_URL + '?' + params.toString();
+  el.innerHTML = `<div class="card calendly-card">
+      <iframe class="calendly-frame" src="${esc(src)}" title="Book a 30 minute Lab Talk with Coach AJ" loading="lazy"></iframe>
+      <p class="muted calendly-fallback">Calendar not showing? <a href="${esc(CALENDLY_URL)}" target="_blank" rel="noopener">Open the booking page in a new tab</a>.</p>
+    </div>`;
+}
+
+/* The earlier in-app slot picker, kept for reference and for the
+   coach's Bookings view settings; the public page no longer uses it. */
+async function renderBookLegacy() {
+  const el = $('#book-main');
+  if (!el) return;
   let data;
   try { data = await api('/api/book/slots'); }
   catch (err) {

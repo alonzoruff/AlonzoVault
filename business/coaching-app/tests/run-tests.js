@@ -506,7 +506,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is the RP v29 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v30"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v31"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v30'") &&
-    swJs.text.includes("ruffin-performance-v30"));
+    appJs.text.includes("const APP_VERSION = 'v31'") &&
+    swJs.text.includes("ruffin-performance-v31"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v30"') &&
-    pageHtml.text.includes('Ruffin Performance · App v30') &&
+    pageHtml.text.includes('data-app-version="v31"') &&
+    pageHtml.text.includes('Ruffin Performance · App v31') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2568,8 +2568,8 @@ async function main() {
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v30' &&
-    v23Content.brand.cache === 'ruffin-performance-v30', v23Content.brand);
+    !!v23Content.brand && v23Content.brand.version === 'v31' &&
+    v23Content.brand.cache === 'ruffin-performance-v31', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -5525,9 +5525,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v30"') &&
-    appJs.text.includes("const APP_VERSION = 'v30'") &&
-    swJs.text.includes('ruffin-performance-v30'));
+    pageHtml.text.includes('data-app-version="v31"') &&
+    appJs.text.includes("const APP_VERSION = 'v31'") &&
+    swJs.text.includes('ruffin-performance-v31'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -8878,7 +8878,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v30' &&
+          br.status === 200 && br.json.brand.version === 'v31' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -9002,7 +9002,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v30',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v31',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');

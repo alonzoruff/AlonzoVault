@@ -23,6 +23,15 @@ Zero dependencies (Node >= 18 built-ins only). Environment:
 - `DATA_DIR` — where the JSON store + session secret live (default `./data`)
 - `SESSION_SECRET` — optional; generated into `DATA_DIR` when unset
 - `COACH_INVITE_EMAILS` — optional comma-separated assistant-coach invite seeds
+- `RESEND_API_KEY` — Resend API key; with `NOTIFY_EMAIL` it turns on
+  coach email notifications (invitation requests, uninvited sign-up
+  attempts, new accounts, form checks, in-person requests). Unset = off.
+- `NOTIFY_EMAIL` — where notifications go (comma-separated for several)
+- `RESEND_FROM` — sender; default `Ruffin Performance <onboarding@resend.dev>`,
+  which only delivers to the address the Resend account was made with.
+  Verify a domain in Resend to send from it.
+- `CALENDLY_URL` — the Calendly event the public booking page embeds
+  (default `https://calendly.com/alonzo-ruffinjr/30min`)
 - `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_UPLOAD_PRESET` — demo-video upload
   identifiers (defaults are the coach's existing account values)
 

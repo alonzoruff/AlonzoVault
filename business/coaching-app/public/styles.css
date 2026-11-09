@@ -2493,3 +2493,10 @@ body.tv-mode {
   .book-slot { flex: 1 1 28%; }
   .book-hours-day { min-width: 100%; }
 }
+
+/* Booking page: Coach AJ's Calendly 30-minute event, embedded inline. */
+.calendly-card { padding: 0; overflow: hidden; background: transparent; }
+.calendly-frame { background: transparent; }
+.calendly-frame { display: block; width: 100%; height: 1000px; border: 0; }
+@media (min-width: 900px) { .calendly-frame { height: 760px; } }
+.calendly-fallback { margin: 0; padding: 10px 16px 14px; font-size: 0.9em; }

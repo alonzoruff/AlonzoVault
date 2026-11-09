@@ -80,6 +80,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const stripeLib = require('./lib/stripe');
+const { notifyCoach } = require('./lib/notify');
+/* Absolute link into the app for a notification email. */
+function appLink(viewPath) {
+  const base = (process.env.DOMAIN || '').replace(/\/+$/, '');
+  if (!base || base === 'https://example.com') return null;
+  return base + (viewPath || '/');
+}
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
@@ -102,9 +109,17 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v30',
-  cache: 'ruffin-performance-v30',
+  version: 'v31',
+  cache: 'ruffin-performance-v31',
 };
+
+/* The public booking page embeds Coach AJ's Calendly 30-minute
+   event. Calendly emails him (and the visitor) on every booking.
+   Override with CALENDLY_URL; it must be a calendly.com link. */
+const CALENDLY_URL = (() => {
+  const v = (process.env.CALENDLY_URL || '').trim();
+  return /^https:\/\/calendly\.com\/[A-Za-z0-9_\-\/]+$/.test(v) ? v : 'https://calendly.com/alonzo-ruffinjr/30min';
+})();
 
 /* ------------------------------------------------------------------ */
 /* Session secret                                                      */
@@ -4353,6 +4368,13 @@ async function handleApi(req, res, url) {
     };
     db.bookings.push(rec);
     saveDb();
+    notifyCoach({
+      subject: 'New Lab Talk request from ' + name,
+      intro: name + ' asked for a Lab Talk. Approve or decline it under Coach Hub > Bookings.',
+      fields: [['Name', name], ['Email', email], ['Athlete', athleteName],
+        ['When', date + ' ' + slot.time + ' (New York time)'], ['Topic', topic]],
+      link: appLink('/'), replyTo: email,
+    });
     return sendJson(res, 201, {
       ok: true, token: rec.token, pagePath: '/?booking=' + rec.token,
       booking: visitorBookingView(rec),
@@ -4412,6 +4434,13 @@ async function handleApi(req, res, url) {
     };
     db.inviteRequests.push(rec);
     saveDb();
+    notifyCoach({
+      subject: 'New invitation request from ' + name,
+      intro: name + ' asked to join ' + BRAND.name + '. Review it under Coach Hub > Invitation Requests. Reply to this email to answer them directly.',
+      fields: [['Name', name], ['Email', email], ['For', forWhom === 'child' ? 'their child' : 'themselves'],
+        ['Athlete', athleteName], ['Interested in', tierInterest], ['Goal', goal]],
+      link: appLink('/'), replyTo: email,
+    });
     return sendJson(res, 201, { ok: true });
   }
 
@@ -4458,6 +4487,12 @@ async function handleApi(req, res, url) {
     const coachInvited = db.coachInvites.includes(email);
     const clientInvited = db.clientInvites.includes(email);
     if (!firstAccount && !coachInvited && !clientInvited) {
+      notifyCoach({
+        subject: 'Sign-up attempt without an invitation: ' + email,
+        intro: email + ' tried to create an account but has not been invited, so the app turned them away. To let them in, invite this email under Coach Hub > Access, or reply to this email to reach them.',
+        fields: [['Email', email]],
+        link: appLink('/'), replyTo: email,
+      });
       return sendJson(res, 403, { error: BRAND.name + ' is invite-only right now — the founding pilot is enrolling by invitation. If your coach invited you, make sure you use the exact email they invited.' });
     }
     const user = {
@@ -4486,6 +4521,14 @@ async function handleApi(req, res, url) {
     db.logs[user.id] = [];
     db.swaps[user.id] = {};
     saveDb();
+    if (!firstAccount) {
+      notifyCoach({
+        subject: 'New ' + (user.role === 'coach' ? 'coach' : 'member') + ' account: ' + email,
+        intro: email + ' created their ' + BRAND.name + ' account.',
+        fields: [['Email', email], ['Role', user.role === 'coach' ? 'coach' : 'member']],
+        link: appLink('/'), replyTo: email,
+      });
+    }
     return sendJson(res, 201, publicUser(user),
       { 'Set-Cookie': sessionCookie(req, signSession(user.id), SESSION_DAYS * 24 * 3600) });
   }
@@ -5036,6 +5079,15 @@ async function handleApi(req, res, url) {
     );
     db.formChecks.push(fc);
     saveDb();
+    {
+      const who = (prof.firstName + ' ' + prof.lastName).trim() || user.email;
+      notifyCoach({
+        subject: 'New form check from ' + who,
+        intro: who + ' sent a video for review. Reply under Coach Hub > Form Checks.',
+        fields: [['Member', who], ['Email', user.email], ['Video', fc.videoUrl], ['Context', fc.context], ['Note', fc.note]],
+        link: appLink('/'), replyTo: user.email,
+      });
+    }
     return sendJson(res, 201, {
       ok: true, formCheck: publicFormCheck(fc),
       weekCount: formCheckWeekCount(prof.id, todayStr()),
@@ -5244,6 +5296,12 @@ async function handleApi(req, res, url) {
     };
     db.liveRequests.push(rec);
     saveDb();
+    notifyCoach({
+      subject: 'In-person session request from ' + (rec.profileName || user.email),
+      intro: (rec.profileName || user.email) + ' asked for an in-person session (Lab Pass).',
+      fields: [['Member', rec.profileName], ['Email', user.email]],
+      link: appLink('/'), replyTo: user.email,
+    });
     return sendJson(res, 201, { ok: true, created: true, request: publicLiveRequest(rec) });
   }
 
@@ -8768,7 +8826,8 @@ function applyBrand(text) {
     .replaceAll('__BRAND_SHORT__', BRAND.short)
     .replaceAll('__BRAND_TAGLINE__', BRAND.tagline)
     .replaceAll('__APP_VERSION__', BRAND.version)
-    .replaceAll('__BRAND_CACHE__', BRAND.cache);
+    .replaceAll('__BRAND_CACHE__', BRAND.cache)
+    .replaceAll('__CALENDLY_URL__', CALENDLY_URL);
 }
 function serveStatic(req, res, url) {
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
