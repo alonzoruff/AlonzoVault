@@ -2337,7 +2337,15 @@ async function renderThisWeek() {
     ? `<p><strong>It has been a few days</strong></p>
        <p>Your last logged session was ${esc(String(data.nudge.daysSince))} days ago. When you are ready, pick up with today's session in My Log.</p>
        <button class="btn secondary" id="tw-nudge-log" type="button">Open My Log</button>`
-    : '');
+    : (data.nudge && data.nudge.kind === 'formcheck'
+    ? (data.nudge.lastDate
+      ? `<p><strong>Keep your technique sharp</strong></p>
+       <p>It has been ${esc(String(data.nudge.daysSince))} days since your last form check. Send a short clip when you are ready and your coach will take a look.</p>
+       <button class="btn secondary" id="tw-nudge-formcheck" type="button">Send a form check</button>`
+      : `<p><strong>Keep your technique sharp</strong></p>
+       <p>You have not sent a form check yet. Film a sprint or a lift and send it in, and your coach will take a look at your technique.</p>
+       <button class="btn secondary" id="tw-nudge-formcheck" type="button">Send a form check</button>`)
+    : ''));
   const readinessHtml = lc
     ? `<p>Latest check-in (${esc(fmtDate(parseDate(lc.date)))}): slept <strong>${esc(String(lc.sleep))}h</strong> · soreness <strong>${esc(String(lc.soreness))}/5</strong> · energy <strong>${esc(String(lc.energy))}/5</strong> ${lc.flags && lc.flags.length
       ? lc.flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ')
@@ -2407,6 +2415,13 @@ async function renderThisWeek() {
   });
   const nudgeLogBtn = $('#tw-nudge-log');
   if (nudgeLogBtn) nudgeLogBtn.addEventListener('click', () => showView('log'));
+  const nudgeFcBtn = $('#tw-nudge-formcheck');
+  if (nudgeFcBtn) nudgeFcBtn.addEventListener('click', () => {
+    state.logSeg = 'formchecks';
+    showView('log');
+    const el = document.getElementById('form-checks-slot');
+    if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 60);
+  });
   const logBtn = $('#tw-log');
   if (logBtn) logBtn.addEventListener('click', () => showView('log'));
   const fcGoBtn = $('#tw-fc');

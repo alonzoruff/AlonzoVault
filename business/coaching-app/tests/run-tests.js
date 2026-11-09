@@ -506,7 +506,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is the RP v29 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v29"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v30"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v29'") &&
-    swJs.text.includes("ruffin-performance-v29"));
+    appJs.text.includes("const APP_VERSION = 'v30'") &&
+    swJs.text.includes("ruffin-performance-v30"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v29"') &&
-    pageHtml.text.includes('Ruffin Performance · App v29') &&
+    pageHtml.text.includes('data-app-version="v30"') &&
+    pageHtml.text.includes('Ruffin Performance · App v30') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2568,8 +2568,8 @@ async function main() {
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v29' &&
-    v23Content.brand.cache === 'ruffin-performance-v29', v23Content.brand);
+    !!v23Content.brand && v23Content.brand.version === 'v30' &&
+    v23Content.brand.cache === 'ruffin-performance-v30', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -5525,9 +5525,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v29"') &&
-    appJs.text.includes("const APP_VERSION = 'v29'") &&
-    swJs.text.includes('ruffin-performance-v29'));
+    pageHtml.text.includes('data-app-version="v30"') &&
+    appJs.text.includes("const APP_VERSION = 'v30'") &&
+    swJs.text.includes('ruffin-performance-v30'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -8878,7 +8878,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v29' &&
+          br.status === 200 && br.json.brand.version === 'v30' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -9002,7 +9002,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v29',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v30',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
@@ -9185,6 +9185,232 @@ async function waitForServer(tries = 60) {
       } finally {
         ivChild.kill('SIGKILL');
         fs.rmSync(IV_DIR, { recursive: true, force: true });
+      }
+    }
+
+    /* Form Check Reminder (v30): the third This Week nudge. A
+       training-tier member whose latest form check is 14+ days old
+       (or who never sent one and whose profile is 14+ days old)
+       gets a formcheck nudge — unless a form check is pending, a
+       coach reply is still unread, or the streak / quiet nudges
+       apply first. Lab Access members never get it. Own server,
+       own store: form checks are submitted through the API, then
+       aged by editing db.json while the server is stopped and
+       restarting on the same DATA_DIR (the form-check week
+       pattern above). */
+    {
+      const FC30_BASE = 'http://127.0.0.1:3232';
+      const fc30Api = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { headers['content-type'] = 'application/json'; data = JSON.stringify(body); }
+        const res = await fetch(FC30_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const fc30Text = async (cookie, p) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        const res = await fetch(FC30_BASE + p, { headers });
+        return { status: res.status, text: await res.text() };
+      };
+      const fc30Cookie = (r) => (r.setCookie[0] || '').split(';')[0];
+      const fc30Fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
+      const fc30Today = fc30Fmt.format(new Date());
+      const fc30Parse = (ds) => { const [y, m, d] = ds.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+      const fc30AddD = (ds, n) => {
+        const dt = new Date(fc30Parse(ds) + n * 86400000);
+        const p2 = (x) => String(x).padStart(2, '0');
+        return dt.getUTCFullYear() + '-' + p2(dt.getUTCMonth() + 1) + '-' + p2(dt.getUTCDate());
+      };
+      const fc30DaysBetween = (fromDs, toDs) => Math.round((fc30Parse(toDs) - fc30Parse(fromDs)) / 86400000);
+      const FC30_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-fc30-'));
+      let fc30Log = '';
+      const startFc30 = () => {
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, process.env, {
+            PORT: '3232', DATA_DIR: FC30_DIR, SESSION_SECRET: 'fc30-secret',
+          }),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', d => { fc30Log += d; });
+        c.stderr.on('data', d => { fc30Log += d; });
+        return c;
+      };
+      const waitFc30 = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(FC30_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      let fc30Child = startFc30();
+      try {
+        check('v30: form check reminder server starts', await waitFc30(), fc30Log);
+        const fc30Js = await fc30Text(null, '/app.js');
+        check('v30: served JS carries the form check nudge rendering',
+          fc30Js.status === 200 && fc30Js.text.includes('Keep your technique sharp') &&
+          fc30Js.text.includes('tw-nudge-formcheck') &&
+          fc30Js.text.includes('You have not sent a form check yet') &&
+          fc30Js.text.includes('days since your last form check'),
+          fc30Js.text.slice(0, 80));
+
+        let fr = await fc30Api(null, 'POST', '/api/register', { email: 'fc30-coach@test.com', password: 'testpass123' });
+        const fc30Coach = fc30Cookie(fr);
+        fr = await fc30Api(fc30Coach, 'POST', '/api/groups', { name: 'Reminder Squad' });
+        const fc30Grp = fr.json.group;
+        const FC30_URL = 'https://res.cloudinary.com/l8qblw99/video/upload/fc30-clip.mp4';
+        const mk30 = async (first, last, email, tier) => {
+          const pr = (await fc30Api(fc30Coach, 'POST', '/api/profiles', { firstName: first, lastName: last, groupId: fc30Grp.id, events: ['sprinter'] })).json.profile;
+          await fc30Api(fc30Coach, 'POST', '/api/client-invites', { email });
+          const reg = await fc30Api(null, 'POST', '/api/register', { email, password: 'testpass123' });
+          const jar = fc30Cookie(reg);
+          await fc30Api(fc30Coach, 'PUT', '/api/access/' + reg.json.id, { tier });
+          await fc30Api(fc30Coach, 'PUT', '/api/profiles/' + pr.id + '/link', { email });
+          return { prof: pr, jar, id: reg.json.id };
+        };
+        const oldM = await mk30('Olive', 'Oldcheck', 'olive-fc30@test.com', 'training');
+        const recentM = await mk30('Rhea', 'Recent', 'rhea-fc30@test.com', 'training');
+        const pendM = await mk30('Pete', 'Pending', 'pete-fc30@test.com', 'training');
+        const unreadM = await mk30('Uma', 'Unread', 'uma-fc30@test.com', 'training');
+        const accessM = await mk30('Alex', 'Access', 'alex-fc30@test.com', 'training');
+        const bothM = await mk30('Bree', 'Both', 'bree-fc30@test.com', 'pass');
+        const neverM = await mk30('Nina', 'Never', 'nina-fc30@test.com', 'training');
+        const freshM = await mk30('Fred', 'Fresh', 'fred-fc30@test.com', 'training');
+        check('v30 fixtures: eight reminder members registered and linked',
+          !!oldM.prof.id && !!recentM.prof.id && !!pendM.prof.id && !!unreadM.prof.id &&
+          !!accessM.prof.id && !!bothM.prof.id && !!neverM.prof.id && !!freshM.prof.id);
+
+        /* Submissions through the API (training-gated, 201). The
+           old-history members' records are aged in the store edit
+           below; Rhea's stays at today. */
+        for (const [m, label] of [[oldM, 'old'], [recentM, 'recent'], [accessM, 'access'], [bothM, 'both']]) {
+          fr = await fc30Api(m.jar, 'POST', '/api/my/form-checks', { videoUrl: FC30_URL, context: 'v30 ' + label });
+          check('v30 fixtures: ' + label + ' member submits a form check', fr.status === 201, fr.status);
+        }
+
+        /* Age the history: stop the server, rewrite db.json, restart.
+           Olive / Alex / Bree: their submission becomes a replied,
+           already-seen check from 20 days ago. Pete: a replied+seen
+           check 20 days ago (his latest) plus an older pending one —
+           only the pending state can suppress his nudge. Uma: a
+           replied check 20 days ago whose reply was never seen —
+           only the unread state can suppress hers. Nina: no form
+           checks at all; her profile itself is aged 20 days. */
+        const oldIso = new Date(Date.now() - 20 * 86400000).toISOString();
+        const olderIso = new Date(Date.now() - 25 * 86400000).toISOString();
+        fc30Child.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        const fc30DbPath = path.join(FC30_DIR, 'db.json');
+        const fc30Db = JSON.parse(fs.readFileSync(fc30DbPath, 'utf8'));
+        for (const pid of [oldM.prof.id, accessM.prof.id, bothM.prof.id]) {
+          for (const fc of fc30Db.formChecks) {
+            if (fc.profileId !== pid) continue;
+            fc.createdAt = oldIso; fc.updatedAt = oldIso;
+            fc.status = 'replied';
+            fc.reply = { text: 'Good shape overall — keep the hips tall.', at: oldIso };
+            fc.replySeenAt = oldIso;
+          }
+        }
+        fc30Db.formChecks.push({
+          id: 'fc30-pend-replied', profileId: pendM.prof.id, videoUrl: FC30_URL,
+          note: '', context: 'v30 pending replied', status: 'replied',
+          reply: { text: 'Nice work — stay tall through the drive.', at: oldIso },
+          replySeenAt: oldIso, createdAt: oldIso, updatedAt: oldIso,
+        });
+        fc30Db.formChecks.push({
+          id: 'fc30-pend-pending', profileId: pendM.prof.id, videoUrl: FC30_URL,
+          note: '', context: 'v30 pending waiting', status: 'pending', reply: null,
+          replySeenAt: null, createdAt: olderIso, updatedAt: olderIso,
+        });
+        fc30Db.formChecks.push({
+          id: 'fc30-unread-replied', profileId: unreadM.prof.id, videoUrl: FC30_URL,
+          note: '', context: 'v30 unread', status: 'replied',
+          reply: { text: 'Check your shin angle on step two.', at: oldIso },
+          replySeenAt: null, createdAt: oldIso, updatedAt: oldIso,
+        });
+        const neverProf = fc30Db.profiles.find(pr => pr.id === neverM.prof.id);
+        if (neverProf) neverProf.createdAt = oldIso;
+        fs.writeFileSync(fc30DbPath, JSON.stringify(fc30Db, null, 1));
+        fc30Child = startFc30();
+        check('v30: server restarts with the aged history', await waitFc30(), fc30Log);
+
+        const oldLastDate = fc30Fmt.format(new Date(oldIso));
+        const expectedDays = fc30DaysBetween(oldLastDate, fc30Today);
+        check('v30 fixtures: the aged history really is 14+ days old', expectedDays >= 14, expectedDays);
+
+        /* Alex's history was built at training tier; the coach now
+           sets Lab Access, so the week payload must never carry the
+           form check nudge for him. */
+        fr = await fc30Api(fc30Coach, 'PUT', '/api/access/' + accessM.id, { tier: 'access' });
+        check('v30 fixtures: coach sets the history member to Lab Access',
+          fr.status === 200 && fr.json.membership.tier === 'access', fr.json);
+
+        /* Bree also earns the streak (and quiet) nudges after the
+           restart: check-ins the last two days, a log 5 days back,
+           and a scheduled day inside the gap. */
+        fr = await fc30Api(fc30Coach, 'POST', '/api/assignments/override', { groupId: fc30Grp.id, date: fc30AddD(fc30Today, -2), sessionId: 'SE-02' });
+        check('v30 fixtures: override sets a scheduled day inside the gap', fr.status === 200, fr.status);
+        await fc30Api(bothM.jar, 'POST', '/api/checkin', { date: fc30AddD(fc30Today, -2), sleep: 8, soreness: 2, energy: 4 });
+        await fc30Api(bothM.jar, 'POST', '/api/checkin', { date: fc30AddD(fc30Today, -1), sleep: 8, soreness: 2, energy: 4 });
+        await fc30Api(bothM.jar, 'POST', '/api/my/logs', { date: fc30AddD(fc30Today, -5), title: 'Bree last session' });
+
+        /* (a) Old latest form check, training tier: formcheck fires. */
+        fr = await fc30Api(oldM.jar, 'GET', '/api/my/week');
+        check('v30: formcheck nudge fires when the latest form check is 14+ days old',
+          fr.status === 200 && !!fr.json.nudge && fr.json.nudge.kind === 'formcheck' &&
+          fr.json.nudge.daysSince === expectedDays && fr.json.nudge.lastDate === oldLastDate,
+          fr.json && fr.json.nudge);
+
+        /* (b) A form check from today: no nudge. */
+        fr = await fc30Api(recentM.jar, 'GET', '/api/my/week');
+        check('v30: no formcheck nudge when the latest form check is recent',
+          fr.status === 200 && fr.json.nudge === null, fr.json && fr.json.nudge);
+
+        /* (c) A pending form check suppresses, even an older one. */
+        fr = await fc30Api(pendM.jar, 'GET', '/api/my/week');
+        check('v30: a pending form check suppresses the formcheck nudge',
+          fr.status === 200 && fr.json.nudge === null, fr.json && fr.json.nudge);
+
+        /* (d) An unread coach reply suppresses. */
+        fr = await fc30Api(unreadM.jar, 'GET', '/api/my/week');
+        check('v30: an unread coach reply suppresses the formcheck nudge',
+          fr.status === 200 && fr.json.nudge === null, fr.json && fr.json.nudge);
+
+        /* (e) Lab Access never gets it, even with old history. */
+        fr = await fc30Api(accessM.jar, 'GET', '/api/my/week');
+        check('v30: a Lab Access member never gets the formcheck nudge',
+          fr.status === 200 && fr.json.linked === true && fr.json.nudge === null,
+          fr.json && fr.json.nudge);
+
+        /* (f) Streak still wins over formcheck when both apply. */
+        fr = await fc30Api(bothM.jar, 'GET', '/api/my/week');
+        check('v30: streak nudge wins over the formcheck nudge when both apply',
+          fr.status === 200 && !!fr.json.nudge && fr.json.nudge.kind === 'streak' && fr.json.nudge.streak === 2,
+          fr.json && fr.json.nudge);
+
+        /* (g) Never submitted, profile 14+ days old: formcheck with
+           lastDate null. A brand-new profile gets nothing. */
+        fr = await fc30Api(neverM.jar, 'GET', '/api/my/week');
+        check('v30: never-submitted member with an old profile gets the formcheck nudge',
+          fr.status === 200 && !!fr.json.nudge && fr.json.nudge.kind === 'formcheck' &&
+          fr.json.nudge.daysSince === expectedDays && fr.json.nudge.lastDate === null,
+          fr.json && fr.json.nudge);
+        fr = await fc30Api(freshM.jar, 'GET', '/api/my/week');
+        check('v30: never-submitted member with a new profile gets no nudge',
+          fr.status === 200 && fr.json.nudge === null, fr.json && fr.json.nudge);
+      } finally {
+        fc30Child.kill('SIGKILL');
+        fs.rmSync(FC30_DIR, { recursive: true, force: true });
       }
     }
 

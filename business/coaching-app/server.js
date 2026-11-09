@@ -102,8 +102,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v29',
-  cache: 'ruffin-performance-v29',
+  version: 'v30',
+  cache: 'ruffin-performance-v30',
 };
 
 /* ------------------------------------------------------------------ */
@@ -5113,7 +5113,12 @@ async function handleApi(req, res, url) {
        that, a training gap of 4+ days with at least one missed
        scheduled day in it. Planned rest is never nagged — a gap
        day only counts as missed when a session was assigned, the
-       day was not an off day, and no completion was recorded. */
+       day was not an off day, and no completion was recorded.
+       Last (v30), a training-tier member who has gone 14+ days
+       since their latest form check — or who has never sent one
+       and joined 14+ days ago — hears about form checks, unless
+       one is already pending or a coach reply is still unread
+       (the Coach feedback ready block covers that case). */
     const streakNow = checkinStreak(prof.id);
     let nudge = null;
     if (streakNow >= 2 && !byDate[today]) {
@@ -5135,6 +5140,28 @@ async function handleApi(req, res, url) {
             if (ga.sessionId && !ga.isOff && !completionFor(prof.id, ds)) { missed = true; break; }
           }
           if (missed) nudge = { kind: 'quiet', daysSince, lastDate: lastTraining };
+        }
+      }
+    }
+    if (!nudge && hasTierAccess(user, 'training')) {
+      const hasPending = checks.some(fc => fc.status === 'pending');
+      const hasUnread = checks.some(fc => fc.replyUnread);
+      if (!hasPending && !hasUnread) {
+        const todayD = parseDateStr(today);
+        if (checks.length) {
+          const lastDate = formCheckDate(checks[0]);
+          const lastD = lastDate ? parseDateStr(lastDate) : null;
+          if (lastD && todayD) {
+            const daysSince = Math.round((todayD - lastD) / 86400000);
+            if (daysSince >= 14) nudge = { kind: 'formcheck', daysSince, lastDate };
+          }
+        } else if (prof.createdAt) {
+          const anchorDate = formCheckDate(prof);
+          const anchorD = anchorDate ? parseDateStr(anchorDate) : null;
+          if (anchorD && todayD) {
+            const daysSince = Math.round((todayD - anchorD) / 86400000);
+            if (daysSince >= 14) nudge = { kind: 'formcheck', daysSince, lastDate: null };
+          }
         }
       }
     }
