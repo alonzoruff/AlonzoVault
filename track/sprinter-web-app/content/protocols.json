@@ -1,0 +1,614 @@
+{
+  "intro": "",
+  "trainer_line": "",
+  "protocols": [
+    {
+      "id": "hip-opening",
+      "title": "Hip Opening",
+      "order": 1,
+      "status": "published",
+      "definitions": "Mobility means being able to move your hip through a useful range without forcing it. Hip flexors bring your knee up. Glutes help control the hip and pelvis. We want better positions for sprinting, not the biggest stretch in the room.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "A sharp pinch, catching, giving way, or pain that keeps coming back is not a stretching problem to guess at. See Lauren or the athletic trainer.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Find your range",
+          "what_to_do": "Before training, do 5 minutes of easy movement. Try 90/90 hip switches, half-kneeling hip-flexor rocks, and controlled leg swings, 1 to 2 sets of 5 to 8 each side. Move slowly and keep your trunk steady. Do not bounce into a painful position.",
+          "advance_when": "Move on when both sides move comfortably and you can keep your pelvis under control.",
+          "videos": [
+            {
+              "label": "90/90 hip switches",
+              "shows": "A clear demo of 90/90 hip switches, done slowly with the trunk steady and no bouncing into a painful position."
+            },
+            {
+              "label": "Half-kneeling hip-flexor rocks",
+              "shows": "A clear demo of half-kneeling hip-flexor rocks, slow and controlled with the trunk steady."
+            },
+            {
+              "label": "Controlled leg swings",
+              "shows": "A clear demo of controlled leg swings, slow and steady, on both sides."
+            }
+          ]
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Own the range",
+          "what_to_do": "Keep the warm-up. Add supported hip airplanes or standing hip circles, 2 sets of 4 to 6 each side. Add a brief split-stance hold after the rocks. No aggressive stretching before max-speed work.",
+          "advance_when": "Move on when you can control the motion without twisting your lower back or pinching the front of the hip.",
+          "videos": [
+            {
+              "label": "Supported hip airplanes or standing hip circles",
+              "shows": "A clear demo of supported hip airplanes, or standing hip circles if that is the pick, controlled and unforced."
+            },
+            {
+              "label": "Split-stance hold",
+              "shows": "A clear demo of the brief split-stance hold that comes after the rocks."
+            }
+          ]
+        },
+        {
+          "week": 3,
+          "label": "Week 3",
+          "title": "Use it in drills",
+          "what_to_do": "Add low-intensity A-march, wall-march holds, and controlled skips after mobility. Keep drills short and crisp. Mobility is prep, not a workout that leaves you sore.",
+          "advance_when": "Move on when positions look smooth and there is no pinching or soreness afterward.",
+          "videos": [
+            {
+              "label": "Low-intensity A-march",
+              "shows": "A clear demo of a low-intensity A-march, short and crisp."
+            },
+            {
+              "label": "Wall-march holds",
+              "shows": "A clear demo of wall-march holds, short and crisp."
+            },
+            {
+              "label": "Controlled skips",
+              "shows": "A clear demo of controlled skips after mobility, short and crisp."
+            }
+          ]
+        },
+        {
+          "week": 4,
+          "label": "Week 4 and after",
+          "title": "Keep it",
+          "what_to_do": "Use 5 to 8 minutes of the best two or three drills before speed days. Recheck which side feels tighter. If the movement is improving, maintain it. Do not chase more range at the cost of control.",
+          "advance_when": "Stay here when you can move well and use the positions at normal training intensity."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "hip-strengthening",
+      "title": "Hip Strengthening",
+      "order": 2,
+      "status": "published",
+      "definitions": "Hip strength means the muscles around your pelvis can produce force and hold good positions. Glutes help with pushing off and controlling your knee. Hip flexors help drive the leg through. We train both sides, not just the muscle that feels weak.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "Hip pain, groin pain, numbness, or a new limp means stop the progression and see the athletic trainer. Strength work should not be used to diagnose the cause.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Learn the positions",
+          "what_to_do": "After clearance for strength work, use glute bridges, side-lying hip abduction, and standing march holds, 2 sets of 8 to 10 or 15 to 20 seconds. Easy effort, clean reps.",
+          "advance_when": "Move on when you can finish without pain or the pelvis rolling around."
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Add single-leg control",
+          "what_to_do": "Use single-leg bridge holds, step-ups to a low box, and banded side steps, 2 to 3 sets of 6 to 10. Keep knee tracking over foot.",
+          "advance_when": "Move on when both legs look controlled and you do not compensate through the back."
+        },
+        {
+          "week": 3,
+          "label": "Week 3",
+          "title": "Build strength",
+          "what_to_do": "Progress to split squats, single-leg RDLs with light load, and resisted marches, 2 to 3 sets of 6 to 8. Add load only when the movement stays clean.",
+          "advance_when": "Move on when you can control lowering and push off without pain or next-day symptoms."
+        },
+        {
+          "week": 4,
+          "label": "Week 4 and after",
+          "title": "Carry it into speed",
+          "what_to_do": "Keep two strength sessions a week. Add low-level bounds or acceleration drills only if the athlete is cleared and already tolerating running. Coach manages load.",
+          "advance_when": "Advance training intensity only when strength, movement, and running tolerance are all solid."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "hip-pain",
+      "title": "Hip Pain",
+      "order": 3,
+      "status": "published",
+      "definitions": "Hip pain is a symptom, not a diagnosis. It might be coming from a muscle, tendon, joint, bone, or somewhere else. Groin pain is pain toward the inside of the hip. A pinch in the front of the hip and pain on the outside do not automatically mean the same thing.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "Severe pain, inability to bear weight, fever, a fall or collision, night pain, persistent groin pain, or pain with hopping needs prompt evaluation. In a growing athlete, hip pain can signal a serious bone or growth-plate issue. Do not run through it.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Get it checked and settle it",
+          "what_to_do": "Tell Lauren or the athletic trainer when it started, exactly where it hurts, and what brings it on. No sprinting, jumping, or stretching into pain until assessed. Follow the trainer-approved activity plan, which may be rest from impact and gentle comfortable motion.",
+          "advance_when": "Move on only with trainer approval, no worsening pain, and comfortable daily walking."
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Restore comfortable movement",
+          "what_to_do": "If cleared, use gentle hip mobility and basic bridges or supported marches. Start with low volume. Check how it feels during activity and the next morning.",
+          "advance_when": "Move on when walking, stairs, and the basic movements are comfortable with no limp."
+        },
+        {
+          "week": 3,
+          "label": "Week 3",
+          "title": "Build strength and easy running",
+          "what_to_do": "If cleared, add step-ups, split-stance strength, and short walk-jog intervals. No hard accelerations or bounds yet.",
+          "advance_when": "Move on when easy running and strength work cause no pain during or after, and the trainer agrees."
+        },
+        {
+          "week": 4,
+          "label": "Week 4 and after",
+          "title": "Return in stages",
+          "what_to_do": "With clearance, progress from easy runs to controlled strides, then faster accelerations, then full training. Do not jump straight from jogging to max speed.",
+          "advance_when": "Full return needs normal movement, strength, and sport-specific work without symptoms, plus trainer clearance."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "knee-pain",
+      "title": "Knee Pain",
+      "order": 4,
+      "status": "published",
+      "definitions": "Knee pain tells us something is irritated, but it does not tell us what. The kneecap is the patella. The patellar tendon runs from the kneecap to the shin. Pain may come from a tendon, joint, ligament, bone, or other tissue. We do not label it from one symptom.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "A pop with swelling, inability to bear weight, locking, major instability, a hot red joint, fever, or severe pain needs prompt medical review. Do not use this plan to work around a possible ligament or bone injury.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Figure out the problem",
+          "what_to_do": "Report pain, swelling, locking, giving way, and how it started to Lauren or the athletic trainer. Pause painful running and jumping. Follow the assessment and approved activity plan.",
+          "advance_when": "Move on only when the trainer clears activity and normal walking is comfortable."
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Build basic control",
+          "what_to_do": "If cleared, try comfortable-range sit-to-stands, step-ups, and calf raises, 2 sets of 6 to 10. Keep the knee tracking with the foot.",
+          "advance_when": "Move on when there is no swelling, limp, giving way, or worse pain afterward."
+        },
+        {
+          "week": 3,
+          "label": "Week 3",
+          "title": "Strength and impact prep",
+          "what_to_do": "If cleared, progress split squats and controlled step-downs. Add easy walk-jog work only if impact is approved.",
+          "advance_when": "Move on when strength and easy impact are symptom-free and the trainer approves."
+        },
+        {
+          "week": 4,
+          "label": "Week 4 and after",
+          "title": "Return to training",
+          "what_to_do": "Build running first, then controlled changes of direction, then jumps and high-speed work as cleared. Increase one demand at a time.",
+          "advance_when": "Return to full training only after strength, range, control, and sport movements are restored and clearance is given."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "knee-tendinitis",
+      "title": "Knee Tendinitis",
+      "order": 5,
+      "status": "published",
+      "definitions": "Athletes say knee tendinitis when the tendon near the kneecap hurts. Often the issue is patellar tendinopathy, which means the tendon is not handling its current jumping or running load well. Tendinitis suggests inflammation, but long-running tendon pain is not always just inflammation. A sore knee is not automatically patellar tendinopathy.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "Pain after a fall, major swelling, inability to straighten the knee, or a sudden pop is not a routine tendon flare. Get checked. For younger athletes, growth-related knee pain may be something different.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Confirm and calm the load",
+          "what_to_do": "Have the athletic trainer confirm what is going on. Reduce the jumps, sprints, and deep knee-loading movements that flare it. If approved, start comfortable isometric holds such as a supported wall sit, 3 to 5 holds of 20 to 30 seconds.",
+          "advance_when": "Move on when everyday activity is manageable and the tendon is not more painful or stiff the next morning."
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Start controlled strength",
+          "what_to_do": "With trainer approval, add slow squats to a tolerable depth, step-ups, and calf raises, 2 to 3 sets of 6 to 10. Avoid chasing pain or adding every drill at once.",
+          "advance_when": "Move on when loading is tolerated and next-day symptoms stay stable or improve."
+        },
+        {
+          "week": 3,
+          "label": "Week 3",
+          "title": "Build capacity",
+          "what_to_do": "Progress resistance slowly on squats, split squats, or leg press as available. Keep jump volume low unless the trainer approves a small reintroduction.",
+          "advance_when": "Move on when strength sessions are tolerated and the trainer approves low-level impact."
+        },
+        {
+          "week": 4,
+          "label": "Week 4 and after",
+          "title": "Earn jumping back",
+          "what_to_do": "Reintroduce low-volume landing drills, then controlled jumps, then faster sprint and jump work. Keep a record of volume and next-morning stiffness. This can take longer than four weeks.",
+          "advance_when": "Full return requires repeated tolerance of sport load without a flare, restored strength, and trainer clearance."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "hamstring-pull-grade-1",
+      "title": "Hamstring Pull, Grade 1",
+      "order": 6,
+      "status": "published",
+      "definitions": "A hamstring strain is damage to muscle fibers at the back of the thigh. Grade 1 usually means a mild strain with limited fiber injury and relatively little loss of strength. The grade must come from a qualified assessment, not a guess based on how far someone can jog.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "A pop, bruising, major weakness, trouble walking, or symptoms that get worse needs reassessment. Do not call it Grade 1 without an athletic trainer or medical assessment.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Protect it",
+          "what_to_do": "Report it to Lauren or the athletic trainer right away. Stop sprinting. Follow their early care plan. If cleared, use comfortable walking and gentle pain-free motion, not aggressive stretching or massage.",
+          "advance_when": "Move on when normal walking is comfortable, symptoms are improving, and the trainer approves loading."
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Rebuild basic strength",
+          "what_to_do": "If cleared, add bridge variations and light hamstring isometrics, then easy double-leg hinge work. Keep everything controlled. No top-speed running.",
+          "advance_when": "Move on when strength work and walking are comfortable with no reaction later or next morning."
+        },
+        {
+          "week": 3,
+          "label": "Week 3",
+          "title": "Reintroduce running",
+          "what_to_do": "With trainer approval, start easy jog intervals and build toward controlled strides. Add gradual eccentric hamstring strength only as prescribed.",
+          "advance_when": "Move on when the athlete handles running and strengthening without pain or loss of confidence."
+        },
+        {
+          "week": 4,
+          "label": "Week 4 and after",
+          "title": "Earn speed back",
+          "what_to_do": "Progress accelerations and faster running in steps, with rest between reps. The athletic trainer checks strength and sport readiness. A mild strain may recover sooner or later than this outline.",
+          "advance_when": "Full return requires pain-free near-max running, restored strength and movement, and trainer clearance."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "hamstring-pull-grade-2",
+      "title": "Hamstring Pull, Grade 2",
+      "order": 7,
+      "status": "published",
+      "definitions": "Grade 2 is a partial hamstring tear. There is more fiber damage and usually more pain, weakness, and lost function than Grade 1. It is not a one-week problem. A trainer or medical professional has to determine the grade and whether imaging or referral is needed.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "Visible bruising, a pop, a gap in the muscle, major weakness, or inability to walk normally warrants prompt assessment. Do not let the week number override a Grade 2 diagnosis.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Assessment and protection",
+          "what_to_do": "No sprinting, jumping, or testing it. See Lauren or the athletic trainer. Follow their plan for walking, protection, and pain-free movement. Avoid stretching hard into the injury.",
+          "advance_when": "Move on only when the trainer confirms healing is progressing and daily walking is improving."
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Start guided loading",
+          "what_to_do": "If cleared, add low-intensity hamstring isometrics, bridges, and gentle hip work. The trainer sets range and resistance.",
+          "advance_when": "Move on when exercises are tolerated and there is no increase in pain or bruising."
+        },
+        {
+          "week": 3,
+          "label": "Weeks 3 to 4",
+          "title": "Build strength",
+          "what_to_do": "Gradually add hinging and hamstring strengthening, including eccentric work when approved. Begin easy running only after the trainer clears it.",
+          "advance_when": "Move on when strength and easy running are tolerated without pain or next-day setbacks."
+        },
+        {
+          "week": 4,
+          "label": "Weeks 5 to 6 and beyond",
+          "title": "Build speed",
+          "what_to_do": "Increase running pace in planned stages, then acceleration, then high-speed exposure. Keep strength work in the program. Timelines vary a lot.",
+          "advance_when": "Return only when strength, sprint mechanics, and high-speed running are restored and the trainer clears the athlete."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "hamstring-pull-grade-3",
+      "title": "Hamstring Pull, Grade 3",
+      "order": 8,
+      "status": "published",
+      "definitions": "Grade 3 means a complete or near-complete hamstring tear. Sometimes the tendon pulls away from the bone, called an avulsion. This can need specialist care and sometimes surgery. It is not something an athlete should rehab alone from an app.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "Severe pain, a loud pop, major bruising, a visible deformity, or inability to bear weight needs urgent medical assessment. Never use a generic week-by-week plan as clearance for Grade 3.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Stop and refer",
+          "what_to_do": "Stop activity immediately. Have the athletic trainer arrange urgent medical assessment. Do not stretch, sprint, massage, or test strength. Follow the medical team on protection, imaging, and whether surgery is needed.",
+          "advance_when": "No progression without a documented specialist plan."
+        },
+        {
+          "week": 2,
+          "label": "Weeks 2 to 6",
+          "title": "Follow the medical plan",
+          "what_to_do": "This is not a standard team exercise block. The treating clinician decides weight bearing, range of motion, and early rehab. Coach only adjusts team participation around those restrictions.",
+          "advance_when": "Advance only when the treating team documents the next phase."
+        },
+        {
+          "week": 3,
+          "label": "Weeks 7 to 12 and beyond",
+          "title": "Supervised rebuild",
+          "what_to_do": "If the specialist and athletic trainer allow it, rehab gradually restores movement, strength, and function. The exact steps depend on the tear and whether surgery occurred.",
+          "advance_when": "Advance only with clinician approval and objective progress."
+        },
+        {
+          "week": 4,
+          "label": "Later phase",
+          "title": "Sport return",
+          "what_to_do": "Running, sprinting, and competition are added only through the clinician-led return-to-sport plan. Recovery can take months, not weeks.",
+          "advance_when": "Full return requires explicit medical clearance, restored function, and successful high-speed sport testing."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "ankle",
+      "title": "Ankle",
+      "order": 9,
+      "status": "published",
+      "definitions": "An ankle sprain means the ligaments supporting the ankle were stretched or torn. The most common one involves rolling the foot inward. But ankle pain could also mean a fracture, tendon problem, or high ankle sprain. We do not assume every rolled ankle is minor.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "Inability to take four steps, bony tenderness, severe swelling, deformity, numbness, or pain higher above the ankle needs prompt evaluation. A fracture or high ankle sprain can look like a routine roll.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Get it checked",
+          "what_to_do": "Tell Lauren or the athletic trainer how it happened. Stop running and jumping. Follow their plan for support, swelling, walking, and gentle movement. Do not force weight bearing.",
+          "advance_when": "Move on when cleared, walking is improving, and swelling is settling."
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Restore movement and balance",
+          "what_to_do": "If cleared, do ankle circles, calf raises, and supported single-leg balance, 2 sets of 8 to 12 or 20 seconds. Work within a comfortable range.",
+          "advance_when": "Move on when walking and basic balance are controlled without increased swelling."
+        },
+        {
+          "week": 3,
+          "label": "Week 3",
+          "title": "Build strength and landing control",
+          "what_to_do": "Progress calf raises, band resistance, step-downs, and low-level landing mechanics if approved. Begin walk-jog work only when cleared.",
+          "advance_when": "Move on when strength, balance, and easy impact are tolerated."
+        },
+        {
+          "week": 4,
+          "label": "Week 4 and after",
+          "title": "Return to sport",
+          "what_to_do": "Progress straight-line running, acceleration, hops, and direction changes in stages. Use bracing or taping if the trainer recommends it.",
+          "advance_when": "Full return requires stable ankle function, no meaningful swelling or pain, sport testing, and trainer clearance."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "lower-back",
+      "title": "Lower Back",
+      "order": 10,
+      "status": "published",
+      "definitions": "Lower back pain is a symptom, not one diagnosis. Muscles, joints, discs, and bones can all be involved. In teen athletes, repeated back extension and rotation can sometimes stress a small part of the spine. That is why we do not just stretch through back pain.",
+      "guardrails": [
+        {
+          "label": "Before you start",
+          "text": "This is a training guide, not a diagnosis or clearance. Tell Lauren or the athletic trainer what is going on before using a pain or injury plan. Weeks are checkpoints, not deadlines. If the next step brings pain, swelling, limping, weakness, or worse symptoms later that day or the next morning, stop and check in. Do not push through it just to stay on schedule.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Coach check before moving on",
+          "text": "The athletic trainer decides what is safe for an injured athlete. Coach handles the training plan after that decision. No one returns to full-speed sprinting, jumping, or competition just because a calendar week has passed.",
+          "place": "before_weeks"
+        },
+        {
+          "label": "Trainer guardrails",
+          "text": "New leg weakness, numbness around the groin, loss of bowel or bladder control, fever, severe trauma, or rapidly worsening symptoms needs urgent medical attention. Persistent pain in a young athlete, especially with back extension, needs evaluation before continued training.",
+          "place": "end"
+        }
+      ],
+      "weeks": [
+        {
+          "week": 1,
+          "label": "Week 1",
+          "title": "Tell the trainer and find the cause",
+          "what_to_do": "Report when it started, where it hurts, and whether pain travels down the leg. Stop painful lifting, sprinting, and extension drills until assessed. Follow the trainer-approved plan for comfortable movement.",
+          "advance_when": "Move on only when serious causes are ruled out, daily movement is improving, and the trainer clears exercise."
+        },
+        {
+          "week": 2,
+          "label": "Week 2",
+          "title": "Rebuild control",
+          "what_to_do": "If cleared, start gentle walking, breathing and bracing practice, bird dogs, and side planks with short holds. No painful end-range stretching.",
+          "advance_when": "Move on when you can keep the trunk steady and the movements do not increase symptoms."
+        },
+        {
+          "week": 3,
+          "label": "Week 3",
+          "title": "Add strength",
+          "what_to_do": "If cleared, progress bodyweight hinges, carries, split squats, and light resistance. Keep a neutral, controlled trunk and build gradually.",
+          "advance_when": "Move on when lifting patterns and daily activity are comfortable, with no next-day flare."
+        },
+        {
+          "week": 4,
+          "label": "Week 4 and after",
+          "title": "Return to speed and lifting",
+          "what_to_do": "Add easy running, then controlled acceleration and heavier lifts in stages as approved. Avoid testing max lifts to prove the back is fine.",
+          "advance_when": "Full return needs normal function, tolerable sport-specific loading, and trainer or clinician clearance."
+        }
+      ],
+      "internal_note": "Coach note: This is an educational draft. AJ needs to approve the exercises, doses, progression tests, and return-to-training decisions before it goes live. Athlete should never treat a week label as permission to advance.",
+      "verified_by": "Alonzo Ruffin",
+      "verified_on": "2026-11-10"
+    }
+  ]
+}

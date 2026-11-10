@@ -53,6 +53,7 @@ const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CONTENT_DIR = path.join(__dirname, 'content');
 const COOKIE_NAME = 'swa_session';
+const protocolsLib = require('./lib/protocols');
 const SESSION_DAYS = 30;
 
 /* ------------------------------------------------------------------ */
@@ -658,6 +659,29 @@ const CONTENT = loadContent();
 const SESSION_BY_ID = new Map(CONTENT.sessions.map(s => [s.id, s]));
 const SESSION_IDS = new Set(SESSION_BY_ID.keys());
 const XT_IDS = new Set(CONTENT.sessions.filter(s => s.id.startsWith('XT-')).map(s => s.id));
+
+/* Protocols (Learn > Protocols): read-only injury and rehab protocol
+   pages. Ships behind PROTOCOLS_ENABLED so it can go out dark and be
+   switched on after QC. Entries live in content/protocols.json; a bad
+   entry is logged and skipped, never a crash. Only published entries
+   are served. Draft and placeholder entries are served only while
+   PROTOCOLS_SHOW_UNPUBLISHED is also on (a staging look), so a live
+   launch never shows an unreviewed page. */
+const PROTOCOLS_ENABLED = /^(1|true|on|yes)$/i.test(process.env.PROTOCOLS_ENABLED || '');
+const PROTOCOLS_SHOW_UNPUBLISHED = /^(1|true|on|yes)$/i.test(process.env.PROTOCOLS_SHOW_UNPUBLISHED || '');
+const PROTOCOLS = (() => {
+  const empty = { intro: '', trainer_line: '', protocols: [] };
+  if (!PROTOCOLS_ENABLED) return empty;
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'protocols.json'), 'utf8'));
+    const { skipped } = protocolsLib.checkProtocols(raw);
+    for (const sk of skipped) console.warn('Protocols: skipped "' + sk.id + '": ' + sk.problems.join('; '));
+    return protocolsLib.publicProtocols(raw, { unpublished: PROTOCOLS_SHOW_UNPUBLISHED });
+  } catch (err) {
+    console.warn('Protocols: could not load content/protocols.json (' + err.message + '). Protocols will be empty.');
+    return empty;
+  }
+})();
 
 /* ------------------------------------------------------------------ */
 /* Preloaded test battery + weekly metrics                             */
@@ -3118,6 +3142,19 @@ async function handleApi(req, res, url) {
         Object.assign(publicRecord(r), { rank: i + 1 })),
     }));
     return sendJson(res, 200, { board });
+  }
+
+  /* Protocols: public reads like Studies. The whole feature answers
+     404 while PROTOCOLS_ENABLED is off. */
+  if (p === '/api/protocols' && req.method === 'GET') {
+    if (!PROTOCOLS_ENABLED) return sendJson(res, 404, { error: 'not found' });
+    return sendJson(res, 200, PROTOCOLS);
+  }
+  if (p.startsWith('/api/protocols/') && req.method === 'GET') {
+    if (!PROTOCOLS_ENABLED) return sendJson(res, 404, { error: 'not found' });
+    const found = PROTOCOLS.protocols.find(pr => pr.id === p.slice('/api/protocols/'.length));
+    if (!found) return sendJson(res, 404, { error: 'not found' });
+    return sendJson(res, 200, { protocol: found });
   }
 
   if (p === '/api/register' && req.method === 'POST') {

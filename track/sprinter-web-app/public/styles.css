@@ -2078,3 +2078,123 @@ body.tv-mode {
   flex: none; font-size: 11px; font-weight: 800; letter-spacing: .05em;
   text-transform: uppercase; color: var(--red);
 }
+
+/* ================================================================
+   Protocols (Learn > Protocols): read-only injury and rehab pages.
+   Tokens only, so every theme carries it. Nothing here relies on
+   color alone: guardrails and video markers carry an icon and words.
+   ================================================================ */
+.pr-intro { margin: 0 0 8px; max-width: 820px; line-height: 1.5; }
+.pr-trainer-line {
+  max-width: 820px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line);
+  border-left: 4px solid var(--gray); border-radius: var(--radius-sm); background: var(--surface-2);
+  font-weight: 600; line-height: 1.4;
+}
+.pr-list { display: grid; gap: 12px; max-width: 820px; }
+.pr-list-group {
+  margin: 10px 0 -2px; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--red-dark);
+}
+.pr-card {
+  display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px var(--card-pad); box-shadow: var(--shadow-card); cursor: pointer; font: inherit; min-height: 44px;
+}
+.pr-card:hover { border-color: var(--gray); }
+.pr-card:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.pr-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pr-card-title { font-size: 17px; font-weight: 700; line-height: 1.3; }
+.pr-card-sum {
+  font-size: 14px; line-height: 1.4; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.pr-card-meta { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.pr-tag {
+  display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  background: var(--badge-plain-bg); color: var(--badge-plain-ink); white-space: nowrap;
+}
+.pr-back { width: auto; margin: 0 0 12px; }
+.pr-detail { max-width: 820px; }
+.pr-group { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--red-dark); }
+.pr-title { margin: 2px 0 10px; font-size: 24px; line-height: 1.25; }
+.pr-placeholder-note {
+  margin: 0 0 14px; padding: 8px 12px; border: 2px dashed var(--gray); border-radius: var(--radius-sm);
+  font-weight: 700; line-height: 1.4;
+}
+.pr-summary p, .pr-goal p, .pr-step-text p, .pr-gate p, .pr-guard p { margin: 0 0 8px; line-height: 1.5; }
+.pr-summary { margin: 0 0 14px; }
+.pr-sec { margin: 0 0 20px; }
+.pr-sec h3 { margin: 0 0 8px; font-size: 18px; }
+.pr-defs { margin: 0; display: grid; gap: 10px; }
+.pr-def { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
+.pr-def dt { font-weight: 700; margin: 0 0 2px; }
+.pr-def dd { margin: 0; line-height: 1.5; }
+.pr-weeknav { margin: 0 0 12px; }
+.pr-weeks { display: grid; gap: var(--card-gap); }
+.pr-week {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: var(--card-pad); box-shadow: var(--shadow-card); scroll-margin-top: 72px;
+}
+.pr-week:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.pr-week-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 8px; font-size: 18px; line-height: 1.3; }
+.pr-week-num {
+  font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: #fff; background: var(--red); border-radius: 999px; padding: 3px 10px;
+}
+.pr-week-name { font-weight: 700; }
+.pr-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.pr-step { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+.pr-step-n {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line);
+  font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.pr-step-body { min-width: 0; }
+.pr-dose {
+  display: inline-block; margin: 0 0 8px; padding: 3px 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--line); font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pr-guard {
+  margin: 12px 0; padding: 10px 12px; border-left: 4px solid var(--high);
+  border-radius: var(--radius-sm); background: var(--high-bg); color: #1c1c1e; /* fixed ink on the fixed light tint, as the flagged cards do, so dark themes stay legible */
+}
+.pr-guard p:last-child { margin-bottom: 0; }
+.pr-guard-label {
+  display: flex !important; align-items: center; gap: 6px; margin: 0 0 4px !important;
+  font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--high);
+}
+.pr-gate {
+  margin: 14px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-top: 3px solid var(--red);
+  border-radius: var(--radius-sm); background: var(--accent-soft-bg);
+}
+.pr-gate p:last-child { margin-bottom: 0; }
+.pr-gate-label {
+  display: flex !important; align-items: center; gap: 6px; margin: 0 0 4px !important;
+  font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--red-dark);
+}
+.pr-video { margin: 8px 0 0; max-width: 560px; }
+.pr-video-frame { border-radius: var(--radius-sm); overflow: hidden; background: #000; }
+.pr-video-cap { margin: 6px 0 0; }
+.pr-video-needed, .pr-video-pending {
+  padding: 10px 12px; border: 2px dashed var(--gray); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.pr-video-badge {
+  display: inline-flex !important; align-items: center; gap: 6px; margin: 0 0 4px !important; padding: 3px 10px;
+  border-radius: 999px; background: var(--accent-soft-bg); color: var(--red-dark); border: 1px solid var(--danger-line);
+  font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+}
+.pr-video-shows { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.pr-video-for { text-transform: none; letter-spacing: 0; font-weight: 700; color: var(--text, inherit); }
+.pr-video-name { margin: 0 0 4px; font-weight: 700; }
+.pr-defs-text p, .pr-todo p { margin: 0 0 8px; line-height: 1.5; }
+.pr-todo { margin: 0 0 12px; }
+.pr-todo-label { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px !important; }
+.pr-week .pr-video { margin: 10px 0 0; }
+.pr-meta { font-size: 13px; margin: 8px 0 0; }
+@media (max-width: 520px) {
+  .pr-title { font-size: 21px; }
+  .pr-back { width: 100%; }
+  .pr-step { grid-template-columns: 24px 1fr; gap: 8px; }
+  .pr-step-n { width: 24px; height: 24px; font-size: 12px; }
+}

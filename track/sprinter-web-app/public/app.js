@@ -151,7 +151,7 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v59';
+const APP_VERSION = 'v60';
 const APP_BUILD_LABEL = 'Cadets Sprint · App v59';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
@@ -473,7 +473,266 @@ function closeNavMenus() {
   const toggle = $('#nav-toggle');
   if (toggle) toggle.setAttribute('aria-expanded', 'false');
 }
+/* PROTOCOLS-BEGIN
+   Protocols (Learn > Protocols): read-only injury and rehab protocol
+   pages. It only reads /api/protocols. It writes nothing: no logging,
+   no forms, no stored state. The server answers 404 while
+   PROTOCOLS_ENABLED is off, and then this whole section stays
+   invisible (no nav item, no menu row, no view). Every word on a page
+   comes from content/protocols.json; the labels below are only the
+   frame around it.
+
+   Each protocol page has three blocks: Definitions, Week by week (one
+   card per week, with what has to be true before the next week as its
+   own line), and Trainer guardrail callouts wherever the content puts
+   them (before the weeks, inside a week, on one step, or at the end).
+   A week or a step can carry video slots. A slot with no approved clip
+   yet shows a "Video needed" marker; a clip that is not approved shows
+   a "waiting for approval" marker and never loads. A page that is not
+   published yet (a draft or placeholder, visible only on staging) says
+   so at the top. */
+/* Set to false to hide the "Video needed" markers from athletes while
+   keeping them for coaches (a decision for AJ once the clips are in). */
+const PROTOCOL_SHOW_NEEDED_TO_ATHLETES = true;
+const PR_SVG = (path) => `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+const PR_ICON_WARN = PR_SVG('<path d="M8 2.2l6 10.6H2z"/><path d="M8 6.6v3M8 11.6v.1"/>');
+const PR_ICON_GATE = PR_SVG('<circle cx="8" cy="8" r="6"/><path d="M5.2 8.2l2 2 3.6-4"/>');
+const PR_ICON_VIDEO = PR_SVG('<rect x="1.8" y="4" width="8.4" height="8" rx="1.6"/><path d="M10.2 7.2l4-2v5.6l-4-2z"/>');
+const protocolsState = {
+  loaded: false, intro: '', trainerLine: '', protocols: [], openId: null, scrollY: 0,
+};
+
+function prDateText(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!m) return '';
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December'];
+  const name = months[parseInt(m[2], 10) - 1];
+  return name ? `${name} ${parseInt(m[3], 10)}, ${m[1]}` : '';
+}
+/* Plain text from the content file becomes paragraphs: a blank line
+   starts a new paragraph, a single line break stays a line break. */
+function prParas(text) {
+  return String(text == null ? '' : text).split(/\n{2,}/).map(t => t.trim()).filter(Boolean)
+    .map(t => `<p>${esc(t).replace(/\n/g, '<br>')}</p>`).join('');
+}
+/* A guardrail is plain text or { text, label }. The label is Char's own
+   heading for it ("Before you start"); without one it reads "Trainer guardrail". */
+function prGuardrailHtml(g) {
+  const text = g && typeof g === 'object' ? g.text : g;
+  const label = g && typeof g === 'object' && g.label ? g.label : 'Trainer guardrail';
+  return `<aside class="pr-guard" role="note" aria-label="${esc(label)}">
+    <p class="pr-guard-label">${PR_ICON_WARN}<span>${esc(label)}</span></p>${prParas(text)}</aside>`;
+}
+function prFirstSentence(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  const m = /^(.+?[.!?])(\s|$)/.exec(t);
+  return m ? m[1] : t;
+}
+function prVideoHtml(v) {
+  if (!v || typeof v !== 'object') return '';
+  const shows = esc(v.shows || '');
+  if (v.state === 'ready' && typeof v.url === 'string' && /^https:\/\//.test(v.url)) {
+    const cap = v.caption ? `<p class="pr-video-cap muted">${esc(v.caption)}</p>` : '';
+    const player = v.yt && /^[A-Za-z0-9_-]{11}$/.test(v.yt)
+      ? `<div class="vid-thumb" data-play="${esc(v.yt)}" role="button" tabindex="0" aria-label="Play video: ${shows}">
+           <img loading="lazy" src="https://i.ytimg.com/vi/${esc(v.yt)}/hqdefault.jpg" alt="">
+           <span class="vid-play" aria-hidden="true">▶</span>
+         </div>`
+      : `<video class="media-video" src="${esc(v.url)}" controls playsinline preload="metadata" aria-label="${shows}"></video>`;
+    const lab = v.label ? `<p class="pr-video-name">${esc(v.label)}</p>` : '';
+    return `<div class="pr-video pr-video-ready">${lab}<div class="pr-video-frame">${player}</div>${cap}</div>`;
+  }
+  if (!isCoachUser() && !PROTOCOL_SHOW_NEEDED_TO_ATHLETES) return '';
+  const pending = v.state === 'pending';
+  return `<div class="pr-video pr-video-${pending ? 'pending' : 'needed'}" role="note">
+    <p class="pr-video-badge">${PR_ICON_VIDEO}<span>${pending ? 'Video waiting for approval' : 'Video needed'}</span>${v.label ? `<span class="pr-video-for">${esc(v.label)}</span>` : ''}</p>
+    <p class="pr-video-shows">${shows}</p>
+  </div>`;
+}
+function prStepHtml(s, n) {
+  return `<li class="pr-step">
+    <span class="pr-step-n" aria-hidden="true">${n}</span>
+    <div class="pr-step-body">
+      <div class="pr-step-text">${prParas(s.text)}</div>
+      ${s.dose ? `<p class="pr-dose">${esc(s.dose)}</p>` : ''}
+      ${s.guardrail ? prGuardrailHtml(s.guardrail) : ''}
+      ${prVideoHtml(s.video)}
+    </div>
+  </li>`;
+}
+function prWeekHtml(w, next) {
+  const name = w.label || ('Week ' + w.week);
+  const steps = (w.steps || []);
+  const gate = next ? 'Before moving on' : 'Before you finish';
+  return `<section class="pr-week" id="pr-week-${w.week}" aria-labelledby="pr-week-h-${w.week}" tabindex="-1">
+    <h4 class="pr-week-title" id="pr-week-h-${w.week}"><span class="pr-week-num">${esc(name)}</span>${w.title ? `<span class="pr-week-name">${esc(w.title)}</span>` : ''}</h4>
+    ${w.goal ? `<div class="pr-goal">${prParas(w.goal)}</div>` : ''}
+    ${w.what_to_do ? `<div class="pr-todo"><p class="pr-todo-label">What to do</p>${prParas(w.what_to_do)}</div>` : ''}
+    ${steps.length ? `<ol class="pr-steps">${steps.map((s, i) => prStepHtml(s, i + 1)).join('')}</ol>` : ''}
+    ${(w.videos || []).map(prVideoHtml).join('')}
+    ${(w.guardrails || []).map(prGuardrailHtml).join('')}
+    ${w.advance_when ? `<div class="pr-gate"><p class="pr-gate-label">${PR_ICON_GATE}<span>${gate}</span></p>${prParas(w.advance_when)}</div>` : ''}
+  </section>`;
+}
+function prDefsHtml(d) {
+  if (typeof d === 'string') return d.trim() ? `<div class="pr-defs-text">${prParas(d)}</div>` : '';
+  if (!Array.isArray(d) || !d.length) return '';
+  return `<dl class="pr-defs">${d.map(x => `<div class="pr-def"><dt>${esc(x.term)}</dt><dd>${esc(x.meaning)}</dd></div>`).join('')}</dl>`;
+}
+function protocolDetailHtml(p) {
+  const before = p.guardrails.filter(g => g.place === 'top' || g.place === 'before_weeks');
+  const end = p.guardrails.filter(g => g.place !== 'top' && g.place !== 'before_weeks');
+  const checked = typeof p.verified_on === 'string' ? prDateText(p.verified_on) : '';
+  const updated = typeof p.updated === 'string' ? prDateText(p.updated) : '';
+  const meta = [checked ? `Checked ${checked}.` : '', updated ? `Updated ${updated}.` : '', p.update_note || '']
+    .filter(Boolean).join(' ');
+  const weekChips = p.weeks.length > 1
+    ? `<div class="chip-row pr-weeknav" role="group" aria-label="Jump to a week">${p.weeks.map(w =>
+      `<button type="button" class="chip" data-pr-week="${w.week}">${esc(w.label || 'Week ' + w.week)}</button>`).join('')}</div>`
+    : '';
+  const defs = prDefsHtml(p.definitions);
+  const notice = p.placeholder
+    ? 'Placeholder page. The real content has not been added yet.'
+    : (p.unpublished ? 'Not published yet. Staging view only.' : '');
+  return `
+    <button type="button" class="btn secondary pr-back" data-pr-back>Back to all protocols</button>
+    <article class="pr-detail">
+      ${p.group ? `<p class="pr-group">${esc(p.group)}</p>` : ''}
+      <h2 class="pr-title">${esc(p.title)}</h2>
+      ${notice ? `<p class="pr-placeholder-note" role="status">${esc(notice)}</p>` : ''}
+      ${p.summary ? `<div class="pr-summary">${prParas(p.summary)}</div>` : ''}
+      ${protocolsState.trainerLine ? `<p class="pr-trainer-line">${esc(protocolsState.trainerLine)}</p>` : ''}
+      ${defs ? `<section class="pr-sec" aria-labelledby="pr-h-defs">
+        <h3 id="pr-h-defs">Definitions</h3>
+        ${defs}
+      </section>` : ''}
+      ${before.map(prGuardrailHtml).join('')}
+      <section class="pr-sec" aria-labelledby="pr-h-weeks">
+        <h3 id="pr-h-weeks">Week by week</h3>
+        ${weekChips}
+        <div class="pr-weeks">${p.weeks.map((w, i) => prWeekHtml(w, p.weeks[i + 1])).join('')}</div>
+      </section>
+      ${end.map(prGuardrailHtml).join('')}
+      ${meta ? `<p class="pr-meta muted">${esc(meta)}</p>` : ''}
+    </article>`;
+}
+function protocolsListHtml() {
+  const list = protocolsState.protocols;
+  if (!list.length) return '<p class="muted">No protocols yet.</p>';
+  let lastGroup = null;
+  const cards = list.map(p => {
+    const head = p.group && p.group !== lastGroup ? `<h3 class="pr-list-group">${esc(p.group)}</h3>` : '';
+    if (p.group) lastGroup = p.group;
+    const n = p.weeks.length;
+    const sum = p.summary || (typeof p.definitions === 'string' ? prFirstSentence(p.definitions) : '');
+    return `${head}<button type="button" class="pr-card" data-pr-open="${esc(p.id)}">
+      <span class="pr-card-top"><span class="pr-card-title">${esc(p.title)}</span>${p.placeholder ? '<span class="pr-tag">Placeholder</span>' : (p.unpublished ? '<span class="pr-tag">Not published yet</span>' : '')}</span>
+      ${sum ? `<span class="pr-card-sum">${esc(sum)}</span>` : ''}
+      <span class="pr-card-meta">${n} week${n === 1 ? '' : 's'}</span>
+    </button>`;
+  }).join('');
+  return `
+    ${protocolsState.intro ? `<p class="pr-intro muted">${esc(protocolsState.intro)}</p>` : ''}
+    ${protocolsState.trainerLine ? `<p class="pr-trainer-line">${esc(protocolsState.trainerLine)}</p>` : ''}
+    <div class="pr-list">${cards}</div>`;
+}
+function renderProtocols() {
+  const root = $('#protocols-root');
+  if (!root) return;
+  const open = protocolsState.openId ? protocolsState.protocols.find(p => p.id === protocolsState.openId) : null;
+  if (protocolsState.openId && !open) protocolsState.openId = null;
+  root.innerHTML = open ? protocolDetailHtml(open) : protocolsListHtml();
+}
+function protocolsBindOnce() {
+  const root = $('#protocols-root');
+  if (!root || root.dataset.bound) return;
+  root.dataset.bound = '1';
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-pr-open],[data-pr-back],[data-pr-week],[data-play]');
+    if (!t || !root.contains(t)) return;
+    if (t.dataset.play) {
+      playVideoThumb(t);
+    } else if (t.dataset.prOpen) {
+      protocolsState.scrollY = window.scrollY;
+      protocolsState.openId = t.dataset.prOpen;
+      renderProtocols();
+      window.scrollTo(0, 0);
+    } else if (t.hasAttribute('data-pr-back')) {
+      protocolsState.openId = null;
+      renderProtocols();
+      window.scrollTo(0, protocolsState.scrollY || 0);
+    } else if (t.dataset.prWeek) {
+      const wk = $('#pr-week-' + t.dataset.prWeek);
+      if (wk) {
+        wk.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+        wk.focus({ preventScroll: true });
+      }
+    }
+  });
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const thumb = e.target.closest('[data-play]');
+    if (thumb && root.contains(thumb)) { e.preventDefault(); playVideoThumb(thumb); }
+  });
+}
+/* Builds the view and the Learn hub row the first time the server says
+   Protocols is on, so index.html does not need to change. */
+function protocolsEnsureShell() {
+  const learn = $('#view-learn');
+  if (!learn || !learn.parentNode) return false;
+  if (!$('#view-protocols')) {
+    const sec = document.createElement('section');
+    sec.id = 'view-protocols';
+    sec.className = 'view';
+    sec.innerHTML = '<h1>Protocols</h1><div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div><div class="subnav-slot"></div><div id="protocols-root"></div>';
+    const after = $('#view-studies') || $('#view-nutrition') || learn;
+    after.parentNode.insertBefore(sec, after.nextSibling);
+  }
+  const menu = learn.querySelector('.menu-list');
+  if (menu && !$('#menu-protocols')) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'menu-item';
+    row.id = 'menu-protocols';
+    row.dataset.view = 'protocols';
+    row.innerHTML = 'Protocols <span>Week by week rehab and return plans</span>';
+    menu.insertBefore(row, menu.querySelector('[data-view="education"]'));
+  }
+  return true;
+}
+/* Asks the server whether Protocols is on and has pages to show. A 404
+   (switch off) or an empty list leaves the app exactly as it was; a
+   list adds the view, the nav item and the menu row. */
+async function initProtocols() {
+  let data;
+  try { data = await api('/api/protocols'); } catch (_) { return; }
+  const list = data && Array.isArray(data.protocols) ? data.protocols : [];
+  if (!list.length) return;
+  if (!protocolsEnsureShell()) return;
+  protocolsState.intro = typeof data.intro === 'string' ? data.intro : '';
+  protocolsState.trainerLine = typeof data.trainer_line === 'string' ? data.trainer_line : '';
+  protocolsState.protocols = list;
+  protocolsState.loaded = true;
+  VIEW_AREA.protocols = 'learn';
+  const learn = GROUP_SUBNAV.learn;
+  if (!learn.some(([v]) => v === 'protocols')) {
+    let at = learn.findIndex(([v]) => v === 'studies');
+    if (at < 0) at = learn.findIndex(([v]) => v === 'nutrition');
+    learn.splice(at >= 0 ? at + 1 : learn.length, 0, ['protocols', 'Protocols']);
+  }
+  buildMainNav();
+  protocolsBindOnce();
+  const active = document.querySelector('.view.active');
+  if (active) {
+    const name = active.id.replace(/^view-/, '');
+    $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+    renderSubnav(name, VIEW_AREA[name] || 'home');
+  }
+}
+/* PROTOCOLS-END */
 buildMainNav();
+initProtocols();
 $$('.nav-group-btn').forEach(btn => btn.addEventListener('click', (e) => {
   e.stopPropagation();
   const group = btn.closest('.nav-group');
@@ -801,6 +1060,7 @@ function openWarmupCard() {
    its coaching cue), four big tiles into the learning surfaces, and
    a fuel prompt matched to whether today is a hard or easy day.
    Everything is a link into an existing view — no new data, no new
+  if (name === 'protocols') { protocolsState.openId = null; renderProtocols(); }
    endpoints, and nothing here pre-fills or records anything. */
 function dayOfYear(d) {
   const start = new Date(d.getFullYear(), 0, 0);

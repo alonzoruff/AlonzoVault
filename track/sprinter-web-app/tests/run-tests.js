@@ -452,8 +452,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v59',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v60"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v60',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v61"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2377,8 +2377,8 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v59'") &&
-    swJs.text.includes("sprinter-app-v60"));
+    appJs.text.includes("const APP_VERSION = 'v60'") &&
+    swJs.text.includes("sprinter-app-v61"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
@@ -7433,6 +7433,325 @@ async function waitForServer(tries = 60) {
       cpChild.kill('SIGKILL');
       fs.rmSync(CP_DIR, { recursive: true, force: true });
     }
+  }
+
+  /* ================================================================
+     Protocols (Learn > Protocols): read-only injury and rehab pages.
+     Content rules, the validator, what the public API may show (no
+     internal fields, no unapproved video links), the dark switch, the
+     placeholder switch, the video-gap list, and the read-only
+     guarantees of the client code.
+     ================================================================ */
+  {
+    const prLib = require(path.join(APP_DIR, 'lib', 'protocols.js'));
+    const prRaw = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'content', 'protocols.json'), 'utf8'));
+    const prList = prRaw.protocols;
+    const TITLES = ['Hip Opening', 'Hip Strengthening', 'Hip Pain', 'Knee Pain', 'Knee Tendinitis',
+      'Hamstring Pull, Grade 1', 'Hamstring Pull, Grade 2', 'Hamstring Pull, Grade 3', 'Ankle', 'Lower Back'];
+
+    /* The content file as shipped. */
+    check('protocols.json holds the two standing lines and a list',
+      typeof prRaw.intro === 'string' && typeof prRaw.trainer_line === 'string' && Array.isArray(prList));
+    check('the ten protocols are all there, in the agreed order',
+      JSON.stringify(prList.map(p => p.title)) === JSON.stringify(TITLES), prList.map(p => p.title));
+    check('Hamstring Pull Grades 1, 2 and 3 are three separate protocols',
+      ['hamstring-pull-grade-1', 'hamstring-pull-grade-2', 'hamstring-pull-grade-3'].every(id => prList.some(p => p.id === id)));
+    const prReport = prLib.checkProtocols(prRaw);
+    check('every shipped protocol passes validation', prReport.skipped.length === 0 && prReport.valid.length === 10, prReport.skipped);
+    check('shipped content is Char\'s text, published after AJ sign-off (Luna verified and published Nov 10)',
+      prList.every(p => p.status === 'published' && typeof p.definitions === 'string' && p.definitions.trim() && p.weeks.length >= 1));
+    check('every published protocol carries its sign-off (verified_by and verified_on recorded)',
+      prList.every(p => typeof p.verified_by === 'string' && p.verified_by.trim() && /^\d{4}-\d{2}-\d{2}$/.test(p.verified_on || '')));
+    check('every shipped week has a label, a "what to do" text and a way to move on',
+      prList.every(p => p.weeks.every((w, i) => w.label && w.what_to_do && w.advance_when)));
+    check('no real video link ships in the file',
+      !/https?:\/\//.test(JSON.stringify(prList.map(p => p.weeks))));
+    const allVideos = (p) => p.weeks.reduce((n, w) => n + (w.videos || []).length + (w.steps || []).filter(s => s.video).length, 0);
+    check('Hip Opening carries video slots', allVideos(prList.find(p => p.id === 'hip-opening')) >= 1);
+    check('no other protocol carries a slot until a good video is known to exist',
+      prList.filter(p => p.id !== 'hip-opening').every(p => allVideos(p) === 0));
+    check('every video slot says what the clip should show and has no link',
+      prList.every(p => p.weeks.every(w => (w.videos || []).concat((w.steps || []).map(s => s.video).filter(Boolean))
+        .every(v => /\S/.test(v.shows) && v.url === undefined))));
+
+    /* The validator. */
+    const good = {
+      id: 'test-protocol', title: 'Test', status: 'published', summary: 'S',
+      definitions: [{ term: 'T', meaning: 'M' }],
+      weeks: [
+        { week: 1, steps: [{ text: 'a' }], advance_when: 'when ready' },
+        { week: 2, steps: [{ text: 'b' }] },
+      ],
+      verified_by: 'Trainer', verified_on: '2026-11-09',
+    };
+    check('a good published protocol validates', prLib.validateProtocol(good).length === 0, prLib.validateProtocol(good));
+    const bad = (patch) => prLib.validateProtocol(Object.assign({}, good, patch));
+    check('rejects an id that is not a slug', bad({ id: 'Not A Slug' }).length > 0);
+    check('rejects a missing title', bad({ title: '' }).length > 0);
+    check('rejects an unknown status', bad({ status: 'live' }).length > 0);
+    check('rejects weeks that skip a number',
+      bad({ weeks: [good.weeks[0], { week: 3, steps: [{ text: 'b' }] }] }).length > 0);
+    check('rejects a week with no way to move on (advance_when) unless it is the last',
+      bad({ weeks: [{ week: 1, steps: [{ text: 'a' }] }, good.weeks[1]] }).length > 0);
+    check('the last week may leave advance_when out',
+      prLib.validateProtocol(Object.assign({}, good, { weeks: [{ week: 1, steps: [{ text: 'a' }] }] })).length === 0);
+    check('rejects a week with no steps',
+      bad({ weeks: [{ week: 1, steps: [], advance_when: 'x' }, good.weeks[1]] }).length > 0);
+    check('rejects no weeks', bad({ weeks: [] }).length > 0);
+    check('rejects a video with no "shows"',
+      bad({ weeks: [{ week: 1, advance_when: 'x', steps: [{ text: 'a', video: {} }] }, good.weeks[1]] }).length > 0);
+    check('rejects a video link that is not https',
+      bad({ weeks: [{ week: 1, advance_when: 'x', steps: [{ text: 'a', video: { shows: 's', url: 'http://x.example/v' } }] }, good.weeks[1]] }).length > 0);
+    check('rejects an approved video with no link',
+      bad({ weeks: [{ week: 1, advance_when: 'x', steps: [{ text: 'a', video: { shows: 's', approved: true } }] }, good.weeks[1]] }).length > 0);
+    check('rejects a guardrail with a place other than top or end',
+      bad({ guardrails: [{ text: 'g', place: 'middle' }] }).length > 0);
+    check('a published protocol needs verified_by', bad({ verified_by: '' }).length > 0);
+    check('a published protocol needs verified_on as a date', bad({ verified_on: 'yesterday' }).length > 0);
+    check('a published protocol needs definitions (the summary is optional, the card falls back to the first sentence)',
+      bad({ definitions: [] }).length > 0 && bad({ definitions: '' }).length > 0 && bad({ summary: '' }).length === 0);
+    const dupe = prLib.checkProtocols([good, Object.assign({}, good)]);
+    check('a duplicate id keeps the first and skips the second', dupe.valid.length === 1 && dupe.skipped.length === 1);
+    check('a malformed file yields nothing, not a crash',
+      prLib.checkProtocols({ not: 'a list' }).valid.length === 0 && prLib.checkProtocols(null).valid.length === 0);
+
+    /* What the public may see. */
+    const withVideos = Object.assign({}, good, {
+      weeks: [{
+        week: 1, advance_when: 'x', steps: [
+          { text: 'needs', video: { shows: 'shows A' } },
+          { text: 'pending', video: { shows: 'shows B', url: 'https://www.youtube.com/watch?v=abcdefghijk' } },
+          { text: 'ready', video: { shows: 'shows C', approved: true, url: 'https://www.youtube.com/watch?v=ABCDEFGHIJK' } },
+          { text: 'no slot' },
+        ],
+      }, good.weeks[1]],
+    });
+    const draftP = Object.assign({}, good, { id: 'a-draft', status: 'draft' });
+    const retiredP = Object.assign({}, good, { id: 'a-retired', status: 'retired' });
+    const placeP = Object.assign({}, good, { id: 'a-placeholder', status: 'placeholder', order: 1 });
+    const second = Object.assign({}, good, { id: 'second', title: 'Second', order: 3 });
+    const first = Object.assign({}, withVideos, { id: 'first', title: 'First', order: 2 });
+    const mix = { intro: 'I', trainer_line: 'T', protocols: [second, first, draftP, retiredP, placeP] };
+    const live = prLib.publicProtocols(mix);
+    check('live output holds published only, no draft, retired or placeholder',
+      JSON.stringify(live.protocols.map(p => p.id)) === JSON.stringify(['first', 'second']), live.protocols.map(p => p.id));
+    check('the two standing lines pass through', live.intro === 'I' && live.trainer_line === 'T');
+    const staged = prLib.publicProtocols(mix, { unpublished: true });
+    check('the staging switch adds placeholders and drafts, never retired, in order',
+      JSON.stringify(staged.protocols.map(p => p.id)) === JSON.stringify(['a-placeholder', 'first', 'second', 'a-draft']) &&
+      staged.protocols[0].placeholder === true && live.protocols[0].placeholder === false &&
+      staged.protocols[3].unpublished === true && live.protocols[0].unpublished === false,
+      staged.protocols.map(p => p.id));
+    check('internal fields never leave (status, verified_by, order, internal_note)',
+      live.protocols.every(p => p.status === undefined && p.verified_by === undefined && p.order === undefined && p.internal_note === undefined) &&
+      !JSON.stringify(prLib.publicProtocols({ protocols: [Object.assign({}, good, { internal_note: 'SECRETNOTE' })] })).includes('SECRETNOTE'));
+    const rich = Object.assign({}, good, {
+      id: 'rich', definitions: 'A plain sentence. Another.',
+      guardrails: [{ label: 'Before you start', text: 'g1', place: 'before_weeks' }, { label: 'Trainer guardrails', text: 'g2', place: 'end' }],
+      weeks: [
+        { week: 1, label: 'Weeks 1 to 2', title: 'Start', what_to_do: 'Do the thing.', advance_when: 'No pain.', videos: [{ label: 'Clip A', shows: 'shows W' }] },
+        { week: 2, label: 'Later phase', what_to_do: 'More.' },
+      ],
+    });
+    check('a protocol in the draft format validates (text definitions, labelled guardrails, week labels, what to do, week videos)',
+      prLib.validateProtocol(rich).length === 0, prLib.validateProtocol(rich));
+    const richOut = prLib.publicProtocols({ protocols: [rich] }).protocols[0];
+    check('the draft format reaches the public output intact',
+      richOut.definitions === 'A plain sentence. Another.' && richOut.guardrails[0].label === 'Before you start' &&
+      richOut.guardrails[0].place === 'before_weeks' && richOut.weeks[0].label === 'Weeks 1 to 2' &&
+      richOut.weeks[0].what_to_do === 'Do the thing.' && richOut.weeks[0].videos[0].state === 'needed' &&
+      richOut.weeks[0].videos[0].label === 'Clip A', richOut);
+    const richGaps = prLib.videoGaps({ protocols: [rich] });
+    check('the gap list covers a whole-week video (step 0) with its label',
+      richGaps.length === 1 && richGaps[0].step === 0 && richGaps[0].label === 'Clip A' && richGaps[0].weekLabel === 'Weeks 1 to 2', richGaps);
+    check('a week needs what_to_do or a step',
+      prLib.validateProtocol(Object.assign({}, rich, { weeks: [{ week: 1, label: 'x', advance_when: 'y' }, rich.weeks[1]] })).length > 0);
+    const vsteps = live.protocols[0].weeks[0].steps;
+    check('a slot with no clip is "needed"', vsteps[0].video.state === 'needed' && vsteps[0].video.url === undefined);
+    check('an unapproved pick is "pending" and its link is not sent anywhere',
+      vsteps[1].video.state === 'pending' && vsteps[1].video.url === undefined &&
+      !JSON.stringify(live).includes('abcdefghijk'));
+    check('an approved clip is "ready" with its link and YouTube id',
+      vsteps[2].video.state === 'ready' && vsteps[2].video.url.includes('ABCDEFGHIJK') && vsteps[2].video.yt === 'ABCDEFGHIJK');
+    check('a step with no video gets no slot', vsteps[3].video === undefined);
+    const gaps = prLib.videoGaps(mix);
+    check('the gap list names needed and pending slots, not the ready one or draft entries',
+      gaps.length === 2 && gaps[0].protocol === 'First' && gaps[0].week === 1 && gaps[0].step === 1 &&
+      gaps[0].shows === 'shows A' && gaps[1].step === 2 && /approval/.test(gaps[1].state), gaps);
+    const shippedGaps = prLib.videoGaps(prRaw);
+    check('the shipped video gap list is Hip Opening only, every slot a whole-week clip with a label',
+      shippedGaps.length > 0 && shippedGaps.every(g => g.id === 'hip-opening' && g.step === 0 && g.label), shippedGaps.length);
+
+    /* The importer: Char's draft format in, protocols.json out. */
+    {
+      const { spawnSync } = require('child_process');
+      const imp = path.join(APP_DIR, 'scripts', 'protocols-import.js');
+      const tdir = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-protocols-imp-'));
+      const draft = path.join(tdir, 'Protocol - Sample Thing.md');
+      const out = path.join(tdir, 'protocols.json');
+      const DRAFT = ['# Protocol: Sample Thing', '', '## What this means', 'It is a sample. It has two sentences.', '',
+        '## Before you start', 'Check with the trainer first.', '', '## Week-by-week plan', '',
+        '### Week 1: Easy start', 'What to do: Walk.', '', 'Before moving on: No pain.', '',
+        '### Later phase: Back to it', 'What to do: Jog.', '', 'Before moving on: Trainer clears you.', '',
+        '## Trainer guardrails', 'Stop if it hurts.', '', '## For the app', 'Internal only note.', ''].join('\n');
+      fs.writeFileSync(draft, DRAFT);
+      const r1 = spawnSync(process.execPath, [imp, '--file', out, draft], { encoding: 'utf8' });
+      const got = r1.status === 0 ? JSON.parse(fs.readFileSync(out, 'utf8')).protocols[0] : null;
+      check('the importer reads a draft into a draft-status protocol that validates',
+        r1.status === 0 && got && got.id === 'sample-thing' && got.status === 'draft' && prLib.validateProtocol(got).length === 0, r1.stdout + r1.stderr);
+      check('the importer keeps Char\'s words: labels, what to do, move-on lines, guardrail places, internal note',
+        got && got.weeks.length === 2 && got.weeks[1].label === 'Later phase' && got.weeks[0].what_to_do === 'Walk.' &&
+        got.weeks[0].advance_when === 'No pain.' && got.guardrails[0].place === 'before_weeks' &&
+        got.guardrails[1].place === 'end' && got.guardrails[1].label === 'Trainer guardrails' && got.internal_note === 'Internal only note.', got);
+      const j1 = fs.readFileSync(out, 'utf8');
+      const r2 = spawnSync(process.execPath, [imp, '--file', out, draft], { encoding: 'utf8' });
+      check('re-running the importer on the same draft changes nothing', r2.status === 0 && /unchanged/.test(r2.stdout) && fs.readFileSync(out, 'utf8') === j1, r2.stdout);
+      const doc = JSON.parse(j1);
+      Object.assign(doc.protocols[0], { status: 'published', verified_by: 'Trainer', verified_on: '2026-11-10', summary: 'Mine.' });
+      doc.protocols[0].weeks[0].videos = [{ shows: 'kept', label: 'K' }];
+      fs.writeFileSync(out, JSON.stringify(doc));
+      fs.writeFileSync(draft, DRAFT.replace('Walk.', 'Walk a bit.'));
+      const r3 = spawnSync(process.execPath, [imp, '--file', out, draft], { encoding: 'utf8' });
+      const g3 = JSON.parse(fs.readFileSync(out, 'utf8')).protocols[0];
+      check('an edited draft updates the words and keeps status, verification, summary and video slots',
+        r3.status === 0 && g3.weeks[0].what_to_do === 'Walk a bit.' && g3.status === 'published' && g3.verified_by === 'Trainer' &&
+        g3.summary === 'Mine.' && g3.weeks[0].videos && g3.weeks[0].videos[0].shows === 'kept', r3.stdout);
+      const before = fs.readFileSync(out, 'utf8');
+      fs.writeFileSync(draft, DRAFT.replace('## For the app', '## Surprise heading'));
+      const r4 = spawnSync(process.execPath, [imp, '--file', out, draft], { encoding: 'utf8' });
+      check('an unknown heading stops the import, says why, and writes nothing',
+        r4.status === 1 && /unknown section/.test(r4.stdout) && fs.readFileSync(out, 'utf8') === before, r4.stdout);
+      fs.writeFileSync(draft, DRAFT.replace('Before moving on: No pain.', ''));
+      const r5 = spawnSync(process.execPath, [imp, '--file', out, draft], { encoding: 'utf8' });
+      check('a week with no "Before moving on" stops the import',
+        r5.status === 1 && /Before moving on/.test(r5.stdout) && fs.readFileSync(out, 'utf8') === before, r5.stdout);
+      const r6 = spawnSync(process.execPath, [imp, '--dry-run', '--file', path.join(tdir, 'none.json'), draft.replace('Sample', 'Sample')], { encoding: 'utf8' });
+      check('--dry-run on a bad draft writes no file', !fs.existsSync(path.join(tdir, 'none.json')), r6.stdout);
+      fs.rmSync(tdir, { recursive: true, force: true });
+    }
+
+    /* The report script: exit 0 on good content, 1 on a bad paste. */
+    {
+      const { spawnSync } = require('child_process');
+      const script = path.join(APP_DIR, 'scripts', 'protocols-report.js');
+      const ok = spawnSync(process.execPath, [script], { encoding: 'utf8' });
+      check('the report script passes on the shipped content and prints the gap table',
+        ok.status === 0 && /Video slots without a clip yet: \d+/.test(ok.stdout), ok.stderr);
+      const tmpBad = path.join(os.tmpdir(), 'swa-protocols-bad-' + process.pid + '.json');
+      fs.writeFileSync(tmpBad, JSON.stringify({ protocols: [Object.assign({}, good, { id: 'BAD ID' })] }));
+      const badRun = spawnSync(process.execPath, [script, tmpBad], { encoding: 'utf8' });
+      fs.rmSync(tmpBad, { force: true });
+      check('the report script names whole-week clips',
+        /whole week/.test(ok.stdout), ok.stdout);
+      check('the report script exits 1 and names the problem on a bad entry',
+        badRun.status === 1 && /id must be a lowercase slug/.test(badRun.stdout), badRun.stdout);
+    }
+
+    /* Servers: on with placeholders, on without, and off. */
+    const mkServer = (port, extra) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-protocols-' + port + '-'));
+      const env = Object.assign({}, process.env, { PORT: String(port), DATA_DIR: dir, SESSION_SECRET: 'protocols-secret' }, extra);
+      for (const k of ['PROTOCOLS_ENABLED', 'PROTOCOLS_SHOW_UNPUBLISHED']) if (!(k in extra)) delete env[k];
+      const s = { base: 'http://127.0.0.1:' + port, dir, log: '' };
+      s.child = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+      s.child.stdout.on('data', d => { s.log += d; });
+      s.child.stderr.on('data', d => { s.log += d; });
+      return s;
+    };
+    const prWait = async (base) => {
+      for (let i = 0; i < 60; i++) {
+        try { if ((await fetch(base + '/api/content')).status === 200) return true; } catch (_) { /* not up */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    const prGet = async (base, p) => {
+      const res = await fetch(base + p);
+      let json = null; try { json = await res.json(); } catch (_) { /* none */ }
+      return { status: res.status, json };
+    };
+    const sOn = mkServer(3230, { PROTOCOLS_ENABLED: '1', PROTOCOLS_SHOW_UNPUBLISHED: '1' });
+    const sLive = mkServer(3231, { PROTOCOLS_ENABLED: '1' });
+    const sOff = mkServer(3232, {});
+    try {
+      check('protocols-staging server starts', await prWait(sOn.base), sOn.log);
+      check('protocols-live server starts', await prWait(sLive.base), sLive.log);
+      check('protocols-off server starts', await prWait(sOff.base), sOff.log);
+
+      const r = await prGet(sOn.base, '/api/protocols');
+      check('GET /api/protocols is public and answers 200 with all ten protocols when staged',
+        r.status === 200 && Array.isArray(r.json.protocols) && r.json.protocols.length === 10, r.status);
+      check('the API never leaks status, verified_by or order',
+        r.json.protocols.every(p => p.status === undefined && p.verified_by === undefined && p.order === undefined));
+      check('published entries arrive flagged as published, not unpublished', r.json.protocols.every(p => p.unpublished === false && p.placeholder === false));
+      check('internal notes never leave the server', !JSON.stringify(r.json).includes('internal_note'));
+      check('Hip Opening arrives with "needed" video slots and no links',
+        r.json.protocols[0].id === 'hip-opening' &&
+        r.json.protocols[0].weeks[0].videos[0].state === 'needed' &&
+        !/https?:\/\//.test(JSON.stringify(r.json)));
+      for (const p of r.json.protocols) {
+        const d = await prGet(sOn.base, '/api/protocols/' + p.id);
+        check('detail for ' + p.id + ' is 200 with the full protocol',
+          d.status === 200 && d.json.protocol.id === p.id && d.json.protocol.weeks.length === p.weeks.length, d.status);
+      }
+      let x = await prGet(sOn.base, '/api/protocols/does-not-exist');
+      check('an unknown protocol id is a 404', x.status === 404, x.status);
+      const w1 = await fetch(sOn.base + '/api/protocols', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"id":"x"}' });
+      check('Protocols cannot be written to through the API', w1.status >= 400, w1.status);
+      const w2 = await fetch(sOn.base + '/api/protocols/hip-opening', { method: 'DELETE' });
+      check('Protocols cannot be deleted through the API', w2.status >= 400, w2.status);
+      check('the server wrote no protocols data to its data folder',
+        !fs.readdirSync(sOn.dir).some(f => /protocol/i.test(f)), fs.readdirSync(sOn.dir));
+
+      x = await prGet(sLive.base, '/api/protocols');
+      check('live (switch on, staging switch off) answers 200 with the ten published protocols',
+        x.status === 200 && Array.isArray(x.json.protocols) && x.json.protocols.length === 10, x.json);
+      x = await prGet(sLive.base, '/api/protocols/hip-opening');
+      check('live serves a published protocol by direct id', x.status === 200, x.status);
+
+      x = await prGet(sOff.base, '/api/protocols');
+      check('GET /api/protocols is a 404 while the switch is off', x.status === 404, x.status);
+      x = await prGet(sOff.base, '/api/protocols/hip-opening');
+      check('a protocol detail is a 404 while the switch is off', x.status === 404, x.status);
+      x = await prGet(sOff.base, '/api/content');
+      check('with the switch off the rest of the app still serves content',
+        x.status === 200 && Array.isArray(x.json.sessions), x.status);
+    } finally {
+      for (const s of [sOn, sLive, sOff]) {
+        s.child.kill('SIGKILL');
+        fs.rmSync(s.dir, { recursive: true, force: true });
+      }
+    }
+
+    /* Client code: delimited, read-only, nothing stored, safe by construction. */
+    const prApp = fs.readFileSync(path.join(APP_DIR, 'public', 'app.js'), 'utf8');
+    const pb = prApp.indexOf('/* PROTOCOLS-BEGIN');
+    const pe = prApp.indexOf('/* PROTOCOLS-END */');
+    check('the Protocols client code is delimited', pb > 0 && pe > pb, [pb, pe]);
+    const prCode = prApp.slice(pb, pe);
+    const subnavStart = prApp.indexOf('const GROUP_SUBNAV = {');
+    const subnavLiteral = prApp.slice(subnavStart, prApp.indexOf('};', subnavStart));
+    check('Protocols is not in the static nav (it is added only when the server says it has pages)',
+      subnavLiteral.includes("'nutrition'") && !subnavLiteral.includes("'protocols'"));
+    check('Protocols client code only reads the API (no POST, PUT or DELETE helpers)',
+      !/apiPost|apiPut|apiDel|method\s*:/.test(prCode));
+    check('Protocols client code stores nothing in the browser',
+      !/localStorage|sessionStorage|indexedDB|document\.cookie/.test(prCode));
+    check('Protocols pages have no forms or text areas to fill in', !/<form|<textarea|<input/i.test(prCode));
+    check('Protocols pages hold no athlete or health data fields',
+      !/state\.user\.(email|name|id)|wellness|check-?in|profileId|\/api\/(?!protocols)/i.test(prCode));
+    check('page text from the content file is escaped before it is shown',
+      !/\$\{\s*(?:p|w|s|d|g|v)\.(?:title|summary|text|goal|dose|guardrail|shows|caption|advance_when|meaning|term|group)\s*\}/.test(prCode));
+    check('the three blocks and the callout labels are in the client code',
+      ['Definitions', 'Week by week', 'Trainer guardrail', 'Video needed', 'Video waiting for approval', 'Not published yet'].every(w => prCode.includes(w)));
+    check('the "before moving on" line is its own element on every week', /class="pr-gate"/.test(prCode) && /'Before moving on'/.test(prCode));
+    check('an unapproved video can never load (a clip loads only from state "ready")',
+      /v\.state === 'ready'/.test(prCode) && /https:\\\/\\\//.test(prCode));
+    const prCss = fs.readFileSync(path.join(APP_DIR, 'public', 'styles.css'), 'utf8');
+    check('the guardrail callout keeps a fixed readable ink on its light tint (dark themes stay legible)',
+      /\.pr-guard \{[^}]*background: var\(--high-bg\)[^}]*color: #1c1c1e/.test(prCss));
+    check('Protocols styles use theme tokens only (no hard-coded brand colors outside the tokens)',
+      !/\.pr-[^{]*\{[^}]*#(?:cc0033|990026)/i.test(prCss));
   }
 
   } catch (err) {
