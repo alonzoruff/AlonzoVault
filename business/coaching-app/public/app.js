@@ -723,6 +723,24 @@ $$('[data-join-tier]').forEach(b => b.addEventListener('click', async () => {
   b.disabled = false;
 }));
 
+/* ---------------- landing tier view toggle (v32) ----------------
+   Cards is the default view. Compare plans swaps the tier cards
+   for the side-by-side table. One view stays visible at a time;
+   the hidden view carries the hidden attribute so it leaves the
+   tab order. The buttons carry aria-pressed for the state. */
+$$('[data-tier-view]').forEach(btn => btn.addEventListener('click', () => {
+  const showCompare = btn.dataset.tierView === 'compare';
+  $$('[data-tier-view]').forEach(b => {
+    const on = b === btn;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const cards = document.getElementById('landing-tiers-cards');
+  const compare = document.getElementById('landing-tiers-compare');
+  if (cards) cards.hidden = showCompare;
+  if (compare) compare.hidden = !showCompare;
+}));
+
 /* ---------------- landing FAQ accordion (v19) ----------------
    One answer open at a time, following the nav toggle pattern:
    the button carries aria-expanded and aria-controls, the panel

@@ -506,7 +506,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is the RP v29 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v31"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v32"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v31'") &&
-    swJs.text.includes("ruffin-performance-v31"));
+    appJs.text.includes("const APP_VERSION = 'v32'") &&
+    swJs.text.includes("ruffin-performance-v32"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v31"') &&
-    pageHtml.text.includes('Ruffin Performance · App v31') &&
+    pageHtml.text.includes('data-app-version="v32"') &&
+    pageHtml.text.includes('Ruffin Performance · App v32') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2568,8 +2568,8 @@ async function main() {
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v31' &&
-    v23Content.brand.cache === 'ruffin-performance-v31', v23Content.brand);
+    !!v23Content.brand && v23Content.brand.version === 'v32' &&
+    v23Content.brand.cache === 'ruffin-performance-v32', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2781,6 +2781,80 @@ async function main() {
   check('join wiring is in the served JS',
     appJs.text.includes('[data-join-tier]') && appJs.text.includes('/api/checkout/session') &&
     appJs.text.includes('data-join-message'));
+  /* Tier comparison toggle (v32): Cards / Compare plans switch in
+     Join the Lab, with a side-by-side table built from TIER_ADDS,
+     locked prices, accessible check and dash cells, and Join
+     buttons in the compare view that reuse the [data-join-tier]
+     binding. */
+  const compareSlice = pageHtml.text.slice(
+    pageHtml.text.indexOf('id="landing-tiers-compare"'), pageHtml.text.indexOf('Questions, answered'));
+  const compareRow = (label) => {
+    const i = compareSlice.indexOf(label);
+    if (i < 0) return '';
+    const end = compareSlice.indexOf('</tr>', i);
+    return end < 0 ? compareSlice.slice(i) : compareSlice.slice(i, end);
+  };
+  const includedCount = (row) => (row.match(/visually-hidden">Included</g) || []).length;
+  const notIncludedCount = (row) => (row.match(/visually-hidden">Not included</g) || []).length;
+  check('v32: tier view toggle markup is present in the served landing page',
+    pageHtml.text.includes('data-tier-view="cards"') &&
+    pageHtml.text.includes('data-tier-view="compare"') &&
+    pageHtml.text.includes('>Cards</button>') &&
+    pageHtml.text.includes('>Compare plans</button>') &&
+    pageHtml.text.includes('aria-pressed="true"') &&
+    pageHtml.text.includes('aria-pressed="false"') &&
+    pageHtml.text.includes('id="landing-tiers-cards"') &&
+    pageHtml.text.includes('id="landing-tiers-compare" hidden'),
+    compareSlice.slice(0, 120));
+  check('v32: comparison table is present with all three tier names and the locked prices',
+    compareSlice.includes('class="tier-compare"') &&
+    compareSlice.includes('Lab Access') && compareSlice.includes('Lab Training') &&
+    compareSlice.includes('Lab Pass') &&
+    compareSlice.includes('$10/mo') && compareSlice.includes('$49.99/mo') &&
+    compareSlice.includes('$99/mo') && !compareSlice.includes('$149'),
+    compareSlice.slice(0, 120));
+  check('v32: shared rows are checked for all three tiers',
+    includedCount(compareRow('Lab Sessions and the Inside the Lab library')) === 3 &&
+    includedCount(compareRow('Your workout log and daily check-in')) === 3 &&
+    includedCount(compareRow('Your Lab Report at every retest')) === 3 &&
+    compareSlice.includes('Included in every tier'),
+    compareSlice.slice(0, 120));
+  check('v32: upgrade rows are correct for training and pass',
+    compareSlice.includes('What the higher tiers add') &&
+    notIncludedCount(compareRow('Personalized training built for you')) === 1 &&
+    includedCount(compareRow('Personalized training built for you')) === 2 &&
+    notIncludedCount(compareRow('Program adjustments as you progress')) === 1 &&
+    includedCount(compareRow('Program adjustments as you progress')) === 2 &&
+    notIncludedCount(compareRow('Form checks with a coach reply')) === 1 &&
+    includedCount(compareRow('Form checks with a coach reply')) === 2 &&
+    notIncludedCount(compareRow('Live web sessions with your coach')) === 2 &&
+    includedCount(compareRow('Live web sessions with your coach')) === 1 &&
+    notIncludedCount(compareRow('The opportunity for in-person sessions')) === 2 &&
+    includedCount(compareRow('The opportunity for in-person sessions')) === 1,
+    compareSlice.slice(0, 120));
+  check('v32: Join buttons are present in the compare view for all three tiers',
+    (compareSlice.match(/data-join-tier=/g) || []).length === 3 &&
+    compareSlice.includes('data-join-tier="access"') &&
+    compareSlice.includes('data-join-tier="training"') &&
+    compareSlice.includes('data-join-tier="pass"') &&
+    compareSlice.includes('Join Lab Access') &&
+    compareSlice.includes('Join Lab Training') &&
+    compareSlice.includes('Join Lab Pass'),
+    compareSlice.slice(0, 120));
+  check('v32: toggle wiring and compare styles are in the served JS and CSS',
+    appJs.text.includes('[data-tier-view]') &&
+    appJs.text.includes('landing-tiers-cards') &&
+    appJs.text.includes('landing-tiers-compare') &&
+    appJs.text.includes('aria-pressed') &&
+    stylesCss.text.includes('.tier-view-toggle') &&
+    stylesCss.text.includes('.tier-compare') &&
+    stylesCss.text.includes('.tier-compare-wrap'),
+    compareSlice.slice(0, 120));
+  check('v32: BRAND version and cache stamps are v32',
+    pageHtml.text.includes('data-app-version="v32"') &&
+    appJs.text.includes("const APP_VERSION = 'v32'") &&
+    swJs.text.includes('ruffin-performance-v32'),
+    compareSlice.slice(0, 120));
   /* Landing FAQ accordion (v19): one card between the tiers and
      the parents card, eight plain answers, trial and prices
      stated exactly as locked. */
@@ -5525,9 +5599,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v31"') &&
-    appJs.text.includes("const APP_VERSION = 'v31'") &&
-    swJs.text.includes('ruffin-performance-v31'));
+    pageHtml.text.includes('data-app-version="v32"') &&
+    appJs.text.includes("const APP_VERSION = 'v32'") &&
+    swJs.text.includes('ruffin-performance-v32'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -8878,7 +8952,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v31' &&
+          br.status === 200 && br.json.brand.version === 'v32' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -9002,7 +9076,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v31',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v32',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');

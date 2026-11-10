@@ -206,7 +206,11 @@
     <div class="card landing-card" data-reveal>
       <h2>Join the Lab</h2>
       <p>Every tier opens the same Lab: the portal, the training library, and your Lab Report. Pick the seat that fits how you train.</p>
-      <div class="landing-tiers">
+      <div class="tier-view-toggle" role="group" aria-label="Choose how to view the plans">
+        <button class="tier-view-btn active" type="button" data-tier-view="cards" aria-pressed="true">Cards</button>
+        <button class="tier-view-btn" type="button" data-tier-view="compare" aria-pressed="false">Compare plans</button>
+      </div>
+      <div class="landing-tiers" id="landing-tiers-cards">
         <div class="landing-tier">
           <span class="landing-tier-pill">Start here</span>
           <h3>Lab Access</h3>
@@ -247,6 +251,83 @@
           </ul>
           <button class="btn landing-join" type="button" data-join-tier="pass">Join Lab Pass</button>
         </div>
+      </div>
+      <div class="tier-compare-wrap" id="landing-tiers-compare" hidden>
+        <table class="tier-compare">
+          <caption class="visually-hidden">Compare Lab membership tiers</caption>
+          <thead>
+            <tr>
+              <th scope="col"><span class="visually-hidden">Feature</span></th>
+              <th scope="col">Lab Access</th>
+              <th scope="col">Lab Training</th>
+              <th scope="col">Lab Pass</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="tier-compare-group"><th scope="colgroup" colspan="4">Included in every tier</th></tr>
+            <tr>
+              <th scope="row">Lab Sessions and the Inside the Lab library</th>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Your workout log and daily check-in</th>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Your Lab Report at every retest</th>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+            </tr>
+            <tr class="tier-compare-group"><th scope="colgroup" colspan="4">What the higher tiers add</th></tr>
+            <tr>
+              <th scope="row">Personalized training built for you</th>
+              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Program adjustments as you progress</th>
+              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Form checks with a coach reply</th>
+              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Live web sessions with your coach</th>
+              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
+              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+            </tr>
+            <tr>
+              <th scope="row">The opportunity for in-person sessions</th>
+              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
+              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
+              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
+            </tr>
+            <tr class="tier-compare-price">
+              <th scope="row">Price</th>
+              <td>$10/mo</td>
+              <td>$49.99/mo</td>
+              <td>$99/mo</td>
+            </tr>
+            <tr class="tier-compare-join">
+              <th scope="row"><span class="visually-hidden">Join</span></th>
+              <td><button class="btn landing-join" type="button" data-join-tier="access">Join Lab Access</button></td>
+              <td><button class="btn landing-join" type="button" data-join-tier="training">Join Lab Training</button></td>
+              <td><button class="btn landing-join" type="button" data-join-tier="pass">Join Lab Pass</button></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <p class="muted" data-join-message role="status"></p>
     </div>
