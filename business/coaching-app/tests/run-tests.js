@@ -506,7 +506,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is the RP v29 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v32"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v33"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,16 +2519,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v32'") &&
-    swJs.text.includes("ruffin-performance-v32"));
+    appJs.text.includes("const APP_VERSION = 'v33'") &&
+    swJs.text.includes("ruffin-performance-v33"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v32"') &&
-    pageHtml.text.includes('Ruffin Performance · App v32') &&
+    pageHtml.text.includes('data-app-version="v33"') &&
+    pageHtml.text.includes('Ruffin Performance · App v33') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2568,8 +2568,8 @@ async function main() {
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v32' &&
-    v23Content.brand.cache === 'ruffin-performance-v32', v23Content.brand);
+    !!v23Content.brand && v23Content.brand.version === 'v33' &&
+    v23Content.brand.cache === 'ruffin-performance-v33', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2850,11 +2850,85 @@ async function main() {
     stylesCss.text.includes('.tier-compare') &&
     stylesCss.text.includes('.tier-compare-wrap'),
     compareSlice.slice(0, 120));
-  check('v32: BRAND version and cache stamps are v32',
-    pageHtml.text.includes('data-app-version="v32"') &&
-    appJs.text.includes("const APP_VERSION = 'v32'") &&
-    swJs.text.includes('ruffin-performance-v32'),
+  check('v33: BRAND version and cache stamps are v33',
+    pageHtml.text.includes('data-app-version="v33"') &&
+    appJs.text.includes("const APP_VERSION = 'v33'") &&
+    swJs.text.includes('ruffin-performance-v33'),
     compareSlice.slice(0, 120));
+  /* Portal preview tabs (v33): interactive preview of what is
+     inside the portal in section 02, replacing the static list.
+     Three tabs with full aria wiring, three panels with the
+     first visible and the rest hidden, all six points from the
+     old list preserved across the panels, and one invite CTA
+     below the panels. */
+  const portalSlice = pageHtml.text.slice(
+    pageHtml.text.indexOf("What's inside the portal"), pageHtml.text.indexOf('How it works'));
+  const trainingPanel = portalSlice.slice(
+    portalSlice.indexOf('id="preview-panel-training"'), portalSlice.indexOf('id="preview-panel-videos"'));
+  const videosPanel = portalSlice.slice(
+    portalSlice.indexOf('id="preview-panel-videos"'), portalSlice.indexOf('id="preview-panel-report"'));
+  const reportPanel = portalSlice.slice(
+    portalSlice.indexOf('id="preview-panel-report"'));
+  check('v33: portal preview tab markup and aria wiring are present in the served landing page',
+    portalSlice.includes('role="tablist"') &&
+    portalSlice.includes('id="preview-tab-training"') &&
+    portalSlice.includes('id="preview-tab-videos"') &&
+    portalSlice.includes('id="preview-tab-report"') &&
+    portalSlice.includes('>Training sessions</button>') &&
+    portalSlice.includes('>Video library</button>') &&
+    portalSlice.includes('>Lab Report</button>') &&
+    portalSlice.includes('aria-controls="preview-panel-training"') &&
+    portalSlice.includes('aria-controls="preview-panel-videos"') &&
+    portalSlice.includes('aria-controls="preview-panel-report"') &&
+    portalSlice.includes('id="preview-tab-training" aria-selected="true"') &&
+    portalSlice.includes('Take a look around before you join. Pick a part of the portal to preview.'),
+    portalSlice.slice(0, 120));
+  check('v33: portal preview panels are present with correct hidden defaults and preserved portal points',
+    portalSlice.includes('id="preview-panel-training"') &&
+    portalSlice.includes('id="preview-panel-videos"') &&
+    portalSlice.includes('id="preview-panel-report"') &&
+    portalSlice.includes('role="tabpanel" id="preview-panel-training" aria-labelledby="preview-tab-training"') &&
+    portalSlice.includes('role="tabpanel" id="preview-panel-videos" aria-labelledby="preview-tab-videos" hidden') &&
+    portalSlice.includes('role="tabpanel" id="preview-panel-report" aria-labelledby="preview-tab-report" hidden') &&
+    trainingPanel.includes('wherever you train') &&
+    trainingPanel.includes('calculated from your own tested maxes') &&
+    trainingPanel.includes('Your own log') &&
+    trainingPanel.includes('sleep, soreness and energy') &&
+    trainingPanel.includes('readiness flags before your next session') &&
+    videosPanel.includes('filmed by your coach himself') &&
+    videosPanel.includes('Not stock video of strangers') &&
+    reportPanel.includes('baseline vs. best vs. latest, updated at every re-test'),
+    portalSlice.slice(0, 120));
+  check('v33: exact form check entitlement sentence is present in the served page',
+    portalSlice.includes('One form check per week is included with Lab Training; extra submissions join the queue. Lab Pass members get priority review within 48 hours.'),
+    portalSlice.slice(0, 120));
+  check('v33: sample previews are labelled Sample with sample session blocks and sample report numbers',
+    trainingPanel.includes('>Sample</span>') &&
+    trainingPanel.includes('Warm-up and movement work') &&
+    trainingPanel.includes('Acceleration work') &&
+    trainingPanel.includes('Strength work') &&
+    reportPanel.includes('>Sample</span>') &&
+    reportPanel.includes('40-yard dash') &&
+    reportPanel.includes('4.91') && reportPanel.includes('4.78'),
+    portalSlice.slice(0, 120));
+  check('v33: portal preview section contains the invite CTA below the panels',
+    portalSlice.includes('<button class="btn landing-cta" type="button" data-view="invite">Request an Invitation') &&
+    portalSlice.indexOf('data-view="invite"') > portalSlice.indexOf('id="preview-panel-report"'),
+    portalSlice.slice(0, 120));
+  check('v33: tab wiring is in the served JS and portal preview styles are in the served CSS',
+    appJs.text.includes('portal-preview-tab') &&
+    appJs.text.includes('preview-tab') &&
+    appJs.text.includes('ArrowRight') && appJs.text.includes('ArrowLeft') &&
+    appJs.text.includes('aria-selected') &&
+    stylesCss.text.includes('.portal-preview-tabs') &&
+    stylesCss.text.includes('.portal-preview-tab') &&
+    stylesCss.text.includes('.portal-preview-panel'),
+    portalSlice.slice(0, 120));
+  check('v33: BRAND version and cache stamps are v33 in the portal preview checks',
+    pageHtml.text.includes('data-app-version="v33"') &&
+    appJs.text.includes("const APP_VERSION = 'v33'") &&
+    swJs.text.includes('ruffin-performance-v33'),
+    portalSlice.slice(0, 120));
   /* Landing FAQ accordion (v19): one card between the tiers and
      the parents card, eight plain answers, trial and prices
      stated exactly as locked. */
@@ -5599,9 +5673,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v32"') &&
-    appJs.text.includes("const APP_VERSION = 'v32'") &&
-    swJs.text.includes('ruffin-performance-v32'));
+    pageHtml.text.includes('data-app-version="v33"') &&
+    appJs.text.includes("const APP_VERSION = 'v33'") &&
+    swJs.text.includes('ruffin-performance-v33'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -8952,7 +9026,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v32' &&
+          br.status === 200 && br.json.brand.version === 'v33' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -9076,7 +9150,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v32',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v33',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
@@ -9141,7 +9215,7 @@ async function waitForServer(tries = 60) {
         const ivJs = await ivText(null, '/app.js');
         const ivCss = await ivText(null, '/styles.css');
         check('landing Request an Invitation buttons point at the invite view',
-          (ivPage.text.match(/data-view="invite">Request an Invitation/g) || []).length === 2 &&
+          (ivPage.text.match(/data-view="invite">Request an Invitation/g) || []).length === 3 &&
           !ivPage.text.includes('data-goto="account">Request an Invitation'), ivPage.status);
         check('invite views are in the served page',
           ivPage.status === 200 && ivPage.text.includes('id="view-invite"') &&

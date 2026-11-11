@@ -1757,6 +1757,25 @@ body.logged-out .primary-nav { display: none !important; }
 .tier-compare-price td { font-weight: 700; }
 .tier-compare-join td { background: var(--panel); }
 .tier-compare-join .landing-join { margin-top: 0; white-space: nowrap; }
+/* ---- portal preview tabs (v33): tab preview of what is inside
+   the portal in section 02. Quiet styling in the same language
+   as the tier view toggle, one panel visible at a time. ---- */
+.portal-preview { margin: 12px 0 4px; }
+.portal-preview-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); }
+.portal-preview-tab {
+  flex: 1 1 auto; min-height: 38px; padding: 7px 14px; border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.portal-preview-tab.active, .portal-preview-tab[aria-selected="true"] { background: var(--red); border-color: var(--red); color: var(--accent-ink); }
+.portal-preview-tab:focus-visible { outline: 2px solid var(--landing-accent); outline-offset: 2px; }
+.portal-preview-panel { display: block; }
+.portal-preview-panel[hidden] { display: none; }
+.portal-preview-sample { margin: 0 0 10px; }
+.portal-preview-sample h3 { margin: 0; font-size: 16px; }
+@media (max-width: 620px) {
+  .portal-preview-tabs { border-radius: var(--radius-sm); }
+  .portal-preview-tab { flex: 1 1 30%; padding: 7px 8px; font-size: 13.5px; white-space: normal; }
+}
 .landing-footer-strip {
   margin: 18px -16px -40px; padding: 18px 22px;
   background: var(--panel); border-top: 1px solid var(--line);

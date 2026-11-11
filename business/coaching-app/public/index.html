@@ -182,14 +182,60 @@
     <div class="card landing-card landing-section" data-reveal>
       <span class="landing-section-number" aria-hidden="true">02</span>
       <h2>What's inside the portal</h2>
-      <ul class="landing-list">
-        <li><strong>The library</strong>: your training sessions and a demo library filmed by your coach himself, so every drill and lift looks the way your coach teaches it. Not stock video of strangers.</li>
-        <li><strong>Your program, wherever you train</strong>: your training week in the app, set by your coach, with lifting loads calculated from your own tested maxes as you progress.</li>
-        <li><strong>Form checks</strong>: send a video of a sprint or a lift and get your coach's reply right in the app. One form check per week is included with Lab Training; extra submissions join the queue. Lab Pass members get priority review within 48 hours.</li>
-        <li><strong>Health &amp; readiness tracking</strong>: a daily check-in on sleep, soreness, and energy takes 20 seconds. Your coach sees the flags before your next session, so training adjusts to how you actually feel.</li>
-        <li><strong>Your own log</strong>: record what you ran and lifted, with effort and notes, so nothing you do away from your coach is invisible to him.</li>
-        <li><strong>The Lab Report</strong>: your tests over time, baseline vs. best vs. latest, updated at every re-test.</li>
-      </ul>
+      <p>Take a look around before you join. Pick a part of the portal to preview.</p>
+      <div class="portal-preview">
+        <div class="portal-preview-tabs" role="tablist" aria-label="Portal preview">
+          <button class="portal-preview-tab active" type="button" role="tab" id="preview-tab-training" aria-selected="true" aria-controls="preview-panel-training" tabindex="0">Training sessions</button>
+          <button class="portal-preview-tab" type="button" role="tab" id="preview-tab-videos" aria-selected="false" aria-controls="preview-panel-videos" tabindex="-1">Video library</button>
+          <button class="portal-preview-tab" type="button" role="tab" id="preview-tab-report" aria-selected="false" aria-controls="preview-panel-report" tabindex="-1">Lab Report</button>
+        </div>
+        <div class="portal-preview-panel" role="tabpanel" id="preview-panel-training" aria-labelledby="preview-tab-training">
+          <div class="portal-preview-sample">
+            <div class="landing-sample-head">
+              <h3>Sample session</h3>
+              <span class="landing-sample-tag">Sample</span>
+            </div>
+            <ul class="landing-list">
+              <li>Warm-up and movement work</li>
+              <li>Acceleration work</li>
+              <li>Strength work</li>
+            </ul>
+          </div>
+          <ul class="landing-list">
+            <li><strong>Your program, wherever you train</strong>: your training week in the app, set by your coach, with lifting loads calculated from your own tested maxes as you progress.</li>
+            <li><strong>Your own log</strong>: record what you ran and lifted, with effort and notes, so nothing you do away from your coach is invisible to him.</li>
+            <li><strong>Health &amp; readiness tracking</strong>: a daily check-in on sleep, soreness and energy takes 20 seconds. Your coach sees the readiness flags before your next session, so training adjusts to how you actually feel.</li>
+          </ul>
+        </div>
+        <div class="portal-preview-panel" role="tabpanel" id="preview-panel-videos" aria-labelledby="preview-tab-videos" hidden>
+          <ul class="landing-list">
+            <li><strong>The library</strong>: a demo library filmed by your coach himself, so every drill and lift looks the way your coach teaches it. Not stock video of strangers.</li>
+            <li><strong>Form checks</strong>: send a video of a sprint or a lift and get your coach's reply right in the app. One form check per week is included with Lab Training; extra submissions join the queue. Lab Pass members get priority review within 48 hours.</li>
+          </ul>
+        </div>
+        <div class="portal-preview-panel" role="tabpanel" id="preview-panel-report" aria-labelledby="preview-tab-report" hidden>
+          <div class="portal-preview-sample">
+            <div class="landing-sample-head">
+              <h3>Lab Report preview</h3>
+              <span class="landing-sample-tag">Sample</span>
+            </div>
+            <div class="landing-sample-rows">
+              <div class="landing-sample-row">
+                <span class="landing-sample-test">40-yard dash</span>
+                <span class="landing-sample-nums">4.91 <span aria-hidden="true">→</span> <strong>4.78</strong></span>
+                <span class="landing-sample-delta">−0.13s</span>
+              </div>
+              <div class="landing-sample-row">
+                <span class="landing-sample-test">Fly 10</span>
+                <span class="landing-sample-nums">1.04 <span aria-hidden="true">→</span> <strong>0.99</strong></span>
+                <span class="landing-sample-delta">−0.05s</span>
+              </div>
+            </div>
+          </div>
+          <p><strong>The Lab Report</strong>: your tests over time, baseline vs. best vs. latest, updated at every re-test.</p>
+        </div>
+      </div>
+      <button class="btn landing-cta" type="button" data-view="invite">Request an Invitation <span class="cta-arrow" aria-hidden="true">→</span></button>
     </div>
 
     <div class="card landing-card landing-section" data-reveal>

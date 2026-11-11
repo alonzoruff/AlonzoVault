@@ -741,6 +741,40 @@ $$('[data-tier-view]').forEach(btn => btn.addEventListener('click', () => {
   if (compare) compare.hidden = !showCompare;
 }));
 
+/* ---------------- landing portal preview tabs (v33) ----------------
+   Three previews of what is inside the portal. The first panel
+   ships visible in the markup, so the section reads fine before
+   this runs. Clicking a tab or moving with the arrow keys,
+   Home, or End activates it: aria-selected and the roving
+   tabindex move with it, and the other panels carry hidden. */
+const portalPreviewTabs = $$('.portal-preview-tab');
+if (portalPreviewTabs.length) {
+  const activatePortalPreviewTab = (tab) => {
+    portalPreviewTabs.forEach(t => {
+      const on = t === tab;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      const panel = document.getElementById(t.getAttribute('aria-controls'));
+      if (panel) panel.hidden = !on;
+    });
+  };
+  portalPreviewTabs.forEach((tab, idx) => {
+    tab.addEventListener('click', () => activatePortalPreviewTab(tab));
+    tab.addEventListener('keydown', (e) => {
+      let next = null;
+      if (e.key === 'ArrowRight') next = portalPreviewTabs[(idx + 1) % portalPreviewTabs.length];
+      else if (e.key === 'ArrowLeft') next = portalPreviewTabs[(idx - 1 + portalPreviewTabs.length) % portalPreviewTabs.length];
+      else if (e.key === 'Home') next = portalPreviewTabs[0];
+      else if (e.key === 'End') next = portalPreviewTabs[portalPreviewTabs.length - 1];
+      else return;
+      e.preventDefault();
+      activatePortalPreviewTab(next);
+      next.focus();
+    });
+  });
+}
+
 /* ---------------- landing FAQ accordion (v19) ----------------
    One answer open at a time, following the nav toggle pattern:
    the button carries aria-expanded and aria-controls, the panel
