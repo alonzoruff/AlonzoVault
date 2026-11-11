@@ -5217,9 +5217,26 @@ async function handleApi(req, res, url) {
         }
       }
     }
+    /* Home hero numbers (v34): real counts only. Check-ins this
+       week since Monday, sessions done this week, and the date of
+       the latest logged or completed workout (null when none). */
+    const heroCheckins = checkinDates.filter(d => d >= mon).length;
+    const heroSessions = week.filter(d => d.completed && d.date <= today).length;
+    let heroLast = null;
+    for (const l of memberLogsFor(prof.id)) { if (l.date <= today && (!heroLast || l.date > heroLast)) heroLast = l.date; }
+    const heroPrefix = prof.id + '|';
+    for (const k of Object.keys(db.completions)) {
+      if (!k.startsWith(heroPrefix)) continue;
+      const d = k.slice(heroPrefix.length);
+      if (d <= today && (!heroLast || d > heroLast)) heroLast = d;
+    }
     return sendJson(res, 200, {
       linked: true, profileId: prof.id,
       athleteName: prof.firstName + ' ' + prof.lastName,
+      firstName: prof.firstName || '',
+      checkinsThisWeek: heroCheckins,
+      sessionsThisWeek: heroSessions,
+      lastWorkoutDate: heroLast,
       date: today,
       todayAssignment: a.sessionId
         ? { date: today, sessionId: a.sessionId, sessionName: a.sessionName, codes: a.codes, note: a.note || '' }

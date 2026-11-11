@@ -686,6 +686,8 @@ function showView(name) {
   if (name === 'devices') renderDevices();
   if (name === 'coverage') renderCoverage();
   if (name === 'exercises') renderExercises();
+  syncBackHome(name);
+  if (name === 'landing') ensureLandingCompare();
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -700,8 +702,9 @@ $$('[data-goto]').forEach(b => b.addEventListener('click', () => showView(b.data
    payments are not configured the server says so, and that message
    is shown plainly under the cards instead of leaving a dead
    button. */
-$$('[data-join-tier]').forEach(b => b.addEventListener('click', async () => {
-  const note = $('[data-join-message]');
+async function rpJoinTier(b) {
+  const scope = b.closest('.rp-compare, .landing-card');
+  const note = (scope && scope.querySelector('[data-join-message]')) || $('[data-join-message]');
   const showNote = (msg) => { if (note) note.textContent = msg; };
   b.disabled = true;
   showNote('One moment…');
@@ -721,7 +724,8 @@ $$('[data-join-tier]').forEach(b => b.addEventListener('click', async () => {
     showNote('Something went wrong. Please try again.');
   }
   b.disabled = false;
-}));
+}
+$$('[data-join-tier]').forEach(b => b.addEventListener('click', () => rpJoinTier(b)));
 
 /* ---------------- landing tier view toggle (v32) ----------------
    Cards is the default view. Compare plans swaps the tier cards
@@ -2354,9 +2358,10 @@ function syncHomePrimary() {
 async function renderThisWeek() {
   const slot = $('#thisweek-slot');
   if (!slot) return;
-  if (!isAthleteUser()) { slot.innerHTML = ''; return; }
+  if (!isAthleteUser()) { slot.innerHTML = ''; renderTodayHero(null); return; }
   let data;
-  try { data = await api('/api/my/week'); } catch (_) { slot.innerHTML = ''; return; }
+  try { data = await api('/api/my/week'); } catch (_) { slot.innerHTML = ''; renderTodayHero(null); return; }
+  renderTodayHero(data);
   if (!data.linked) {
     slot.innerHTML = `<div class="card">
       <h2>This Week</h2>
@@ -9523,3 +9528,238 @@ async function renderInviteRequests() {
     } catch (err) { alert(err.message); }
   }));
 }
+
+
+/* RP-HOME-REDESIGN-START (v34) ------------------------------------
+   Homepage redesign. Three pieces, all built from data the app
+   already has:
+   1. Member Today hero: greeting by first name, today's session
+      with one start action, a coach note, a week strip, and a
+      "Your Work" progress row. Real counts only; zero states say
+      so plainly. Fed by /api/my/week (renderThisWeek calls in).
+   2. Back to Home: one control under the header on every view
+      except home itself.
+   3. Compare Plans: the plan cards and the comparison table sit
+      right under the visitor hero. The table is cloned from the
+      existing markup so inclusions and prices have one source. */
+const RP_COPY = {
+  greetNamed: (n) => `What's good, ${n}?`,
+  greetPlain: "What's good?",
+  main: "Today's session is up. Let's get to work.",
+  support: 'Your plan, your progress. One session at a time.',
+  start: "Start Today's Workout",
+  caughtUp: "You're all caught up for today. Keep learning and be ready for the next one.",
+  noteLabel: 'From Coach AJ',
+  note: "I want you to know why you're doing the work, not just check a box and move on. Focus on the details today, log what you did, and give me something we can build on. Keep getting better.",
+  workHeading: 'Your Work',
+  emptyLast: 'Your first session starts here.',
+  emptyStreak: 'Start your streak today.',
+  emptyWeek: 'Nothing logged yet this week.',
+  emptyLab: 'Your Lab Report starts with baseline testing.',
+  back: 'Back to Home',
+  compareHeading: 'Compare Plans',
+  compareSub: "See what's included at each level.",
+  compareIntro: "Pick the level of coaching that fits what you need. You can see exactly what's included before you move up.",
+  trial: 'Try Lab Access free for 3 days. No card needed.',
+  trialAction: 'Try Lab Access',
+};
+const RP_PLANS = [
+  { tier: 'access', name: 'Lab Access', price: '$10', line: 'Learn the work. Track the work.', up: '', action: 'Choose Lab Access' },
+  { tier: 'training', name: 'Lab Training', price: '$49.99', line: 'Get a plan built for you.', up: 'Add your own training plan and coach feedback.', action: 'Choose Lab Training' },
+  { tier: 'pass', name: 'Lab Pass', price: '$99', line: 'More time with your coach.', up: 'Add live web sessions and in-person opportunities.', action: 'Choose Lab Pass' },
+];
+
+function rpFirstName(data) {
+  const raw = data && (data.firstName || (data.athleteName || '').split(' ')[0]);
+  return String(raw || '').trim();
+}
+
+function renderTodayHero(data) {
+  const view = document.getElementById('view-home');
+  if (!view) return;
+  let slot = document.getElementById('rp-hero-slot');
+  if (!data || !isAthleteUser()) {
+    if (slot) slot.remove();
+    view.classList.remove('rp-hero-on');
+    return;
+  }
+  if (!slot) {
+    slot = document.createElement('section');
+    slot.id = 'rp-hero-slot';
+    slot.className = 'rp-hero-slot';
+    slot.setAttribute('aria-label', 'Today');
+    view.insertBefore(slot, view.firstChild);
+  }
+  view.classList.add('rp-hero-on');
+  const first = rpFirstName(data);
+  const greet = first ? RP_COPY.greetNamed(esc(first)) : esc(RP_COPY.greetPlain);
+  const todayStrLong = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  const a = data.linked ? data.todayAssignment : null;
+  const weekArr = data.week || [];
+  const todayEntry = weekArr.find(d => d.isToday) || null;
+
+  let stage;
+  if (a && a.sessionId) {
+    stage = `
+      <p class="rp-hero-main">${esc(RP_COPY.main)}</p>
+      <div class="rp-session">
+        <span class="rp-session-code">${esc(a.sessionId)}</span>
+        <span class="rp-session-name">${esc(a.sessionName || '')}</span>
+        ${todayEntry && todayEntry.completed ? '<span class="rp-done">Done</span>' : ''}
+      </div>
+      ${a.note ? `<p class="rp-session-note">${esc(a.note)}</p>` : ''}
+      <button class="rp-start" type="button" data-rp-start="${esc(a.sessionId)}">${esc(RP_COPY.start)} <span aria-hidden="true">→</span></button>`;
+  } else if (data.linked) {
+    stage = `
+      <p class="rp-hero-main">${esc(RP_COPY.caughtUp)}</p>
+      <button class="rp-start rp-start-quiet" type="button" data-rp-learn>Keep learning <span aria-hidden="true">→</span></button>`;
+  } else {
+    stage = `<p class="rp-hero-main">${esc(RP_COPY.support)}</p>`;
+  }
+
+  const weekStrip = (data.linked && weekArr.length) ? `<div class="rp-weekstrip" aria-label="Your week">${weekArr.map(d => {
+    const cls = 'rp-day' + (d.isToday ? ' today' : '') + (d.completed ? ' done' : '') + (d.isOff ? ' off' : '');
+    return `<span class="${cls}"><span class="rp-day-dow">${esc((DAY_NAMES[d.dayKey] || d.dayKey).slice(0, 3))}</span><span class="rp-day-dot" aria-hidden="true">${d.completed ? '✓' : ''}</span><span class="visually-hidden">${d.completed ? 'Done' : (d.isOff ? 'Rest' : (d.sessionId ? 'Planned' : 'Open'))}</span></span>`;
+  }).join('')}</div>` : '';
+
+  /* Your Work: real numbers only. A zero is shown as the plain
+     empty line, never a manufactured count. */
+  let work = '';
+  if (data.linked) {
+    const streak = Number(data.checkinStreak) || 0;
+    const sess = Number(data.sessionsThisWeek) || 0;
+    const cks = Number(data.checkinsThisWeek) || 0;
+    const t = data.speedTeaser;
+    const num = (n, label, empty) => `<div class="rp-stat">
+        <span class="rp-stat-label">${esc(label)}</span>
+        ${n > 0 ? `<span class="rp-stat-num">${n}</span>` : `<span class="rp-stat-empty">${esc(empty)}</span>`}
+      </div>`;
+    const lastTile = `<div class="rp-stat">
+        <span class="rp-stat-label">Last Workout</span>
+        ${data.lastWorkoutDate ? `<span class="rp-stat-num rp-stat-date">${esc(fmtDate(parseDate(data.lastWorkoutDate)))}</span>` : `<span class="rp-stat-empty">${esc(RP_COPY.emptyLast)}</span>`}
+      </div>`;
+    const labTile = t
+      ? `<button class="rp-stat rp-stat-link" type="button" data-rp-lab>
+          <span class="rp-stat-label">Latest Lab Report</span>
+          <span class="rp-stat-num rp-stat-date">${esc(srDisplay(t, t.best))}</span>
+          <span class="rp-stat-sub">${esc(t.name)}</span>
+        </button>`
+      : `<div class="rp-stat"><span class="rp-stat-label">Latest Lab Report</span><span class="rp-stat-empty">${esc(RP_COPY.emptyLab)}</span></div>`;
+    work = `<div class="rp-work">
+      <h2 class="rp-work-title">${esc(RP_COPY.workHeading)}</h2>
+      <div class="rp-stats">
+        ${num(streak, 'Day Streak', RP_COPY.emptyStreak)}
+        ${num(sess, 'Sessions This Week', RP_COPY.emptyWeek)}
+        ${lastTile}
+        ${num(cks, 'Check-ins This Week', RP_COPY.emptyWeek)}
+        ${labTile}
+      </div>
+    </div>`;
+  }
+
+  slot.innerHTML = `
+    <div class="rp-hero">
+      <div class="rp-hero-inner">
+        <p class="rp-hero-date">${esc(todayStrLong)}</p>
+        <h1 class="rp-hero-greet">${greet}</h1>
+        ${stage}
+        ${weekStrip}
+      </div>
+    </div>
+    ${work}
+    <aside class="rp-note" aria-label="${esc(RP_COPY.noteLabel)}">
+      <span class="rp-note-badge" aria-hidden="true">AJ</span>
+      <div>
+        <p class="rp-note-label">${esc(RP_COPY.noteLabel)}</p>
+        <p class="rp-note-text">${esc(RP_COPY.note)}</p>
+      </div>
+    </aside>`;
+
+  const startBtn = slot.querySelector('[data-rp-start]');
+  if (startBtn) startBtn.addEventListener('click', () => {
+    const s = state.sessions.get(startBtn.dataset.rpStart);
+    if (s) { openRunner(sessionToRunnerPlan(s)); return; }
+    /* The runner needs the session in the library; if it is not
+       there, land the member on a search for its code instead of
+       a dead end. */
+    state.libQuery = startBtn.dataset.rpStart;
+    const ls = $('#lib-search'); if (ls) ls.value = state.libQuery;
+    showView('library'); renderLibrary();
+  });
+  const learnBtn = slot.querySelector('[data-rp-learn]');
+  if (learnBtn) learnBtn.addEventListener('click', () => showView('learn'));
+  const labBtn = slot.querySelector('[data-rp-lab]');
+  if (labBtn) labBtn.addEventListener('click', () => showView('speedreport'));
+}
+
+/* Back to Home: one bar under the header, hidden on the home
+   view itself. Signed-in members go to Today; visitors go to the
+   landing page. */
+function syncBackHome(name) {
+  let bar = document.getElementById('rp-backbar');
+  const homeName = state.user ? 'home' : 'landing';
+  if (!bar) {
+    const main = document.getElementById('app');
+    if (!main || !main.parentNode) return;
+    bar = document.createElement('div');
+    bar.id = 'rp-backbar';
+    bar.className = 'rp-backbar';
+    bar.innerHTML = `<button type="button" class="rp-back"><span aria-hidden="true">←</span> ${esc(RP_COPY.back)}</button>`;
+    main.parentNode.insertBefore(bar, main);
+  }
+  const btn = bar.firstElementChild;
+  btn.setAttribute('data-view', homeName);
+  bar.hidden = name === homeName;
+}
+
+/* Compare Plans, right under the visitor hero. */
+function ensureLandingCompare() {
+  if (document.getElementById('rp-compare')) return;
+  const hero = document.querySelector('#view-landing .landing-hero');
+  const srcTable = document.querySelector('#landing-tiers-compare .tier-compare');
+  if (!hero || !srcTable) return;
+  const sec = document.createElement('section');
+  sec.id = 'rp-compare';
+  sec.className = 'rp-compare';
+  sec.setAttribute('aria-labelledby', 'rp-compare-h');
+  sec.innerHTML = `
+    <h2 id="rp-compare-h">${esc(RP_COPY.compareHeading)}</h2>
+    <p class="rp-compare-sub">${esc(RP_COPY.compareSub)}</p>
+    <p class="rp-compare-intro">${esc(RP_COPY.compareIntro)}</p>
+    <div class="rp-plans">${RP_PLANS.map(p => `
+      <div class="rp-plan rp-plan-${p.tier}">
+        <h3>${esc(p.name)}</h3>
+        <p class="rp-plan-price">${esc(p.price)}<span>/mo</span></p>
+        <p class="rp-plan-line">${esc(p.line)}</p>
+        ${p.up ? `<p class="rp-plan-up">${esc(p.up)}</p>` : '<p class="rp-plan-up"></p>'}
+        <button class="btn landing-join" type="button" data-rp-join="${p.tier}">${esc(p.action)}</button>
+      </div>`).join('')}</div>
+    <div class="tier-compare-wrap rp-compare-table"></div>
+    <p class="rp-trial">${esc(RP_COPY.trial)} <button class="landing-textlink" type="button" data-view="invite">${esc(RP_COPY.trialAction)}</button></p>
+    <p class="muted" data-join-message role="status"></p>`;
+  const wrap = sec.querySelector('.rp-compare-table');
+  const clone = srcTable.cloneNode(true);
+  wrap.appendChild(clone);
+  hero.insertAdjacentElement('afterend', sec);
+  sec.querySelectorAll('[data-join-tier]').forEach(b => b.addEventListener('click', () => rpJoinTier(b)));
+  sec.querySelectorAll('[data-rp-join]').forEach(b => {
+    b.setAttribute('data-join-tier', b.dataset.rpJoin);
+    b.addEventListener('click', () => rpJoinTier(b));
+  });
+  /* A quiet shortcut in the hero's own action row. */
+  const actions = hero.querySelector('.landing-actions');
+  if (actions && !actions.querySelector('[data-rp-scroll-compare]')) {
+    const link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'btn landing-compare-link';
+    link.setAttribute('data-rp-scroll-compare', '');
+    link.textContent = RP_COPY.compareHeading;
+    link.addEventListener('click', () => {
+      sec.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+    });
+    actions.appendChild(link);
+  }
+}
+/* RP-HOME-REDESIGN-END */
+ensureLandingCompare();
+syncBackHome('landing');

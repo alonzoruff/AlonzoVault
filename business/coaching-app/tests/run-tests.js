@@ -5696,6 +5696,26 @@ async function main() {
   check('v24: GET This Week alone does not mark the reply seen',
     r.status === 200 && r.json.formCheck.unreadReplyCount === v24UnreadBefore &&
     !!r.json.formCheck.unreadLatest && r.json.formCheck.unreadLatest.id === fcFirstId, r.json.formCheck);
+  check('v34: This Week carries the home hero numbers as real counts',
+    typeof r.json.firstName === 'string' && r.json.firstName.length > 0 &&
+    Number.isInteger(r.json.checkinsThisWeek) && r.json.checkinsThisWeek >= 0 &&
+    Number.isInteger(r.json.sessionsThisWeek) && r.json.sessionsThisWeek >= 0 &&
+    (r.json.lastWorkoutDate === null || /^\d{4}-\d{2}-\d{2}$/.test(r.json.lastWorkoutDate)),
+    { f: r.json.firstName, c: r.json.checkinsThisWeek, s: r.json.sessionsThisWeek, l: r.json.lastWorkoutDate });
+  {
+    const v34App = await apiText(null, '/app.js');
+    const v34Css = await apiText(null, '/styles.css');
+    check('v34: client ships the Today hero, Back to Home and Compare Plans',
+      v34App.status === 200 && v34App.text.includes('RP-HOME-REDESIGN-START') &&
+      v34App.text.includes("Start Today's Workout") && v34App.text.includes('From Coach AJ') &&
+      v34App.text.includes('function syncBackHome') && v34App.text.includes('function ensureLandingCompare') &&
+      v34App.text.includes('Back to Home') && v34App.text.includes('Compare Plans') &&
+      !v34App.text.includes('{firstName}'),
+      v34App.status);
+    check('v34: styles ship the hero, back bar and compare section',
+      v34Css.status === 200 && v34Css.text.includes('.rp-hero') && v34Css.text.includes('.rp-backbar') && v34Css.text.includes('.rp-compare'),
+      v34Css.status);
+  }
   r = await api(null, 'POST', '/api/my/form-checks/' + fcFirstId + '/seen', {});
   check('v24: unauthenticated POST seen is 401', r.status === 401, r.status);
   r = await api(unaFc, 'POST', '/api/my/form-checks/' + fcFirstId + '/seen', {});
