@@ -1674,12 +1674,8 @@ body.logged-out .primary-nav { display: none !important; }
   font-size: 17px; font-weight: 900; line-height: 1.1;
   letter-spacing: .09em; text-transform: uppercase; color: #fff;
 }
-.landing-eyebrow {
-  margin: 58px 0 16px; color: var(--landing-accent);
-  font-size: 12px; font-weight: 900; letter-spacing: .2em;
-}
 .landing-hero h1 {
-  max-width: 600px; margin: 0 0 22px; color: #fff;
+  max-width: 600px; margin: 58px 0 22px; color: #fff;
   font-size: clamp(42px, 7vw, 64px); font-weight: 900;
   line-height: .98; letter-spacing: -.035em;
 }
@@ -1718,10 +1714,9 @@ body.logged-out .primary-nav { display: none !important; }
 .landing-measure-value { color: #fff; font-size: 29px; font-weight: 900; line-height: 1; }
 .landing-card h2 { margin-top: 2px; }
 .landing-section { position: relative; overflow: hidden; }
-.landing-section-number {
-  display: block; margin-bottom: 8px; color: var(--landing-accent);
-  font-size: 42px; font-weight: 900; line-height: .95; letter-spacing: -.03em;
-}
+/* One level of boxing: a section that holds boxed items (the plan cards)
+   drops its own box so the page does not read as cards inside cards. */
+.landing-flat { background: none; border: 0; box-shadow: none; padding-left: 0; padding-right: 0; }
 .landing-list { margin: 6px 0 4px; padding-left: 20px; }
 .landing-list li { margin: 6px 0; font-size: 15px; }
 .landing-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0; }
@@ -1861,8 +1856,7 @@ body.logged-out .primary-nav { display: none !important; }
       linear-gradient(90deg, rgba(5, 5, 6, .5) 0%, rgba(5, 5, 6, 0) 72%),
       url('/assets/hero-sprinter.jpg') 72% center / cover no-repeat #09090b;
   }
-  .landing-eyebrow { margin-top: 42px; }
-  .landing-hero h1 { font-size: 43px; }
+  .landing-hero h1 { font-size: 43px; margin-top: 42px; }
   .landing-subline { font-size: 18px; }
   .landing-actions { align-items: stretch; flex-direction: column; }
   .landing-hero .btn { width: 100%; }
@@ -2031,40 +2025,15 @@ body.logged-out .primary-nav { display: none !important; }
 @keyframes heroIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: no-preference) {
   .landing-hero-content > * { animation: heroIn .35s var(--ease-enter) both; }
-  .landing-hero-content > :nth-child(2) { animation-delay: 40ms; }
-  .landing-hero-content > :nth-child(3) { animation-duration: .45s; animation-delay: 70ms; }
-  .landing-hero-content > :nth-child(4) { animation-delay: 130ms; }
-  .landing-hero-content > :nth-child(5) { animation-delay: 190ms; }
-  .landing-hero-content > :nth-child(6) { animation-duration: .25s; animation-delay: 250ms; }
-  .landing-hero-content > :nth-child(7) { animation-duration: .25s; animation-delay: 320ms; }
+  .landing-hero-content > :nth-child(2) { animation-duration: .45s; animation-delay: 70ms; }
+  .landing-hero-content > :nth-child(3) { animation-delay: 130ms; }
+  .landing-hero-content > :nth-child(4) { animation-delay: 190ms; }
+  .landing-hero-content > :nth-child(5) { animation-duration: .25s; animation-delay: 250ms; }
+  .landing-hero-content > :nth-child(6) { animation-duration: .25s; animation-delay: 320ms; }
   .landing-measure { animation: heroIn .4s var(--ease-enter) both; animation-delay: 340ms; }
   .landing-measure:nth-child(2) { animation-delay: 400ms; }
   .landing-measure:nth-child(3) { animation-delay: 460ms; }
 }
-
-/* ---- scroll reveals (landing): the hidden state exists only
-   under html.motion-ok, which app.js adds when motion is welcome
-   and IntersectionObserver exists. Revealed once, stays visible. */
-html.motion-ok [data-reveal] { opacity: 0; transform: translateY(14px); }
-html.motion-ok [data-reveal].rv-in {
-  opacity: 1; transform: translateY(0);
-  transition: opacity .42s var(--ease-std), transform .42s var(--ease-enter);
-}
-@media print { html.motion-ok [data-reveal] { opacity: 1 !important; transform: none !important; } }
-/* Inside a revealed block, small groups stagger by a step or two. */
-@keyframes itemIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes rowIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes chipIn { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
-html.motion-ok .landing-sample.rv-in .landing-sample-row { animation: rowIn .45s var(--ease-enter) both; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(2) { animation-delay: 60ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(3) { animation-delay: 120ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(4) { animation-delay: 120ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-delta { animation: chipIn .4s var(--ease-enter) both; animation-delay: 120ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(2) .landing-sample-delta { animation-delay: 180ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(3) .landing-sample-delta { animation-delay: 240ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(4) .landing-sample-delta { animation-delay: 240ms; }
-html.motion-ok .landing-card.rv-in .landing-tier { animation: itemIn .45s var(--ease-enter) both; }
-html.motion-ok .landing-card.rv-in .landing-tier:nth-child(2) { animation-delay: 60ms; }
 
 /* ---- report data typography: the improvement chip reads as a
    chip, the best mark carries the row, prices align on a grid. -- */
@@ -2288,34 +2257,34 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --shadow-bar: 0 -1px 0 var(--line), 0 -8px 24px -12px rgba(0, 0, 0, .6);
 }
 
-/* ---- Carbon Lime: the performance lab. Deep carbon rooms, a
+/* ---- Carbon: the performance lab. Deep carbon rooms, a
    woven texture on the page, sharper corners, stronger borders,
-   and lime carrying the accent work app-wide — buttons, tabs,
-   key numbers — with restraint. ---- */
+   and bright white carrying the accent work app-wide: buttons, tabs,
+   key numbers. ---- */
 [data-theme="carbon"] {
   color-scheme: dark;
   --bg: #08090a;
   --card: #101214;
-  --ink: #eef0e9;
-  --muted: #a2a89b;
-  --line: #31382a;
-  --red: #b9e62c;
-  --red-dark: #d3f36a;
-  --accent-ink: #141a04;
+  --ink: #eceef0;
+  --muted: #a3a7ad;
+  --line: #30343a;
+  --red: #f2f3f5;
+  --red-dark: #ffffff;
+  --accent-ink: #0b0c0d;
   --surface-2: #17191c;
   --surface-hover: #1f2326;
-  --field-bg: #0b0d0a;
-  --panel: #0a0c0a;
-  --panel-2: #12140f;
+  --field-bg: #0b0c0d;
+  --panel: #0a0b0c;
+  --panel-2: #111214;
   --header-bg: #0a0b0c;
-  --chip-bg: #22261c;
-  --chip-ink: #d5dcc4;
+  --chip-bg: #24272b;
+  --chip-ink: #d3d6db;
   --radius: 8px;
   --radius-sm: 6px;
   --shadow-card: inset 0 1px 0 rgba(255, 255, 255, .04), 0 2px 8px rgba(0, 0, 0, .45);
   --shadow-pop: 0 16px 40px rgba(0, 0, 0, .65), 0 2px 8px rgba(0, 0, 0, .5);
   --shadow-btn: 0 1px 2px rgba(0, 0, 0, .5);
-  --focus-ring: rgba(185, 230, 44, .22);
+  --focus-ring: rgba(242, 243, 245, .22);
   --accent: var(--red);
   --accent-strong: var(--red-dark);
   --r-card: var(--radius);
@@ -2323,9 +2292,9 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --r-inner: 4px;
   --r-pill: 999px;
   --surface-pop: #15181a;
-  --line-strong: #636d52;
-  --focus: #b9e62c;
-  --accent-tint: rgba(185, 230, 44, .12);
+  --line-strong: #666b73;
+  --focus: #f2f3f5;
+  --accent-tint: rgba(255, 255, 255, .1);
   --danger: var(--high);
   --ok: var(--low);
   --warn: #e3c766; --warn-bg: #2a2113; --warn-line: #57451c;
@@ -2337,48 +2306,47 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
     repeating-linear-gradient(-45deg, rgba(255, 255, 255, .016) 0 10px, transparent 10px 20px);
 }
 [data-theme="carbon"] #view-landing {
-  --landing-accent: #cdf463;
-  --landing-accent-hover: #ddff70;
+  --landing-accent: #e6e8ec;
+  --landing-accent-hover: #ffffff;
 }
 [data-theme="carbon"] .landing-hero {
   border-bottom: 3px solid var(--landing-accent);
   box-shadow: inset 3px 0 0 var(--landing-accent);
 }
 [data-theme="carbon"] .topbar {
-  border-bottom-color: rgba(185, 230, 44, .5);
+  border-bottom-color: rgba(255, 255, 255, .35);
 }
 [data-theme="carbon"] .hero {
   box-shadow: inset 0 -3px 0 var(--red), var(--shadow-card);
 }
 
-/* ---- Studio: the daylight edit. Warm white rooms, black ink,
-   silver borders, wide soft corners — and lime kept small: the
-   landing marks and little highlights, nothing loud. Graphite
-   carries the buttons and tabs. The landing hero photo stays,
+/* ---- Studio: the daylight edit. Clean white rooms, black ink,
+   grey borders, wide soft corners. Graphite carries the
+   buttons, tabs and landing marks. The landing hero photo stays,
    with the words set into a light panel so they read clean. ---- */
 [data-theme="studio"] {
   color-scheme: light;
-  --bg: #f4f2ed;
-  --card: #fffefa;
+  --bg: #f3f4f5;
+  --card: #ffffff;
   --ink: #1b1c1f;
-  --muted: #716c61;
-  --line: #ded9ce;
+  --muted: #6b6f76;
+  --line: #dcdee1;
   --red: #232529;
   --red-dark: #232529;
-  --accent-ink: #f8f6f1;
-  --surface-2: #efede7;
-  --surface-hover: #e6e3da;
+  --accent-ink: #f8f9fa;
+  --surface-2: #eceef0;
+  --surface-hover: #e2e4e7;
   --field-bg: #ffffff;
-  --panel: #ebe9e3;
-  --panel-2: #f8f6f2;
-  --header-bg: #fffefa;
-  --chip-bg: #e9e6de;
-  --chip-ink: #57534a;
+  --panel: #e9ebed;
+  --panel-2: #f7f8f9;
+  --header-bg: #ffffff;
+  --chip-bg: #e7e9ec;
+  --chip-ink: #4f535a;
   --radius: 20px;
   --radius-sm: 14px;
-  --shadow-card: 0 1px 2px rgba(74, 68, 54, .05), 0 10px 30px -18px rgba(74, 68, 54, .35);
-  --shadow-pop: 0 24px 48px -16px rgba(74, 68, 54, .28), 0 2px 8px rgba(74, 68, 54, .12);
-  --shadow-btn: 0 1px 2px rgba(74, 68, 54, .12);
+  --shadow-card: 0 1px 2px rgba(30, 34, 40, .05), 0 10px 30px -18px rgba(30, 34, 40, .35);
+  --shadow-pop: 0 24px 48px -16px rgba(30, 34, 40, .28), 0 2px 8px rgba(30, 34, 40, .12);
+  --shadow-btn: 0 1px 2px rgba(30, 34, 40, .12);
   --focus-ring: rgba(35, 37, 41, .16);
   --accent: var(--red);
   --accent-strong: var(--red-dark);
@@ -2386,8 +2354,8 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --r-control: var(--radius-sm);
   --r-inner: 10px;
   --r-pill: 999px;
-  --surface-pop: #fffefa;
-  --line-strong: #948c7c;
+  --surface-pop: #ffffff;
+  --line-strong: #8a8f97;
   --focus: #232529;
   --accent-tint: rgba(35, 37, 41, .07);
   /* Studio signal shades (v25): the hues and meanings stay fixed,
@@ -2398,16 +2366,16 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --danger: var(--high);
   --ok: var(--low);
   --warn: #8a6510; --warn-bg: #fbf1d6; --warn-line: #e6cf8a;
-  --shadow-bar: 0 -1px 0 var(--line), 0 -10px 30px -18px rgba(74, 68, 54, .3);
-  --shadow-bar-top: 0 1px 0 var(--line), 0 10px 30px -18px rgba(74, 68, 54, .3);
+  --shadow-bar: 0 -1px 0 var(--line), 0 -10px 30px -18px rgba(30, 34, 40, .3);
+  --shadow-bar-top: 0 1px 0 var(--line), 0 10px 30px -18px rgba(30, 34, 40, .3);
 }
 [data-theme="studio"] #view-landing {
-  --landing-accent: #5b7309;
+  --landing-accent: #2b2e33;
   --landing-accent-ink: #ffffff;
-  --landing-accent-hover: #6d8811;
+  --landing-accent-hover: #44484f;
 }
 [data-theme="studio"] .landing-hero-content {
-  background: rgba(255, 254, 249, .94);
+  background: rgba(255, 255, 255, .94);
   border: 1px solid rgba(27, 28, 31, .08);
   border-radius: 22px;
   padding: 30px;
@@ -2415,14 +2383,16 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
 }
 [data-theme="studio"] .landing-hero h1 {
   color: var(--ink);
-  font-family: Georgia, "Times New Roman", serif;
   font-weight: 700;
   letter-spacing: -.015em;
 }
+[data-theme="studio"] .landing-hero .btn.landing-compare-link {
+  border-color: rgba(27, 28, 31, .45); color: var(--ink);
+}
 [data-theme="studio"] .landing-wordmark { color: var(--ink); }
 [data-theme="studio"] .landing-logo { filter: none; }
-[data-theme="studio"] .landing-subline { color: #35332d; }
-[data-theme="studio"] .landing-pilot-note { color: #4c463c; }
+[data-theme="studio"] .landing-subline { color: #33363b; }
+[data-theme="studio"] .landing-pilot-note { color: #484b52; }
 [data-theme="studio"] .landing-hero .landing-signin {
   background: transparent; border-color: rgba(27, 28, 31, .45); color: var(--ink);
 }
@@ -2668,9 +2638,9 @@ body.tv-mode .rp-backbar { display: none; }
 .landing-hero .btn.landing-compare-link {
   background: transparent; border: 1px solid rgba(255, 255, 255, .45); color: #fff;
 }
+/* Unboxed on purpose: the plan cards inside it are the boxes. */
 .rp-compare {
   max-width: 960px; margin: 24px auto; padding: 24px 16px;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-card);
 }
 .rp-compare { scroll-margin-top: 72px; }
 .rp-compare h2 { margin: 0; font-size: var(--fs-xl); }

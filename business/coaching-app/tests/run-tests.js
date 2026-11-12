@@ -367,7 +367,7 @@ async function main() {
     appJs.text.includes('EX_CATEGORIES') && appJs.text.includes('data-excat') &&
     appJs.text.includes('data-exequip') && appJs.text.includes('data-extag') &&
     appJs.text.includes('clearExerciseFilters') &&
-    appJs.text.includes('No movements match — clear filters'));
+    appJs.text.includes('No movements match: clear filters'));
   const exCoreMatch = appJs.text.match(/\/\* EXERCISE-FILTER-BEGIN \*\/([\s\S]*?)\/\* EXERCISE-FILTER-END \*\//);
   check('exercise filter core is extractable for data-level tests', !!exCoreMatch);
   if (exCoreMatch && Array.isArray(exlib)) {
@@ -2449,7 +2449,7 @@ async function main() {
     appJs.text.includes('runTodayButtonHtml') && appJs.text.includes('data-run-today') &&
     appJs.text.includes('wireRunTodayButtons') &&
     appJs.text.includes('openRunner(sessionToRunnerPlan(s))') &&
-    appJs.text.includes('▶ Run today\'s workout') && appJs.text.includes('▶ Run — ') &&
+    appJs.text.includes('▶ Run today\'s workout') && appJs.text.includes('▶ Run: ') &&
     appJs.text.includes('todayRunTargets(data.groups)'));
   const stylesCss = await apiText(null, '/styles.css');
   check('today-run button style is served at the restored pre-design treatment (56px)',
@@ -2470,7 +2470,7 @@ async function main() {
     !/fonts\.googleapis|fonts\.gstatic/.test(pageHtml.text + stylesCss.text + appJs.text));
   check('rollback: run button label is plain text with the session code (no mono run-code span)',
     appJs.text.includes("`▶ Run today's workout · ${esc(target.sessionId)}`") &&
-    appJs.text.includes("`▶ Run — ${esc(target.groupName)} · ${esc(target.sessionId)}`") &&
+    appJs.text.includes("`▶ Run: ${esc(target.groupName)} · ${esc(target.sessionId)}`") &&
     !appJs.text.includes('run-code') && !stylesCss.text.includes('.run-code'));
   check('rollback: run button has no slab gradient or spring-press treatment',
     !/\.btn\.run-today-btn\s*\{[^}]*linear-gradient/.test(stylesCss.text) &&
@@ -2479,7 +2479,7 @@ async function main() {
     /\.lane-divider\s*\{[^}]*height:\s*4px/.test(stylesCss.text) &&
     /\.lane-divider \.lane-strip\s*\{[^}]*repeating-linear-gradient\(90deg, var\(--red\) 0 34px, transparent 34px 56px\)/.test(stylesCss.text));
   check('rollback: Today + session detail headers are the plain headings again (no split heads)',
-    appJs.text.includes('<h2>Today — ${DAY_NAMES[todayKey]}, ${fmtDate(info.date)}</h2>') &&
+    appJs.text.includes('<h2>Today: ${DAY_NAMES[todayKey]}, ${fmtDate(info.date)}</h2>') &&
     appJs.text.includes('<h2><span class="code-link">${esc(s.id)}</span> · ${esc(s.name)}</h2>') &&
     !appJs.text.includes('split-head') && !stylesCss.text.includes('.split-head'));
   check('rollback: mark/result cells render in the body font (no mono num cells)',
@@ -2552,7 +2552,7 @@ async function main() {
     srSeg.slice(0, 120));
   check('printable report: print-only footer carries the brand line and a generated-on date',
     srSeg.includes('sr-print-footer') &&
-    srSeg.includes('Ruffin Performance — Measured speed, not promised speed.') &&
+    srSeg.includes('Ruffin Performance. Measured speed, not promised speed.') &&
     srSeg.includes('Generated on') && !srSeg.includes('CSCS'),
     srSeg.slice(0, 120));
   check('printable report: print CSS scopes the report, hides chrome and other views, shows the footer',
@@ -2663,16 +2663,16 @@ async function main() {
     pageHtml.text.includes("localStorage.getItem('rp-theme')") &&
     pageHtml.text.includes("document.documentElement.setAttribute('data-theme'") &&
     pageHtml.text.indexOf("getItem('rp-theme')") < pageHtml.text.indexOf('/styles.css'));
-  check('stylesheet carries the Carbon Lime and Studio theme blocks',
+  check('stylesheet carries the Carbon and Studio theme blocks',
     stylesCss.text.includes('[data-theme="carbon"]') &&
     stylesCss.text.includes('[data-theme="studio"]') &&
     stylesCss.text.includes('--bg: #08090a') &&
-    stylesCss.text.includes('--bg: #f4f2ed'));
+    stylesCss.text.includes('--bg: #f3f4f5'));
   check('the themes genuinely differ in accent, radius and surfaces',
-    /\[data-theme="carbon"\] \{[^}]*--red: #b9e62c/.test(stylesCss.text) &&
+    /\[data-theme="carbon"\] \{[^}]*--red: #f2f3f5/.test(stylesCss.text) &&
     /\[data-theme="carbon"\] \{[^}]*--radius: 8px/.test(stylesCss.text) &&
     /\[data-theme="studio"\] \{[^}]*--radius: 20px/.test(stylesCss.text) &&
-    /\[data-theme="studio"\] \{[^}]*--card: #fffefa/.test(stylesCss.text));
+    /\[data-theme="studio"\] \{[^}]*--card: #ffffff/.test(stylesCss.text));
   check('Studio gives the landing hero a light panel and Carbon a lime hero edge',
     stylesCss.text.includes('[data-theme="studio"] .landing-hero-content') &&
     stylesCss.text.includes('[data-theme="carbon"] .landing-hero'));
@@ -2688,7 +2688,7 @@ async function main() {
   check('app JS owns the theme list with all three looks',
     appJs.text.includes('const THEMES = [') &&
     appJs.text.includes("id: 'silverline', name: 'Silverline'") &&
-    appJs.text.includes("id: 'carbon', name: 'Carbon Lime'") &&
+    appJs.text.includes("id: 'carbon', name: 'Carbon'") &&
     appJs.text.includes("id: 'studio', name: 'Studio'"));
   check('applyTheme switches live and persists per device (localStorage rp-theme)',
     appJs.text.includes('function applyTheme(') &&
@@ -2766,7 +2766,7 @@ async function main() {
     pageHtml.text.includes('id="view-landing"') &&
     pageHtml.text.includes('Ruffin Performance') &&
     pageHtml.text.includes('Member sign in') &&
-    pageHtml.text.includes('Founding pilot — membership is invite-only while we launch.'),
+    pageHtml.text.includes('Founding pilot: membership is invite-only while we launch.'),
     pageHtml.text.slice(0, 120));
   check('landing shows the three Lab tiers with prices and join buttons (no checkout wording)',
     pageHtml.text.includes('Lab Access') && pageHtml.text.includes('$10') &&
@@ -2950,10 +2950,9 @@ async function main() {
     faqSlice.includes('no card is required to start') &&
     faqSlice.includes('does not include personalized training, live web sessions, or the in-person opportunity'),
     faqSlice.slice(0, 120));
-  check('landing FAQ tier prices match the locked prices',
-    faqSlice.includes('Lab Access is $10 a month') &&
-    faqSlice.includes('Lab Training is $49.99 a month') &&
-    faqSlice.includes('Lab Pass is $99 a month'),
+  check('landing FAQ points to the plan cards for prices (each price shown once, on the cards)',
+    !faqSlice.includes('$10') && !faqSlice.includes('$49.99') && !faqSlice.includes('$99') &&
+    faqSlice.includes('The prices are on the plan cards above'),
     faqSlice.slice(0, 120));
   check('landing FAQ accordion markup is accessible and wired in the served JS and CSS',
     (pageHtml.text.match(/class="faq-q"/g) || []).length === 8 &&
@@ -3088,9 +3087,9 @@ async function main() {
     appJs.text.includes("{ name: 'Avg sleep', unit: 'hrs', better: 'higher' }") &&
     !appJs.text.includes("], 'week', true)"));
   check('qa: a concern with no pain score offers a not-recorded option (never a silent 1/10)',
-    appJs.text.includes('— not recorded —') && appJs.text.includes("value === '' ? undefined"));
+    appJs.text.includes('Not recorded') && appJs.text.includes("value === '' ? undefined"));
   check('qa: roster cards show account-link status without opening Edit profile',
-    appJs.text.includes('🔗 Linked:') && appJs.text.includes('Not linked — open Edit profile'));
+    appJs.text.includes('🔗 Linked:') && appJs.text.includes('Not linked. Open Edit profile'));
   check('qa: checklist group cards carry the shared Run button',
     appJs.text.includes('runTodayButtonHtml({ sessionId: a.sessionId, groupName: blk.group.name })'));
   check('qa: library detail remembers its origin and filters can be cleared in one tap',
@@ -5796,19 +5795,18 @@ async function main() {
   check('landing leads with the Canva headline, measured-speed subline and invitation CTA',
     pageHtml.text.includes('Speed development, built on evidence.') &&
     pageHtml.text.includes('Measured speed, not promised speed.') &&
-    pageHtml.text.includes('SPEED · POWER · DATA') &&
+    !pageHtml.text.includes('SPEED · POWER · DATA') &&
     pageHtml.text.includes('Request an Invitation'));
-  check('landing carries the Canva measure panels, numbered sections and footer strip',
+  check('landing carries the Canva measure panels and footer strip (no numbered sections, no hidden-until-reveal)',
     pageHtml.text.includes('landing-measure-label">Acceleration') &&
     pageHtml.text.includes('landing-measure-value">10m') &&
     pageHtml.text.includes('landing-measure-label">Max Velocity') &&
     pageHtml.text.includes('landing-measure-value">Fly 10') &&
     pageHtml.text.includes('landing-measure-label">Progress') &&
     pageHtml.text.includes('landing-measure-value">Retest') &&
-    pageHtml.text.includes('landing-section-number" aria-hidden="true">01') &&
-    pageHtml.text.includes('landing-section-number" aria-hidden="true">02') &&
-    pageHtml.text.includes('landing-section-number" aria-hidden="true">03') &&
-    pageHtml.text.includes('Lab memberships from $10/month. Baseline testing and your Lab Report come with every tier.'));
+    !pageHtml.text.includes('landing-section-number') &&
+    !pageHtml.text.includes('data-reveal') &&
+    pageHtml.text.includes('Baseline testing and your Lab Report come with every tier.'));
   check('landing photo hero and silver accent stay scoped to the landing',
     stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
     stylesCss.text.includes('--landing-accent: #e4e6eb') &&
@@ -7439,7 +7437,7 @@ async function waitForServer(tries = 60) {
         plJs.text.includes('renderCwLoadChart') && plJs.text.includes('/load-chart') &&
         plJs.text.includes('runner-loadchart') && plJs.text.includes('renderHomeLoads') &&
         plJs.text.includes('/api/my/loads') && plJs.text.includes('Your lifting loads') &&
-        plJs.text.includes('Needs a max test') && plJs.text.includes('No max on file — ask coach'),
+        plJs.text.includes('Needs a max test') && plJs.text.includes('No max on file: ask coach'),
         plJs.status);
       const plTvStart = plJs.text.indexOf('TV BOARD');
       const plTvEnd = plJs.text.indexOf('/* ---------------- boot', plTvStart);
@@ -9134,7 +9132,7 @@ async function waitForServer(tries = 60) {
           lrPage.text.includes('<li>New videos added weekly</li>') &&
           lrPage.text.includes('<li>New content added regularly</li>'), lrPage.status);
         check('pricing carries the personalized coaching lines on Lab Training',
-          lrPage.text.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
+          lrPage.text.includes('A plan built for you, one athlete at a time. Not a template everyone follows') &&
           lrPage.text.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
           lrPage.status);
 
