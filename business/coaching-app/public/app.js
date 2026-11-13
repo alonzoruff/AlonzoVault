@@ -687,7 +687,8 @@ function showView(name) {
   if (name === 'coverage') renderCoverage();
   if (name === 'exercises') renderExercises();
   syncBackHome(name);
-  if (name === 'landing') ensureLandingCompare();
+  document.body.classList.toggle('rp-public', !state.user && RP_PUBLIC_VIEWS.has(name));
+  rpSyncUrl(name);
   window.scrollTo(0, 0);
 }
 document.addEventListener('click', (e) => {
@@ -701,7 +702,11 @@ $$('[data-goto]').forEach(b => b.addEventListener('click', () => showView(b.data
    payment page for that tier and sends the visitor there. While
    payments are not configured the server says so, and that message
    is shown plainly under the cards instead of leaving a dead
-   button. */
+   button.
+   v35: no button calls this while Stripe is not configured. The
+   landing buttons all say Request an Invitation and open the
+   form (data-invite-tier). To turn payments on, put
+   data-join-tier back on the plan buttons. */
 async function rpJoinTier(b) {
   const scope = b.closest('.rp-compare, .landing-card');
   const note = (scope && scope.querySelector('[data-join-message]')) || $('[data-join-message]');
@@ -726,24 +731,6 @@ async function rpJoinTier(b) {
   b.disabled = false;
 }
 $$('[data-join-tier]').forEach(b => b.addEventListener('click', () => rpJoinTier(b)));
-
-/* ---------------- landing tier view toggle (v32) ----------------
-   Cards is the default view. Compare plans swaps the tier cards
-   for the side-by-side table. One view stays visible at a time;
-   the hidden view carries the hidden attribute so it leaves the
-   tab order. The buttons carry aria-pressed for the state. */
-$$('[data-tier-view]').forEach(btn => btn.addEventListener('click', () => {
-  const showCompare = btn.dataset.tierView === 'compare';
-  $$('[data-tier-view]').forEach(b => {
-    const on = b === btn;
-    b.classList.toggle('active', on);
-    b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  });
-  const cards = document.getElementById('landing-tiers-cards');
-  const compare = document.getElementById('landing-tiers-compare');
-  if (cards) cards.hidden = showCompare;
-  if (compare) compare.hidden = !showCompare;
-}));
 
 /* ---------------- landing portal preview tabs (v33) ----------------
    Three previews of what is inside the portal. The first panel
@@ -1808,45 +1795,46 @@ function renderAccount() {
     $('#chip-logout').addEventListener('click', out);
     $('#acct-logout').addEventListener('click', out);
   } else {
-    chip.textContent = 'Not logged in';
-    note.textContent = 'Log in or create an account';
+    chip.textContent = '';
+    note.textContent = '';
+    const forgot = RP_CONTACT_EMAIL
+      ? `Forgot your password? <a href="mailto:${esc(RP_CONTACT_EMAIL)}?subject=${encodeURIComponent('Password help')}">Email Coach AJ</a> from the address on your account and I will help you get back in.`
+      : 'Forgot your password? Ask Coach AJ directly and he will help you get back in.';
     $('#account-main').innerHTML = `
-      <div class="card" id="req-invite-card">
-        <h2>Request an invitation</h2>
-        <p>Membership is <strong>invite-only</strong> during the founding pilot. There is no public sign-up, and every seat starts with a baseline test and a Lab Report.</p>
-        <p class="muted">How it works: Coach AJ adds your email to the invite list. When he does, create your account below with that exact email and you are in. Your program, your check-ins, and your numbers all live here from day one. Know Coach AJ? Ask him to put your email on the list.</p>
-        <div class="tw-actions">
-          <button class="btn primary" id="req-goto-register" type="button">I've been invited: create my account</button>
-          <button class="btn secondary" id="req-goto-login" type="button">Member log in</button>
+      <div class="card acct-card">
+        <div class="acct-tabs" role="tablist" aria-label="Account">
+          <button type="button" role="tab" id="acct-tab-login" class="acct-tab active" aria-selected="true" aria-controls="login-form">Log in</button>
+          <button type="button" role="tab" id="acct-tab-register" class="acct-tab" aria-selected="false" aria-controls="register-form" tabindex="-1">Create account</button>
         </div>
-      </div>
-      <form id="login-form" class="card">
-        <h2>Log in</h2>
-        <label>Email <input type="email" id="li-email" required autocomplete="email"></label>
-        <label>Password <input type="password" id="li-pass" required autocomplete="current-password"></label>
-        <button class="btn primary" type="submit">Log in</button>
-        <p class="error" id="li-err"></p>
-        <p class="muted">Forgot your password? There is no self-service reset yet. Members, ask your coach; coaches, ask the app owner.</p>
-      </form>
-      <form id="register-form" class="card">
-        <h2>Create an account</h2>
-        <p class="muted">Membership is invite-only during the founding pilot. If your coach invited you, create your account with the exact email they invited. It is how your coach links you for the daily check-in, and it holds your practice log and cross-training swaps. Coach accounts unlock the coach tools.</p>
-        <label>Email <input type="email" id="rg-email" required autocomplete="email"></label>
-        <label>Password (8+ characters) <input type="password" id="rg-pass" required autocomplete="new-password" minlength="8"></label>
-        <button class="btn primary" type="submit">Create account</button>
-        <p class="error" id="rg-err"></p>
-      </form>
-      ${appVersionHtml()}`;
-    const reqReg = $('#req-goto-register');
-    if (reqReg) reqReg.addEventListener('click', () => {
-      const el = document.getElementById('register-form');
-      if (el) { el.scrollIntoView({ block: 'start' }); const em = $('#rg-email'); if (em) em.focus({ preventScroll: true }); }
-    });
-    const reqLogin = $('#req-goto-login');
-    if (reqLogin) reqLogin.addEventListener('click', () => {
-      const el = document.getElementById('login-form');
-      if (el) { el.scrollIntoView({ block: 'start' }); const em = $('#li-email'); if (em) em.focus({ preventScroll: true }); }
-    });
+        <form id="login-form" role="tabpanel" aria-labelledby="acct-tab-login">
+          <label>Email <input type="email" id="li-email" required autocomplete="email"></label>
+          <label>Password <input type="password" id="li-pass" required autocomplete="current-password"></label>
+          <button class="btn primary" type="submit">Log in</button>
+          <p class="error" id="li-err" role="alert"></p>
+          <p class="muted">${forgot}</p>
+        </form>
+        <form id="register-form" role="tabpanel" aria-labelledby="acct-tab-register" hidden>
+          <p class="muted">Create your account with the exact email I invited. It is how I link you to your daily check-in and your numbers.</p>
+          <label>Email <input type="email" id="rg-email" required autocomplete="email"></label>
+          <label>Password (8+ characters) <input type="password" id="rg-pass" required autocomplete="new-password" minlength="8"></label>
+          <button class="btn primary" type="submit">Create account</button>
+          <p class="error" id="rg-err" role="alert"></p>
+        </form>
+        <p class="acct-invite muted">No invitation yet? <button class="landing-textlink" type="button" data-invite-tier="unsure">Request an invitation</button></p>
+      </div>`;
+    const setAcctTab = (which) => {
+      const reg = which === 'register';
+      $('#login-form').hidden = reg;
+      $('#register-form').hidden = !reg;
+      [['login', !reg], ['register', reg]].forEach(([k, on]) => {
+        const t = $('#acct-tab-' + k);
+        t.classList.toggle('active', on);
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+      });
+    };
+    $('#acct-tab-login').addEventListener('click', () => setAcctTab('login'));
+    $('#acct-tab-register').addEventListener('click', () => setAcctTab('register'));
     $('#login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -8686,6 +8674,124 @@ const EMPTY_CONTENT = {
   coachEducation: [], labPrograms: [], guide: '', season: '', videoUpload: null,
 };
 
+/* ---------------- public site: routes, trial, contact (v35) ----------------
+   One place for the values the public pages share.
+   RP_TRIAL_DAYS  the free trial length, filled by the server from the
+                  TRIAL_DAYS setting (default 3). Every mention on the
+                  public site reads it from here.
+   RP_CONTACT_EMAIL  filled from CONTACT_EMAIL; empty until it is set.
+   RP_RESPONSE_WINDOW  how soon Coach AJ answers a request. AJ's call. */
+const RP_TRIAL_DAYS = Math.max(1, parseInt('__TRIAL_DAYS__', 10) || 3);
+const RP_CONTACT_EMAIL = (e => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : ''))('__CONTACT_EMAIL__');
+const RP_RESPONSE_WINDOW = '2 business days';
+
+const RP_PUBLIC_VIEWS = new Set(['landing', 'book', 'invite', 'account', 'privacy', 'terms']);
+/* Landing sections that have their own address. They show the
+   landing page and scroll to the section. */
+const RP_SECTION_PATHS = {
+  '/plans': 'plans', '/how-it-works': 'how-it-works', '/faq': 'faq', '/about': 'about',
+};
+const RP_VIEW_PATHS = {
+  landing: '/', home: '/', account: '/login', invite: '/request-invitation',
+  book: '/book-a-lab-talk', privacy: '/privacy', terms: '/terms',
+};
+const RP_PATH_VIEWS = {};
+Object.keys(RP_VIEW_PATHS).forEach(k => { if (k !== 'home') RP_PATH_VIEWS[RP_VIEW_PATHS[k]] = k; });
+RP_PATH_VIEWS['/'] = 'landing';
+const RP_TITLES = {
+  plans: 'Plans', 'how-it-works': 'How It Works', faq: 'FAQ', about: 'About',
+  account: 'Sign In', invite: 'Request an Invitation', book: 'Book a Lab Talk',
+  privacy: 'Privacy', terms: 'Terms',
+};
+const RP_BASE_TITLE = document.title;
+let rpPendingPath = null;
+let rpSuppressPush = false;
+
+function rpPathFor(name) {
+  if (RP_VIEW_PATHS[name]) return RP_VIEW_PATHS[name];
+  return '/' + name;
+}
+function rpSyncUrl(name) {
+  const want = rpPendingPath || rpPathFor(name);
+  const key = rpPendingPath ? want.slice(1) : name;
+  rpPendingPath = null;
+  document.title = RP_TITLES[key] ? RP_TITLES[key] + ' | ' + RP_BASE_TITLE : RP_BASE_TITLE;
+  if (rpSuppressPush || location.pathname === want) return;
+  try { history.pushState({ view: name }, '', want); } catch (_) { /* address bar not available */ }
+}
+function rpScrollToSection(id) {
+  const t = document.getElementById(id);
+  if (t) t.scrollIntoView({ block: 'start', behavior: 'auto' });
+}
+/* Open an address: a landing section, a public page, or any view. */
+function rpRoute(path, replaceUnknown) {
+  path = (path || '/').replace(/\/+$/, '') || '/';
+  const section = RP_SECTION_PATHS[path];
+  rpSuppressPush = true;
+  try {
+    if (section) { showView('landing'); rpScrollToSection(section); document.title = RP_TITLES[section] + ' | ' + RP_BASE_TITLE; }
+    else if (path === '/') showView(state.user ? 'home' : 'landing');
+    else {
+      const name = RP_PATH_VIEWS[path] || path.slice(1);
+      if (/^[a-z0-9-]+$/.test(name) && document.getElementById('view-' + name)) showView(name);
+      else {
+        showView(state.user ? 'home' : 'landing');
+        if (replaceUnknown !== false) { try { history.replaceState({}, '', '/'); } catch (_) { /* ignore */ } }
+      }
+    }
+  } finally { rpSuppressPush = false; }
+}
+function rpGo(route) {
+  if (RP_SECTION_PATHS['/' + route]) {
+    rpPendingPath = '/' + route;
+    showView('landing');
+    rpScrollToSection(route);
+  } else if (route === 'home') {
+    showView(state.user ? 'home' : 'landing');
+  } else {
+    showView(route);
+  }
+}
+window.addEventListener('popstate', () => rpRoute(location.pathname));
+document.addEventListener('click', (e) => {
+  const a = e.target.closest && e.target.closest('a[data-route]');
+  if (a && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+    e.preventDefault();
+    rpGo(a.dataset.route);
+    return;
+  }
+  /* Every plan button asks for an invitation with that plan chosen. */
+  const inv = e.target.closest && e.target.closest('[data-invite-tier]');
+  if (inv) { state.inviteTier = inv.dataset.inviteTier; showView('invite'); }
+});
+
+/* One sample Lab Report, shown wherever the page shows one. */
+const RP_SAMPLE_REPORT = [
+  ['40-yard dash', '4.91 s', '4.78 s', '−0.13 s'],
+  ['Fly 10', '1.04 s', '0.99 s', '−0.05 s'],
+  ['Vertical jump', '24.5″', '27.0″', '+2.5″'],
+  ['Broad jump', '7′6″', '8′1″', '+7″'],
+];
+function rpFillPublicBits() {
+  $$('[data-trial-days]').forEach(n => { n.textContent = String(RP_TRIAL_DAYS); });
+  $$('[data-sample-report]').forEach(n => {
+    n.innerHTML = `<div class="sample-report-wrap"><table class="sample-report">
+      <caption class="visually-hidden">Sample Lab Report: baseline compared with best</caption>
+      <thead><tr><th scope="col">Test</th><th scope="col">Baseline</th><th scope="col">Best</th><th scope="col">Change</th></tr></thead>
+      <tbody>${RP_SAMPLE_REPORT.map(r => `<tr><th scope="row">${r[0]}</th><td>${r[1]}</td><td><strong>${r[2]}</strong></td><td class="sample-report-change">${r[3]}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+  });
+  const yr = $('#footer-year'); if (yr) yr.textContent = String(new Date().getFullYear());
+  const c = $('#footer-contact');
+  if (c) {
+    if (RP_CONTACT_EMAIL) { c.href = 'mailto:' + RP_CONTACT_EMAIL; c.textContent = RP_CONTACT_EMAIL; c.hidden = false; }
+    else c.remove();
+  }
+  const pc = document.querySelector('[data-contact-line]');
+  if (pc && RP_CONTACT_EMAIL) pc.innerHTML = `Email me at <a href="mailto:${esc(RP_CONTACT_EMAIL)}">${esc(RP_CONTACT_EMAIL)}</a> and I will answer.`;
+}
+rpFillPublicBits();
+
 (async function boot() {
   try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
   try {
@@ -8723,6 +8829,7 @@ const EMPTY_CONTENT = {
   const bookTokenParam = new URLSearchParams(window.location.search).get('booking');
   if (bookTokenParam) state.bookToken = bookTokenParam;
   if (state.bookToken) showView('book');
+  else if (location.pathname !== '/') rpRoute(location.pathname);
   else if (state.user) showView('home');
   showAppUpdatedToast();
   renderLibrary();
@@ -9157,9 +9264,16 @@ function renderBook() {
   }
   const src = CALENDLY_URL + '?' + params.toString();
   el.innerHTML = `<div class="card calendly-card">
-      <iframe class="calendly-frame" src="${esc(src)}" title="Book a 30 minute Lab Talk with Coach AJ" loading="lazy"></iframe>
-      <p class="muted calendly-fallback">Calendar not showing? <a href="${esc(CALENDLY_URL)}" target="_blank" rel="noopener">Open the booking page in a new tab</a>.</p>
+      <p class="calendly-top">Pick a time for a 30 minute call. Calendar not showing? <a href="${esc(CALENDLY_URL)}" target="_blank" rel="noopener">Open the booking page in a new tab</a>.</p>
+      <div class="calendly-wrap" id="calendly-wrap">
+        <p class="calendly-loading" role="status">Loading the calendar…</p>
+        <iframe class="calendly-frame" src="${esc(src)}" title="Book a 30 minute Lab Talk with Coach AJ"></iframe>
+      </div>
     </div>`;
+  const frame = el.querySelector('.calendly-frame');
+  if (frame) frame.addEventListener('load', () => {
+    const w = $('#calendly-wrap'); if (w) w.classList.add('loaded');
+  });
 }
 
 /* The earlier in-app slot picker, kept for reference and for the
@@ -9406,51 +9520,92 @@ async function renderBookings() {
 function renderInvite() {
   const el = $('#invite-main');
   if (!el) return;
-  el.innerHTML = `<div class="card">
-    <h2>Tell Coach AJ about your goals</h2>
-    <label>Your name <input type="text" id="invite-name" maxlength="120" autocomplete="name"></label>
-    <label>Email <input type="email" id="invite-email" maxlength="200" autocomplete="email"></label>
-    <p class="ci-label">Who is this for?</p>
-    <label><input type="radio" name="invite-for" value="self" checked> Myself</label>
-    <label><input type="radio" name="invite-for" value="child"> My child</label>
-    <label>Athlete name (if you are requesting for your child) <input type="text" id="invite-athlete" maxlength="120"></label>
-    <label>Which membership interests you?
+  const pre = state.inviteTier;
+  state.inviteTier = null;
+  const tier = ['access', 'training', 'pass', 'unsure'].includes(pre) ? pre : 'unsure';
+  const opt = (v, label) => `<option value="${v}"${v === tier ? ' selected' : ''}>${label}</option>`;
+  const R = '<span class="req" aria-hidden="true">*</span>';
+  el.innerHTML = `<form class="card invite-form" id="invite-form" novalidate>
+    <p class="muted">Fields marked ${R} are required.</p>
+    <fieldset class="invite-for">
+      <legend class="ci-label">Who is this for? ${R}</legend>
+      <label><input type="radio" name="invite-for" value="self" checked> Myself</label>
+      <label><input type="radio" name="invite-for" value="child"> My child</label>
+    </fieldset>
+    <label>Your name ${R} <input type="text" id="invite-name" maxlength="120" autocomplete="name" required></label>
+    <label id="invite-athlete-wrap" hidden>Your athlete's name ${R} <input type="text" id="invite-athlete" maxlength="120"></label>
+    <label>Email ${R} <input type="email" id="invite-email" maxlength="200" autocomplete="email" required></label>
+    <label><span id="invite-grade-label">Your age or grade</span> ${R} <input type="text" id="invite-grade" maxlength="60" placeholder="For example 16, or 11th grade" required></label>
+    <label>Sport or event ${R} <input type="text" id="invite-sport" maxlength="80" placeholder="For example track, 100m and 200m" required></label>
+    <label>Where do you train? <input type="text" id="invite-location" maxlength="120" placeholder="Town or area"></label>
+    <label>Which plan interests you?
       <select id="invite-tier">
-        <option value="access">Lab Access $10/mo</option>
-        <option value="training">Lab Training $49.99/mo</option>
-        <option value="pass">Lab Pass $99/mo</option>
-        <option value="unsure" selected>Not sure yet</option>
+        ${opt('access', 'Lab Access $10/mo')}
+        ${opt('training', 'Lab Training $49.99/mo')}
+        ${opt('pass', 'Lab Pass $99/mo')}
+        ${opt('unsure', 'Not sure yet')}
       </select>
     </label>
-    <label>What are you working toward? <textarea id="invite-goal" rows="3" maxlength="1000" placeholder="Your goals, and anything you want Coach AJ to know"></textarea></label>
+    <label>What are you working toward? ${R} <textarea id="invite-goal" rows="3" maxlength="1000" placeholder="Your goals, and anything you want me to know" required></textarea></label>
+    <label class="invite-consent"><input type="checkbox" id="invite-consent"> <span id="invite-consent-text">I am 18 or older.</span> ${R}</label>
     <div class="visually-hidden" aria-hidden="true">
       <label>Website <input type="text" id="invite-website" name="website" tabindex="-1" autocomplete="off"></label>
     </div>
     <p class="error" id="invite-err" role="alert"></p>
-    <button class="btn primary" type="button" id="invite-send" style="width:auto">Send Request</button>
-    <p class="muted">No account or payment is needed to send a request.</p>
-  </div>`;
-  const send = $('#invite-send');
-  if (send) send.addEventListener('click', async () => {
+    <button class="btn primary" type="submit" id="invite-send" style="width:auto">Send Request</button>
+    <div class="invite-next">
+      <p class="ci-label">What happens next</p>
+      <p>I read your request myself and reply by email within ${esc(RP_RESPONSE_WINDOW)}. If the Lab fits, I invite your email. Your first ${RP_TRIAL_DAYS} days are then a free trial at the Lab Access level, with no card. Sending a request needs no account and no payment.</p>
+      <p class="muted">Your details are used only to answer this request. <a href="/privacy" data-route="privacy">Privacy</a></p>
+    </div>
+  </form>`;
+  const syncFor = () => {
+    const child = (document.querySelector('input[name="invite-for"]:checked') || {}).value === 'child';
+    $('#invite-athlete-wrap').hidden = !child;
+    $('#invite-grade-label').textContent = child ? "Your athlete's age or grade" : 'Your age or grade';
+    $('#invite-consent-text').textContent = child
+      ? "I am this athlete's parent or guardian and I agree to be contacted about this request."
+      : 'I am 18 or older.';
+  };
+  $$('input[name="invite-for"]').forEach(r => r.addEventListener('change', syncFor));
+  $('#invite-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
     const errEl = $('#invite-err');
+    const send = $('#invite-send');
+    const child = (document.querySelector('input[name="invite-for"]:checked') || {}).value === 'child';
+    const v = (id) => $(id).value.trim();
+    const missing = [];
+    if (!v('#invite-name')) missing.push('your name');
+    if (child && !v('#invite-athlete')) missing.push("your athlete's name");
+    if (!v('#invite-email')) missing.push('your email');
+    if (!v('#invite-grade')) missing.push('an age or grade');
+    if (!v('#invite-sport')) missing.push('a sport or event');
+    if (!v('#invite-goal')) missing.push('what you are working toward');
+    if (missing.length) { errEl.textContent = 'Please add ' + missing.join(', ') + '.'; return; }
+    if (!$('#invite-consent').checked) {
+      errEl.textContent = child ? "Please confirm you are the athlete's parent or guardian." : 'Please confirm you are 18 or older.';
+      return;
+    }
+    errEl.textContent = '';
     send.disabled = true;
     try {
-      const forEl = document.querySelector('input[name="invite-for"]:checked');
       await apiPost('/api/invite-requests', {
-        name: $('#invite-name').value, email: $('#invite-email').value,
-        forWhom: forEl ? forEl.value : 'self',
-        athleteName: $('#invite-athlete').value,
+        name: v('#invite-name'), email: v('#invite-email'),
+        forWhom: child ? 'child' : 'self',
+        athleteName: child ? v('#invite-athlete') : '',
+        grade: v('#invite-grade'), sport: v('#invite-sport'), location: v('#invite-location'),
         tierInterest: $('#invite-tier').value,
-        goal: $('#invite-goal').value,
+        goal: v('#invite-goal'),
+        consent: true,
         website: $('#invite-website').value,
       });
       el.innerHTML = `<div class="card">
         <h2>Request received</h2>
-        <p>Request received. Coach AJ will review it and reach out if there is a good fit.</p>
-        <p class="muted">No account or payment is needed. If Coach AJ invites your email, you can create your account with that email.</p>
+        <p>Thank you. I will read it and reply by email within ${esc(RP_RESPONSE_WINDOW)}.</p>
+        <p class="muted">No account or payment is needed yet. If I invite your email, create your account with that email and your first ${RP_TRIAL_DAYS} days are free.</p>
       </div>`;
     } catch (err) {
-      if (errEl) errEl.textContent = err.message;
+      errEl.textContent = err.message;
       send.disabled = false;
     }
   });
@@ -9536,17 +9691,7 @@ const RP_COPY = {
   emptyWeek: 'Nothing logged yet this week.',
   emptyLab: 'Your Lab Report starts with baseline testing.',
   back: 'Back to Home',
-  compareHeading: 'Compare Plans',
-  compareSub: "See what's included at each level.",
-  compareIntro: "Pick the level of coaching that fits what you need. You can see exactly what's included before you move up.",
-  trial: 'Try Lab Access free for 3 days. No card needed.',
-  trialAction: 'Try Lab Access',
 };
-const RP_PLANS = [
-  { tier: 'access', name: 'Lab Access', price: '$10', line: 'Learn the work. Track the work.', up: '', action: 'Choose Lab Access' },
-  { tier: 'training', name: 'Lab Training', price: '$49.99', line: 'Get a plan built for you.', up: 'Add your own training plan and coach feedback.', action: 'Choose Lab Training' },
-  { tier: 'pass', name: 'Lab Pass', price: '$99', line: 'More time with your coach.', up: 'Add live web sessions and in-person opportunities.', action: 'Choose Lab Pass' },
-];
 
 function rpFirstName(data) {
   const raw = data && (data.firstName || (data.athleteName || '').split(' ')[0]);
@@ -9691,54 +9836,5 @@ function syncBackHome(name) {
   bar.hidden = name === homeName;
 }
 
-/* Compare Plans, right under the visitor hero. */
-function ensureLandingCompare() {
-  if (document.getElementById('rp-compare')) return;
-  const hero = document.querySelector('#view-landing .landing-hero');
-  const srcTable = document.querySelector('#landing-tiers-compare .tier-compare');
-  if (!hero || !srcTable) return;
-  const sec = document.createElement('section');
-  sec.id = 'rp-compare';
-  sec.className = 'rp-compare';
-  sec.setAttribute('aria-labelledby', 'rp-compare-h');
-  sec.innerHTML = `
-    <h2 id="rp-compare-h">${esc(RP_COPY.compareHeading)}</h2>
-    <p class="rp-compare-sub">${esc(RP_COPY.compareSub)}</p>
-    <p class="rp-compare-intro">${esc(RP_COPY.compareIntro)}</p>
-    <div class="rp-plans">${RP_PLANS.map(p => `
-      <div class="rp-plan rp-plan-${p.tier}">
-        <h3>${esc(p.name)}</h3>
-        <p class="rp-plan-price">${esc(p.price)}<span>/mo</span></p>
-        <p class="rp-plan-line">${esc(p.line)}</p>
-        ${p.up ? `<p class="rp-plan-up">${esc(p.up)}</p>` : '<p class="rp-plan-up"></p>'}
-        <button class="btn landing-join" type="button" data-rp-join="${p.tier}">${esc(p.action)}</button>
-      </div>`).join('')}</div>
-    <div class="tier-compare-wrap rp-compare-table"></div>
-    <p class="rp-trial">${esc(RP_COPY.trial)} <button class="landing-textlink" type="button" data-view="invite">${esc(RP_COPY.trialAction)}</button></p>
-    <p class="muted" data-join-message role="status"></p>`;
-  const wrap = sec.querySelector('.rp-compare-table');
-  const clone = srcTable.cloneNode(true);
-  wrap.appendChild(clone);
-  hero.insertAdjacentElement('afterend', sec);
-  sec.querySelectorAll('[data-join-tier]').forEach(b => b.addEventListener('click', () => rpJoinTier(b)));
-  sec.querySelectorAll('[data-rp-join]').forEach(b => {
-    b.setAttribute('data-join-tier', b.dataset.rpJoin);
-    b.addEventListener('click', () => rpJoinTier(b));
-  });
-  /* A quiet shortcut in the hero's own action row. */
-  const actions = hero.querySelector('.landing-actions');
-  if (actions && !actions.querySelector('[data-rp-scroll-compare]')) {
-    const link = document.createElement('button');
-    link.type = 'button';
-    link.className = 'btn landing-compare-link';
-    link.setAttribute('data-rp-scroll-compare', '');
-    link.textContent = RP_COPY.compareHeading;
-    link.addEventListener('click', () => {
-      sec.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
-    });
-    actions.appendChild(link);
-  }
-}
 /* RP-HOME-REDESIGN-END */
-ensureLandingCompare();
 syncBackHome('landing');

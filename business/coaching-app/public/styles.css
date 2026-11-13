@@ -2667,3 +2667,127 @@ body.tv-mode .rp-backbar { display: none; }
   .rp-start, .rp-start:hover { transition: none; transform: none; }
 }
 /* RP-HOME-REDESIGN-END */
+
+/* =====================================================================
+   v35 site revamp: public nav, wide desktop layout, one Plans section,
+   sample Lab Report table, invitation form, account tabs, Calendly,
+   legal pages, footer links.
+   ===================================================================== */
+a.brand-block { color: inherit; text-decoration: none; }
+a.brand-block:focus-visible { outline: 2px solid var(--landing-accent, currentColor); outline-offset: 3px; border-radius: 6px; }
+#view-landing [id], #plans, #faq, #about, #how-it-works { scroll-margin-top: 84px; }
+
+/* Public nav: real links, shown only to visitors. */
+.public-nav { display: none; }
+body.logged-out .public-nav {
+  display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 6px;
+}
+.public-nav a {
+  color: var(--ink); text-decoration: none; font-size: 14.5px; font-weight: 600;
+  padding: 9px 12px; border-radius: 8px; min-height: 40px; display: inline-flex; align-items: center;
+}
+.public-nav a:hover { background: var(--panel-2); }
+.public-nav a:focus-visible { outline: 2px solid var(--landing-accent, currentColor); outline-offset: 1px; }
+.public-nav a.public-nav-signin { border: 1px solid var(--line); }
+body.logged-out .topbar-inner { flex-wrap: wrap; gap: 4px 12px; }
+body.logged-out .topbar-right .nav-toggle { display: none; }
+body.logged-out .public-nav { margin-left: auto; }
+@media (max-width: 620px) {
+  body.logged-out .public-nav { width: 100%; justify-content: space-between; margin-left: 0; flex-wrap: nowrap; padding-bottom: 4px; gap: 2px; }
+  .public-nav a { white-space: nowrap; font-size: 14px; padding: 9px 8px; }
+  .sample-report th, .sample-report td { padding: 9px 8px; }
+}
+
+/* Wide desktop layout for the public pages. */
+@media (min-width: 1000px) {
+  body.rp-public .topbar-inner, body.rp-public main, body.rp-public .footer { max-width: 1120px; }
+  body.rp-public .landing-hero { margin-left: -16px; margin-right: -16px; padding: 64px 56px; min-height: 560px; }
+  body.rp-public .landing-hero-content { width: min(640px, 100%); }
+}
+@media (min-width: 760px) {
+  .landing-steps { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* How it works */
+.landing-steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 14px; counter-reset: step; grid-template-columns: 1fr; }
+.landing-steps li { counter-increment: step; position: relative; padding: 14px 16px 14px 56px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2, transparent); }
+.landing-steps li::before {
+  content: counter(step); position: absolute; left: 14px; top: 14px; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 800; font-size: 14px;
+  background: var(--landing-accent); color: var(--landing-accent-ink);
+}
+.landing-steps h3 { margin: 0 0 4px; font-size: 16px; }
+.landing-steps p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+
+/* Sample Lab Report table (baseline vs best vs change) */
+.sample-report-wrap { overflow-x: auto; margin: 12px 0 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sample-report { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14.5px; }
+.sample-report th, .sample-report td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.sample-report thead th { background: var(--panel-2); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.sample-report tbody tr:last-child th, .sample-report tbody tr:last-child td { border-bottom: 0; }
+.sample-report th:first-child, .sample-report td:first-child { text-align: left; font-weight: 400; white-space: normal; }
+.sample-report-change { color: var(--landing-accent); font-weight: 800; }
+[data-theme="studio"] .sample-report-change { color: var(--ink); }
+.portal-shot { margin: 0 0 14px; }
+.portal-shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+
+/* One Plans section */
+#plans .landing-tiers { display: grid; grid-template-columns: 1fr; gap: 16px; margin: 18px 0 8px; }
+@media (min-width: 820px) { #plans .landing-tiers { grid-template-columns: repeat(3, 1fr); align-items: stretch; } }
+#plans .landing-tier { padding: 20px 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2, transparent); }
+#plans .landing-tier-pill { position: absolute; top: 18px; right: 16px; margin: 0; }
+#plans .landing-tier h3 { margin: 0; font-size: 20px; }
+#plans .landing-price { margin: 6px 0 8px; font-size: 34px; font-weight: 900; }
+#plans .landing-price span { font-size: 15px; font-weight: 500; color: var(--muted); }
+.landing-incl { margin: 6px 0 6px; font-size: 12px; letter-spacing: .07em; text-transform: uppercase; font-weight: 800; color: var(--muted); }
+.landing-checks { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 9px; }
+.landing-checks li { position: relative; padding-left: 24px; font-size: 14.5px; line-height: 1.45; }
+.landing-checks li::before { content: "✓"; position: absolute; left: 0; top: 0; font-weight: 900; color: var(--landing-accent); }
+[data-theme="studio"] .landing-checks li::before { color: var(--ink); }
+.landing-tier-note { font-size: 13px; margin: 0 0 12px; }
+#plans .landing-join, .landing-final .landing-cta {
+  margin-top: auto; width: 100%; min-height: 46px; font-weight: 800;
+  background: var(--landing-accent); border-color: var(--landing-accent); color: var(--landing-accent-ink);
+}
+.landing-final .landing-cta { width: auto; padding: 12px 22px; }
+.nb { white-space: nowrap; }
+.landing-trial { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 14.5px; }
+
+/* Invitation form */
+.req { color: var(--landing-accent); font-weight: 900; margin-left: 2px; }
+[data-theme="studio"] .req { color: #b3261e; }
+.invite-form .invite-for { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.invite-form .invite-for legend { padding: 0; margin-bottom: 4px; }
+.invite-form label { display: block; margin-bottom: 12px; }
+.invite-form label[hidden] { display: none; }
+.invite-form label input[type="text"], .invite-form label input[type="email"], .invite-form label select, .invite-form label textarea { display: block; width: 100%; margin-top: 4px; }
+.invite-form .invite-for label { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.invite-form .invite-consent { display: flex; align-items: flex-start; gap: 10px; }
+.invite-form .invite-consent input { margin-top: 3px; flex: none; }
+.invite-next { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.invite-next p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; }
+@media (min-width: 900px) { #invite-main .card, #account-main .card, #book-main .card { max-width: 720px; } .legal { max-width: 780px; } }
+
+/* Account tabs */
+.acct-tabs { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.acct-tab { background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); font: inherit; font-weight: 700; padding: 10px 14px; min-height: 44px; cursor: pointer; }
+.acct-tab.active { color: var(--ink); border-bottom-color: var(--landing-accent); }
+[data-theme="studio"] .acct-tab.active { border-bottom-color: var(--ink); }
+.acct-tab:focus-visible { outline: 2px solid var(--landing-accent, currentColor); outline-offset: -2px; }
+.acct-card form[hidden] { display: none; }
+.acct-invite { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+
+/* Calendly: link on top, loading state, full height */
+.calendly-top { margin: 0; padding: 14px 16px 10px; font-size: 14.5px; }
+.calendly-wrap { position: relative; min-height: 640px; }
+.calendly-loading { position: absolute; inset: 0 0 auto 0; margin: 0; padding: 40px 16px; text-align: center; color: var(--muted); }
+.calendly-wrap.loaded .calendly-loading { display: none; }
+.calendly-frame { display: block; position: relative; width: 100%; height: 1150px; border: 0; }
+@media (min-width: 900px) { .calendly-frame { height: 860px; } }
+
+/* Legal pages and footer links */
+.legal h2 { margin: 18px 0 6px; font-size: 17px; }
+.legal h2:first-child { margin-top: 0; }
+.legal p { margin: 0 0 8px; line-height: 1.6; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0; }
+.footer-links a { color: inherit; text-decoration: underline; padding: 6px 0; min-height: 32px; display: inline-flex; align-items: center; }
