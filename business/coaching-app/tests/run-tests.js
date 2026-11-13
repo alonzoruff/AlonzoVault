@@ -5634,6 +5634,31 @@ async function main() {
                every Wren field must read as her own empty state.
        Una   — registered but NOT linked (clear not-linked state). */
   check('this-week slot is in the served page', pageHtml.text.includes('id="thisweek-slot"'));
+  {
+    /* v35 desktop layout: the six Today slots sit in one side rail
+       (ids unchanged), and the wide-screen grid lives only inside the
+       1100px media block so phones and tablets keep the single column. */
+    const sideStart = pageHtml.text.indexOf('<div class="home-side">');
+    const homeContent = pageHtml.text.indexOf('id="home-content"');
+    const railHtml = sideStart > -1 ? pageHtml.text.slice(sideStart, homeContent) : '';
+    check('v35: Today side rail wraps the six slots, ahead of home-content',
+      sideStart > -1 && homeContent > sideStart &&
+      ['thisweek-slot', 'checkin-slot', 'memberlog-slot', 'intake-slot', 'goals-slot', 'announce-slot']
+        .every(id => railHtml.includes('id="' + id + '"')));
+    const v35Start = stylesCss.text.indexOf('RP-LAYOUT-V35-START');
+    const v35End = stylesCss.text.indexOf('RP-LAYOUT-V35-END');
+    const v35Css = v35Start > -1 ? stylesCss.text.slice(v35Start, v35End) : '';
+    const v35Media = v35Css.slice(v35Css.indexOf('@media (min-width: 1100px)'));
+    check('v35: dashboard grid and workout grid are wide-screen only',
+      v35Css.includes('@media (min-width: 1100px)') &&
+      /#view-home\.active\.rp-hero-on\s*\{[^}]*display:\s*grid/.test(v35Media) &&
+      /#lib-list\s*\{[^}]*display:\s*grid/.test(v35Media) &&
+      v35Css.indexOf('display: grid') > v35Css.indexOf('@media (min-width: 1100px)'));
+    check('v35: layout pass adds no fonts, gradients, accent bars or motion',
+      v35Css.length > 0 && !/font-family|gradient|animation|::before|::after|border-left/.test(v35Css));
+    check('v35: This Week session codes stay on one line',
+      /\.tw-code\s*\{[^}]*white-space:\s*nowrap/.test(v35Css));
+  }
   check('this-week wiring is in the served JS',
     appJs.text.includes('renderThisWeek') && appJs.text.includes('/api/my/week') &&
     appJs.text.includes('See your Lab Report') && appJs.text.includes('check-in streak'));

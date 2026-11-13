@@ -2668,6 +2668,7 @@ body.tv-mode .rp-backbar { display: none; }
 }
 /* RP-HOME-REDESIGN-END */
 
+/* =====================================================================
    v35 site revamp: public nav, wide desktop layout, one Plans section,
    sample Lab Report table, invitation form, account tabs, Calendly,
    legal pages, footer links.
@@ -2790,7 +2791,7 @@ body.logged-out .public-nav { margin-left: auto; }
 .legal p { margin: 0 0 8px; line-height: 1.6; }
 .footer-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0; }
 .footer-links a { color: inherit; text-decoration: underline; padding: 6px 0; min-height: 32px; display: inline-flex; align-items: center; }
-=======
+
 /* Public home refresh: a wider, editorial layout keeps the training
    proof and the next step visible without changing member app views. */
 body.logged-out .topbar {
@@ -2926,3 +2927,41 @@ body.logged-out #view-landing #plans .landing-tier { position: relative; display
 }
 body.logged-out #view-landing .landing-faq + .landing-card,
 body.logged-out #view-landing .landing-faq + .landing-card + .landing-card { grid-column: 1 / -1; }
+
+/* RP-LAYOUT-V35-START ---------------------------------------------
+   Desktop layout pass. Structure only: no new fonts, colours,
+   accent bars or motion, so the Oct 25 rollback look stands and all
+   three themes carry over through the existing tokens. Phones and
+   tablets (under 1100px) are unchanged.
+   1. Header, nav, Back to Home and footer run 1160px wide.
+   2. Today becomes a two-column dashboard for members: hero and the
+      day's plan on the left; This Week, check-in, log, intake, goals
+      and announcements in a rail on the right.
+   3. Workouts, Videos and Exercises use the full width; the workout
+      list becomes a two-column grid. Reading views stay at 880px. */
+@media (min-width: 1100px) {
+  .topbar-inner, .mainnav, .rp-backbar, .footer { max-width: 1160px; }
+  main:has(> #view-home.active.rp-hero-on),
+  main:has(> #view-library.active),
+  main:has(> #view-videos.active),
+  main:has(> #view-exercises.active) { max-width: 1160px; }
+
+  #view-home.active.rp-hero-on {
+    display: grid; align-items: start; column-gap: 24px;
+    grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
+    grid-template-areas: "hero side" "main side";
+  }
+  #view-home.rp-hero-on > #rp-hero-slot { grid-area: hero; min-width: 0; }
+  #view-home.rp-hero-on > .home-side { grid-area: side; min-width: 0; }
+  #view-home.rp-hero-on > #home-content { grid-area: main; min-width: 0; }
+
+  #lib-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+  #lib-list > .session-row { margin: 0; height: 100%; }
+  #lib-list > :not(.session-row) { grid-column: 1 / -1; }
+  .home-side .tw-code { font-size: 10.5px; }
+}
+/* This Week strip: session codes stay on one line (ACC-01 used to
+   break at the hyphen on phones and in the desktop rail). */
+.tw-day { min-width: 0; padding-left: 2px; padding-right: 2px; }
+.tw-code { white-space: nowrap; letter-spacing: -.01em; }
+/* RP-LAYOUT-V35-END */
