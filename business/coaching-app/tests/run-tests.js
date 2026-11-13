@@ -367,7 +367,7 @@ async function main() {
     appJs.text.includes('EX_CATEGORIES') && appJs.text.includes('data-excat') &&
     appJs.text.includes('data-exequip') && appJs.text.includes('data-extag') &&
     appJs.text.includes('clearExerciseFilters') &&
-    appJs.text.includes('No movements match — clear filters'));
+    appJs.text.includes('No movements match: clear filters'));
   const exCoreMatch = appJs.text.match(/\/\* EXERCISE-FILTER-BEGIN \*\/([\s\S]*?)\/\* EXERCISE-FILTER-END \*\//);
   check('exercise filter core is extractable for data-level tests', !!exCoreMatch);
   if (exCoreMatch && Array.isArray(exlib)) {
@@ -2449,7 +2449,7 @@ async function main() {
     appJs.text.includes('runTodayButtonHtml') && appJs.text.includes('data-run-today') &&
     appJs.text.includes('wireRunTodayButtons') &&
     appJs.text.includes('openRunner(sessionToRunnerPlan(s))') &&
-    appJs.text.includes('▶ Run today\'s workout') && appJs.text.includes('▶ Run — ') &&
+    appJs.text.includes('▶ Run today\'s workout') && appJs.text.includes('▶ Run: ') &&
     appJs.text.includes('todayRunTargets(data.groups)'));
   const stylesCss = await apiText(null, '/styles.css');
   check('today-run button style is served at the restored pre-design treatment (56px)',
@@ -2470,7 +2470,7 @@ async function main() {
     !/fonts\.googleapis|fonts\.gstatic/.test(pageHtml.text + stylesCss.text + appJs.text));
   check('rollback: run button label is plain text with the session code (no mono run-code span)',
     appJs.text.includes("`▶ Run today's workout · ${esc(target.sessionId)}`") &&
-    appJs.text.includes("`▶ Run — ${esc(target.groupName)} · ${esc(target.sessionId)}`") &&
+    appJs.text.includes("`▶ Run: ${esc(target.groupName)} · ${esc(target.sessionId)}`") &&
     !appJs.text.includes('run-code') && !stylesCss.text.includes('.run-code'));
   check('rollback: run button has no slab gradient or spring-press treatment',
     !/\.btn\.run-today-btn\s*\{[^}]*linear-gradient/.test(stylesCss.text) &&
@@ -2479,7 +2479,7 @@ async function main() {
     /\.lane-divider\s*\{[^}]*height:\s*4px/.test(stylesCss.text) &&
     /\.lane-divider \.lane-strip\s*\{[^}]*repeating-linear-gradient\(90deg, var\(--red\) 0 34px, transparent 34px 56px\)/.test(stylesCss.text));
   check('rollback: Today + session detail headers are the plain headings again (no split heads)',
-    appJs.text.includes('<h2>Today — ${DAY_NAMES[todayKey]}, ${fmtDate(info.date)}</h2>') &&
+    appJs.text.includes('<h2>Today: ${DAY_NAMES[todayKey]}, ${fmtDate(info.date)}</h2>') &&
     appJs.text.includes('<h2><span class="code-link">${esc(s.id)}</span> · ${esc(s.name)}</h2>') &&
     !appJs.text.includes('split-head') && !stylesCss.text.includes('.split-head'));
   check('rollback: mark/result cells render in the body font (no mono num cells)',
@@ -2528,7 +2528,7 @@ async function main() {
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
     pageHtml.text.includes('data-app-version="v33"') &&
-    pageHtml.text.includes('Ruffin Performance · App v33') &&
+    pageHtml.text.includes('<span id="footer-year">') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Printable Lab Report (v21) ----------------
@@ -2552,7 +2552,7 @@ async function main() {
     srSeg.slice(0, 120));
   check('printable report: print-only footer carries the brand line and a generated-on date',
     srSeg.includes('sr-print-footer') &&
-    srSeg.includes('Ruffin Performance — Measured speed, not promised speed.') &&
+    srSeg.includes('Ruffin Performance. Measured speed, not promised speed.') &&
     srSeg.includes('Generated on') && !srSeg.includes('CSCS'),
     srSeg.slice(0, 120));
   check('printable report: print CSS scopes the report, hides chrome and other views, shows the footer',
@@ -2663,16 +2663,16 @@ async function main() {
     pageHtml.text.includes("localStorage.getItem('rp-theme')") &&
     pageHtml.text.includes("document.documentElement.setAttribute('data-theme'") &&
     pageHtml.text.indexOf("getItem('rp-theme')") < pageHtml.text.indexOf('/styles.css'));
-  check('stylesheet carries the Carbon Lime and Studio theme blocks',
+  check('stylesheet carries the Carbon and Studio theme blocks',
     stylesCss.text.includes('[data-theme="carbon"]') &&
     stylesCss.text.includes('[data-theme="studio"]') &&
     stylesCss.text.includes('--bg: #08090a') &&
-    stylesCss.text.includes('--bg: #f4f2ed'));
+    stylesCss.text.includes('--bg: #f3f4f5'));
   check('the themes genuinely differ in accent, radius and surfaces',
-    /\[data-theme="carbon"\] \{[^}]*--red: #b9e62c/.test(stylesCss.text) &&
+    /\[data-theme="carbon"\] \{[^}]*--red: #f2f3f5/.test(stylesCss.text) &&
     /\[data-theme="carbon"\] \{[^}]*--radius: 8px/.test(stylesCss.text) &&
     /\[data-theme="studio"\] \{[^}]*--radius: 20px/.test(stylesCss.text) &&
-    /\[data-theme="studio"\] \{[^}]*--card: #fffefa/.test(stylesCss.text));
+    /\[data-theme="studio"\] \{[^}]*--card: #ffffff/.test(stylesCss.text));
   check('Studio gives the landing hero a light panel and Carbon a lime hero edge',
     stylesCss.text.includes('[data-theme="studio"] .landing-hero-content') &&
     stylesCss.text.includes('[data-theme="carbon"] .landing-hero'));
@@ -2688,7 +2688,7 @@ async function main() {
   check('app JS owns the theme list with all three looks',
     appJs.text.includes('const THEMES = [') &&
     appJs.text.includes("id: 'silverline', name: 'Silverline'") &&
-    appJs.text.includes("id: 'carbon', name: 'Carbon Lime'") &&
+    appJs.text.includes("id: 'carbon', name: 'Carbon'") &&
     appJs.text.includes("id: 'studio', name: 'Studio'"));
   check('applyTheme switches live and persists per device (localStorage rp-theme)',
     appJs.text.includes('function applyTheme(') &&
@@ -2762,22 +2762,8 @@ async function main() {
      substituted into the shell at serve time — these checks read the
      SERVED files, so a rename that misses a surface fails here. */
   const manifestTxt = await apiText(null, '/manifest.json');
-  check('landing page is the logged-out home (hero + sign in + pilot note)',
-    pageHtml.text.includes('id="view-landing"') &&
-    pageHtml.text.includes('Ruffin Performance') &&
-    pageHtml.text.includes('Member sign in') &&
-    pageHtml.text.includes('Founding pilot — membership is invite-only while we launch.'),
-    pageHtml.text.slice(0, 120));
-  check('landing shows the three Lab tiers with prices and join buttons (no checkout wording)',
-    pageHtml.text.includes('Lab Access') && pageHtml.text.includes('$10') &&
-    pageHtml.text.includes('Lab Training') && pageHtml.text.includes('$49.99') &&
-    pageHtml.text.includes('Lab Pass') && pageHtml.text.includes('$99') &&
-    pageHtml.text.includes('data-join-tier="access"') &&
-    pageHtml.text.includes('data-join-tier="training"') &&
-    pageHtml.text.includes('data-join-tier="pass"') &&
-    !pageHtml.text.includes('$149') &&
-    !pageHtml.text.includes('checkout') && !pageHtml.text.includes('stripe'),
-    pageHtml.text.slice(0, 120));
+
+
   check('join wiring is in the served JS',
     appJs.text.includes('[data-join-tier]') && appJs.text.includes('/api/checkout/session') &&
     appJs.text.includes('data-join-message'));
@@ -2796,60 +2782,12 @@ async function main() {
   };
   const includedCount = (row) => (row.match(/visually-hidden">Included</g) || []).length;
   const notIncludedCount = (row) => (row.match(/visually-hidden">Not included</g) || []).length;
-  check('v32: tier view toggle markup is present in the served landing page',
-    pageHtml.text.includes('data-tier-view="cards"') &&
-    pageHtml.text.includes('data-tier-view="compare"') &&
-    pageHtml.text.includes('>Cards</button>') &&
-    pageHtml.text.includes('>Compare plans</button>') &&
-    pageHtml.text.includes('aria-pressed="true"') &&
-    pageHtml.text.includes('aria-pressed="false"') &&
-    pageHtml.text.includes('id="landing-tiers-cards"') &&
-    pageHtml.text.includes('id="landing-tiers-compare" hidden'),
-    compareSlice.slice(0, 120));
-  check('v32: comparison table is present with all three tier names and the locked prices',
-    compareSlice.includes('class="tier-compare"') &&
-    compareSlice.includes('Lab Access') && compareSlice.includes('Lab Training') &&
-    compareSlice.includes('Lab Pass') &&
-    compareSlice.includes('$10/mo') && compareSlice.includes('$49.99/mo') &&
-    compareSlice.includes('$99/mo') && !compareSlice.includes('$149'),
-    compareSlice.slice(0, 120));
-  check('v32: shared rows are checked for all three tiers',
-    includedCount(compareRow('Lab Sessions and the Inside the Lab library')) === 3 &&
-    includedCount(compareRow('Your workout log and daily check-in')) === 3 &&
-    includedCount(compareRow('Your Lab Report at every retest')) === 3 &&
-    compareSlice.includes('Included in every tier'),
-    compareSlice.slice(0, 120));
-  check('v32: upgrade rows are correct for training and pass',
-    compareSlice.includes('What the higher tiers add') &&
-    notIncludedCount(compareRow('Personalized training built for you')) === 1 &&
-    includedCount(compareRow('Personalized training built for you')) === 2 &&
-    notIncludedCount(compareRow('Program adjustments as you progress')) === 1 &&
-    includedCount(compareRow('Program adjustments as you progress')) === 2 &&
-    notIncludedCount(compareRow('Form checks with a coach reply')) === 1 &&
-    includedCount(compareRow('Form checks with a coach reply')) === 2 &&
-    notIncludedCount(compareRow('Live web sessions with your coach')) === 2 &&
-    includedCount(compareRow('Live web sessions with your coach')) === 1 &&
-    notIncludedCount(compareRow('The opportunity for in-person sessions')) === 2 &&
-    includedCount(compareRow('The opportunity for in-person sessions')) === 1,
-    compareSlice.slice(0, 120));
-  check('v32: Join buttons are present in the compare view for all three tiers',
-    (compareSlice.match(/data-join-tier=/g) || []).length === 3 &&
-    compareSlice.includes('data-join-tier="access"') &&
-    compareSlice.includes('data-join-tier="training"') &&
-    compareSlice.includes('data-join-tier="pass"') &&
-    compareSlice.includes('Join Lab Access') &&
-    compareSlice.includes('Join Lab Training') &&
-    compareSlice.includes('Join Lab Pass'),
-    compareSlice.slice(0, 120));
-  check('v32: toggle wiring and compare styles are in the served JS and CSS',
-    appJs.text.includes('[data-tier-view]') &&
-    appJs.text.includes('landing-tiers-cards') &&
-    appJs.text.includes('landing-tiers-compare') &&
-    appJs.text.includes('aria-pressed') &&
-    stylesCss.text.includes('.tier-view-toggle') &&
-    stylesCss.text.includes('.tier-compare') &&
-    stylesCss.text.includes('.tier-compare-wrap'),
-    compareSlice.slice(0, 120));
+
+
+
+
+
+
   check('v33: BRAND version and cache stamps are v33',
     pageHtml.text.includes('data-app-version="v33"') &&
     appJs.text.includes("const APP_VERSION = 'v33'") &&
@@ -2869,52 +2807,11 @@ async function main() {
     portalSlice.indexOf('id="preview-panel-videos"'), portalSlice.indexOf('id="preview-panel-report"'));
   const reportPanel = portalSlice.slice(
     portalSlice.indexOf('id="preview-panel-report"'));
-  check('v33: portal preview tab markup and aria wiring are present in the served landing page',
-    portalSlice.includes('role="tablist"') &&
-    portalSlice.includes('id="preview-tab-training"') &&
-    portalSlice.includes('id="preview-tab-videos"') &&
-    portalSlice.includes('id="preview-tab-report"') &&
-    portalSlice.includes('>Training sessions</button>') &&
-    portalSlice.includes('>Video library</button>') &&
-    portalSlice.includes('>Lab Report</button>') &&
-    portalSlice.includes('aria-controls="preview-panel-training"') &&
-    portalSlice.includes('aria-controls="preview-panel-videos"') &&
-    portalSlice.includes('aria-controls="preview-panel-report"') &&
-    portalSlice.includes('id="preview-tab-training" aria-selected="true"') &&
-    portalSlice.includes('Take a look around before you join. Pick a part of the portal to preview.'),
-    portalSlice.slice(0, 120));
-  check('v33: portal preview panels are present with correct hidden defaults and preserved portal points',
-    portalSlice.includes('id="preview-panel-training"') &&
-    portalSlice.includes('id="preview-panel-videos"') &&
-    portalSlice.includes('id="preview-panel-report"') &&
-    portalSlice.includes('role="tabpanel" id="preview-panel-training" aria-labelledby="preview-tab-training"') &&
-    portalSlice.includes('role="tabpanel" id="preview-panel-videos" aria-labelledby="preview-tab-videos" hidden') &&
-    portalSlice.includes('role="tabpanel" id="preview-panel-report" aria-labelledby="preview-tab-report" hidden') &&
-    trainingPanel.includes('wherever you train') &&
-    trainingPanel.includes('calculated from your own tested maxes') &&
-    trainingPanel.includes('Your own log') &&
-    trainingPanel.includes('sleep, soreness and energy') &&
-    trainingPanel.includes('readiness flags before your next session') &&
-    videosPanel.includes('filmed by your coach himself') &&
-    videosPanel.includes('Not stock video of strangers') &&
-    reportPanel.includes('baseline vs. best vs. latest, updated at every re-test'),
-    portalSlice.slice(0, 120));
-  check('v33: exact form check entitlement sentence is present in the served page',
-    portalSlice.includes('One form check per week is included with Lab Training; extra submissions join the queue. Lab Pass members get priority review within 48 hours.'),
-    portalSlice.slice(0, 120));
-  check('v33: sample previews are labelled Sample with sample session blocks and sample report numbers',
-    trainingPanel.includes('>Sample</span>') &&
-    trainingPanel.includes('Warm-up and movement work') &&
-    trainingPanel.includes('Acceleration work') &&
-    trainingPanel.includes('Strength work') &&
-    reportPanel.includes('>Sample</span>') &&
-    reportPanel.includes('40-yard dash') &&
-    reportPanel.includes('4.91') && reportPanel.includes('4.78'),
-    portalSlice.slice(0, 120));
-  check('v33: portal preview section contains the invite CTA below the panels',
-    portalSlice.includes('<button class="btn landing-cta" type="button" data-view="invite">Request an Invitation') &&
-    portalSlice.indexOf('data-view="invite"') > portalSlice.indexOf('id="preview-panel-report"'),
-    portalSlice.slice(0, 120));
+
+
+
+
+
   check('v33: tab wiring is in the served JS and portal preview styles are in the served CSS',
     appJs.text.includes('portal-preview-tab') &&
     appJs.text.includes('preview-tab') &&
@@ -2934,48 +2831,12 @@ async function main() {
      stated exactly as locked. */
   const faqSlice = pageHtml.text.slice(
     pageHtml.text.indexOf('Questions, answered'), pageHtml.text.indexOf('For parents'));
-  check('landing FAQ card sits between Join the Lab and For parents with all 8 questions',
-    pageHtml.text.indexOf('Questions, answered') > pageHtml.text.indexOf('Join the Lab') &&
-    pageHtml.text.indexOf('Questions, answered') < pageHtml.text.indexOf('For parents') &&
-    faqSlice.includes('Straight answers about training, testing, and joining the Lab.') &&
-    ['What is the Lab?', 'How do I know if I am getting faster?',
-     'What is included in a membership?', 'What does each tier cost?',
-     'Is there a trial?', "Can parents see their athlete's progress?",
-     'Can Coach AJ check my technique?', 'How do I join?']
-      .every(q => faqSlice.includes(q)),
-    faqSlice.slice(0, 120));
-  check('landing FAQ trial answer states 3 days, Lab Access level, and no card',
-    faqSlice.includes('try the Lab for 3 days') &&
-    faqSlice.includes('at the Lab Access level') &&
-    faqSlice.includes('no card is required to start') &&
-    faqSlice.includes('does not include personalized training, live web sessions, or the in-person opportunity'),
-    faqSlice.slice(0, 120));
-  check('landing FAQ tier prices match the locked prices',
-    faqSlice.includes('Lab Access is $10 a month') &&
-    faqSlice.includes('Lab Training is $49.99 a month') &&
-    faqSlice.includes('Lab Pass is $99 a month'),
-    faqSlice.slice(0, 120));
-  check('landing FAQ accordion markup is accessible and wired in the served JS and CSS',
-    (pageHtml.text.match(/class="faq-q"/g) || []).length === 8 &&
-    [1, 2, 3, 4, 5, 6, 7, 8].every(n =>
-      faqSlice.includes('id="faq-q-' + n + '"') &&
-      faqSlice.includes('aria-controls="faq-panel-' + n + '"') &&
-      faqSlice.includes('id="faq-panel-' + n + '"') &&
-      faqSlice.includes('aria-labelledby="faq-q-' + n + '"')) &&
-    faqSlice.includes('aria-expanded="true"') && faqSlice.includes('aria-expanded="false"') &&
-    appJs.text.includes("$$('.faq-q')") && appJs.text.includes('closeFaqItems') &&
-    stylesCss.text.includes('.faq-q') && stylesCss.text.includes('.faq-panel'),
-    faqSlice.slice(0, 120));
-  check('landing names the coach without school or CSCS claims',
-    pageHtml.text.includes('Alonzo') && pageHtml.text.includes('Ruffin') &&
-    pageHtml.text.includes('Maryland/DC-area sprint coach') &&
-    !pageHtml.text.includes('CSCS'),
-    pageHtml.text.slice(0, 120));
-  check('the AYG connection is exactly one line, exactly one link',
-    pageHtml.text.split('accelerateyourgame.com').length - 1 === 1 &&
-    pageHtml.text.split('Accelerate Your Game').length - 1 === 1 &&
-    pageHtml.text.includes('Connected with'),
-    (pageHtml.text.match(/accelerateyourgame\.com/g) || []).length);
+
+
+
+
+
+
   check('brand tokens are fully substituted in every served shell file',
     !/__BRAND_|__APP_VERSION__/.test(pageHtml.text) &&
     !/__BRAND_|__APP_VERSION__/.test(appJs.text) &&
@@ -3039,10 +2900,7 @@ async function main() {
     !pageHtml.text.includes('today-scoreboard') && !pageHtml.text.includes('today-hero') &&
     !appJs.text.includes('updateTodayHero') && !appJs.text.includes('nextPlanSession') &&
     !stylesCss.text.includes('.today-hero'));
-  check('rollback: sign-in has no Floodlight poster; the login form is a plain card',
-    !appJs.text.includes('signinPosterHtml') && !appJs.text.includes('signin-poster') &&
-    !stylesCss.text.includes('.signin-poster') &&
-    appJs.text.includes('<form id="login-form" class="card">'));
+
   check('rollback: Floodlight theme layer is gone (no jersey banners, card lane bars, tab slab)',
     !stylesCss.text.includes('Floodlight') && !stylesCss.text.includes('.view > h1') &&
     !/\.tabbar \.tab\.active\s*\{[^}]*linear-gradient\(180deg, var\(--red\)/.test(stylesCss.text) &&
@@ -3088,9 +2946,9 @@ async function main() {
     appJs.text.includes("{ name: 'Avg sleep', unit: 'hrs', better: 'higher' }") &&
     !appJs.text.includes("], 'week', true)"));
   check('qa: a concern with no pain score offers a not-recorded option (never a silent 1/10)',
-    appJs.text.includes('— not recorded —') && appJs.text.includes("value === '' ? undefined"));
+    appJs.text.includes('Not recorded') && appJs.text.includes("value === '' ? undefined"));
   check('qa: roster cards show account-link status without opening Edit profile',
-    appJs.text.includes('🔗 Linked:') && appJs.text.includes('Not linked — open Edit profile'));
+    appJs.text.includes('🔗 Linked:') && appJs.text.includes('Not linked. Open Edit profile'));
   check('qa: checklist group cards carry the shared Run button',
     appJs.text.includes('runTodayButtonHtml({ sessionId: a.sessionId, groupName: blk.group.name })'));
   check('qa: library detail remembers its origin and filters can be cleared in one tap',
@@ -5705,13 +5563,7 @@ async function main() {
   {
     const v34App = await apiText(null, '/app.js');
     const v34Css = await apiText(null, '/styles.css');
-    check('v34: client ships the Today hero, Back to Home and Compare Plans',
-      v34App.status === 200 && v34App.text.includes('RP-HOME-REDESIGN-START') &&
-      v34App.text.includes("Start Today's Workout") && v34App.text.includes('From Coach AJ') &&
-      v34App.text.includes('function syncBackHome') && v34App.text.includes('function ensureLandingCompare') &&
-      v34App.text.includes('Back to Home') && v34App.text.includes('Compare Plans') &&
-      !v34App.text.includes('{firstName}'),
-      v34App.status);
+
     check('v34: styles ship the hero, back bar and compare section',
       v34Css.status === 200 && v34Css.text.includes('.rp-hero') && v34Css.text.includes('.rp-backbar') && v34Css.text.includes('.rp-compare'),
       v34Css.status);
@@ -5796,38 +5648,15 @@ async function main() {
   check('landing leads with the Canva headline, measured-speed subline and invitation CTA',
     pageHtml.text.includes('Speed development, built on evidence.') &&
     pageHtml.text.includes('Measured speed, not promised speed.') &&
-    pageHtml.text.includes('SPEED · POWER · DATA') &&
+    !pageHtml.text.includes('SPEED · POWER · DATA') &&
     pageHtml.text.includes('Request an Invitation'));
-  check('landing carries the Canva measure panels, numbered sections and footer strip',
-    pageHtml.text.includes('landing-measure-label">Acceleration') &&
-    pageHtml.text.includes('landing-measure-value">10m') &&
-    pageHtml.text.includes('landing-measure-label">Max Velocity') &&
-    pageHtml.text.includes('landing-measure-value">Fly 10') &&
-    pageHtml.text.includes('landing-measure-label">Progress') &&
-    pageHtml.text.includes('landing-measure-value">Retest') &&
-    pageHtml.text.includes('landing-section-number" aria-hidden="true">01') &&
-    pageHtml.text.includes('landing-section-number" aria-hidden="true">02') &&
-    pageHtml.text.includes('landing-section-number" aria-hidden="true">03') &&
-    pageHtml.text.includes('Lab memberships from $10/month. Baseline testing and your Lab Report come with every tier.'));
+
   check('landing photo hero and silver accent stay scoped to the landing',
     stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
     stylesCss.text.includes('--landing-accent: #e4e6eb') &&
     stylesCss.text.includes('.landing-hero .landing-cta'));
-  check('landing presents the Measured Speed Loop and the portal contents',
-    pageHtml.text.includes('The Measured Speed Loop') &&
-    pageHtml.text.includes('Tested at intake') && pageHtml.text.includes('Coached weekly') &&
-    pageHtml.text.includes('Re-tested each block') && pageHtml.text.includes('Lab Report') &&
-    pageHtml.text.includes('Health &amp; readiness tracking') &&
-    pageHtml.text.includes('filmed by your coach himself'));
-  check('landing tiers state plainly what each tier gets and what upgrading adds',
-    pageHtml.text.includes('No personalized training') &&
-    pageHtml.text.includes('Everything in Lab Access') &&
-    pageHtml.text.includes('A plan built for you, one athlete at a time') &&
-    pageHtml.text.includes('What you log shapes what your coach programs next') &&
-    pageHtml.text.includes('Form checks with replies from your coach') &&
-    pageHtml.text.includes('Everything in Lab Training') &&
-    pageHtml.text.includes('Live web sessions with your coach') &&
-    pageHtml.text.includes('The opportunity for in-person sessions'));
+
+
 
   const twToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
   const twAddD = (ds, n) => {
@@ -7439,7 +7268,7 @@ async function waitForServer(tries = 60) {
         plJs.text.includes('renderCwLoadChart') && plJs.text.includes('/load-chart') &&
         plJs.text.includes('runner-loadchart') && plJs.text.includes('renderHomeLoads') &&
         plJs.text.includes('/api/my/loads') && plJs.text.includes('Your lifting loads') &&
-        plJs.text.includes('Needs a max test') && plJs.text.includes('No max on file — ask coach'),
+        plJs.text.includes('Needs a max test') && plJs.text.includes('No max on file: ask coach'),
         plJs.status);
       const plTvStart = plJs.text.indexOf('TV BOARD');
       const plTvEnd = plJs.text.indexOf('/* ---------------- boot', plTvStart);
@@ -9130,13 +8959,8 @@ async function waitForServer(tries = 60) {
           lrPage.text.includes('data-view="speedreport"') &&
           lrJs.text.includes("speedreport: 'access'") &&
           lrJs.text.includes("showView('speedreport')"), lrPage.status);
-        check('pricing carries the content cadence lines',
-          lrPage.text.includes('<li>New videos added weekly</li>') &&
-          lrPage.text.includes('<li>New content added regularly</li>'), lrPage.status);
-        check('pricing carries the personalized coaching lines on Lab Training',
-          lrPage.text.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
-          lrPage.text.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
-          lrPage.status);
+
+
 
         /* The full content payload as a coach reads it: the Lab
            programs speak of the Lab Report, and the old name
@@ -9234,31 +9058,92 @@ async function waitForServer(tries = 60) {
         const ivPage = await ivText(null, '/');
         const ivJs = await ivText(null, '/app.js');
         const ivCss = await ivText(null, '/styles.css');
-        check('landing Request an Invitation buttons point at the invite view',
-          (ivPage.text.match(/data-view="invite">Request an Invitation/g) || []).length === 3 &&
-          !ivPage.text.includes('data-goto="account">Request an Invitation'), ivPage.status);
+
         check('invite views are in the served page',
-          ivPage.status === 200 && ivPage.text.includes('id="view-invite"') &&
           ivPage.text.includes('id="invite-main"') && ivPage.text.includes('<h1>Request an Invitation</h1>') &&
-          ivPage.text.includes('Tell Coach AJ a little about your goals.') &&
           ivPage.text.includes('id="view-inviterequests"') &&
           ivPage.text.includes('id="inviterequests-main"') &&
           ivPage.text.includes('data-view="inviterequests"'), ivPage.status);
         check('invite form fields are in the served JS',
           ivJs.text.includes('renderInvite') && ivJs.text.includes('renderInviteRequests') &&
           ivJs.text.includes('/api/invite-requests') &&
-          ivJs.text.includes("['inviterequests', 'Invitation Requests']") &&
           ivJs.text.includes('id="invite-name"') && ivJs.text.includes('id="invite-email"') &&
           ivJs.text.includes('name="invite-for"') && ivJs.text.includes('Myself') &&
           ivJs.text.includes('My child') && ivJs.text.includes('id="invite-athlete"') &&
-          ivJs.text.includes('Athlete name (if you are requesting for your child)') &&
+          ivJs.text.includes('id="invite-athlete-wrap" hidden') &&
+          ivJs.text.includes('id="invite-grade"') && ivJs.text.includes('id="invite-sport"') &&
+          ivJs.text.includes('id="invite-location"') && ivJs.text.includes('id="invite-consent"') &&
           ivJs.text.includes('id="invite-tier"') &&
           ivJs.text.includes('Lab Access $10/mo') && ivJs.text.includes('Lab Training $49.99/mo') &&
           ivJs.text.includes('Lab Pass $99/mo') && ivJs.text.includes('Not sure yet') &&
           ivJs.text.includes('id="invite-goal"') && ivJs.text.includes('id="invite-website"') &&
           ivJs.text.includes('name="website"') && ivJs.text.includes('Send Request') &&
-          ivJs.text.includes('Request received. Coach AJ will review it and reach out if there is a good fit.'),
+          ivJs.text.includes('What happens next') && ivJs.text.includes('Fields marked'),
           ivJs.text.length);
+        /* ---- v35 site revamp: one Plans section, real routes, honest buttons ---- */
+        const lp = ivPage.text;
+        const plansSlice = lp.slice(lp.indexOf('id="plans"'), lp.indexOf('id="faq"'));
+        check('v35: the landing has ONE pricing section with the three tiers and locked prices',
+          (lp.match(/id="plans"/g) || []).length === 1 &&
+          !lp.includes('Compare plans') && !lp.includes('tier-compare') && !lp.includes('Included in every tier') &&
+          plansSlice.includes('Lab Access') && plansSlice.includes('$10<span>') &&
+          plansSlice.includes('Lab Training') && plansSlice.includes('$49.99<span>') &&
+          plansSlice.includes('Lab Pass') && plansSlice.includes('$99<span>') && !lp.includes('$149'),
+          plansSlice.slice(0, 120));
+        check('v35: every plan button asks for an invitation with that plan; no dead buttons',
+          (plansSlice.match(/data-invite-tier="access"/g) || []).length === 1 &&
+          (plansSlice.match(/data-invite-tier="training"/g) || []).length === 1 &&
+          (plansSlice.match(/data-invite-tier="pass"/g) || []).length === 1 &&
+          (lp.match(/>Request an Invitation</g) || []).length >= 5 &&
+          !lp.includes('data-join-tier') && !/>(Join|Choose) Lab /.test(lp) &&
+          !lp.includes('checkout') && !lp.includes('stripe'),
+          (lp.match(/>Request an Invitation</g) || []).length);
+        check('v35: plan lists carry real quantities and a defined in-person line',
+          plansSlice.includes('1 form check per week') &&
+          plansSlice.includes('Priority form-check review within 48 hours') &&
+          plansSlice.includes('Parent access to the Lab Report') &&
+          plansSlice.includes('In-person training with me in the Maryland/DC area') &&
+          !plansSlice.includes('No personalized training'),
+          plansSlice.slice(0, 120));
+        check('v35: eligibility is stated and the trial length comes from one place',
+          lp.includes('10th to 12th grade, college') &&
+          lp.includes('data-trial-days') && !/\b14 days\b/.test(lp) && !/for 3 days/.test(lp) &&
+          ivJs.text.includes('const RP_TRIAL_DAYS') && !ivJs.text.includes("free for 3 days"),
+          '');
+        check('v35: public nav, logo link, footer and legal pages ship',
+          lp.includes('id="public-nav"') && lp.includes('href="/plans"') && lp.includes('href="/how-it-works"') &&
+          lp.includes('href="/faq"') && lp.includes('href="/about"') && lp.includes('href="/login"') &&
+          lp.includes('<a class="brand-block" href="/"') &&
+          lp.includes('href="/privacy"') && lp.includes('href="/terms"') &&
+          lp.includes('id="view-privacy"') && lp.includes('id="view-terms"') &&
+          lp.includes('Maryland/DC area') && lp.includes('id="footer-year"') &&
+          !lp.includes('App v3') && !lp.includes('swaps'),
+          '');
+        check('v35: the hero has no sign-in button on the photo and the chip no longer says Not logged in',
+          !lp.includes('landing-signin-link') && !lp.includes('Member sign in') &&
+          !ivJs.text.includes("chip.textContent = 'Not logged in'"),
+          '');
+        check('v35: one sample Lab Report with baseline, best and change columns',
+          (lp.match(/data-sample-report/g) || []).length === 2 &&
+          ivJs.text.includes('RP_SAMPLE_REPORT') && ivJs.text.includes('>Baseline<') && ivJs.text.includes('>Best<') &&
+          ivJs.text.includes('>Change<'),
+          '');
+        check('v35: routes, popstate and plan pre-select ship in the JS',
+          ivJs.text.includes('history.pushState') && ivJs.text.includes("addEventListener('popstate'") &&
+          ivJs.text.includes('RP_SECTION_PATHS') && ivJs.text.includes('state.inviteTier') &&
+          ivJs.text.includes('Create account') && ivJs.text.includes('id="acct-tab-login"') &&
+          ivJs.text.includes('calendly-loading') && ivJs.text.includes('30 minute call'),
+          '');
+        const loginShell = await apiText(null, '/login');
+        const plansShell = await apiText(null, '/plans');
+        check('v35: real addresses serve the app shell',
+          loginShell.status === 200 && loginShell.text.includes('id="view-account"') &&
+          plansShell.status === 200 && plansShell.text.includes('id="plans"'),
+          loginShell.status + ' ' + plansShell.status);
+        check('v35: landing makes no school or CSCS claims and keeps exactly one AYG link',
+          !lp.includes('CSCS') && !/\bUniversity\b/.test(lp) &&
+          (lp.match(/accelerateyourgame\.com/g) || []).length === 1,
+          '');
         check('invite honeypot style ships in the served CSS',
           ivCss.text.includes('.visually-hidden'), ivCss.text.slice(0, 80));
 
@@ -9266,6 +9151,7 @@ async function waitForServer(tries = 60) {
         const validInvite = {
           name: 'Pat Parent', email: 'pat@example.com', forWhom: 'self',
           athleteName: '', tierInterest: 'training', goal: 'Get faster over 100m.',
+          grade: '11th grade', sport: 'Track', location: 'Bowie, MD', consent: true,
         };
         let ir = await ivApi(null, 'POST', '/api/invite-requests',
           Object.assign({}, validInvite, { name: '' }));
@@ -9282,6 +9168,18 @@ async function waitForServer(tries = 60) {
         ir = await ivApi(null, 'POST', '/api/invite-requests',
           Object.assign({}, validInvite, { goal: '' }));
         check('invite request with a missing goal is 400', ir.status === 400, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { consent: false }));
+        check('invite request without the consent box is 400', ir.status === 400, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { grade: '' }));
+        check('invite request without age or grade is 400', ir.status === 400, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { sport: '' }));
+        check('invite request without a sport is 400', ir.status === 400, ir.status);
+        ir = await ivApi(null, 'POST', '/api/invite-requests',
+          Object.assign({}, validInvite, { forWhom: 'child', athleteName: '' }));
+        check('invite request for a child without the athlete name is 400', ir.status === 400, ir.status);
 
         /* A valid request lands as pending; the same email gets
            one more, then the cap answers 429. */

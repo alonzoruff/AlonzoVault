@@ -60,7 +60,7 @@ const waitFor = async (pred, ms = 3000) => {
 
     await t.test('an invitation request emails the coach, reply-to the visitor', async () => {
       const r = await api(app, 'POST', '/api/invite-requests', {
-        name: 'Pat Visitor', email: 'pat@example.test', goal: 'Run a faster 400', forWhom: 'self',
+        name: 'Pat Visitor', email: 'pat@example.test', goal: 'Run a faster 400', forWhom: 'self', grade: '11th', sport: 'Track', consent: true,
       });
       assert.strictEqual(r.status, 201);
       assert.ok(await waitFor(() => resend.seen.length === 1), 'no email sent');
@@ -104,7 +104,7 @@ const waitFor = async (pred, ms = 3000) => {
     await t.test('a Resend failure never fails the visitor\'s request', async () => {
       resend.fail = 500;
       const r = await api(app, 'POST', '/api/invite-requests', {
-        name: 'Sam Visitor', email: 'sam@example.test', goal: 'Get stronger',
+        name: 'Sam Visitor', email: 'sam@example.test', goal: 'Get stronger', grade: '12th', sport: 'Track', consent: true,
       });
       assert.strictEqual(r.status, 201);
       const logged = await waitFor(() => app.logs.join('').includes('[notify] Resend refused'));
@@ -128,7 +128,7 @@ const waitFor = async (pred, ms = 3000) => {
   try {
     await t.test('without RESEND_API_KEY nothing is sent and the request still succeeds', async () => {
       await api(quiet, 'POST', '/api/register', { email: 'owner@example.test', password: 'owner-pass-123' });
-      const r = await api(quiet, 'POST', '/api/invite-requests', { name: 'Lee', email: 'lee@example.test', goal: 'Speed' });
+      const r = await api(quiet, 'POST', '/api/invite-requests', { name: 'Lee', email: 'lee@example.test', goal: 'Speed', grade: '10th', sport: 'Track', consent: true });
       assert.strictEqual(r.status, 201);
       assert.ok(await waitFor(() => quiet.logs.join('').includes('Email notifications are off')));
     });

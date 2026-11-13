@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>__BRAND_NAME__ — __BRAND_TAGLINE__</title>
-<meta name="description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is invite-only during the founding pilot.">
+<title>__BRAND_NAME__ | __BRAND_TAGLINE__</title>
+<meta name="description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is by invitation during the founding pilot.">
 <link rel="canonical" href="https://ruffin-performance.onrender.com/">
 <meta name="robots" content="index, follow">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="__BRAND_NAME__">
-<meta property="og:title" content="__BRAND_NAME__ — __BRAND_TAGLINE__">
-<meta property="og:description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is invite-only during the founding pilot.">
+<meta property="og:title" content="__BRAND_NAME__ | __BRAND_TAGLINE__">
+<meta property="og:description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is by invitation during the founding pilot.">
 <meta property="og:url" content="https://ruffin-performance.onrender.com/">
 <meta property="og:image" content="https://ruffin-performance.onrender.com/assets/hero-sprinter.jpg">
-<meta property="og:image:alt" content="__BRAND_NAME__ — __BRAND_TAGLINE__">
+<meta property="og:image:alt" content="__BRAND_NAME__ | __BRAND_TAGLINE__">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="__BRAND_NAME__ — __BRAND_TAGLINE__">
-<meta name="twitter:description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is invite-only during the founding pilot.">
+<meta name="twitter:title" content="__BRAND_NAME__ | __BRAND_TAGLINE__">
+<meta name="twitter:description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is by invitation during the founding pilot.">
 <meta name="twitter:image" content="https://ruffin-performance.onrender.com/assets/hero-sprinter.jpg">
 <script type="application/ld+json">
 {
@@ -69,13 +69,20 @@
 <body>
 <header class="topbar">
   <div class="topbar-inner">
-    <div class="brand-block">
-      <img class="site-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
+    <a class="brand-block" href="/" data-route="home" aria-label="__BRAND_NAME__ home">
+      <img class="site-logo" src="/assets/rp-logo.svg" alt="">
       <div class="brand-text">
         <div class="identity">__BRAND_NAME__</div>
         <div class="app-name">__BRAND_TAGLINE__</div>
       </div>
-    </div>
+    </a>
+    <nav class="public-nav" id="public-nav" aria-label="Site">
+      <a href="/plans" data-route="plans">Plans</a>
+      <a href="/how-it-works" data-route="how-it-works">How It Works</a>
+      <a href="/faq" data-route="faq">FAQ</a>
+      <a href="/about" data-route="about">About</a>
+      <a href="/login" data-route="account" class="public-nav-signin">Sign In</a>
+    </nav>
     <div class="topbar-right">
       <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
       <div id="account-chip" class="account-chip"></div>
@@ -106,19 +113,18 @@
     <div class="landing-hero">
       <div class="landing-hero-content">
         <div class="landing-brandmark">
-          <img class="landing-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
+          <img class="landing-logo" src="/assets/rp-logo.svg" alt="">
           <span class="landing-wordmark">__BRAND_NAME__</span>
-          <button class="btn quiet landing-signin-link" type="button" data-goto="account">Member sign in</button>
         </div>
-        <p class="landing-eyebrow">SPEED · POWER · DATA</p>
         <h1>Speed development, built on evidence.</h1>
         <p class="landing-subline">Measured speed, not promised speed.</p>
-        <p class="landing-forline">For competitive athletes, and the parents who want proof it is working. Train in person in the Maryland/DC area or from anywhere: a real coach, a real program, and numbers at every step.</p>
+        <p class="landing-forline">I'm Coach AJ. I coach 10th to 12th grade, college and adult athletes in person in the Maryland/DC area and online from anywhere, and I put a number on every step. Parents see the same numbers I do.</p>
         <div class="landing-actions">
-          <button class="btn landing-cta" type="button" data-view="invite">Request an Invitation <span class="cta-arrow" aria-hidden="true">→</span></button>
+          <button class="btn landing-cta" type="button" data-invite-tier="unsure">Request an Invitation</button>
+          <a class="btn landing-compare-link" href="/plans" data-route="plans">See plans</a>
         </div>
         <p class="landing-talk-line">Not sure yet? <button class="landing-textlink" type="button" data-view="book">Book a free Lab Talk</button></p>
-        <p class="landing-pilot-note">Founding pilot: membership is invite-only while we launch.</p>
+        <p class="landing-pilot-note">The Lab is in its founding pilot, so membership is by invitation.</p>
       </div>
     </div>
 
@@ -137,52 +143,29 @@
       </div>
     </div>
 
-    <div class="card landing-card landing-sample" data-reveal aria-label="Sample Lab Report">
+    <div class="card landing-card landing-section" id="how-it-works">
+      <h2>How it works</h2>
+      <ol class="landing-steps">
+        <li><h3>Get invited</h3><p>You send a request. If the Lab fits, I invite your email and you create your account with it. Your first <span data-trial-days>3</span> days are a free trial at the Lab Access level, with no card.</p></li>
+        <li><h3>Test your baseline</h3><p>In week one you run a 40-yard dash, a vertical jump and a broad jump. Athletes under 18 need a parent or guardian to sign off on intake first. Every later number is measured against this one.</p></li>
+        <li><h3>Train, log and check in</h3><p>You follow your week, watch the demo videos, log your work and answer a 20-second daily check-in on sleep, soreness and energy. I read it before your next session and adjust.</p></li>
+        <li><h3>Test again and see the change</h3><p>At the end of each training block (a set stretch of weeks with one focus) you repeat the same tests the same way. Your Lab Report shows the result.</p></li>
+      </ol>
+    </div>
+
+    <div class="card landing-card landing-sample" aria-label="Sample Lab Report">
       <div class="landing-sample-head">
         <h2>Your Lab Report</h2>
         <span class="landing-sample-tag">Sample</span>
       </div>
-      <p class="muted">Every member gets one of these at intake and at every re-test: baseline, personal best, and the change since day one. This is what "measured, not promised" looks like on paper.</p>
-      <div class="landing-sample-rows">
-        <div class="landing-sample-row">
-          <span class="landing-sample-test">40-yard dash</span>
-          <span class="landing-sample-nums">4.91 <span aria-hidden="true">→</span> <strong>4.78</strong></span>
-          <span class="landing-sample-delta">−0.13s</span>
-        </div>
-        <div class="landing-sample-row">
-          <span class="landing-sample-test">Fly 10</span>
-          <span class="landing-sample-nums">1.04 <span aria-hidden="true">→</span> <strong>0.99</strong></span>
-          <span class="landing-sample-delta">−0.05s</span>
-        </div>
-        <div class="landing-sample-row">
-          <span class="landing-sample-test">Vertical jump</span>
-          <span class="landing-sample-nums">24.5″ <span aria-hidden="true">→</span> <strong>27.0″</strong></span>
-          <span class="landing-sample-delta">+2.5″</span>
-        </div>
-        <div class="landing-sample-row">
-          <span class="landing-sample-test">Broad jump</span>
-          <span class="landing-sample-nums">7′6″ <span aria-hidden="true">→</span> <strong>8′1″</strong></span>
-          <span class="landing-sample-delta">+7″</span>
-        </div>
-      </div>
-      <p class="muted landing-sample-note">Example numbers from one training block. Your athlete's report carries their own, updated at every re-test and readable at a glance.</p>
+      <p class="muted">You get a report like this at intake and again at every re-test. A re-test is the same tests, run again, so the change is a number.</p>
+      <div data-sample-report></div>
+      <p class="muted landing-sample-note">Sample numbers for one training block. Your report carries your own.</p>
     </div>
 
-    <div class="card landing-card landing-section" data-reveal>
-      <span class="landing-section-number" aria-hidden="true">01</span>
-      <h2>The Measured Speed Loop</h2>
-      <ol class="landing-list">
-        <li><strong>Tested at intake.</strong> Your first week starts with baseline testing (40-yard dash, vertical jump, broad jump), so every number after it has something honest to be measured against.</li>
-        <li><strong>Coached weekly.</strong> Your program, your demos, your form checks, and your daily check-ins, reviewed by your coach every week.</li>
-        <li><strong>Re-tested each block.</strong> At the end of every training block you test again, on the same tests, the same way.</li>
-        <li><strong>Your Lab Report.</strong> Baseline, personal bests, and the change since day one. A report you can hold, and show a parent.</li>
-      </ol>
-    </div>
-
-    <div class="card landing-card landing-section" data-reveal>
-      <span class="landing-section-number" aria-hidden="true">02</span>
+    <div class="card landing-card landing-section" id="portal-preview">
       <h2>What's inside the portal</h2>
-      <p>Take a look around before you join. Pick a part of the portal to preview.</p>
+      <p>Take a look around before you ask for an invitation.</p>
       <div class="portal-preview">
         <div class="portal-preview-tabs" role="tablist" aria-label="Portal preview">
           <button class="portal-preview-tab active" type="button" role="tab" id="preview-tab-training" aria-selected="true" aria-controls="preview-panel-training" tabindex="0">Training sessions</button>
@@ -190,281 +173,148 @@
           <button class="portal-preview-tab" type="button" role="tab" id="preview-tab-report" aria-selected="false" aria-controls="preview-panel-report" tabindex="-1">Lab Report</button>
         </div>
         <div class="portal-preview-panel" role="tabpanel" id="preview-panel-training" aria-labelledby="preview-tab-training">
-          <div class="portal-preview-sample">
-            <div class="landing-sample-head">
-              <h3>Sample session</h3>
-              <span class="landing-sample-tag">Sample</span>
-            </div>
-            <ul class="landing-list">
-              <li>Warm-up and movement work</li>
-              <li>Acceleration work</li>
-              <li>Strength work</li>
-            </ul>
-          </div>
+          <figure class="portal-shot"><img src="/assets/preview-training.jpg" alt="The Training sessions screen in the member portal" loading="lazy" onerror="this.closest('figure').hidden=true"></figure>
           <ul class="landing-list">
-            <li><strong>Your program, wherever you train</strong>: your training week in the app, set by your coach, with lifting loads calculated from your own tested maxes as you progress.</li>
-            <li><strong>Your own log</strong>: record what you ran and lifted, with effort and notes, so nothing you do away from your coach is invisible to him.</li>
-            <li><strong>Health &amp; readiness tracking</strong>: a daily check-in on sleep, soreness and energy takes 20 seconds. Your coach sees the readiness flags before your next session, so training adjusts to how you actually feel.</li>
+            <li>Your training week, set by me, with lifting loads worked out from your own tested maxes.</li>
+            <li>Your own log for what you ran and lifted, with effort and notes, so work away from me still counts.</li>
+            <li>A daily check-in on sleep, soreness and energy. If you report poor sleep or high soreness, I see it before your next session and can change the work.</li>
           </ul>
         </div>
         <div class="portal-preview-panel" role="tabpanel" id="preview-panel-videos" aria-labelledby="preview-tab-videos" hidden>
+          <figure class="portal-shot"><img src="/assets/preview-videos.jpg" alt="The Video library screen in the member portal" loading="lazy" onerror="this.closest('figure').hidden=true"></figure>
           <ul class="landing-list">
-            <li><strong>The library</strong>: a demo library filmed by your coach himself, so every drill and lift looks the way your coach teaches it. Not stock video of strangers.</li>
-            <li><strong>Form checks</strong>: send a video of a sprint or a lift and get your coach's reply right in the app. One form check per week is included with Lab Training; extra submissions join the queue. Lab Pass members get priority review within 48 hours.</li>
+            <li>A demo library I filmed myself, so every drill and lift looks the way I teach it.</li>
+            <li>Form checks: send a video of a sprint or a lift and get my reply in the app. Lab Training includes 1 form check per week. Lab Pass members get priority review within 48 hours.</li>
           </ul>
         </div>
         <div class="portal-preview-panel" role="tabpanel" id="preview-panel-report" aria-labelledby="preview-tab-report" hidden>
-          <div class="portal-preview-sample">
-            <div class="landing-sample-head">
-              <h3>Lab Report preview</h3>
-              <span class="landing-sample-tag">Sample</span>
-            </div>
-            <div class="landing-sample-rows">
-              <div class="landing-sample-row">
-                <span class="landing-sample-test">40-yard dash</span>
-                <span class="landing-sample-nums">4.91 <span aria-hidden="true">→</span> <strong>4.78</strong></span>
-                <span class="landing-sample-delta">−0.13s</span>
-              </div>
-              <div class="landing-sample-row">
-                <span class="landing-sample-test">Fly 10</span>
-                <span class="landing-sample-nums">1.04 <span aria-hidden="true">→</span> <strong>0.99</strong></span>
-                <span class="landing-sample-delta">−0.05s</span>
-              </div>
-            </div>
-          </div>
-          <p><strong>The Lab Report</strong>: your tests over time, baseline vs. best vs. latest, updated at every re-test.</p>
+          <figure class="portal-shot"><img src="/assets/preview-report.jpg" alt="The Lab Report screen in the member portal" loading="lazy" onerror="this.closest('figure').hidden=true"></figure>
+          <div data-sample-report></div>
+          <p>Your tests over time: your baseline, your best and the change between them, updated at every re-test.</p>
         </div>
       </div>
-      <button class="btn landing-cta" type="button" data-view="invite">Request an Invitation <span class="cta-arrow" aria-hidden="true">→</span></button>
     </div>
 
-    <div class="card landing-card landing-section" data-reveal>
-      <span class="landing-section-number" aria-hidden="true">03</span>
-      <h2>How it works</h2>
-      <ol class="landing-list">
-        <li><strong>Get invited.</strong> Membership opens by invitation during the founding pilot: your coach invites your email, you create your account with that email, you're in. Want a founding pilot seat? Ask your coach to put your email on the invite list.</li>
-        <li><strong>Intake &amp; baseline.</strong> Complete your intake (minors: a parent or guardian signs off), then test your baseline in week one.</li>
-        <li><strong>Train, log, check in.</strong> Follow your week, watch the demos, log your work, check in daily — your coach reviews, replies, and adjusts as the numbers move.</li>
-        <li><strong>Re-test &amp; report.</strong> Each block ends with a re-test and an updated Lab Report.</li>
-      </ol>
-    </div>
-
-    <div class="card landing-card" data-reveal>
-      <h2>Join the Lab</h2>
-      <p>Every tier opens the same Lab: the portal, the training library, and your Lab Report. Pick the seat that fits how you train.</p>
-      <div class="tier-view-toggle" role="group" aria-label="Choose how to view the plans">
-        <button class="tier-view-btn active" type="button" data-tier-view="cards" aria-pressed="true">Cards</button>
-        <button class="tier-view-btn" type="button" data-tier-view="compare" aria-pressed="false">Compare plans</button>
-      </div>
+    <div class="card landing-card landing-flat" id="plans">
+      <h2>Plans</h2>
+      <p>Every plan opens the same Lab: the portal, the training library and your Lab Report. Prices are per month, for athletes in 10th to 12th grade, college and adults.</p>
       <div class="landing-tiers" id="landing-tiers-cards">
         <div class="landing-tier">
-          <span class="landing-tier-pill">Start here</span>
+          <p class="landing-tier-pill">Start here</p>
           <h3>Lab Access</h3>
           <p class="landing-price">$10<span>/mo</span></p>
-          <p class="landing-tier-bestfor">For an athlete who wants the full Lab and trains on their own plan.</p>
-          <ul class="landing-list">
-            <li>The Lab portal: everything in one place</li>
-            <li>Lab Sessions: training programs to follow week to week</li>
-            <li>Inside the Lab: technique and coaching videos</li>
-            <li>New videos added weekly</li>
-            <li>New content added regularly</li>
-            <li>Your Lab Report, updated at every re-test</li>
+          <p class="landing-tier-bestfor">For the athlete who wants the full Lab and trains on their own.</p>
+          <p class="landing-incl">What's included</p>
+          <ul class="landing-list landing-checks">
+            <li>The full Lab portal</li>
+            <li>Lab Sessions to follow week to week</li>
+            <li>The Inside the Lab video library, with new videos every week</li>
+            <li>Your Lab Report at intake and every <span class="nb">re-test</span></li>
             <li>Workout log and daily check-in</li>
-            <li>No personalized training</li>
           </ul>
-          <button class="btn landing-join" type="button" data-join-tier="access">Join Lab Access</button>
+          <p class="muted landing-tier-note">A plan written for you starts at Lab Training.</p>
+          <button class="btn landing-join" type="button" data-invite-tier="access">Request an Invitation</button>
         </div>
         <div class="landing-tier">
           <h3>Lab Training</h3>
           <p class="landing-price">$49.99<span>/mo</span></p>
-          <p class="landing-tier-bestfor">For an athlete who wants a coach writing the plan.</p>
-          <ul class="landing-list">
-            <li>Everything in Lab Access</li>
-            <li>A plan built for you, one athlete at a time — not a template everyone follows</li>
-            <li>Your plan changes as you train. What you log shapes what your coach programs next</li>
-            <li>Form checks with replies from your coach</li>
+          <p class="landing-tier-bestfor">For the athlete who wants me writing the plan.</p>
+          <p class="landing-incl">Everything in Lab Access, plus</p>
+          <ul class="landing-list landing-checks">
+            <li>A training plan I write for you, not a template</li>
+            <li>Your plan changes as you train, based on your log and check-ins</li>
+            <li>1 form check per week: send a video, get my reply in the app</li>
           </ul>
-          <button class="btn landing-join" type="button" data-join-tier="training">Join Lab Training</button>
+          <button class="btn landing-join" type="button" data-invite-tier="training">Request an Invitation</button>
         </div>
         <div class="landing-tier">
           <h3>Lab Pass</h3>
           <p class="landing-price">$99<span>/mo</span></p>
-          <p class="landing-tier-bestfor">The pass that gets you everywhere in the Lab.</p>
-          <ul class="landing-list">
-            <li>Everything in Lab Training</li>
-            <li>Live web sessions with your coach</li>
-            <li>The opportunity for in-person sessions</li>
+          <p class="landing-tier-bestfor">For the athlete who wants the most time with me.</p>
+          <p class="landing-incl">Everything in Lab Training, plus</p>
+          <ul class="landing-list landing-checks">
+            <li>Live web sessions with me</li>
+            <li>In-person training with me in the Maryland/DC area when I have openings. I confirm the place and time with you</li>
+            <li>Priority form-check review within 48 hours</li>
+            <li>Parent access to the Lab Report</li>
+            <li>Move up to Lab Pass from another plan any time</li>
           </ul>
-          <button class="btn landing-join" type="button" data-join-tier="pass">Join Lab Pass</button>
+          <button class="btn landing-join" type="button" data-invite-tier="pass">Request an Invitation</button>
         </div>
       </div>
-      <div class="tier-compare-wrap" id="landing-tiers-compare" hidden>
-        <table class="tier-compare">
-          <caption class="visually-hidden">Compare Lab membership tiers</caption>
-          <thead>
-            <tr>
-              <th scope="col"><span class="visually-hidden">Feature</span></th>
-              <th scope="col">Lab Access</th>
-              <th scope="col">Lab Training</th>
-              <th scope="col">Lab Pass</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="tier-compare-group"><th scope="colgroup" colspan="4">Included in every tier</th></tr>
-            <tr>
-              <th scope="row">Lab Sessions and the Inside the Lab library</th>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-            </tr>
-            <tr>
-              <th scope="row">Your workout log and daily check-in</th>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-            </tr>
-            <tr>
-              <th scope="row">Your Lab Report at every retest</th>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-            </tr>
-            <tr class="tier-compare-group"><th scope="colgroup" colspan="4">What the higher tiers add</th></tr>
-            <tr>
-              <th scope="row">Personalized training built for you</th>
-              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-            </tr>
-            <tr>
-              <th scope="row">Program adjustments as you progress</th>
-              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-            </tr>
-            <tr>
-              <th scope="row">Form checks with a coach reply</th>
-              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-            </tr>
-            <tr>
-              <th scope="row">Live web sessions with your coach</th>
-              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
-              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-            </tr>
-            <tr>
-              <th scope="row">The opportunity for in-person sessions</th>
-              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
-              <td><span aria-hidden="true">—</span><span class="visually-hidden">Not included</span></td>
-              <td><span aria-hidden="true">✓</span><span class="visually-hidden">Included</span></td>
-            </tr>
-            <tr class="tier-compare-price">
-              <th scope="row">Price</th>
-              <td>$10/mo</td>
-              <td>$49.99/mo</td>
-              <td>$99/mo</td>
-            </tr>
-            <tr class="tier-compare-join">
-              <th scope="row"><span class="visually-hidden">Join</span></th>
-              <td><button class="btn landing-join" type="button" data-join-tier="access">Join Lab Access</button></td>
-              <td><button class="btn landing-join" type="button" data-join-tier="training">Join Lab Training</button></td>
-              <td><button class="btn landing-join" type="button" data-join-tier="pass">Join Lab Pass</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" data-join-message role="status"></p>
+      <p class="landing-trial">Invitation-first trial: when I invite you, your first <span data-trial-days>3</span> days are free at the Lab Access level. No card needed.</p>
     </div>
 
-    <div class="card landing-card landing-faq" data-reveal>
+    <div class="card landing-card landing-faq" id="faq">
       <h2>Questions, answered</h2>
-      <p class="muted">Straight answers about training, testing, and joining the Lab.</p>
       <div class="faq-list">
         <div class="faq-item">
           <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-1" aria-expanded="true" aria-controls="faq-panel-1">What is the Lab?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
           <div class="faq-panel" id="faq-panel-1" role="region" aria-labelledby="faq-q-1">
-            <p>A speed and strength coaching membership built around real training and measurable progress. Your program, your coach's demo videos, and your testing numbers all live in one portal, and Coach AJ Ruffin reviews the work every week.</p>
+            <p>A speed and strength coaching membership built around real training and measurable progress. Your program, my demo videos and your testing numbers all live in one portal, and I review the work every week.</p>
           </div>
         </div>
         <div class="faq-item">
           <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-2" aria-expanded="false" aria-controls="faq-panel-2">How do I know if I am getting faster?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
           <div class="faq-panel" id="faq-panel-2" role="region" aria-labelledby="faq-q-2" hidden>
-            <p>You test a baseline in your first week, then re-test at the end of every training block on the same tests. Your Lab Report shows your baseline, your personal bests, and the change since day one, so progress is a number, not a promise.</p>
+            <p>You test a baseline in your first week, then test again at the end of every training block. Your Lab Report shows your baseline, your best and the change, so progress is a number, not a promise.</p>
           </div>
         </div>
         <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-3" aria-expanded="false" aria-controls="faq-panel-3">What is included in a membership?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
+          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-3" aria-expanded="false" aria-controls="faq-panel-3">Who is the Lab for?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
           <div class="faq-panel" id="faq-panel-3" role="region" aria-labelledby="faq-q-3" hidden>
-            <p>Every tier opens the same Lab: the portal, Lab Sessions to follow week to week, Inside the Lab technique and coaching videos, your workout log and daily check-in, and your Lab Report. Higher tiers add a plan built for you and live time with your coach. The tier cards above list exactly what each one includes.</p>
+            <p>Athletes in 10th to 12th grade, college athletes and adults. If your athlete is under 18, a parent or guardian makes the request and signs off on intake.</p>
           </div>
         </div>
         <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-4" aria-expanded="false" aria-controls="faq-panel-4">What does each tier cost?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
+          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-4" aria-expanded="false" aria-controls="faq-panel-4">Is there a trial?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
           <div class="faq-panel" id="faq-panel-4" role="region" aria-labelledby="faq-q-4" hidden>
-            <p>Lab Access is $10 a month. Lab Training is $49.99 a month. Lab Pass is $99 a month. You can upgrade between tiers at any time.</p>
+            <p>Yes. When I invite you, your first <span data-trial-days>3</span> days are free at the Lab Access level, and no card is needed to start. The trial does not include a personal plan, live web sessions or in-person training. The trial starts after I invite you, so the first step is a request or a free Lab Talk.</p>
           </div>
         </div>
         <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-5" aria-expanded="false" aria-controls="faq-panel-5">Is there a trial?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
+          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-5" aria-expanded="false" aria-controls="faq-panel-5">Can parents see their athlete's progress?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
           <div class="faq-panel" id="faq-panel-5" role="region" aria-labelledby="faq-q-5" hidden>
-            <p>Yes. You can try the Lab for 3 days before you pay. The trial covers the Lab content and features at the Lab Access level, and no card is required to start. It does not include personalized training, live web sessions, or the in-person opportunity. Membership is invite-only during the founding pilot, so a trial starts with an invitation: book a free Lab Talk or request an invitation and Coach AJ will get you set up.</p>
+            <p>Yes. Lab Pass includes parent access to the Lab Report, which shows baseline and best results in plain numbers. Parents see the same numbers I do.</p>
           </div>
         </div>
         <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-6" aria-expanded="false" aria-controls="faq-panel-6">Can parents see their athlete's progress?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
+          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-6" aria-expanded="false" aria-controls="faq-panel-6">Can you check my technique?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
           <div class="faq-panel" id="faq-panel-6" role="region" aria-labelledby="faq-q-6" hidden>
-            <p>Yes. The Lab Report shows baseline and best testing results in plain numbers, updated at every re-test. Families see the same numbers the coach sees.</p>
+            <p>Yes, on Lab Training and Lab Pass. Send a video of a sprint or a lift and get my reply in the app. Lab Training includes 1 form check per week. Lab Pass members get priority review within 48 hours.</p>
           </div>
         </div>
         <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-7" aria-expanded="false" aria-controls="faq-panel-7">Can Coach AJ check my technique?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
+          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-7" aria-expanded="false" aria-controls="faq-panel-7">How do I join?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
           <div class="faq-panel" id="faq-panel-7" role="region" aria-labelledby="faq-q-7" hidden>
-            <p>Yes. Members on Lab Training and Lab Pass can send a video of a sprint or a lift and get Coach AJ's reply in the app. One form check per week is included with Lab Training, and Lab Pass members get priority review within 48 hours.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-8" aria-expanded="false" aria-controls="faq-panel-8">How do I join?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
-          <div class="faq-panel" id="faq-panel-8" role="region" aria-labelledby="faq-q-8" hidden>
-            <p>Membership is invite-only during the founding pilot. Book a free Lab Talk, a 30 minute video call where you talk through your goals and which plan fits, or request an invitation on this page. When Coach AJ invites your email, you create your account with that email and you are in.</p>
+            <p>Request an invitation here, or book a free Lab Talk, a 30 minute video call where we go over your goals and which plan fits. When I invite your email, you create your account with it and you are in.</p>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="card landing-card" data-reveal>
-      <h2>For parents</h2>
-      <ul class="landing-list">
-        <li><strong>You see the numbers.</strong> The Lab Report, showing baseline, personal bests, and the change since day one, is updated at every re-test, in plain numbers you can hold and ask about.</li>
-        <li><strong>You know the work is happening.</strong> Your athlete's program, training log, and daily readiness check-ins live in the app, and the coach reviews them every week.</li>
-        <li><strong>No promises, just proof.</strong> We never guarantee a time. We measure, train, and measure again, and you see the same numbers we do.</li>
-      </ul>
+    <div class="card landing-card" id="about">
+      <h2>About Coach AJ</h2>
+      <p>I'm Alonzo “AJ” Ruffin, a sprint coach in the Maryland/DC area. I train fast on the hard days, recover on the easy days and measure everything. The same structure, testing and workout library that I coach with are what run this app.</p>
+      <p class="muted">I also work with <a href="https://accelerateyourgame.com" target="_blank" rel="noopener">Accelerate Your Game</a> on speed and conditioning in Maryland. I never guarantee a time. I measure, train and measure again, and you see the same numbers I do.</p>
     </div>
 
-    <div class="card landing-card" data-reveal>
-      <h2>About the coach</h2>
-      <p><strong>Alonzo “AJ” Ruffin</strong> is a Maryland/DC-area sprint coach. His coaching runs on a simple system: train fast on high days, recover on low days, measure everything. It is the same high-low structure, testing framework, and workout library that power this app.</p>
-      <p class="muted">Connected with <a href="https://accelerateyourgame.com" target="_blank" rel="noopener">Accelerate Your Game</a> — speed &amp; conditioning in Maryland.</p>
-    </div>
-
-    <div class="card landing-card landing-final" data-reveal>
+    <div class="card landing-card landing-final">
       <h2>Ready to be measured?</h2>
-      <p>Founding pilot seats are limited and every one starts the same way: an invitation, a baseline test, and a program built on your own numbers.</p>
-      <button class="btn landing-cta" type="button" data-view="invite">Request an Invitation <span class="cta-arrow" aria-hidden="true">→</span></button>
-      <p class="muted">Invite-only during the founding pilot. If Coach AJ has your email, create your account with it and you are in.</p>
-      <p>Not sure yet? <button class="btn secondary" type="button" data-view="book" style="width:auto">Book a free Lab Talk</button></p>
-      <p class="muted">A Lab Talk is a free 30 minute video call with Coach AJ: your goals, the plans, and which one fits.</p>
+      <p>Send a request and I'll reply by email. If the Lab fits you, I'll invite you.</p>
+      <div class="landing-actions">
+        <button class="btn landing-cta" type="button" data-invite-tier="unsure">Request an Invitation</button>
+        <button class="btn secondary" type="button" data-view="book">Book a free Lab Talk</button>
+      </div>
+      <p class="muted">A Lab Talk is a free 30 minute video call with me: your goals, the plans and which one fits.</p>
     </div>
-
-    <p class="landing-footer-strip" data-reveal>Lab memberships from $10/month. Baseline testing and your Lab Report come with every tier.</p>
   </section>
 
   <!-- BOOK A LAB TALK (public) -->
   <section id="view-book" class="view">
     <h1>Book a free Lab Talk</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="view-sub muted">A Lab Talk is a free 30 minute video call with Coach AJ. You talk through your goals, he walks you through the Lab plans, and together you work out which one fits. Pick a time below. You get a confirmation email with the video link right away, and Coach AJ is notified of your booking.</p>
+    <p class="view-sub muted">A Lab Talk is a free 30 minute video call with me. We go over your goals and the Lab plans and work out which one fits. Pick a time below. You get a confirmation email with the video link right away.</p>
     <div id="book-main"></div>
   </section>
 
@@ -472,8 +322,42 @@
   <section id="view-invite" class="view">
     <h1>Request an Invitation</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="view-sub muted">Tell Coach AJ a little about your goals. He reviews every request himself and reaches out when there is a good fit.</p>
+    <p class="view-sub muted">Tell me a little about you. I read every request myself.</p>
     <div id="invite-main"></div>
+  </section>
+
+  <!-- PRIVACY (public) -->
+  <section id="view-privacy" class="view">
+    <h1>Privacy</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="card legal">
+      <h2>What I collect</h2>
+      <p>On the invitation form: your name, email, grade or age, sport, general location, goals and, if you are a parent, your athlete's name. In the portal: your account email, your training log, check-ins, test results and any videos you send for a form check.</p>
+      <h2>How I use it</h2>
+      <p>Only to review your request, coach you and show you your own progress. I do not sell your information or use it for advertising.</p>
+      <h2>Who can see it</h2>
+      <p>I can see it, and so can you. For athletes under 18, the parent or guardian can see the Lab Report. The booking calendar is run by Calendly, which handles the details you enter there under its own policy. When payments open, card details are handled by Stripe and never stored by this site.</p>
+      <h2>Athletes under 18</h2>
+      <p>A parent or guardian makes the request and signs off on intake. I do not coach a minor without that.</p>
+      <h2>Questions or deletion</h2>
+      <p data-contact-line>Ask me through the invitation form and I will answer by email.</p>
+    </div>
+  </section>
+
+  <!-- TERMS (public) -->
+  <section id="view-terms" class="view">
+    <h1>Terms</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="card legal">
+      <h2>Using the Lab</h2>
+      <p>Membership is by invitation. You are responsible for your account and for keeping your password to yourself.</p>
+      <h2>No guarantees</h2>
+      <p>Training and testing carry the usual risks of athletic activity. I never promise a time or a result. Nothing here is medical advice. If something hurts, stop and see a medical professional.</p>
+      <h2>Athletes under 18</h2>
+      <p>A parent or guardian must make the request and sign off on intake before I coach a minor.</p>
+      <h2>Changes</h2>
+      <p>I may update these terms as the Lab grows. The current version is always on this page.</p>
+    </div>
   </section>
 
   <!-- TODAY -->
@@ -536,7 +420,7 @@
   <section id="view-train" class="view">
     <h1>Train</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="view-sub muted">Everything you train with, in one place — the workouts, the plan for the season, and your warm-ups.</p>
+    <p class="view-sub muted">Everything you train with, in one place. The workouts, the plan for the season, and your warm-ups.</p>
     <div class="menu-list">
       <button type="button" class="menu-item" data-view="library">Workouts <span>Find a workout by type, distance, or day</span></button>
       <button type="button" class="menu-item" data-view="labprograms">Programs <span>Winter Base, Hip and Ankle Armor, and First Step</span></button>
@@ -545,7 +429,7 @@
       <button type="button" class="menu-item" data-view="records">Club Records <span>The all-time top 10 in every event</span></button>
       <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked</span></button>
       <button type="button" class="menu-item" data-view="speedreport">Lab Report <span>Your own baseline, your personal bests, and how far you have come</span></button>
-      <button type="button" class="menu-item" data-view="livesessions">Live Sessions <span>Live web sessions with your coach, and the in-person opportunity — Lab Pass</span></button>
+      <button type="button" class="menu-item" data-view="livesessions">Live Sessions <span>Live web sessions with your coach, and the in-person opportunity. Lab Pass</span></button>
       <button type="button" class="menu-item" data-view="drills">Warm-Up Drills <span>The 16 standard drills, Parts A &amp; B</span></button>
       <button type="button" class="menu-item" data-view="qtr">400m Training <span>The full 400m framework and the QTR sessions</span></button>
     </div>
@@ -569,7 +453,7 @@
       <button type="button" class="menu-item" data-view="videos">Videos <span>Watch a demo of any drill or lift</span></button>
       <button type="button" class="menu-item" data-view="definitions">Definitions <span>Every term in plain language, with the coaching cue</span></button>
       <button type="button" class="menu-item" data-view="exercises">Exercise Library <span>Movements saved from Instagram, with cues and sources</span></button>
-      <button type="button" class="menu-item" data-view="nutrition">Nutrition <span>What to eat and when — practice days and meet days</span></button>
+      <button type="button" class="menu-item" data-view="nutrition">Nutrition <span>What to eat and when. Practice days and meet days</span></button>
       <button type="button" class="menu-item" data-view="education">Coach Education <span>Clinics and courses for coaches</span></button>
       <button type="button" class="menu-item" data-view="guide">How to use this app <span>The whole system in plain words</span></button>
     </div>
@@ -579,42 +463,42 @@
   <section id="view-coachhub" class="view">
     <h1>Coach</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="view-sub muted">Coach tools only — members never see this section. Everything for running the program lives here.</p>
+    <p class="view-sub muted">Coach tools only. Members never see this section. Everything for running the program lives here.</p>
     <div class="menu-list">
       <h2 class="menu-group-label">Today</h2>
       <button type="button" class="menu-item" data-view="coach">Today's Checklist <span>Each group's workout for the day, with check-offs</span></button>
-      <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book — present, late, excused, absent — and every athlete's record</span></button>
+      <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book (present, late, excused, absent) and every athlete's record</span></button>
       <button type="button" class="menu-item" data-view="meetday">Meet Day <span>Run the meet: entries by event, a live checklist, and fast results with PR flags</span></button>
       <button type="button" class="menu-item" data-view="tv">TV Board <span>The weight-room display: the full Workout of the Day, one page per group</span></button>
-      <button type="button" class="menu-item" data-view="weightroom">Weight Room <span>Every member's workout side by side — walk each panel through its steps and check them off</span></button>
+      <button type="button" class="menu-item" data-view="weightroom">Weight Room <span>Every member's workout side by side. Walk each panel through its steps and check them off</span></button>
       <h2 class="menu-group-label">Athletes</h2>
       <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
       <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, flags, testing, meets, attendance, health, goals, and private coach notes</span></button>
       <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
       <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
-      <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked — the same board the athletes see</span></button>
+      <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked. The same board the athletes see</span></button>
       <button type="button" class="menu-item" data-view="meets">Meet Results <span>Race and field marks, PRs, and the team PR board</span></button>
       <button type="button" class="menu-item" data-view="goals">Goals <span>Season target marks for every athlete, with progress from their real results</span></button>
       <button type="button" class="menu-item" data-view="records">Club Records <span>Manage the all-time top 10 board</span></button>
       <button type="button" class="menu-item" data-view="reports">Reports <span>Team trends, completion and load charts, and athlete report cards</span></button>
-      <button type="button" class="menu-item" data-view="digest">Weekly Digest <span>Last week at a glance — check-ins, training, PRs, health — and the week coming</span></button>
+      <button type="button" class="menu-item" data-view="digest">Weekly Digest <span>Last week at a glance (check-ins, training, PRs, health) and the week coming</span></button>
       <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
       <h2 class="menu-group-label">Requests</h2>
-      <button type="button" class="menu-item" data-view="inviterequests">Invitation Requests <span>Requests from the public invitation page — mark invited or declined</span></button>
-      <button type="button" class="menu-item" data-view="formcheckqueue">Form Checks <span>Videos members sent for review — watch, reply in the app, and clear the queue</span></button>
-      <button type="button" class="menu-item" data-view="bookings">Bookings <span>Lab Talk requests from the public booking page — approve or decline, and set the open hours</span></button>
+      <button type="button" class="menu-item" data-view="inviterequests">Invitation Requests <span>Requests from the public invitation page. Mark invited or declined</span></button>
+      <button type="button" class="menu-item" data-view="formcheckqueue">Form Checks <span>Videos members sent for review. Watch, reply in the app, and clear the queue</span></button>
+      <button type="button" class="menu-item" data-view="bookings">Bookings <span>Lab Talk requests from the public booking page. Approve or decline, and set the open hours</span></button>
       <h2 class="menu-group-label">Program</h2>
-      <button type="button" class="menu-item" data-view="custom">Custom Workouts <span>Build your own blocks, rounds, and rests — then run it step by step</span></button>
-      <button type="button" class="menu-item" data-view="programs">Programs <span>Reusable week-by-week training templates — build once, apply to any group</span></button>
+      <button type="button" class="menu-item" data-view="custom">Custom Workouts <span>Build your own blocks, rounds, and rests, then run it step by step</span></button>
+      <button type="button" class="menu-item" data-view="programs">Programs <span>Reusable week-by-week training templates. Build once, apply to any group</span></button>
       <button type="button" class="menu-item" data-view="calendar">Team Calendar <span>The whole month at a glance: every group's sessions, meets, and test days</span></button>
-      <button type="button" class="menu-item" data-view="announce">Announcements <span>One-way posts to the whole team or a single group — athletes read them on Today</span></button>
+      <button type="button" class="menu-item" data-view="announce">Announcements <span>One-way posts to the whole team or a single group. Athletes read them on Today</span></button>
       <h2 class="menu-group-label">Admin</h2>
-      <button type="button" class="menu-item" data-view="access">Access <span>Every member account and its tier — set tiers, cancel, and reactivate memberships</span></button>
+      <button type="button" class="menu-item" data-view="access">Access <span>Every member account and its tier. Set tiers, cancel, and reactivate memberships</span></button>
       <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
       <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
       <button type="button" class="menu-item" data-view="devices">Devices <span>ForceDecks, NordBord, and T-APEX: import each device's results file and they land in every athlete's testing history, labeled by device</span></button>
-      <button type="button" class="menu-item" data-view="coverage">Demo Coverage <span>The filming map: every drill and test marked — your video, a placeholder, or still to film</span></button>
-      <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access — under Account</span></button>
+      <button type="button" class="menu-item" data-view="coverage">Demo Coverage <span>The filming map: every drill and test marked. Your video, a placeholder, or still to film</span></button>
+      <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access: under Account</span></button>
     </div>
   </section>
 
@@ -623,7 +507,7 @@
     <h1>Workouts</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Find a workout by type, distance, or day. Tap any workout to see the full session — reps, rest, and coaching cues.</p>
+    <p class="view-sub muted">Find a workout by type, distance, or day. Tap any workout to see the full session. Reps, rest, and coaching cues.</p>
     <div class="filters card" id="lib-filters">
       <input id="lib-search" type="search" placeholder="Search by name or code (try “fly” or MAX-01)">
       <div class="filter-row">
@@ -656,7 +540,7 @@
     </div>
     <div id="season-week"></div>
     <details class="card doc">
-      <summary><strong>About this plan</strong> — where it comes from, the rules, the tapers</summary>
+      <summary><strong>About this plan</strong>: where it comes from, the rules, the tapers</summary>
       <div id="season-doc"></div>
     </details>
   </section>
@@ -665,7 +549,7 @@
   <section id="view-log" class="view">
     <h1>My Log</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="view-sub muted">Your private practice log. Save what you actually ran, so you can look back at it — only you can see it.</p>
+    <p class="view-sub muted">Your private practice log. Save what you actually ran, so you can look back at it. Only you can see it.</p>
     <nav class="seg" id="log-seg" aria-label="My Log sections" hidden>
       <button type="button" class="seg-btn active" data-seg="log" aria-pressed="true">Log</button>
       <button type="button" class="seg-btn" data-seg="history" aria-pressed="false">History</button>
@@ -686,12 +570,12 @@
         <label>Times / marks <input type="text" id="log-marks" placeholder="e.g. Best fly 10m: 1.02"></label>
         <label>How it felt
           <select id="log-feel">
-            <option value="">—</option>
-            <option value="1">1 — rough</option>
+            <option value="">-</option>
+            <option value="1">1: rough</option>
             <option value="2">2</option>
-            <option value="3">3 — solid</option>
+            <option value="3">3: solid</option>
             <option value="4">4</option>
-            <option value="5">5 — great</option>
+            <option value="5">5: great</option>
           </select>
         </label>
         <label>Notes <textarea id="log-notes" rows="2"></textarea></label>
@@ -707,7 +591,7 @@
     <h1>Warm-Up Cards</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The warm-up for today, on three cards. Print any card on its own — one Letter page, single-sided — straight from here.</p>
+    <p class="view-sub muted">The warm-up for today, on three cards. Print any card on its own (one Letter page, single-sided) straight from here.</p>
 
     <article class="wu-card wu-light" id="wu-card-1">
       <header class="wu-head">
@@ -725,41 +609,41 @@
         <p class="wu-goal"><strong>GOAL</strong> Get blood moving and joints loose. You should finish warm and relaxed, never breathing hard. This warm-up should never become a workout.</p>
       </header>
       <section class="wu-sec">
-        <h3><span class="wu-step">1</span> RAISE <em>3 min — easy and conversational</em></h3>
+        <h3><span class="wu-step">1</span> RAISE <em>3 min: easy and conversational</em></h3>
         <ul class="wu-list">
-          <li><strong>Jog</strong> — 400-800m easy — relaxed shoulders, easy breathing</li>
-          <li><strong>Skipping</strong> — 2 x 20m — regular skip and arm-swing skip only, keep it light</li>
+          <li><strong>Jog</strong>: 400-800m easy. Relaxed shoulders, easy breathing</li>
+          <li><strong>Skipping</strong>: 2 x 20m. Regular skip and arm-swing skip only, keep it light</li>
         </ul>
       </section>
       <section class="wu-sec">
-        <h3><span class="wu-step">2</span> MOBILITY <em>5 min — walk the line, no rushing</em></h3>
+        <h3><span class="wu-step">2</span> MOBILITY <em>5 min: walk the line, no rushing</em></h3>
         <ul class="wu-list">
-          <li><strong>Forward leg swings</strong> — 10 per leg — tall posture, no trunk swing</li>
-          <li><strong>Lateral leg swings</strong> — 10 per leg — hips stay square while the leg opens and closes</li>
-          <li><strong>Walking knee hugs</strong> — 15-20m — rise onto the toe of the stance leg</li>
-          <li><strong>Walking quad pulls</strong> — 15-20m — heel to glute, reach tall with the opposite arm</li>
-          <li><strong>Hip circles</strong> — 5 each direction, per leg — knee at 90 degrees, big controlled circle</li>
-          <li><strong>Karaoke</strong> — 20m each direction, easy — opens the hips, stay light on your feet</li>
+          <li><strong>Forward leg swings</strong>: 10 per leg. Tall posture, no trunk swing</li>
+          <li><strong>Lateral leg swings</strong>: 10 per leg. Hips stay square while the leg opens and closes</li>
+          <li><strong>Walking knee hugs</strong>: 15-20m. Rise onto the toe of the stance leg</li>
+          <li><strong>Walking quad pulls</strong>: 15-20m. Heel to glute, reach tall with the opposite arm</li>
+          <li><strong>Hip circles</strong>: 5 each direction, per leg. Knee at 90 degrees, big controlled circle</li>
+          <li><strong>Karaoke</strong>: 20m each direction, easy. Opens the hips, stay light on your feet</li>
         </ul>
       </section>
       <section class="wu-sec">
-        <h3><span class="wu-step">3</span> WAKE UP <em>2 min — smooth, not fast</em></h3>
+        <h3><span class="wu-step">3</span> WAKE UP <em>2 min: smooth, not fast</em></h3>
         <ul class="wu-list">
-          <li><strong>Ankle dribbles</strong> — 20m — short quick steps on the balls of the feet</li>
-          <li><strong>Relaxed strides</strong> — 2 x 60m at about 70% — finish each stride slightly faster, stay relaxed</li>
+          <li><strong>Ankle dribbles</strong>: 20m. Short quick steps on the balls of the feet</li>
+          <li><strong>Relaxed strides</strong>: 2 x 60m at about 70%. Finish each stride slightly faster, stay relaxed</li>
         </ul>
       </section>
       <section class="wu-sec wu-finish">
         <h3>FINISH CHECK <em>Before you start the day's work</em></h3>
         <ul class="wu-list">
-          <li><strong>Breathing easy</strong> — you can talk in full sentences</li>
-          <li><strong>Hips and ankles loose</strong> — no stiffness left from yesterday</li>
-          <li><strong>Warm, not tired</strong> — if not, walk one more easy lap and repeat leg swings</li>
+          <li><strong>Breathing easy</strong>: you can talk in full sentences</li>
+          <li><strong>Hips and ankles loose</strong>: no stiffness left from yesterday</li>
+          <li><strong>Warm, not tired</strong>: if not, walk one more easy lap and repeat leg swings</li>
         </ul>
       </section>
-      <p class="wu-rule"><strong>Do not add:</strong> No plyos, no extra strides, no sprint drills at speed. Save that work for a hard day — that is the whole point of a light day.</p>
-      <p class="wu-coach"><strong>COACH RULE:</strong> If you are breathing hard, you went too hard. Low days stay low — that is what makes the next hard day possible.</p>
-      <footer class="wu-foot">Card 1 of 3 — Based on WUP-03 Tempo-Day Warm-Up (10 min) and drills DRL-01 to DRL-16. Print single-sided, laminate, keep with the tempo-day gear.</footer>
+      <p class="wu-rule"><strong>Do not add:</strong> No plyos, no extra strides, no sprint drills at speed. Save that work for a hard day. That is the whole point of a light day.</p>
+      <p class="wu-coach"><strong>COACH RULE:</strong> If you are breathing hard, you went too hard. Low days stay low. That is what makes the next hard day possible.</p>
+      <footer class="wu-foot">Card 1 of 3. Based on WUP-03 Tempo-Day Warm-Up (10 min) and drills DRL-01 to DRL-16. Print single-sided, laminate, keep with the tempo-day gear.</footer>
       <button class="btn primary wu-print" type="button" data-print-card="wu-card-1">Print this card</button>
     </article>
 
@@ -774,53 +658,53 @@
           </div>
           <div class="wu-time"><strong>20-25 min</strong><span>TOTAL TIME</span></div>
         </div>
-        <p class="wu-use">Use on: Every high day — block work, fly runs, max velocity, and speed endurance. Full routine, every time. Speed is never done cold.</p>
+        <p class="wu-use">Use on: Every high day. Block work, fly runs, max velocity, and speed endurance. Full routine, every time. Speed is never done cold.</p>
         <div class="wu-tags"><span>TRAINERS, THEN SPIKES</span><span>TRACK</span><span>PLYOS INCLUDED</span><span>BLOCKS IN PART 4</span></div>
-        <p class="wu-goal"><strong>GOAL</strong> Prime the body for 95% and above: warm, loose, springy, and sharp — without getting tired in the warm-up.</p>
+        <p class="wu-goal"><strong>GOAL</strong> Prime the body for 95% and above: warm, loose, springy, and sharp. Without getting tired in the warm-up.</p>
       </header>
       <section class="wu-sec">
-        <h3><span class="wu-step">1</span> RAISE — PART A <em>Jog and skipping series</em></h3>
+        <h3><span class="wu-step">1</span> RAISE: PART A <em>Jog and skipping series</em></h3>
         <ul class="wu-list">
-          <li><strong>Jog + progressive strides</strong> — 800m + 4 x 60m — finish each stride slightly faster, last near 80%</li>
-          <li><strong>Skipping series</strong> — 4 x 20m — regular, arm swing, for height, for distance</li>
+          <li><strong>Jog + progressive strides</strong>: 800m + 4 x 60m. Finish each stride slightly faster, last near 80%</li>
+          <li><strong>Skipping series</strong>: 4 x 20m. Regular, arm swing, for height, for distance</li>
         </ul>
       </section>
       <section class="wu-sec">
-        <h3><span class="wu-step">2</span> DYNAMIC + SPRINT DRILLS — PART B <em>15-20m each / drills 20m x 2</em></h3>
+        <h3><span class="wu-step">2</span> DYNAMIC + SPRINT DRILLS: PART B <em>15-20m each / drills 20m x 2</em></h3>
         <ul class="wu-list wu-cols">
-          <li><strong>Leg swings</strong> — fwd + lateral, 10/leg</li>
-          <li><strong>A-skips</strong> — toe up, paw under hip</li>
-          <li><strong>Knee hugs / Quad pulls</strong> — 15-20m</li>
-          <li><strong>B-skips</strong> — extend, then paw down</li>
-          <li><strong>Lunges with twist</strong> — 15-20m</li>
-          <li><strong>High knees</strong> — tall, fast contact</li>
-          <li><strong>Inchworms</strong> — 15-20m</li>
-          <li><strong>Butt kicks</strong> — heels to glutes, knees down</li>
-          <li><strong>Hip circles</strong> — 5/dir/leg</li>
-          <li><strong>Straight-leg bounds</strong> — strike under hips</li>
-          <li><strong>Karaoke</strong> — 20m each way</li>
-          <li><strong>Ankle dribbles</strong> — 20m, quick and short</li>
+          <li><strong>Leg swings</strong>: fwd + lateral, 10/leg</li>
+          <li><strong>A-skips</strong>: toe up, paw under hip</li>
+          <li><strong>Knee hugs / Quad pulls</strong>: 15-20m</li>
+          <li><strong>B-skips</strong>: extend, then paw down</li>
+          <li><strong>Lunges with twist</strong>: 15-20m</li>
+          <li><strong>High knees</strong>: tall, fast contact</li>
+          <li><strong>Inchworms</strong>: 15-20m</li>
+          <li><strong>Butt kicks</strong>: heels to glutes, knees down</li>
+          <li><strong>Hip circles</strong>: 5/dir/leg</li>
+          <li><strong>Straight-leg bounds</strong>: strike under hips</li>
+          <li><strong>Karaoke</strong>: 20m each way</li>
+          <li><strong>Ankle dribbles</strong>: 20m, quick and short</li>
         </ul>
       </section>
       <section class="wu-sec">
-        <h3><span class="wu-step">3</span> PLYO PRIMER <em>Quality only — full recovery, low contacts</em></h3>
+        <h3><span class="wu-step">3</span> PLYO PRIMER <em>Quality only. Full recovery, low contacts</em></h3>
         <ul class="wu-list">
-          <li><strong>Pogo hops</strong> — 2 x 10 — quiet, springy, stiff ankles; spring off the ground, do not sink</li>
-          <li><strong>Countermovement jumps</strong> — 2 x 3 — explode up, stick the landing</li>
-          <li><strong>Alternating bounds</strong> — 2 x 20m — powerful push, do not reach</li>
-          <li><strong>Single-leg hops</strong> — 1-2 x 10m per leg — speed days only, and only when fresh</li>
+          <li><strong>Pogo hops</strong>: 2 x 10. Quiet, springy, stiff ankles; spring off the ground, do not sink</li>
+          <li><strong>Countermovement jumps</strong>: 2 x 3. Explode up, stick the landing</li>
+          <li><strong>Alternating bounds</strong>: 2 x 20m. Powerful push, do not reach</li>
+          <li><strong>Single-leg hops</strong>: 1-2 x 10m per leg. Speed days only, and only when fresh</li>
         </ul>
         <p class="wu-stop"><strong>Stop rule:</strong> If landings get loud or heavy, the plyo primer is done. Quality contacts over quantity, always.</p>
       </section>
       <section class="wu-sec">
-        <h3><span class="wu-step">4</span> BUILD — PART C <em>Spikes on</em></h3>
+        <h3><span class="wu-step">4</span> BUILD: PART C <em>Spikes on</em></h3>
         <ul class="wu-list">
-          <li><strong>Build-ups</strong> — 2-3 x 60-80m to session speed — tall, relaxed, strike under the hip</li>
-          <li><strong>Block starts</strong> — 1-2 on acceleration days — own the first three steps, gradual rise</li>
+          <li><strong>Build-ups</strong>: 2-3 x 60-80m to session speed. Tall, relaxed, strike under the hip</li>
+          <li><strong>Block starts</strong>: 1-2 on acceleration days. Own the first three steps, gradual rise</li>
         </ul>
       </section>
       <p class="wu-coach"><strong>FORM CHECK:</strong> Tall with a slight whole-body lean. Toe up. Arms cheek to pocket, opposite arm and leg together. If times are 3% off standard or form breaks down, the high session ends.</p>
-      <footer class="wu-foot">Card 2 of 3 — Based on WUP-01 Standard Sprint Warm-Up (Parts A/B/C) with PLY-01 / PLY-02 plyo primer and drills DRL-01 to DRL-16. Print single-sided, laminate, keep at the start line.</footer>
+      <footer class="wu-foot">Card 2 of 3. Based on WUP-01 Standard Sprint Warm-Up (Parts A/B/C) with PLY-01 / PLY-02 plyo primer and drills DRL-01 to DRL-16. Print single-sided, laminate, keep at the start line.</footer>
       <button class="btn primary wu-print" type="button" data-print-card="wu-card-2">Print this card</button>
     </article>
 
@@ -835,47 +719,47 @@
           </div>
           <div class="wu-time"><strong>12-15 min</strong><span>TOTAL TIME</span></div>
         </div>
-        <p class="wu-use">Use on: Circuit and weight-room days, and cross-training circuit days. Built to flow straight into Round 1 — no standing around between the warm-up and the work.</p>
+        <p class="wu-use">Use on: Circuit and weight-room days, and cross-training circuit days. Built to flow straight into Round 1. No standing around between the warm-up and the work.</p>
         <div class="wu-tags"><span>TRAINERS</span><span>TRACK OR WEIGHT ROOM</span><span>MINI-BANDS READY</span><span>MATS OUT</span></div>
         <p class="wu-goal"><strong>GOAL</strong> Raise temperature, open the hips, and switch on glutes and core, so the first circuit round is already clean.</p>
       </header>
       <section class="wu-sec">
-        <h3><span class="wu-step">1</span> RAISE <em>3 min — keep moving</em></h3>
+        <h3><span class="wu-step">1</span> RAISE <em>3 min: keep moving</em></h3>
         <ul class="wu-list">
-          <li><strong>Jog</strong> — 400m easy — or 2 min easy bike / rower if you are already in the weight room</li>
-          <li><strong>Skipping + Karaoke</strong> — 2 x 20m / 20m each way — light, quick feet</li>
-          <li><strong>Inchworms</strong> — 15-20m — legs straight to load the hamstrings</li>
+          <li><strong>Jog</strong>: 400m easy, or 2 min easy bike / rower if you are already in the weight room</li>
+          <li><strong>Skipping + Karaoke</strong>: 2 x 20m / 20m each way. Light, quick feet</li>
+          <li><strong>Inchworms</strong>: 15-20m. Legs straight to load the hamstrings</li>
         </ul>
       </section>
       <section class="wu-sec">
         <h3><span class="wu-step">2</span> MOBILITY <em>4 min</em></h3>
         <ul class="wu-list">
-          <li><strong>Leg swings</strong> — forward + lateral, 10 per leg — tall posture, hips square</li>
-          <li><strong>Walking knee hugs</strong> — 15-20m — rise onto the toe of the stance leg</li>
-          <li><strong>Walking quad pulls</strong> — 15-20m — heel to glute, reach tall with the opposite arm</li>
-          <li><strong>Walking lunges with twist</strong> — 15-20m — front knee tracks over the ankle, rotate over the front leg</li>
-          <li><strong>Hip circles</strong> — 5 each direction, per leg — knee at 90 degrees, big controlled circle</li>
+          <li><strong>Leg swings</strong>: forward + lateral, 10 per leg. Tall posture, hips square</li>
+          <li><strong>Walking knee hugs</strong>: 15-20m. Rise onto the toe of the stance leg</li>
+          <li><strong>Walking quad pulls</strong>: 15-20m. Heel to glute, reach tall with the opposite arm</li>
+          <li><strong>Walking lunges with twist</strong>: 15-20m. Front knee tracks over the ankle, rotate over the front leg</li>
+          <li><strong>Hip circles</strong>: 5 each direction, per leg. Knee at 90 degrees, big controlled circle</li>
         </ul>
       </section>
       <section class="wu-sec">
-        <h3><span class="wu-step">3</span> ACTIVATION CIRCUIT <em>2 rounds — 30 sec rest between rounds</em></h3>
+        <h3><span class="wu-step">3</span> ACTIVATION CIRCUIT <em>2 rounds: 30 sec rest between rounds</em></h3>
         <ul class="wu-list">
-          <li><strong>Bodyweight squats</strong> — x 10 — knees track over toes, chest tall</li>
-          <li><strong>Walking lunges</strong> — 10m — front knee over ankle, torso tall</li>
-          <li><strong>Glute bridges</strong> — x 10 — squeeze at the top, ribs down</li>
-          <li><strong>Mini-band lateral walks</strong> — 10m each way — hips level, feet straight, band stays tight</li>
-          <li><strong>Dead bugs</strong> — x 6 per side — low back stays down, move slow</li>
-          <li><strong>Ankle dribbles</strong> — 20m — short quick steps on the balls of the feet</li>
+          <li><strong>Bodyweight squats</strong>: x 10. Knees track over toes, chest tall</li>
+          <li><strong>Walking lunges</strong>: 10m. Front knee over ankle, torso tall</li>
+          <li><strong>Glute bridges</strong>: x 10. Squeeze at the top, ribs down</li>
+          <li><strong>Mini-band lateral walks</strong>: 10m each way. Hips level, feet straight, band stays tight</li>
+          <li><strong>Dead bugs</strong>: x 6 per side. Low back stays down, move slow</li>
+          <li><strong>Ankle dribbles</strong>: 20m. Short quick steps on the balls of the feet</li>
         </ul>
       </section>
       <section class="wu-sec">
         <h3><span class="wu-step">4</span> READY</h3>
         <ul class="wu-list">
-          <li><strong>Easy strides or spin</strong> — 2 x 60m relaxed, or 1 min easy bike / rower — conversational effort, then go straight into Round 1</li>
+          <li><strong>Easy strides or spin</strong>: 2 x 60m relaxed, or 1 min easy bike / rower. Conversational effort, then go straight into Round 1</li>
         </ul>
       </section>
-      <p class="wu-coach"><strong>COACH RULE:</strong> Moderate loads, clean reps. Build capacity, not soreness. If form breaks in the activation circuit, fix it there — do not carry it into loaded work.</p>
-      <footer class="wu-foot">Card 3 of 3 — Based on WUP-01 drills with STR-01 circuit and XT-03 / XT-04 activation work, drills DRL-01 to DRL-16. Print single-sided, laminate, keep in the weight room.</footer>
+      <p class="wu-coach"><strong>COACH RULE:</strong> Moderate loads, clean reps. Build capacity, not soreness. If form breaks in the activation circuit, fix it there. Do not carry it into loaded work.</p>
+      <footer class="wu-foot">Card 3 of 3. Based on WUP-01 drills with STR-01 circuit and XT-03 / XT-04 activation work, drills DRL-01 to DRL-16. Print single-sided, laminate, keep in the weight room.</footer>
       <button class="btn primary wu-print" type="button" data-print-card="wu-card-3">Print this card</button>
     </article>
   </section>
@@ -885,29 +769,29 @@
     <h1>Nutrition</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">What to eat and when — on practice days, meet days, and lifting days.</p>
-    <p class="muted">Fueling education for sprinters — principles, plates, and timing. No diet plans and no calorie counting: eat to match the work, protein at every meal, and never train on empty. Ranges below are general education guidelines for hard-training athletes, in the coach's words.</p>
+    <p class="view-sub muted">What to eat and when. On practice days, meet days, and lifting days.</p>
+    <p class="muted">Fueling education for sprinters. Principles, plates, and timing. No diet plans and no calorie counting: eat to match the work, protein at every meal, and never train on empty. Ranges below are general education guidelines for hard-training athletes, in the coach's words.</p>
 
     <article class="nu-card nu-scarlet">
       <h2>1 · Daily Fueling for Sprinters</h2>
-      <p class="nu-sub">The everyday plate — and how it changes with the training day.</p>
+      <p class="nu-sub">The everyday plate, and how it changes with the training day.</p>
       <ul class="nu-list">
-        <li><strong>Fuel matches the day.</strong> On hard and speed days, build a carb-forward plate — roughly half the plate from foods like rice, pasta, potatoes, bread, and fruit. Speed work burns through stored fuel fast, and the tank has to be full before you ask for top speed. On light and recovery days, keep the same protein and color and ease the starch portion back a little.</li>
-        <li><strong>Protein at every meal.</strong> A palm-sized portion — eggs, chicken, beef, fish, Greek yogurt, milk, beans. Hard-training sprinters generally land around <strong>1.4–2.0 grams of protein per kilo of body weight across the whole day</strong>, spread over breakfast, lunch, dinner, and a snack — not one giant serving at night.</li>
-        <li><strong>Carbs follow the workload.</strong> As a general guide, hard training days run about <strong>5–6 grams of carbohydrate per kilo of body weight</strong> for the day; lighter days need somewhat less. If afternoon practices feel flat week after week, the first suspect is not enough carbs earlier in the day.</li>
+        <li><strong>Fuel matches the day.</strong> On hard and speed days, build a carb-forward plate. Roughly half the plate from foods like rice, pasta, potatoes, bread, and fruit. Speed work burns through stored fuel fast, and the tank has to be full before you ask for top speed. On light and recovery days, keep the same protein and color and ease the starch portion back a little.</li>
+        <li><strong>Protein at every meal.</strong> A palm-sized portion. Eggs, chicken, beef, fish, Greek yogurt, milk, beans. Hard-training sprinters generally land around <strong>1.4 to 2.0 grams of protein per kilo of body weight across the whole day</strong>, spread over breakfast, lunch, dinner, and a snack. Not one giant serving at night.</li>
+        <li><strong>Carbs follow the workload.</strong> As a general guide, hard training days run about <strong>5 to 6 grams of carbohydrate per kilo of body weight</strong> for the day; lighter days need somewhat less. If afternoon practices feel flat week after week, the first suspect is not enough carbs earlier in the day.</li>
         <li><strong>Color at lunch and dinner.</strong> A fruit or a vegetable at both meals, every day. It is the simplest habit that covers the most ground.</li>
-        <li><strong>Breakfast is non-negotiable.</strong> Carbs plus protein to start the day — oatmeal and milk, eggs and toast, a smoothie. Skipping breakfast means starting the day on empty and trying to fuel training from lunch alone.</li>
+        <li><strong>Breakfast is non-negotiable.</strong> Carbs plus protein to start the day. Oatmeal and milk, eggs and toast, a smoothie. Skipping breakfast means starting the day on empty and trying to fuel training from lunch alone.</li>
         <li><strong>Snacks have a job.</strong> Pair a carb with a protein: banana and milk, a peanut butter sandwich, trail mix and yogurt. A snack is a bridge to the next meal, not a meal replacement.</li>
       </ul>
     </article>
 
     <article class="nu-card nu-gold">
       <h2>2 · Before Practice / Before a Meet</h2>
-      <p class="nu-sub">The timing ladder — the closer to go-time, the smaller and simpler the food.</p>
+      <p class="nu-sub">The timing ladder. The closer to go-time, the smaller and simpler the food.</p>
       <ul class="nu-list">
-        <li><strong>3–4 hours out: a full meal.</strong> Carb-based with moderate protein, and go easy on fat and fiber so it has time to digest — pasta with a light sauce, rice and chicken, a sandwich and fruit.</li>
-        <li><strong>1–2 hours out: a carb snack.</strong> A bagel, pretzels, fruit, applesauce, or a sports drink. Familiar and easy on the stomach.</li>
-        <li><strong>30–60 minutes out: small fast carbs only.</strong> A few gummies or chews, juice, half a banana. Just enough to top off — nothing heavy sitting in the stomach at the start line.</li>
+        <li><strong>3 to 4 hours out: a full meal.</strong> Carb-based with moderate protein, and go easy on fat and fiber so it has time to digest. Pasta with a light sauce, rice and chicken, a sandwich and fruit.</li>
+        <li><strong>1 to 2 hours out: a carb snack.</strong> A bagel, pretzels, fruit, applesauce, or a sports drink. Familiar and easy on the stomach.</li>
+        <li><strong>30 to 60 minutes out: small fast carbs only.</strong> A few gummies or chews, juice, half a banana. Just enough to top off. Nothing heavy sitting in the stomach at the start line.</li>
         <li><strong>Keep fat and fiber low right before.</strong> Heavy, greasy, or high-fiber food digests slowly and is the classic cause of a sloshy, heavy warm-up.</li>
         <li><strong>Nothing new on meet day.</strong> If a food has not been tested before a hard practice, it does not debut at a meet.</li>
         <li><strong>Skip the energy drinks.</strong> They are not fuel, and the crash lands mid-meet.</li>
@@ -920,8 +804,8 @@
       <ul class="nu-list">
         <li><strong>Protein + carbs together, within about 60 minutes</strong> after a hard session. That pairing is the whole point: carbs refill the tank while protein starts the repair work.</li>
         <li><strong>Carbs first priority after hard days.</strong> The fuel you burned (glycogen) restocks fastest in the first hours after training. Skipping carbs after a hard day is borrowing from tomorrow's practice.</li>
-        <li><strong>A real protein dose at each meal.</strong> A palm-sized serving, roughly 20–40 grams of protein, at breakfast, lunch, the post-practice meal, and dinner. Total daily protein matters more than any single shake moment.</li>
-        <li><strong>Chocolate milk is the classic for a reason</strong> — carbs, protein, and fluid in one bottle. Also strong: a turkey sandwich and fruit, a smoothie, pasta with meat sauce, eggs and toast.</li>
+        <li><strong>A real protein dose at each meal.</strong> A palm-sized serving, roughly 20 to 40 grams of protein, at breakfast, lunch, the post-practice meal, and dinner. Total daily protein matters more than any single shake moment.</li>
+        <li><strong>Chocolate milk is the classic for a reason</strong>: carbs, protein, and fluid in one bottle. Also strong: a turkey sandwich and fruit, a smoothie, pasta with meat sauce, eggs and toast.</li>
         <li><strong>Two meals after a hard day.</strong> The post-practice bite is a bridge. Dinner still happens when you get home.</li>
         <li><strong>Sleep is the other half of recovery.</strong> Fueling works with sleep, never instead of it.</li>
       </ul>
@@ -931,12 +815,12 @@
       <h2>4 · Hydration</h2>
       <p class="nu-sub">Start hydrated, sip through the work, replace what you lost.</p>
       <ul class="nu-list">
-        <li><strong>Daily baseline:</strong> water all day. Bring a bottle, keep it with you, and sip steadily through the day — do not try to catch up right before training.</li>
-        <li><strong>The urine-color rule:</strong> aim for pale yellow, like lemonade. Dark yellow, like apple juice, means drink more — starting now, not at practice.</li>
+        <li><strong>Daily baseline:</strong> water all day. Bring a bottle, keep it with you, and sip steadily through the day. Do not try to catch up right before training.</li>
+        <li><strong>The urine-color rule:</strong> aim for pale yellow, like lemonade. Dark yellow, like apple juice, means drink more. Starting now, not at practice.</li>
         <li><strong>Before practice:</strong> drink with your pre-practice meal or snack, then a few big gulps again right before warm-up.</li>
-        <li><strong>During practice:</strong> sip regularly instead of waiting for thirst — in the heat, roughly a cup every 15–20 minutes.</li>
-        <li><strong>After practice:</strong> replace what you sweated out. If you step on a scale and you are down a pound, drink roughly 2–3 cups of fluid for that pound. The goal is to finish sessions within about 2% of your starting body weight.</li>
-        <li><strong>Hot or long days: add electrolytes.</strong> On 90-minute-plus sessions or very hot days, a sports drink — or water plus salty food — replaces the salt that plain water cannot.</li>
+        <li><strong>During practice:</strong> sip regularly instead of waiting for thirst. In the heat, roughly a cup every 15 to 20 minutes.</li>
+        <li><strong>After practice:</strong> replace what you sweated out. If you step on a scale and you are down a pound, drink roughly 2 to 3 cups of fluid for that pound. The goal is to finish sessions within about 2% of your starting body weight.</li>
+        <li><strong>Hot or long days: add electrolytes.</strong> On 90-minute-plus sessions or very hot days, a sports drink, or water plus salty food, replaces the salt that plain water cannot.</li>
         <li><strong>Know the warning signs:</strong> headache, dizziness, dark urine, cramps that will not release, nausea, or fatigue that feels wrong for the workout. Tell a coach. Dizziness is never something to push through.</li>
       </ul>
     </article>
@@ -945,33 +829,33 @@
       <h2>5 · Meet Day Timeline</h2>
       <p class="nu-sub">A race-day run-through, wake-up to the ride home.</p>
       <ul class="nu-list">
-        <li><strong>Wake-up meal (3–4 hours before your first race when the schedule allows):</strong> a familiar, carb-based breakfast with some protein — eggs and toast with fruit, oatmeal and milk. The meal shrinks as the start gets closer, exactly like the practice ladder.</li>
-        <li><strong>Pack for the bus.</strong> Meets run long and concession stands are a gamble: bagels, pretzels, bananas, granola bars, a sports drink — food you already trust.</li>
+        <li><strong>Wake-up meal (3 to 4 hours before your first race when the schedule allows):</strong> a familiar, carb-based breakfast with some protein. Eggs and toast with fruit, oatmeal and milk. The meal shrinks as the start gets closer, exactly like the practice ladder.</li>
+        <li><strong>Pack for the bus.</strong> Meets run long and concession stands are a gamble: bagels, pretzels, bananas, granola bars, a sports drink. Food you already trust.</li>
         <li><strong>Between races: small carb bites.</strong> A few bites and sips after each race keeps the tank steady. Save a bigger meal for after your last event, or for a break of two hours or more.</li>
-        <li><strong>Food finishes before the warm-up.</strong> Your last real bite should be done about 30–60 minutes before your warm-up starts; after that, only tiny fast carbs.</li>
-        <li><strong>After your last race:</strong> a recovery meal within the hour — protein plus carbs — then a full dinner at home.</li>
+        <li><strong>Food finishes before the warm-up.</strong> Your last real bite should be done about 30 to 60 minutes before your warm-up starts; after that, only tiny fast carbs.</li>
+        <li><strong>After your last race:</strong> a recovery meal within the hour, protein plus carbs, then a full dinner at home.</li>
         <li><strong>The meet-day rule:</strong> nothing new. New food, new drinks, and new routines all get tested at practice first.</li>
       </ul>
     </article>
 
     <article class="nu-card nu-slate">
       <h2>6 · Weight Room Day Fueling</h2>
-      <p class="nu-sub">Strength and testing days — fueling for the build.</p>
+      <p class="nu-sub">Strength and testing days. Fueling for the build.</p>
       <ul class="nu-list">
         <li><strong>Protein emphasis.</strong> Strength days are when protein does its building work: a palm-sized portion at every meal, all day, not just after lifting.</li>
-        <li><strong>Pre-lift snack, 1–2 hours out:</strong> carbs plus a little protein — a peanut butter sandwich, yogurt and granola, milk and a banana. Never lift on empty.</li>
+        <li><strong>Pre-lift snack, 1 to 2 hours out:</strong> carbs plus a little protein. A peanut butter sandwich, yogurt and granola, milk and a banana. Never lift on empty.</li>
         <li><strong>Testing days are max-effort days.</strong> Eat a real breakfast and a real lunch. Personal records do not happen on fumes; if it has been hours since lunch, take a small carb bite before you test.</li>
-        <li><strong>Post-lift, within the hour:</strong> protein + carbs together — chocolate milk, a sandwich, a smoothie — then dinner as usual. That is the recovery window that turns today's lifting into next month's strength.</li>
+        <li><strong>Post-lift, within the hour:</strong> protein + carbs together (chocolate milk, a sandwich, a smoothie) then dinner as usual. That is the recovery window that turns today's lifting into next month's strength.</li>
         <li><strong>Hydration counts indoors too.</strong> Bottle nearby, sips between sets on long sessions.</li>
       </ul>
     </article>
 
     <article class="nu-card nu-note">
-      <h2>Supplements — the honest version</h2>
+      <h2>Supplements: the honest version</h2>
       <ul class="nu-list">
-        <li><strong>Food first, always.</strong> No supplement fixes skipped meals, low carbs on hard days, or short sleep — and those three move performance more than anything in a tub.</li>
+        <li><strong>Food first, always.</strong> No supplement fixes skipped meals, low carbs on hard days, or short sleep, and those three move performance more than anything in a tub.</li>
         <li><strong>We do not push supplements for young athletes.</strong> Products are not regulated like food, labels can be wrong, and a contaminated product can cost an athlete their eligibility.</li>
-        <li><strong>The evidence conversation belongs at home.</strong> Sports-science texts do review ergogenic aids with real evidence behind them in adult athletes — but that is a family-and-doctor conversation, not a training-room one.</li>
+        <li><strong>The evidence conversation belongs at home.</strong> Sports-science texts do review ergogenic aids with real evidence behind them in adult athletes, but that is a family-and-doctor conversation, not a training-room one.</li>
         <li><strong>The proven stack is boring:</strong> breakfast, carbs around training, protein at meals, water, and sleep.</li>
       </ul>
     </article>
@@ -983,7 +867,7 @@
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
     <p class="view-sub muted">Watch a demo of any drill or lift before you try it.</p>
-    <p class="muted">The demo library — every video picked and checked by hand. Tap a card to play it right here.</p>
+    <p class="muted">The demo library. Every video picked and checked by hand. Tap a card to play it right here.</p>
     <div class="filters card">
       <input id="vid-search" type="search" placeholder="Search videos (try “squat”, “wickets”, “hip”)">
       <div class="chip-row" id="vid-chips"></div>
@@ -997,8 +881,8 @@
     <h1>Definitions</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Look up any word the coach uses — defined in plain language, with the coaching cue where there is one.</p>
-    <p class="muted">Every exercise, every type of running, and every program term in this app — defined in plain language, with the coaching cue where there is one.</p>
+    <p class="view-sub muted">Look up any word the coach uses. Defined in plain language, with the coaching cue where there is one.</p>
+    <p class="muted">Every exercise, every type of running, and every program term in this app. Defined in plain language, with the coaching cue where there is one.</p>
     <div class="filters card">
       <input id="def-search" type="search" placeholder="Search definitions (try “tempo”, “A-skips”, “taper”)">
       <div class="chip-row" id="def-chips"></div>
@@ -1012,7 +896,7 @@
     <h1>Exercise Library</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Movements mined from the training posts saved on Instagram — what each one trains, the gear it needs, and the coaching cues.</p>
+    <p class="view-sub muted">Movements mined from the training posts saved on Instagram. What each one trains, the gear it needs, and the coaching cues.</p>
     <p class="muted">Every movement links back to the post it came from, so you can watch the original.</p>
     <div class="filters card">
       <input id="ex-search" type="search" placeholder="Search movements (try “nordic”, “hip flexor”, “partner”)">
@@ -1030,8 +914,8 @@
     <h1>Coach Education</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Clinics and courses for coaches — local, national, and online.</p>
-    <p class="muted">Trainings and courses for sprint and strength coaches — local to the DC metro, national events worth the trip, and online options you can do from anywhere. Researched and linked to each provider's own page.</p>
+    <p class="view-sub muted">Clinics and courses for coaches. Local, national, and online.</p>
+    <p class="muted">Trainings and courses for sprint and strength coaches. Local to the DC metro, national events worth the trip, and online options you can do from anywhere. Researched and linked to each provider's own page.</p>
     <div class="filters card">
       <input id="edu-search" type="search" placeholder="Search trainings (try “ALTIS”, “USATF”, “strength”)">
       <div class="chip-row" id="edu-chips"></div>
@@ -1053,7 +937,7 @@
     <h1>Testing</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Record test days and results — lifts, jumps, and pull-ups — and see ranked tables and personal bests. Coaches only.</p>
+    <p class="view-sub muted">Record test days and results (lifts, jumps, and pull-ups) and see ranked tables and personal bests. Coaches only.</p>
     <div id="testing-main"></div>
   </section>
 
@@ -1072,7 +956,7 @@
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
     <p class="view-sub muted">Record what an athlete reports to you, and track it until it clears.</p>
-    <p class="muted">Your private notebook: record what an athlete reports to you — an ache, a pain, something tight — and track it until it clears. Athletes never see this; it is coach-only.</p>
+    <p class="muted">Your private notebook: record what an athlete reports to you (an ache, a pain, something tight) and track it until it clears. Athletes never see this; it is coach-only.</p>
     <div id="health-main"></div>
   </section>
 
@@ -1100,7 +984,7 @@
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
     <p class="view-sub muted">What gear the program owns, how much of it, and where it lives.</p>
-    <p class="muted">The program's gear, counted by you: what you have, how many, what shape it is in, and where it lives. Coach-only — athletes never see this.</p>
+    <p class="muted">The program's gear, counted by you: what you have, how many, what shape it is in, and where it lives. Coach-only. Athletes never see this.</p>
     <div id="inventory-main"></div>
   </section>
 
@@ -1109,7 +993,7 @@
     <h1>Meet Results</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Record what your athletes run, jump, and throw at meets — PRs and the team board build themselves. Coaches only.</p>
+    <p class="view-sub muted">Record what your athletes run, jump, and throw at meets. PRs and the team board build themselves. Coaches only.</p>
     <div id="meets-main"></div>
   </section>
 
@@ -1127,7 +1011,7 @@
     <h1>Goals</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">One target mark per athlete per event. Progress is figured from their real meet results — the first mark they record is the baseline, their PR is where they stand. Coaches only.</p>
+    <p class="view-sub muted">One target mark per athlete per event. Progress is figured from their real meet results. The first mark they record is the baseline, their PR is where they stand. Coaches only.</p>
     <div id="goals-main"></div>
   </section>
 
@@ -1136,7 +1020,7 @@
     <h1>Reports</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The program in charts: strength trends, who is completing the work, planned load, and health — plus a printable report card for every athlete.</p>
+    <p class="view-sub muted">The program in charts: strength trends, who is completing the work, planned load, and health. Plus a printable report card for every athlete.</p>
     <div id="reports-main"></div>
   </section>
 
@@ -1145,7 +1029,7 @@
     <h1>Weekly Digest</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">One week of the program, assembled for you: who checked in, who trained, what got faster, what needs attention — and the week coming.</p>
+    <p class="view-sub muted">One week of the program, assembled for you: who checked in, who trained, what got faster, what needs attention, and the week coming.</p>
     <div id="digest-main"></div>
   </section>
 
@@ -1154,7 +1038,7 @@
     <h1>Announcements</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">One-way posts from the coaching staff — to the whole team, or to a single group. Athletes read them on their Today page. No replies, no read receipts. Coaches only.</p>
+    <p class="view-sub muted">One-way posts from the coaching staff. To the whole team, or to a single group. Athletes read them on their Today page. No replies, no read receipts. Coaches only.</p>
     <div id="announce-main"></div>
   </section>
 
@@ -1163,7 +1047,7 @@
     <h1>Attendance</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The daily roll-book: who is here, who is late, who is excused, and who is absent. Every tap saves on its own. Coaches only — athletes never see this.</p>
+    <p class="view-sub muted">The daily roll-book: who is here, who is late, who is excused, and who is absent. Every tap saves on its own. Coaches only. Athletes never see this.</p>
     <div id="attendance-main"></div>
   </section>
 
@@ -1181,7 +1065,7 @@
     <h1>Access</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Every member account and the tier it carries. Set a tier, cancel a membership, or bring one back — changes apply at once and each one is recorded. Coaches only.</p>
+    <p class="view-sub muted">Every member account and the tier it carries. Set a tier, cancel a membership, or bring one back. Changes apply at once and each one is recorded. Coaches only.</p>
     <div id="access-main"></div>
   </section>
 
@@ -1217,7 +1101,7 @@
     <h1>Club Records</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The all-time top 10, event by event — the marks every member is chasing.</p>
+    <p class="view-sub muted">The all-time top 10, event by event. The marks every member is chasing.</p>
     <div id="records-main"></div>
     <div id="records-manage"></div>
   </section>
@@ -1227,7 +1111,7 @@
     <h1>Leaderboard</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The team's best numbers, ranked — the top 5 in every test and meet event, from the marks already on record.</p>
+    <p class="view-sub muted">The team's best numbers, ranked. The top 5 in every test and meet event, from the marks already on record.</p>
     <div id="leaderboard-main"></div>
   </section>
 
@@ -1236,7 +1120,7 @@
     <h1>Lab Report</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Your own report: your baseline from your first testing session, your personal bests, and the change since baseline — the page to show a parent.</p>
+    <p class="view-sub muted">Your own report: your baseline from your first testing session, your personal bests, and the change since baseline. The page to show a parent.</p>
     <div id="speedreport-main"></div>
   </section>
 
@@ -1255,7 +1139,7 @@
     <h1>Warm-Up Drills</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The 16 standard drills — how each one goes, and a demo for most of them.</p>
+    <p class="view-sub muted">The 16 standard drills. How each one goes, and a demo for most of them.</p>
     <p class="muted">The standard warm-up series. Part A warms up, Part B mobilizes and drills sprint mechanics.</p>
     <div id="drill-list"></div>
   </section>
@@ -1278,7 +1162,7 @@
     <h1>How to use this app</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The whole system in plain words — hard days, easy days, and how the plan fits together.</p>
+    <p class="view-sub muted">The whole system in plain words. Hard days, easy days, and how the plan fits together.</p>
     <div class="card doc" id="guide-doc"></div>
   </section>
 
@@ -1286,7 +1170,7 @@
   <section id="view-account" class="view">
     <h1>Account</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="view-sub muted">Members sign in here. New memberships are invite-only during the founding pilot. Coaches manage accounts, coach invites, and member invites here.</p>
+    <p class="view-sub muted">Sign in to your Lab account, or create one with the email I invited.</p>
     <p class="muted" id="menu-account-note">Log in or create an account</p>
     <div id="account-main"></div>
     <div id="intake-main"></div>
@@ -1296,7 +1180,7 @@
   <section id="view-tv" class="view">
     <div class="tv-shell">
       <div class="tv-top">
-        <div class="tv-brand">__BRAND_NAME__ <span>__BRAND_TAGLINE__ — TRAINING BOARD</span></div>
+        <div class="tv-brand">__BRAND_NAME__ <span>__BRAND_TAGLINE__ | TRAINING BOARD</span></div>
         <div class="tv-top-right">
           <div class="tv-clock" id="tv-clock"></div>
           <div class="tv-updated" id="tv-updated"></div>
@@ -1328,7 +1212,7 @@
     <h1>Custom Workouts</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Workouts you build yourself: blocks of exercises, rounds, and rests. Hit Run it and the screen walks the room through every step — big enough to read across the weight room. Coaches only.</p>
+    <p class="view-sub muted">Workouts you build yourself: blocks of exercises, rounds, and rests. Hit Run it and the screen walks the room through every step. Big enough to read across the weight room. Coaches only.</p>
     <div id="custom-main"></div>
   </section>
 
@@ -1337,7 +1221,7 @@
     <h1>Programs</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">Training templates you build once and reuse: lay out the weeks, then apply a program to a group (or all of them) from any start date. Applying writes coach overrides — the season plan itself never changes. Coaches only.</p>
+    <p class="view-sub muted">Training templates you build once and reuse: lay out the weeks, then apply a program to a group (or all of them) from any start date. Applying writes coach overrides. The season plan itself never changes. Coaches only.</p>
     <div id="programs-main"></div>
   </section>
 
@@ -1373,7 +1257,7 @@
     <h1>Demo Coverage</h1>
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="subnav-slot"></div>
-    <p class="view-sub muted">The filming map for a coach video on every movement: each drill and test the demo system covers, marked by whose video is attached — yours, a placeholder, or none yet. Watch, add, or swap any demo right from its row. Coaches only.</p>
+    <p class="view-sub muted">The filming map for a coach video on every movement: each drill and test the demo system covers, marked by whose video is attached. Yours, a placeholder, or none yet. Watch, add, or swap any demo right from its row. Coaches only.</p>
     <div id="coverage-main"></div>
   </section>
 </main>
@@ -1410,11 +1294,15 @@
 </div>
 
 <footer class="footer muted">
-  <img class="site-logo footer-logo" src="/assets/rp-logo.svg" alt="__BRAND_NAME__">
-  <div>__BRAND_NAME__ · __BRAND_TAGLINE__</div>
-  <div>Founding pilot — membership is invite-only while we launch.</div>
-  <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="__APP_VERSION__">__BRAND_NAME__ · App __APP_VERSION__</div>
+  <img class="site-logo footer-logo" src="/assets/rp-logo.svg" alt="">
+  <div>__BRAND_NAME__ · Maryland/DC area and online</div>
+  <div class="footer-links" id="footer-links">
+    <a href="/privacy" data-route="privacy">Privacy</a>
+    <a href="/terms" data-route="terms">Terms</a>
+    <a href="mailto:__CONTACT_EMAIL__" id="footer-contact" data-contact hidden>__CONTACT_EMAIL__</a>
+  </div>
+  <div>Your log entries are private to your account.</div>
+  <div class="app-version" data-app-version="__APP_VERSION__">© <span id="footer-year">2026</span> __BRAND_NAME__</div>
 </footer>
 
 <script src="/app.js"></script>

@@ -116,6 +116,20 @@ const BRAND = {
 /* The public booking page embeds Coach AJ's Calendly 30-minute
    event. Calendly emails him (and the visitor) on every booking.
    Override with CALENDLY_URL; it must be a calendly.com link. */
+/* The free trial length, in days, shown everywhere on the public
+   site from this one value. AJ's call: set TRIAL_DAYS on the service
+   to change it. 3 matches what the site said before. */
+const TRIAL_DAYS = (() => {
+  const n = parseInt(process.env.TRIAL_DAYS, 10);
+  return Number.isInteger(n) && n >= 1 && n <= 60 ? n : 3;
+})();
+/* The public contact address for the footer and the password-help
+   link. Left empty (the site then shows no address) until CONTACT_EMAIL
+   is set; it is separate from NOTIFY_EMAIL on purpose. */
+const CONTACT_EMAIL = (() => {
+  const e = String(process.env.CONTACT_EMAIL || '').trim();
+  return /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(e) ? e : '';
+})();
 const CALENDLY_URL = (() => {
   const v = (process.env.CALENDLY_URL || '').trim();
   return /^https:\/\/calendly\.com\/[A-Za-z0-9_\-\/]+$/.test(v) ? v : 'https://calendly.com/alonzo-ruffinjr/30min';
@@ -4398,6 +4412,9 @@ async function handleApi(req, res, url) {
     const email = clean(body.email, 200).toLowerCase();
     const athleteName = clean(body.athleteName, 120);
     const goal = clean(body.goal, 1000);
+    const grade = clean(body.grade, 60);
+    const sport = clean(body.sport, 80);
+    const location = clean(body.location, 120);
     if (!name) return sendJson(res, 400, { error: 'Please add your name.' });
     if (!EMAIL_RE.test(email)) {
       return sendJson(res, 400, { error: 'Please enter a valid email address.' });
@@ -4416,8 +4433,20 @@ async function handleApi(req, res, url) {
         return sendJson(res, 400, { error: 'Please pick the membership that interests you.' });
       }
     }
+    if (forWhom === 'child' && !athleteName) {
+      return sendJson(res, 400, { error: "Please add your athlete's name." });
+    }
+    if (!grade) return sendJson(res, 400, { error: 'Please add the athlete\'s age or grade.' });
+    if (!sport) return sendJson(res, 400, { error: 'Please add the sport or event.' });
     if (!goal) {
       return sendJson(res, 400, { error: 'Please add a sentence about what you are working toward.' });
+    }
+    if (body.consent !== true) {
+      return sendJson(res, 400, {
+        error: forWhom === 'child'
+          ? 'Please confirm you are the athlete\'s parent or guardian.'
+          : 'Please confirm you are 18 or older.',
+      });
     }
     const pendingCount = db.inviteRequests
       .filter(r => r.email === email && r.status === 'pending').length;
@@ -4429,8 +4458,8 @@ async function handleApi(req, res, url) {
     const now = new Date().toISOString();
     const rec = {
       id: crypto.randomUUID(),
-      name, email, forWhom, athleteName, tierInterest, goal,
-      status: 'pending', createdAt: now, updatedAt: now,
+      name, email, forWhom, athleteName, tierInterest, goal, grade, sport, location,
+      consent: true, status: 'pending', createdAt: now, updatedAt: now,
     };
     db.inviteRequests.push(rec);
     saveDb();
@@ -4438,7 +4467,8 @@ async function handleApi(req, res, url) {
       subject: 'New invitation request from ' + name,
       intro: name + ' asked to join ' + BRAND.name + '. Review it under Coach Hub > Invitation Requests. Reply to this email to answer them directly.',
       fields: [['Name', name], ['Email', email], ['For', forWhom === 'child' ? 'their child' : 'themselves'],
-        ['Athlete', athleteName], ['Interested in', tierInterest], ['Goal', goal]],
+        ['Athlete', athleteName], ['Age or grade', grade], ['Sport', sport], ['Location', location],
+        ['Interested in', tierInterest], ['Goal', goal]],
       link: appLink('/'), replyTo: email,
     });
     return sendJson(res, 201, { ok: true });
@@ -8844,7 +8874,9 @@ function applyBrand(text) {
     .replaceAll('__BRAND_TAGLINE__', BRAND.tagline)
     .replaceAll('__APP_VERSION__', BRAND.version)
     .replaceAll('__BRAND_CACHE__', BRAND.cache)
-    .replaceAll('__CALENDLY_URL__', CALENDLY_URL);
+    .replaceAll('__CALENDLY_URL__', CALENDLY_URL)
+    .replaceAll('__TRIAL_DAYS__', String(TRIAL_DAYS))
+    .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL);
 }
 function serveStatic(req, res, url) {
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);

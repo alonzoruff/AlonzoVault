@@ -1674,12 +1674,8 @@ body.logged-out .primary-nav { display: none !important; }
   font-size: 17px; font-weight: 900; line-height: 1.1;
   letter-spacing: .09em; text-transform: uppercase; color: #fff;
 }
-.landing-eyebrow {
-  margin: 58px 0 16px; color: var(--landing-accent);
-  font-size: 12px; font-weight: 900; letter-spacing: .2em;
-}
 .landing-hero h1 {
-  max-width: 600px; margin: 0 0 22px; color: #fff;
+  max-width: 600px; margin: 58px 0 22px; color: #fff;
   font-size: clamp(42px, 7vw, 64px); font-weight: 900;
   line-height: .98; letter-spacing: -.035em;
 }
@@ -1718,10 +1714,9 @@ body.logged-out .primary-nav { display: none !important; }
 .landing-measure-value { color: #fff; font-size: 29px; font-weight: 900; line-height: 1; }
 .landing-card h2 { margin-top: 2px; }
 .landing-section { position: relative; overflow: hidden; }
-.landing-section-number {
-  display: block; margin-bottom: 8px; color: var(--landing-accent);
-  font-size: 42px; font-weight: 900; line-height: .95; letter-spacing: -.03em;
-}
+/* One level of boxing: a section that holds boxed items (the plan cards)
+   drops its own box so the page does not read as cards inside cards. */
+.landing-flat { background: none; border: 0; box-shadow: none; padding-left: 0; padding-right: 0; }
 .landing-list { margin: 6px 0 4px; padding-left: 20px; }
 .landing-list li { margin: 6px 0; font-size: 15px; }
 .landing-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0; }
@@ -1861,8 +1856,7 @@ body.logged-out .primary-nav { display: none !important; }
       linear-gradient(90deg, rgba(5, 5, 6, .5) 0%, rgba(5, 5, 6, 0) 72%),
       url('/assets/hero-sprinter.jpg') 72% center / cover no-repeat #09090b;
   }
-  .landing-eyebrow { margin-top: 42px; }
-  .landing-hero h1 { font-size: 43px; }
+  .landing-hero h1 { font-size: 43px; margin-top: 42px; }
   .landing-subline { font-size: 18px; }
   .landing-actions { align-items: stretch; flex-direction: column; }
   .landing-hero .btn { width: 100%; }
@@ -2031,40 +2025,15 @@ body.logged-out .primary-nav { display: none !important; }
 @keyframes heroIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: no-preference) {
   .landing-hero-content > * { animation: heroIn .35s var(--ease-enter) both; }
-  .landing-hero-content > :nth-child(2) { animation-delay: 40ms; }
-  .landing-hero-content > :nth-child(3) { animation-duration: .45s; animation-delay: 70ms; }
-  .landing-hero-content > :nth-child(4) { animation-delay: 130ms; }
-  .landing-hero-content > :nth-child(5) { animation-delay: 190ms; }
-  .landing-hero-content > :nth-child(6) { animation-duration: .25s; animation-delay: 250ms; }
-  .landing-hero-content > :nth-child(7) { animation-duration: .25s; animation-delay: 320ms; }
+  .landing-hero-content > :nth-child(2) { animation-duration: .45s; animation-delay: 70ms; }
+  .landing-hero-content > :nth-child(3) { animation-delay: 130ms; }
+  .landing-hero-content > :nth-child(4) { animation-delay: 190ms; }
+  .landing-hero-content > :nth-child(5) { animation-duration: .25s; animation-delay: 250ms; }
+  .landing-hero-content > :nth-child(6) { animation-duration: .25s; animation-delay: 320ms; }
   .landing-measure { animation: heroIn .4s var(--ease-enter) both; animation-delay: 340ms; }
   .landing-measure:nth-child(2) { animation-delay: 400ms; }
   .landing-measure:nth-child(3) { animation-delay: 460ms; }
 }
-
-/* ---- scroll reveals (landing): the hidden state exists only
-   under html.motion-ok, which app.js adds when motion is welcome
-   and IntersectionObserver exists. Revealed once, stays visible. */
-html.motion-ok [data-reveal] { opacity: 0; transform: translateY(14px); }
-html.motion-ok [data-reveal].rv-in {
-  opacity: 1; transform: translateY(0);
-  transition: opacity .42s var(--ease-std), transform .42s var(--ease-enter);
-}
-@media print { html.motion-ok [data-reveal] { opacity: 1 !important; transform: none !important; } }
-/* Inside a revealed block, small groups stagger by a step or two. */
-@keyframes itemIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes rowIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes chipIn { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
-html.motion-ok .landing-sample.rv-in .landing-sample-row { animation: rowIn .45s var(--ease-enter) both; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(2) { animation-delay: 60ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(3) { animation-delay: 120ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(4) { animation-delay: 120ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-delta { animation: chipIn .4s var(--ease-enter) both; animation-delay: 120ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(2) .landing-sample-delta { animation-delay: 180ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(3) .landing-sample-delta { animation-delay: 240ms; }
-html.motion-ok .landing-sample.rv-in .landing-sample-row:nth-child(4) .landing-sample-delta { animation-delay: 240ms; }
-html.motion-ok .landing-card.rv-in .landing-tier { animation: itemIn .45s var(--ease-enter) both; }
-html.motion-ok .landing-card.rv-in .landing-tier:nth-child(2) { animation-delay: 60ms; }
 
 /* ---- report data typography: the improvement chip reads as a
    chip, the best mark carries the row, prices align on a grid. -- */
@@ -2288,34 +2257,34 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --shadow-bar: 0 -1px 0 var(--line), 0 -8px 24px -12px rgba(0, 0, 0, .6);
 }
 
-/* ---- Carbon Lime: the performance lab. Deep carbon rooms, a
+/* ---- Carbon: the performance lab. Deep carbon rooms, a
    woven texture on the page, sharper corners, stronger borders,
-   and lime carrying the accent work app-wide — buttons, tabs,
-   key numbers — with restraint. ---- */
+   and bright white carrying the accent work app-wide: buttons, tabs,
+   key numbers. ---- */
 [data-theme="carbon"] {
   color-scheme: dark;
   --bg: #08090a;
   --card: #101214;
-  --ink: #eef0e9;
-  --muted: #a2a89b;
-  --line: #31382a;
-  --red: #b9e62c;
-  --red-dark: #d3f36a;
-  --accent-ink: #141a04;
+  --ink: #eceef0;
+  --muted: #a3a7ad;
+  --line: #30343a;
+  --red: #f2f3f5;
+  --red-dark: #ffffff;
+  --accent-ink: #0b0c0d;
   --surface-2: #17191c;
   --surface-hover: #1f2326;
-  --field-bg: #0b0d0a;
-  --panel: #0a0c0a;
-  --panel-2: #12140f;
+  --field-bg: #0b0c0d;
+  --panel: #0a0b0c;
+  --panel-2: #111214;
   --header-bg: #0a0b0c;
-  --chip-bg: #22261c;
-  --chip-ink: #d5dcc4;
+  --chip-bg: #24272b;
+  --chip-ink: #d3d6db;
   --radius: 8px;
   --radius-sm: 6px;
   --shadow-card: inset 0 1px 0 rgba(255, 255, 255, .04), 0 2px 8px rgba(0, 0, 0, .45);
   --shadow-pop: 0 16px 40px rgba(0, 0, 0, .65), 0 2px 8px rgba(0, 0, 0, .5);
   --shadow-btn: 0 1px 2px rgba(0, 0, 0, .5);
-  --focus-ring: rgba(185, 230, 44, .22);
+  --focus-ring: rgba(242, 243, 245, .22);
   --accent: var(--red);
   --accent-strong: var(--red-dark);
   --r-card: var(--radius);
@@ -2323,9 +2292,9 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --r-inner: 4px;
   --r-pill: 999px;
   --surface-pop: #15181a;
-  --line-strong: #636d52;
-  --focus: #b9e62c;
-  --accent-tint: rgba(185, 230, 44, .12);
+  --line-strong: #666b73;
+  --focus: #f2f3f5;
+  --accent-tint: rgba(255, 255, 255, .1);
   --danger: var(--high);
   --ok: var(--low);
   --warn: #e3c766; --warn-bg: #2a2113; --warn-line: #57451c;
@@ -2337,48 +2306,47 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
     repeating-linear-gradient(-45deg, rgba(255, 255, 255, .016) 0 10px, transparent 10px 20px);
 }
 [data-theme="carbon"] #view-landing {
-  --landing-accent: #cdf463;
-  --landing-accent-hover: #ddff70;
+  --landing-accent: #e6e8ec;
+  --landing-accent-hover: #ffffff;
 }
 [data-theme="carbon"] .landing-hero {
   border-bottom: 3px solid var(--landing-accent);
   box-shadow: inset 3px 0 0 var(--landing-accent);
 }
 [data-theme="carbon"] .topbar {
-  border-bottom-color: rgba(185, 230, 44, .5);
+  border-bottom-color: rgba(255, 255, 255, .35);
 }
 [data-theme="carbon"] .hero {
   box-shadow: inset 0 -3px 0 var(--red), var(--shadow-card);
 }
 
-/* ---- Studio: the daylight edit. Warm white rooms, black ink,
-   silver borders, wide soft corners — and lime kept small: the
-   landing marks and little highlights, nothing loud. Graphite
-   carries the buttons and tabs. The landing hero photo stays,
+/* ---- Studio: the daylight edit. Clean white rooms, black ink,
+   grey borders, wide soft corners. Graphite carries the
+   buttons, tabs and landing marks. The landing hero photo stays,
    with the words set into a light panel so they read clean. ---- */
 [data-theme="studio"] {
   color-scheme: light;
-  --bg: #f4f2ed;
-  --card: #fffefa;
+  --bg: #f3f4f5;
+  --card: #ffffff;
   --ink: #1b1c1f;
-  --muted: #716c61;
-  --line: #ded9ce;
+  --muted: #6b6f76;
+  --line: #dcdee1;
   --red: #232529;
   --red-dark: #232529;
-  --accent-ink: #f8f6f1;
-  --surface-2: #efede7;
-  --surface-hover: #e6e3da;
+  --accent-ink: #f8f9fa;
+  --surface-2: #eceef0;
+  --surface-hover: #e2e4e7;
   --field-bg: #ffffff;
-  --panel: #ebe9e3;
-  --panel-2: #f8f6f2;
-  --header-bg: #fffefa;
-  --chip-bg: #e9e6de;
-  --chip-ink: #57534a;
+  --panel: #e9ebed;
+  --panel-2: #f7f8f9;
+  --header-bg: #ffffff;
+  --chip-bg: #e7e9ec;
+  --chip-ink: #4f535a;
   --radius: 20px;
   --radius-sm: 14px;
-  --shadow-card: 0 1px 2px rgba(74, 68, 54, .05), 0 10px 30px -18px rgba(74, 68, 54, .35);
-  --shadow-pop: 0 24px 48px -16px rgba(74, 68, 54, .28), 0 2px 8px rgba(74, 68, 54, .12);
-  --shadow-btn: 0 1px 2px rgba(74, 68, 54, .12);
+  --shadow-card: 0 1px 2px rgba(30, 34, 40, .05), 0 10px 30px -18px rgba(30, 34, 40, .35);
+  --shadow-pop: 0 24px 48px -16px rgba(30, 34, 40, .28), 0 2px 8px rgba(30, 34, 40, .12);
+  --shadow-btn: 0 1px 2px rgba(30, 34, 40, .12);
   --focus-ring: rgba(35, 37, 41, .16);
   --accent: var(--red);
   --accent-strong: var(--red-dark);
@@ -2386,8 +2354,8 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --r-control: var(--radius-sm);
   --r-inner: 10px;
   --r-pill: 999px;
-  --surface-pop: #fffefa;
-  --line-strong: #948c7c;
+  --surface-pop: #ffffff;
+  --line-strong: #8a8f97;
   --focus: #232529;
   --accent-tint: rgba(35, 37, 41, .07);
   /* Studio signal shades (v25): the hues and meanings stay fixed,
@@ -2398,16 +2366,16 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
   --danger: var(--high);
   --ok: var(--low);
   --warn: #8a6510; --warn-bg: #fbf1d6; --warn-line: #e6cf8a;
-  --shadow-bar: 0 -1px 0 var(--line), 0 -10px 30px -18px rgba(74, 68, 54, .3);
-  --shadow-bar-top: 0 1px 0 var(--line), 0 10px 30px -18px rgba(74, 68, 54, .3);
+  --shadow-bar: 0 -1px 0 var(--line), 0 -10px 30px -18px rgba(30, 34, 40, .3);
+  --shadow-bar-top: 0 1px 0 var(--line), 0 10px 30px -18px rgba(30, 34, 40, .3);
 }
 [data-theme="studio"] #view-landing {
-  --landing-accent: #5b7309;
+  --landing-accent: #2b2e33;
   --landing-accent-ink: #ffffff;
-  --landing-accent-hover: #6d8811;
+  --landing-accent-hover: #44484f;
 }
 [data-theme="studio"] .landing-hero-content {
-  background: rgba(255, 254, 249, .94);
+  background: rgba(255, 255, 255, .94);
   border: 1px solid rgba(27, 28, 31, .08);
   border-radius: 22px;
   padding: 30px;
@@ -2415,14 +2383,16 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
 }
 [data-theme="studio"] .landing-hero h1 {
   color: var(--ink);
-  font-family: Georgia, "Times New Roman", serif;
   font-weight: 700;
   letter-spacing: -.015em;
 }
+[data-theme="studio"] .landing-hero .btn.landing-compare-link {
+  border-color: rgba(27, 28, 31, .45); color: var(--ink);
+}
 [data-theme="studio"] .landing-wordmark { color: var(--ink); }
 [data-theme="studio"] .landing-logo { filter: none; }
-[data-theme="studio"] .landing-subline { color: #35332d; }
-[data-theme="studio"] .landing-pilot-note { color: #4c463c; }
+[data-theme="studio"] .landing-subline { color: #33363b; }
+[data-theme="studio"] .landing-pilot-note { color: #484b52; }
 [data-theme="studio"] .landing-hero .landing-signin {
   background: transparent; border-color: rgba(27, 28, 31, .45); color: var(--ink);
 }
@@ -2668,9 +2638,9 @@ body.tv-mode .rp-backbar { display: none; }
 .landing-hero .btn.landing-compare-link {
   background: transparent; border: 1px solid rgba(255, 255, 255, .45); color: #fff;
 }
+/* Unboxed on purpose: the plan cards inside it are the boxes. */
 .rp-compare {
   max-width: 960px; margin: 24px auto; padding: 24px 16px;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-card);
 }
 .rp-compare { scroll-margin-top: 72px; }
 .rp-compare h2 { margin: 0; font-size: var(--fs-xl); }
@@ -2698,6 +2668,129 @@ body.tv-mode .rp-backbar { display: none; }
 }
 /* RP-HOME-REDESIGN-END */
 
+   v35 site revamp: public nav, wide desktop layout, one Plans section,
+   sample Lab Report table, invitation form, account tabs, Calendly,
+   legal pages, footer links.
+   ===================================================================== */
+a.brand-block { color: inherit; text-decoration: none; }
+a.brand-block:focus-visible { outline: 2px solid var(--landing-accent, currentColor); outline-offset: 3px; border-radius: 6px; }
+#view-landing [id], #plans, #faq, #about, #how-it-works { scroll-margin-top: 84px; }
+
+/* Public nav: real links, shown only to visitors. */
+.public-nav { display: none; }
+body.logged-out .public-nav {
+  display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 6px;
+}
+.public-nav a {
+  color: var(--ink); text-decoration: none; font-size: 14.5px; font-weight: 600;
+  padding: 9px 12px; border-radius: 8px; min-height: 40px; display: inline-flex; align-items: center;
+}
+.public-nav a:hover { background: var(--panel-2); }
+.public-nav a:focus-visible { outline: 2px solid var(--landing-accent, currentColor); outline-offset: 1px; }
+.public-nav a.public-nav-signin { border: 1px solid var(--line); }
+body.logged-out .topbar-inner { flex-wrap: wrap; gap: 4px 12px; }
+body.logged-out .topbar-right .nav-toggle { display: none; }
+body.logged-out .public-nav { margin-left: auto; }
+@media (max-width: 620px) {
+  body.logged-out .public-nav { width: 100%; justify-content: space-between; margin-left: 0; flex-wrap: nowrap; padding-bottom: 4px; gap: 2px; }
+  .public-nav a { white-space: nowrap; font-size: 14px; padding: 9px 8px; }
+  .sample-report th, .sample-report td { padding: 9px 8px; }
+}
+
+/* Wide desktop layout for the public pages. */
+@media (min-width: 1000px) {
+  body.rp-public .topbar-inner, body.rp-public main, body.rp-public .footer { max-width: 1120px; }
+  body.rp-public .landing-hero { margin-left: -16px; margin-right: -16px; padding: 64px 56px; min-height: 560px; }
+  body.rp-public .landing-hero-content { width: min(640px, 100%); }
+}
+@media (min-width: 760px) {
+  .landing-steps { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* How it works */
+.landing-steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 14px; counter-reset: step; grid-template-columns: 1fr; }
+.landing-steps li { counter-increment: step; position: relative; padding: 14px 16px 14px 56px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2, transparent); }
+.landing-steps li::before {
+  content: counter(step); position: absolute; left: 14px; top: 14px; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 800; font-size: 14px;
+  background: var(--landing-accent); color: var(--landing-accent-ink);
+}
+.landing-steps h3 { margin: 0 0 4px; font-size: 16px; }
+.landing-steps p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+
+/* Sample Lab Report table (baseline vs best vs change) */
+.sample-report-wrap { overflow-x: auto; margin: 12px 0 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sample-report { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14.5px; }
+.sample-report th, .sample-report td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.sample-report thead th { background: var(--panel-2); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.sample-report tbody tr:last-child th, .sample-report tbody tr:last-child td { border-bottom: 0; }
+.sample-report th:first-child, .sample-report td:first-child { text-align: left; font-weight: 400; white-space: normal; }
+.sample-report-change { color: var(--landing-accent); font-weight: 800; }
+[data-theme="studio"] .sample-report-change { color: var(--ink); }
+.portal-shot { margin: 0 0 14px; }
+.portal-shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+
+/* One Plans section */
+#plans .landing-tiers { display: grid; grid-template-columns: 1fr; gap: 16px; margin: 18px 0 8px; }
+@media (min-width: 820px) { #plans .landing-tiers { grid-template-columns: repeat(3, 1fr); align-items: stretch; } }
+#plans .landing-tier { padding: 20px 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2, transparent); }
+#plans .landing-tier-pill { position: absolute; top: 18px; right: 16px; margin: 0; }
+#plans .landing-tier h3 { margin: 0; font-size: 20px; }
+#plans .landing-price { margin: 6px 0 8px; font-size: 34px; font-weight: 900; }
+#plans .landing-price span { font-size: 15px; font-weight: 500; color: var(--muted); }
+.landing-incl { margin: 6px 0 6px; font-size: 12px; letter-spacing: .07em; text-transform: uppercase; font-weight: 800; color: var(--muted); }
+.landing-checks { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 9px; }
+.landing-checks li { position: relative; padding-left: 24px; font-size: 14.5px; line-height: 1.45; }
+.landing-checks li::before { content: "✓"; position: absolute; left: 0; top: 0; font-weight: 900; color: var(--landing-accent); }
+[data-theme="studio"] .landing-checks li::before { color: var(--ink); }
+.landing-tier-note { font-size: 13px; margin: 0 0 12px; }
+#plans .landing-join, .landing-final .landing-cta {
+  margin-top: auto; width: 100%; min-height: 46px; font-weight: 800;
+  background: var(--landing-accent); border-color: var(--landing-accent); color: var(--landing-accent-ink);
+}
+.landing-final .landing-cta { width: auto; padding: 12px 22px; }
+.nb { white-space: nowrap; }
+.landing-trial { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 14.5px; }
+
+/* Invitation form */
+.req { color: var(--landing-accent); font-weight: 900; margin-left: 2px; }
+[data-theme="studio"] .req { color: #b3261e; }
+.invite-form .invite-for { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.invite-form .invite-for legend { padding: 0; margin-bottom: 4px; }
+.invite-form label { display: block; margin-bottom: 12px; }
+.invite-form label[hidden] { display: none; }
+.invite-form label input[type="text"], .invite-form label input[type="email"], .invite-form label select, .invite-form label textarea { display: block; width: 100%; margin-top: 4px; }
+.invite-form .invite-for label { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.invite-form .invite-consent { display: flex; align-items: flex-start; gap: 10px; }
+.invite-form .invite-consent input { margin-top: 3px; flex: none; }
+.invite-next { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.invite-next p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; }
+@media (min-width: 900px) { #invite-main .card, #account-main .card, #book-main .card { max-width: 720px; } .legal { max-width: 780px; } }
+
+/* Account tabs */
+.acct-tabs { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.acct-tab { background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); font: inherit; font-weight: 700; padding: 10px 14px; min-height: 44px; cursor: pointer; }
+.acct-tab.active { color: var(--ink); border-bottom-color: var(--landing-accent); }
+[data-theme="studio"] .acct-tab.active { border-bottom-color: var(--ink); }
+.acct-tab:focus-visible { outline: 2px solid var(--landing-accent, currentColor); outline-offset: -2px; }
+.acct-card form[hidden] { display: none; }
+.acct-invite { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+
+/* Calendly: link on top, loading state, full height */
+.calendly-top { margin: 0; padding: 14px 16px 10px; font-size: 14.5px; }
+.calendly-wrap { position: relative; min-height: 640px; }
+.calendly-loading { position: absolute; inset: 0 0 auto 0; margin: 0; padding: 40px 16px; text-align: center; color: var(--muted); }
+.calendly-wrap.loaded .calendly-loading { display: none; }
+.calendly-frame { display: block; position: relative; width: 100%; height: 1150px; border: 0; }
+@media (min-width: 900px) { .calendly-frame { height: 860px; } }
+
+/* Legal pages and footer links */
+.legal h2 { margin: 18px 0 6px; font-size: 17px; }
+.legal h2:first-child { margin-top: 0; }
+.legal p { margin: 0 0 8px; line-height: 1.6; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0; }
+.footer-links a { color: inherit; text-decoration: underline; padding: 6px 0; min-height: 32px; display: inline-flex; align-items: center; }
+=======
 /* Public home refresh: a wider, editorial layout keeps the training
    proof and the next step visible without changing member app views. */
 body.logged-out .topbar {
@@ -2816,3 +2909,20 @@ body.logged-out #view-landing .landing-footer-strip {
   body.logged-out #view-landing .landing-measure { padding-inline: 8px; }
   body.logged-out #view-landing .landing-measure-value { font-size: 18px; }
 }
+
+/* ==============================================================
+/* v35 over the public home refresh (merged from main): the new sections
+   need explicit grid spans, and the refreshed plan cards keep the
+   absolute START HERE pill. */
+body.logged-out #view-landing .landing-flat,
+body.logged-out #view-landing #about,
+body.logged-out #view-landing .landing-final { grid-column: 1 / -1; }
+body.logged-out #view-landing .landing-sample { grid-column: span 7; }
+body.logged-out #view-landing .landing-sample + .landing-section { grid-column: span 5; }
+body.logged-out #view-landing #plans .landing-tier { position: relative; display: flex; flex-direction: column; }
+@media (max-width: 760px) {
+  body.logged-out #view-landing .landing-sample,
+  body.logged-out #view-landing .landing-sample + .landing-section { grid-column: 1 / -1; }
+}
+body.logged-out #view-landing .landing-faq + .landing-card,
+body.logged-out #view-landing .landing-faq + .landing-card + .landing-card { grid-column: 1 / -1; }
