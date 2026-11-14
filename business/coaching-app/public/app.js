@@ -86,6 +86,7 @@ const state = {
   memberLogsData: null,
   memberLogEdit: null,
   mlMsg: '',
+  mlSummary: null,
   intakeData: null,
   intakeEditing: false,
   intakeMsg: '',
@@ -2027,6 +2028,25 @@ function memberLogMetaLine(l) {
   if (l.durationMin != null) bits.push(l.durationMin + ' min');
   return bits.join(' · ');
 }
+function memberLogSummaryHtml() {
+  if (!state.mlSummary) return '';
+  const log = state.mlSummary.log || {};
+  const edited = !!state.mlSummary.edited;
+  const title = (log.title || '').trim() || 'Workout';
+  const dateStr = log.date ? esc(fmtDate(parseDate(log.date))) : '';
+  const codePart = log.sessionCode ? ' (' + esc(log.sessionCode) + ')' : '';
+  const entries = log.entries || [];
+  const meta = memberLogMetaLine(log);
+  return `<div class="card" id="ml-summary">
+    <h2>${edited ? 'Log updated' : 'Session logged'}</h2>
+    <p><strong>${dateStr}</strong> · ${esc(title)}${codePart} ${memberLogStatusBadge(log)}</p>
+    ${entries.length ? `<p>${entries.length} exercise${entries.length === 1 ? '' : 's'} logged</p><p class="muted">${entries.map(e => esc(e.exercise) + (e.detail ? ' · ' + esc(e.detail) : '')).join('<br>')}</p>` : ''}
+    ${meta ? `<p class="muted">${esc(meta)}</p>` : ''}
+    ${log.note ? `<p class="muted">${esc(log.note)}</p>` : ''}
+    <p>Your work is saved in your training log. Your coach can see it.</p>
+    <button class="btn primary" id="ml-summary-today" type="button">Back to Today</button>
+  </div>`;
+}
 async function renderMemberLogs() {
   const todaySlot = $('#memberlog-slot');
   const listSlot = $('#member-logs-slot');
@@ -2099,6 +2119,7 @@ function openMemberLogEditor(prefill) {
     status: 'done', rpe: '', durationMin: '', entries: [], note: '',
   }, prefill || {});
   state.mlMsg = '';
+  state.mlSummary = null;
   showView('log');
   renderMemberLogs();
   setTimeout(() => {
@@ -2147,11 +2168,11 @@ function paintMemberLogsList(data) {
     return;
   }
   const logs = data.logs || [];
-  slot.innerHTML = `<div class="card" id="ml-log-block">
+  slot.innerHTML = `${state.mlSummary ? memberLogSummaryHtml() : ''}<div class="card" id="ml-log-block">
     <h2>My workout logs</h2>
     <p class="muted">Your coach sees these. They're how your coach follows your training between sessions. Everything here is yours: edit or delete anything you wrote.</p>
     <button class="btn primary" id="ml-add" type="button" style="width:auto">Log a workout</button>
-    ${state.mlMsg ? `<p class="muted">${esc(state.mlMsg)}</p>` : ''}
+    ${!state.mlSummary && state.mlMsg ? `<p class="muted">${esc(state.mlMsg)}</p>` : ''}
     <div id="ml-editor"></div>
   </div>
   <div class="card" id="ml-history-block">
@@ -2167,6 +2188,11 @@ function paintMemberLogsList(data) {
     </div>`).join('') : emptyState({ title: 'No sessions logged yet', body: 'Log a session after practice and it will show up here.' })}
   </div>`;
   applyLogSeg();
+  const summaryTodayBtn = slot.querySelector('#ml-summary-today');
+  if (summaryTodayBtn) summaryTodayBtn.addEventListener('click', () => {
+    state.mlSummary = null;
+    showView('home');
+  });
   $('#ml-add').addEventListener('click', () => {
     const today = dateStrOf(todayLocal());
     const already = logs.some(l => l.date === today);
@@ -2182,6 +2208,7 @@ function paintMemberLogsList(data) {
     try {
       await apiDel('/api/my/logs/' + encodeURIComponent(b.dataset.mlDel));
       if (state.memberLogEdit && state.memberLogEdit.id === b.dataset.mlDel) state.memberLogEdit = null;
+      if (state.mlSummary && state.mlSummary.log && state.mlSummary.log.id === b.dataset.mlDel) state.mlSummary = null;
       state.mlMsg = 'Log deleted.';
       renderMemberLogs();
     } catch (err) { alert(err.message); }
@@ -2278,8 +2305,11 @@ function paintMemberLogEditor() {
       note: $('#ml-note') ? $('#ml-note').value : '',
     };
     try {
-      if (cur.id) await apiPut('/api/my/logs/' + encodeURIComponent(cur.id), payload);
-      else await apiPost('/api/my/logs', payload);
+      let savedRes = null;
+      if (cur.id) savedRes = await apiPut('/api/my/logs/' + encodeURIComponent(cur.id), payload);
+      else savedRes = await apiPost('/api/my/logs', payload);
+      const savedLog = (savedRes && savedRes.log) ? savedRes.log : Object.assign({}, payload, { id: cur.id });
+      state.mlSummary = { log: savedLog, edited: !!cur.id };
       state.memberLogEdit = null;
       state.mlMsg = 'Saved. Your coach can see it. ✓';
       await renderMemberLogs();

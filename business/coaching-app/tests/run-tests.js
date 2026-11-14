@@ -506,7 +506,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is the RP v29 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v33"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v34"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,15 +2519,15 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v33'") &&
-    swJs.text.includes("ruffin-performance-v33"));
+    appJs.text.includes("const APP_VERSION = 'v34'") &&
+    swJs.text.includes("ruffin-performance-v34"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v33"') &&
+    pageHtml.text.includes('data-app-version="v34"') &&
     pageHtml.text.includes('<span id="footer-year">') &&
     appJs.text.includes('appVersionHtml'));
 
@@ -2568,8 +2568,8 @@ async function main() {
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v33' &&
-    v23Content.brand.cache === 'ruffin-performance-v33', v23Content.brand);
+    !!v23Content.brand && v23Content.brand.version === 'v34' &&
+    v23Content.brand.cache === 'ruffin-performance-v34', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2788,10 +2788,10 @@ async function main() {
 
 
 
-  check('v33: BRAND version and cache stamps are v33',
-    pageHtml.text.includes('data-app-version="v33"') &&
-    appJs.text.includes("const APP_VERSION = 'v33'") &&
-    swJs.text.includes('ruffin-performance-v33'),
+  check('v34: BRAND version and cache stamps are v34',
+    pageHtml.text.includes('data-app-version="v34"') &&
+    appJs.text.includes("const APP_VERSION = 'v34'") &&
+    swJs.text.includes('ruffin-performance-v34'),
     compareSlice.slice(0, 120));
   /* Portal preview tabs (v33): interactive preview of what is
      inside the portal in section 02, replacing the static list.
@@ -2821,11 +2821,37 @@ async function main() {
     stylesCss.text.includes('.portal-preview-tab') &&
     stylesCss.text.includes('.portal-preview-panel'),
     portalSlice.slice(0, 120));
-  check('v33: BRAND version and cache stamps are v33 in the portal preview checks',
-    pageHtml.text.includes('data-app-version="v33"') &&
-    appJs.text.includes("const APP_VERSION = 'v33'") &&
-    swJs.text.includes('ruffin-performance-v33'),
+  check('v34: BRAND version and cache stamps are v34 in the portal preview checks',
+    pageHtml.text.includes('data-app-version="v34"') &&
+    appJs.text.includes("const APP_VERSION = 'v34'") &&
+    swJs.text.includes('ruffin-performance-v34'),
     portalSlice.slice(0, 120));
+  /* Training Session Completion Summary (v34): after a member
+     saves a workout log, a summary card at the top of My Log
+     shows what was just saved, built from the returned log,
+     with one Back to Today button. Client-side only. */
+  check('v34: mlSummary state field exists in the served JS',
+    appJs.text.includes('mlSummary: null'), appJs.text.slice(0, 120));
+  check('v34: summary helper and card id exist in the served JS',
+    appJs.text.includes('memberLogSummaryHtml') &&
+    appJs.text.includes('id="ml-summary"'), appJs.text.slice(0, 120));
+  check('v34: summary headings for new and edited logs exist in the served JS',
+    appJs.text.includes('Session logged') && appJs.text.includes('Log updated'),
+    appJs.text.slice(0, 120));
+  check('v34: summary confirmation sentence is exact in the served JS',
+    appJs.text.includes('Your work is saved in your training log. Your coach can see it.'),
+    appJs.text.slice(0, 120));
+  check('v34: Back to Today button id exists in the served JS',
+    appJs.text.includes('id="ml-summary-today"') &&
+    appJs.text.includes('Back to Today'), appJs.text.slice(0, 120));
+  check('v34: save handler assigns state.mlSummary in the served JS',
+    appJs.text.includes('state.mlSummary = { log:') &&
+    appJs.text.includes('state.mlSummary = null'), appJs.text.slice(0, 120));
+  check('v34: BRAND version and cache stamps are v34',
+    pageHtml.text.includes('data-app-version="v34"') &&
+    appJs.text.includes("const APP_VERSION = 'v34'") &&
+    swJs.text.includes('ruffin-performance-v34'),
+    appJs.text.slice(0, 120));
   /* Landing FAQ accordion (v19): one card between the tiers and
      the parents card, eight plain answers, trial and prices
      stated exactly as locked. */
@@ -4993,6 +5019,21 @@ async function main() {
     r.json.log.durationMin === 45 && r.json.log.entries.length === 1 &&
     r.json.log.entries[0].detail === '3x5 @ 185' && r.json.log.note === 'Felt strong', r.json.log);
   const editLogId = r.json.log.id;
+  /* v34 summary API: POST returns the saved log fields the
+     completion summary renders (date, title, sessionCode,
+     status, entries, rpe/duration via the meta line, note). */
+  r = await api(logan, 'POST', '/api/my/logs', {
+    date: yDay, title: 'Summary check', sessionCode: 'ACC-01', status: 'done', rpe: 6, durationMin: 40,
+    entries: [{ exercise: 'Sprint', detail: '6x30m' }], note: 'Summary note',
+  });
+  check('v34: POST /api/my/logs returns the saved log fields the summary uses',
+    r.status === 201 && !!r.json.log && r.json.log.date === yDay &&
+    r.json.log.title === 'Summary check' && r.json.log.sessionCode === 'ACC-01' &&
+    r.json.log.status === 'done' && r.json.log.rpe === 6 && r.json.log.durationMin === 40 &&
+    Array.isArray(r.json.log.entries) && r.json.log.entries.length === 1 &&
+    r.json.log.entries[0].exercise === 'Sprint' && r.json.log.note === 'Summary note', r.json.log);
+  const v34SummaryLogId = r.json.log && r.json.log.id;
+  if (v34SummaryLogId) await api(logan, 'DELETE', '/api/my/logs/' + v34SummaryLogId);
   r = await api(lena, 'PUT', '/api/my/logs/' + editLogId, { title: 'Hijacked' });
   check('another member editing Logan\'s log is 404 (invisible, not forbidden)', r.status === 404, r.status);
   r = await api(lena, 'DELETE', '/api/my/logs/' + editLogId);
@@ -5531,9 +5572,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v33"') &&
-    appJs.text.includes("const APP_VERSION = 'v33'") &&
-    swJs.text.includes('ruffin-performance-v33'));
+    pageHtml.text.includes('data-app-version="v34"') &&
+    appJs.text.includes("const APP_VERSION = 'v34'") &&
+    swJs.text.includes('ruffin-performance-v34'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -8900,7 +8941,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v33' &&
+          br.status === 200 && br.json.brand.version === 'v34' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -9019,7 +9060,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v33',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v34',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
