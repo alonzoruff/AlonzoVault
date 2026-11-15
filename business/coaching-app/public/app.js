@@ -2386,19 +2386,23 @@ async function renderThisWeek() {
   const nudgeHtml = data.nudge && data.nudge.kind === 'streak'
     ? `<p><strong>Keep your streak going</strong></p>
        <p>You have checked in ${esc(String(data.nudge.streak))} days in a row. Get today's check-in done and keep it moving.</p>
-       <button class="btn secondary" id="tw-nudge-checkin" type="button">Do today's check-in</button>`
+       <button class="btn secondary" id="tw-nudge-checkin" type="button">Do today's check-in</button>
+       <button class="btn secondary" id="tw-nudge-snooze" type="button" data-nudge-kind="streak">Remind me in 7 days</button>`
     : (data.nudge && data.nudge.kind === 'quiet'
     ? `<p><strong>It has been a few days</strong></p>
        <p>Your last logged session was ${esc(String(data.nudge.daysSince))} days ago. When you are ready, pick up with today's session in My Log.</p>
-       <button class="btn secondary" id="tw-nudge-log" type="button">Open My Log</button>`
+       <button class="btn secondary" id="tw-nudge-log" type="button">Open My Log</button>
+       <button class="btn secondary" id="tw-nudge-snooze" type="button" data-nudge-kind="quiet">Remind me in 7 days</button>`
     : (data.nudge && data.nudge.kind === 'formcheck'
     ? (data.nudge.lastDate
       ? `<p><strong>Keep your technique sharp</strong></p>
        <p>It has been ${esc(String(data.nudge.daysSince))} days since your last form check. Send a short clip when you are ready and your coach will take a look.</p>
-       <button class="btn secondary" id="tw-nudge-formcheck" type="button">Send a form check</button>`
+       <button class="btn secondary" id="tw-nudge-formcheck" type="button">Send a form check</button>
+       <button class="btn secondary" id="tw-nudge-snooze" type="button" data-nudge-kind="formcheck">Remind me in 7 days</button>`
       : `<p><strong>Keep your technique sharp</strong></p>
        <p>You have not sent a form check yet. Film a sprint or a lift and send it in, and your coach will take a look at your technique.</p>
-       <button class="btn secondary" id="tw-nudge-formcheck" type="button">Send a form check</button>`)
+       <button class="btn secondary" id="tw-nudge-formcheck" type="button">Send a form check</button>
+       <button class="btn secondary" id="tw-nudge-snooze" type="button" data-nudge-kind="formcheck">Remind me in 7 days</button>`)
     : ''));
   const readinessHtml = lc
     ? `<p>Latest check-in (${esc(fmtDate(parseDate(lc.date)))}): slept <strong>${esc(String(lc.sleep))}h</strong> · soreness <strong>${esc(String(lc.soreness))}/5</strong> · energy <strong>${esc(String(lc.energy))}/5</strong> ${lc.flags && lc.flags.length
@@ -2475,6 +2479,13 @@ async function renderThisWeek() {
     showView('log');
     const el = document.getElementById('form-checks-slot');
     if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 60);
+  });
+  const nudgeSnoozeBtn = $('#tw-nudge-snooze');
+  if (nudgeSnoozeBtn) nudgeSnoozeBtn.addEventListener('click', async () => {
+    const kind = nudgeSnoozeBtn.getAttribute('data-nudge-kind') || (data.nudge && data.nudge.kind) || '';
+    if (!kind) return;
+    try { await apiPost('/api/my/nudge/snooze', { kind }); } catch (_) { return; }
+    renderThisWeek();
   });
   const logBtn = $('#tw-log');
   if (logBtn) logBtn.addEventListener('click', () => showView('log'));

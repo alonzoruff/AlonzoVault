@@ -109,8 +109,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v34',
-  cache: 'ruffin-performance-v34',
+  version: 'v35',
+  cache: 'ruffin-performance-v35',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute
@@ -203,6 +203,10 @@ const PROFILE_STATUSES = ['active', 'injured', 'inactive'];
    account and Access pages; the checkout resolves its own Stripe
    Price IDs from CHECKOUT_TIERS below and the two must agree. */
 const MEMBERSHIP_TIERS = ['access', 'training', 'pass'];
+/* The This Week nudge kinds (v35 snooze): the fixed priority order
+   the week payload evaluates them in — streak, then quiet, then
+   formcheck. A member can snooze each kind for 7 days at a time. */
+const NUDGE_KINDS = ['streak', 'quiet', 'formcheck'];
 const TIER_INFO = {
   access: { name: 'Lab Access', price: 10, priceLabel: '$10/month' },
   training: { name: 'Lab Training', price: 49.99, priceLabel: '$49.99/month' },
@@ -486,6 +490,12 @@ function migrate() {
     if (typeof u.stripeCustomerId !== 'string' || !u.stripeCustomerId) u.stripeCustomerId = null;
     if (typeof u.stripeSubscriptionId !== 'string' || !u.stripeSubscriptionId) u.stripeSubscriptionId = null;
     if (!Array.isArray(u.membershipHistory)) u.membershipHistory = [];
+    // Nudge snoozes (v35): { kind: snoozedUntil ISO } on the member's
+    // own account record — one entry per nudge kind at most.
+    if (!u.nudgeSnoozes || typeof u.nudgeSnoozes !== 'object' || Array.isArray(u.nudgeSnoozes)) u.nudgeSnoozes = {};
+    for (const k of Object.keys(u.nudgeSnoozes)) {
+      if (!NUDGE_KINDS.includes(k) || typeof u.nudgeSnoozes[k] !== 'string') delete u.nudgeSnoozes[k];
+    }
     // The first account is the head coach (owner). Stores written
     // before invites existed have no marker — the first user owns it.
     if (u.isOwner === undefined) u.isOwner = i === 0;
@@ -4542,6 +4552,7 @@ async function handleApi(req, res, url) {
       tier: null, membershipStatus: 'active', tierUpdatedAt: null,
       stripeCustomerId: null, stripeSubscriptionId: null,
       membershipHistory: [],
+      nudgeSnoozes: {},
     };
     // If a coach already linked this email to a roster profile, the
     // new account is born bound to it (daily check-in works at once).
@@ -5146,6 +5157,27 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true, formCheck: publicFormCheck(fc) });
   }
 
+  /* ---------- nudge snooze (v35, member-facing, own record only) ----------
+     A member who is not ready to act on a This Week nudge can put
+     that one kind to sleep for 7 days. The snooze lives on the
+     member's own account record (user.nudgeSnoozes, the same JSON
+     store replySeenAt rides in), one timestamp per kind, and the
+     week payload skips a kind only while its timestamp is still in
+     the future. Nothing else reads this field: it never touches a
+     safety, injury, or account notice, only the three nudges. */
+  if (p === '/api/my/nudge/snooze' && req.method === 'POST') {
+    const body = await readBody(req);
+    const kind = typeof body.kind === 'string' ? body.kind.trim() : '';
+    if (!NUDGE_KINDS.includes(kind)) {
+      return sendJson(res, 400, { error: 'Unknown nudge kind.' });
+    }
+    if (!user.nudgeSnoozes || typeof user.nudgeSnoozes !== 'object' || Array.isArray(user.nudgeSnoozes)) user.nudgeSnoozes = {};
+    const snoozedUntil = new Date(Date.now() + 7 * 86400000).toISOString();
+    user.nudgeSnoozes[kind] = snoozedUntil;
+    saveDb();
+    return sendJson(res, 200, { ok: true, kind, snoozedUntil });
+  }
+
   /* ---------- member "This Week" home (member-facing, own data only) ----------
      One assembled payload for the member's home card: today's
      assigned session, the Mon–Sun week at a glance, the check-in
@@ -5202,10 +5234,18 @@ async function handleApi(req, res, url) {
        one is already pending or a coach reply is still unread
        (the Coach feedback ready block covers that case). */
     const streakNow = checkinStreak(prof.id);
-    let nudge = null;
+    /* Every kind whose condition holds right now, in the standing
+       priority order. The conditions are computed independently
+       (the quiet math used to sit in the streak branch's else, and
+       formcheck behind "no nudge yet") so the snooze pass below can
+       see each kind's condition on its own: a snoozed streak must
+       not block the quiet nudge behind it, and a kind whose
+       condition has gone away must give up its snooze. */
+    const nudgeCandidates = [];
     if (streakNow >= 2 && !byDate[today]) {
-      nudge = { kind: 'streak', streak: streakNow };
-    } else {
+      nudgeCandidates.push({ kind: 'streak', streak: streakNow });
+    }
+    {
       const trainDates = new Set(memberLogsFor(prof.id).map(l => l.date));
       const completionPrefix = prof.id + '|';
       for (const k of Object.keys(db.completions)) {
@@ -5221,11 +5261,11 @@ async function handleApi(req, res, url) {
             const ga = resolveAssignment(prof.groupId, ds);
             if (ga.sessionId && !ga.isOff && !completionFor(prof.id, ds)) { missed = true; break; }
           }
-          if (missed) nudge = { kind: 'quiet', daysSince, lastDate: lastTraining };
+          if (missed) nudgeCandidates.push({ kind: 'quiet', daysSince, lastDate: lastTraining });
         }
       }
     }
-    if (!nudge && hasTierAccess(user, 'training')) {
+    if (hasTierAccess(user, 'training')) {
       const hasPending = checks.some(fc => fc.status === 'pending');
       const hasUnread = checks.some(fc => fc.replyUnread);
       if (!hasPending && !hasUnread) {
@@ -5235,17 +5275,44 @@ async function handleApi(req, res, url) {
           const lastD = lastDate ? parseDateStr(lastDate) : null;
           if (lastD && todayD) {
             const daysSince = Math.round((todayD - lastD) / 86400000);
-            if (daysSince >= 14) nudge = { kind: 'formcheck', daysSince, lastDate };
+            if (daysSince >= 14) nudgeCandidates.push({ kind: 'formcheck', daysSince, lastDate });
           }
         } else if (prof.createdAt) {
           const anchorDate = formCheckDate(prof);
           const anchorD = anchorDate ? parseDateStr(anchorDate) : null;
           if (anchorD && todayD) {
             const daysSince = Math.round((todayD - anchorD) / 86400000);
-            if (daysSince >= 14) nudge = { kind: 'formcheck', daysSince, lastDate: null };
+            if (daysSince >= 14) nudgeCandidates.push({ kind: 'formcheck', daysSince, lastDate: null });
           }
         }
       }
+    }
+    /* Snooze pass (v35): drop a kind's snooze record lazily when
+       its time has run out or its condition no longer holds (the
+       member acted, so a later occurrence starts fresh), then
+       serve the first candidate whose snooze is not still active.
+       An active snooze on a higher-priority kind never blocks a
+       lower-priority one. */
+    if (!user.nudgeSnoozes || typeof user.nudgeSnoozes !== 'object' || Array.isArray(user.nudgeSnoozes)) user.nudgeSnoozes = {};
+    const snoozeNowMs = Date.now();
+    const candidateKinds = new Set(nudgeCandidates.map(c => c.kind));
+    let snoozeChanged = false;
+    for (const kind of NUDGE_KINDS) {
+      const until = user.nudgeSnoozes[kind];
+      if (until === undefined) continue;
+      const untilMs = typeof until === 'string' ? Date.parse(until) : NaN;
+      if (!candidateKinds.has(kind) || Number.isNaN(untilMs) || untilMs <= snoozeNowMs) {
+        delete user.nudgeSnoozes[kind];
+        snoozeChanged = true;
+      }
+    }
+    if (snoozeChanged) saveDb();
+    let nudge = null;
+    for (const c of nudgeCandidates) {
+      const untilMs = Date.parse(user.nudgeSnoozes[c.kind] || '');
+      if (!Number.isNaN(untilMs) && untilMs > snoozeNowMs) continue;
+      nudge = c;
+      break;
     }
     /* Home hero numbers (v34): real counts only. Check-ins this
        week since Monday, sessions done this week, and the date of

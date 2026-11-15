@@ -506,7 +506,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is the RP v29 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v34"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v35"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,15 +2519,15 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v34'") &&
-    swJs.text.includes("ruffin-performance-v34"));
+    appJs.text.includes("const APP_VERSION = 'v35'") &&
+    swJs.text.includes("ruffin-performance-v35"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v34"') &&
+    pageHtml.text.includes('data-app-version="v35"') &&
     pageHtml.text.includes('<span id="footer-year">') &&
     appJs.text.includes('appVersionHtml'));
 
@@ -2568,8 +2568,8 @@ async function main() {
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v34' &&
-    v23Content.brand.cache === 'ruffin-performance-v34', v23Content.brand);
+    !!v23Content.brand && v23Content.brand.version === 'v35' &&
+    v23Content.brand.cache === 'ruffin-performance-v35', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2789,9 +2789,9 @@ async function main() {
 
 
   check('v34: BRAND version and cache stamps are v34',
-    pageHtml.text.includes('data-app-version="v34"') &&
-    appJs.text.includes("const APP_VERSION = 'v34'") &&
-    swJs.text.includes('ruffin-performance-v34'),
+    pageHtml.text.includes('data-app-version="v35"') &&
+    appJs.text.includes("const APP_VERSION = 'v35'") &&
+    swJs.text.includes('ruffin-performance-v35'),
     compareSlice.slice(0, 120));
   /* Portal preview tabs (v33): interactive preview of what is
      inside the portal in section 02, replacing the static list.
@@ -2822,9 +2822,9 @@ async function main() {
     stylesCss.text.includes('.portal-preview-panel'),
     portalSlice.slice(0, 120));
   check('v34: BRAND version and cache stamps are v34 in the portal preview checks',
-    pageHtml.text.includes('data-app-version="v34"') &&
-    appJs.text.includes("const APP_VERSION = 'v34'") &&
-    swJs.text.includes('ruffin-performance-v34'),
+    pageHtml.text.includes('data-app-version="v35"') &&
+    appJs.text.includes("const APP_VERSION = 'v35'") &&
+    swJs.text.includes('ruffin-performance-v35'),
     portalSlice.slice(0, 120));
   /* Training Session Completion Summary (v34): after a member
      saves a workout log, a summary card at the top of My Log
@@ -2848,9 +2848,9 @@ async function main() {
     appJs.text.includes('state.mlSummary = { log:') &&
     appJs.text.includes('state.mlSummary = null'), appJs.text.slice(0, 120));
   check('v34: BRAND version and cache stamps are v34',
-    pageHtml.text.includes('data-app-version="v34"') &&
-    appJs.text.includes("const APP_VERSION = 'v34'") &&
-    swJs.text.includes('ruffin-performance-v34'),
+    pageHtml.text.includes('data-app-version="v35"') &&
+    appJs.text.includes("const APP_VERSION = 'v35'") &&
+    swJs.text.includes('ruffin-performance-v35'),
     appJs.text.slice(0, 120));
   /* Landing FAQ accordion (v19): one card between the tiers and
      the parents card, eight plain answers, trial and prices
@@ -5572,9 +5572,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v34"') &&
-    appJs.text.includes("const APP_VERSION = 'v34'") &&
-    swJs.text.includes('ruffin-performance-v34'));
+    pageHtml.text.includes('data-app-version="v35"') &&
+    appJs.text.includes("const APP_VERSION = 'v35'") &&
+    swJs.text.includes('ruffin-performance-v35'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -8941,7 +8941,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v34' &&
+          br.status === 200 && br.json.brand.version === 'v35' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -9060,7 +9060,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v34',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v35',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
@@ -9543,6 +9543,237 @@ async function waitForServer(tries = 60) {
       } finally {
         fc30Child.kill('SIGKILL');
         fs.rmSync(FC30_DIR, { recursive: true, force: true });
+      }
+    }
+
+    /* Nudge Snooze (v35): a member can put one This Week nudge
+       kind to sleep for 7 days from the nudge card itself. The
+       snooze is per member and per kind, stored on the member's
+       own account record: a snoozed kind is skipped, the next
+       eligible nudge behind it still shows, one member's snooze
+       never touches another member, and once the snooze time has
+       run out the nudge comes back. When the member acts and the
+       kind's condition goes away, the week payload clears that
+       snooze record (checked in the store file) so a later
+       occurrence is not suppressed by a stale snooze. Own server,
+       own store; the expiry and the old-profile form check fixture
+       are aged by editing db.json while the server is stopped and
+       restarting on the same DATA_DIR (the v30 pattern). */
+    {
+      const SNZ_BASE = 'http://127.0.0.1:3235';
+      const snzApi = async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { headers['content-type'] = 'application/json'; data = JSON.stringify(body); }
+        const res = await fetch(SNZ_BASE + p, { method, headers, body: data });
+        let json = null;
+        try { json = await res.json(); } catch (_) { /* empty/non-json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, setCookie };
+      };
+      const snzText = async (cookie, p) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        const res = await fetch(SNZ_BASE + p, { headers });
+        return { status: res.status, text: await res.text() };
+      };
+      const snzCookie = (r) => (r.setCookie[0] || '').split(';')[0];
+      const snzFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
+      const snzToday = snzFmt.format(new Date());
+      const snzParse = (ds) => { const [y, m, d] = ds.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+      const snzAddD = (ds, n) => {
+        const dt = new Date(snzParse(ds) + n * 86400000);
+        const p2 = (x) => String(x).padStart(2, '0');
+        return dt.getUTCFullYear() + '-' + p2(dt.getUTCMonth() + 1) + '-' + p2(dt.getUTCDate());
+      };
+      const SNZ_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-snooze35-'));
+      let snzLog = '';
+      const startSnz = () => {
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, process.env, {
+            PORT: '3235', DATA_DIR: SNZ_DIR, SESSION_SECRET: 'snooze35-secret',
+          }),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', d => { snzLog += d; });
+        c.stderr.on('data', d => { snzLog += d; });
+        return c;
+      };
+      const waitSnz = async () => {
+        for (let i = 0; i < 60; i++) {
+          try {
+            const res = await fetch(SNZ_BASE + '/api/content');
+            if (res.status === 200) return true;
+          } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      let snzChild = startSnz();
+      try {
+        check('v35: nudge snooze server starts', await waitSnz(), snzLog);
+        const snzJs = await snzText(null, '/app.js');
+        check('v35: served JS carries the snooze control on the nudge cards',
+          snzJs.status === 200 && snzJs.text.includes('Remind me in 7 days') &&
+          snzJs.text.includes('tw-nudge-snooze') &&
+          snzJs.text.includes('/api/my/nudge/snooze') &&
+          snzJs.text.includes('data-nudge-kind="streak"') &&
+          snzJs.text.includes('data-nudge-kind="quiet"') &&
+          snzJs.text.includes('data-nudge-kind="formcheck"'),
+          snzJs.text.slice(0, 80));
+
+        let sr = await snzApi(null, 'POST', '/api/register', { email: 'snz-coach@test.com', password: 'testpass123' });
+        const snzCoach = snzCookie(sr);
+        sr = await snzApi(snzCoach, 'POST', '/api/groups', { name: 'Snooze Squad' });
+        const snzGrp = sr.json.group;
+        const mkSnz = async (first, last, email) => {
+          const pr = (await snzApi(snzCoach, 'POST', '/api/profiles', { firstName: first, lastName: last, groupId: snzGrp.id, events: ['sprinter'] })).json.profile;
+          await snzApi(snzCoach, 'POST', '/api/client-invites', { email });
+          const reg = await snzApi(null, 'POST', '/api/register', { email, password: 'testpass123' });
+          const jar = snzCookie(reg);
+          await snzApi(snzCoach, 'PUT', '/api/access/' + reg.json.id, { tier: 'training' });
+          await snzApi(snzCoach, 'PUT', '/api/profiles/' + pr.id + '/link', { email });
+          return { prof: pr, jar, id: reg.json.id };
+        };
+        const sally = await mkSnz('Sally', 'Snooze', 'sally-snooze35@test.com');
+        const quinn35 = await mkSnz('Quinn', 'Quietweek', 'quinn-snooze35@test.com');
+        const rita = await mkSnz('Rita', 'Regular', 'rita-snooze35@test.com');
+        const andy = await mkSnz('Andy', 'Acts', 'andy-snooze35@test.com');
+        const fiona = await mkSnz('Fiona', 'Film', 'fiona-snooze35@test.com');
+        check('v35 fixtures: five snooze members registered and linked',
+          !!sally.prof.id && !!quinn35.prof.id && !!rita.prof.id && !!andy.prof.id && !!fiona.prof.id);
+
+        /* A scheduled day inside every gap below (for the quiet
+           condition), on the shared group. */
+        sr = await snzApi(snzCoach, 'POST', '/api/assignments/override', { groupId: snzGrp.id, date: snzAddD(snzToday, -2), sessionId: 'SE-02' });
+        check('v35 fixtures: override sets a scheduled day inside the gap', sr.status === 200, sr.status);
+
+        /* Streak conditions: check-ins the last two days, none
+           today. Sally also has a log 5 days back, so the quiet
+           condition holds for her behind the streak. */
+        for (const m of [sally, quinn35, rita, andy]) {
+          await snzApi(m.jar, 'POST', '/api/checkin', { date: snzAddD(snzToday, -2), sleep: 8, soreness: 2, energy: 4 });
+          await snzApi(m.jar, 'POST', '/api/checkin', { date: snzAddD(snzToday, -1), sleep: 8, soreness: 2, energy: 4 });
+        }
+        await snzApi(sally.jar, 'POST', '/api/my/logs', { date: snzAddD(snzToday, -5), title: 'Sally last session' });
+
+        /* The endpoint's own gates: logged out is 401, an unknown
+           or missing kind is 400. */
+        sr = await snzApi(null, 'POST', '/api/my/nudge/snooze', { kind: 'streak' });
+        check('v35: snooze without a login is 401', sr.status === 401, sr.status);
+        sr = await snzApi(sally.jar, 'POST', '/api/my/nudge/snooze', { kind: 'bogus' });
+        check('v35: snooze with an unknown kind is 400', sr.status === 400, sr.status);
+        sr = await snzApi(sally.jar, 'POST', '/api/my/nudge/snooze', {});
+        check('v35: snooze with no kind is 400', sr.status === 400, sr.status);
+
+        /* Sally snoozes the streak: the quiet nudge behind it
+           shows instead of nothing. */
+        sr = await snzApi(sally.jar, 'GET', '/api/my/week');
+        check('v35: streak nudge shows before any snooze',
+          sr.status === 200 && !!sr.json.nudge && sr.json.nudge.kind === 'streak' && sr.json.nudge.streak === 2,
+          sr.json && sr.json.nudge);
+        sr = await snzApi(sally.jar, 'POST', '/api/my/nudge/snooze', { kind: 'streak' });
+        const snoozeMs = sr.json && sr.json.snoozedUntil ? Date.parse(sr.json.snoozedUntil) : NaN;
+        check('v35: snoozing the streak answers ok with a time about 7 days out',
+          sr.status === 200 && sr.json.ok === true && sr.json.kind === 'streak' &&
+          !Number.isNaN(snoozeMs) && snoozeMs > Date.now() + 6 * 86400000 && snoozeMs < Date.now() + 8 * 86400000,
+          sr.json);
+        sr = await snzApi(sally.jar, 'GET', '/api/my/week');
+        check('v35: with the streak snoozed, the next eligible nudge (quiet) shows',
+          sr.status === 200 && !!sr.json.nudge && sr.json.nudge.kind === 'quiet' &&
+          sr.json.nudge.daysSince === 5 && sr.json.nudge.lastDate === snzAddD(snzToday, -5),
+          sr.json && sr.json.nudge);
+
+        /* Quinn snoozes his streak: he has no other candidate, so
+           his week shows no nudge at all. Rita, with the same
+           condition and no snooze, still sees hers. */
+        sr = await snzApi(quinn35.jar, 'POST', '/api/my/nudge/snooze', { kind: 'streak' });
+        check('v35: the second member can snooze his own streak', sr.status === 200 && sr.json.ok === true, sr.status);
+        sr = await snzApi(quinn35.jar, 'GET', '/api/my/week');
+        check('v35: a snoozed kind is suppressed when nothing sits behind it',
+          sr.status === 200 && sr.json.nudge === null, sr.json && sr.json.nudge);
+        sr = await snzApi(rita.jar, 'GET', '/api/my/week');
+        check('v35: one member snoozing does not affect another member',
+          sr.status === 200 && !!sr.json.nudge && sr.json.nudge.kind === 'streak' && sr.json.nudge.streak === 2,
+          sr.json && sr.json.nudge);
+
+        /* Sally snoozes the quiet nudge too: nothing is left. */
+        sr = await snzApi(sally.jar, 'POST', '/api/my/nudge/snooze', { kind: 'quiet' });
+        check('v35: snoozing the quiet kind answers ok', sr.status === 200 && sr.json.ok === true && sr.json.kind === 'quiet', sr.json);
+        sr = await snzApi(sally.jar, 'GET', '/api/my/week');
+        check('v35: with both her kinds snoozed, Sally sees no nudge',
+          sr.status === 200 && sr.json.nudge === null, sr.json && sr.json.nudge);
+
+        /* Acting clears as before, with no snooze involved: Andy
+           checks in today and his streak nudge is gone. */
+        sr = await snzApi(andy.jar, 'GET', '/api/my/week');
+        check('v35: the acting fixture starts with the streak nudge',
+          sr.status === 200 && !!sr.json.nudge && sr.json.nudge.kind === 'streak', sr.json && sr.json.nudge);
+        await snzApi(andy.jar, 'POST', '/api/checkin', { date: snzToday, sleep: 8, soreness: 2, energy: 4 });
+        sr = await snzApi(andy.jar, 'GET', '/api/my/week');
+        check('v35: checking in today clears the streak nudge as before',
+          sr.status === 200 && sr.json.nudge === null && sr.json.checkedInToday === true, sr.json && sr.json.nudge);
+
+        /* Sally acts on the snoozed streak (checks in today): the
+           week payload clears the streak snooze record from her
+           stored account, while the still-live quiet snooze (its
+           condition still holds) stays on the record. */
+        await snzApi(sally.jar, 'POST', '/api/checkin', { date: snzToday, sleep: 8, soreness: 2, energy: 4 });
+        sr = await snzApi(sally.jar, 'GET', '/api/my/week');
+        check('v35: after Sally acts, her week still shows no nudge (quiet remains snoozed)',
+          sr.status === 200 && sr.json.nudge === null, sr.json && sr.json.nudge);
+        const snzDbMid = JSON.parse(fs.readFileSync(path.join(SNZ_DIR, 'db.json'), 'utf8'));
+        const sallyRec = snzDbMid.users.find(u => u.email === 'sally-snooze35@test.com');
+        check('v35: acting cleared the streak snooze record lazily, the live quiet snooze stays',
+          !!sallyRec && !!sallyRec.nudgeSnoozes &&
+          !('streak' in sallyRec.nudgeSnoozes) && typeof sallyRec.nudgeSnoozes.quiet === 'string',
+          sallyRec && sallyRec.nudgeSnoozes);
+
+        /* Age the fixtures: Quinn's snooze time is moved into the
+           past (what the record looks like once 7 days have run
+           out) and Fiona's profile is made 20 days old, so her
+           never-sent-a-form-check condition holds after restart. */
+        const pastIso = new Date(Date.now() - 86400000).toISOString();
+        const oldIso35 = new Date(Date.now() - 20 * 86400000).toISOString();
+        snzChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        const snzDbPath = path.join(SNZ_DIR, 'db.json');
+        const snzDb = JSON.parse(fs.readFileSync(snzDbPath, 'utf8'));
+        const quinnRec = snzDb.users.find(u => u.email === 'quinn-snooze35@test.com');
+        if (quinnRec) { quinnRec.nudgeSnoozes = quinnRec.nudgeSnoozes || {}; quinnRec.nudgeSnoozes.streak = pastIso; }
+        const fionaProf = snzDb.profiles.find(pr => pr.id === fiona.prof.id);
+        if (fionaProf) fionaProf.createdAt = oldIso35;
+        fs.writeFileSync(snzDbPath, JSON.stringify(snzDb, null, 1));
+        snzChild = startSnz();
+        check('v35: server restarts with the aged snooze and profile', await waitSnz(), snzLog);
+        check('v35 fixtures: the aged snooze was written to the store', !!quinnRec && quinnRec.nudgeSnoozes.streak === pastIso);
+
+        /* With the snooze time run out, Quinn's streak nudge is
+           back — the snooze lasted its 7 days and no longer. */
+        sr = await snzApi(quinn35.jar, 'GET', '/api/my/week');
+        check('v35: the streak nudge returns once the snooze has expired',
+          sr.status === 200 && !!sr.json.nudge && sr.json.nudge.kind === 'streak' && sr.json.nudge.streak === 2,
+          sr.json && sr.json.nudge);
+
+        /* The third kind snoozes the same way: Fiona's formcheck
+           nudge (old profile, never submitted) goes quiet for a
+           week when she snoozes it. */
+        sr = await snzApi(fiona.jar, 'GET', '/api/my/week');
+        check('v35: the formcheck nudge shows for the old-profile member',
+          sr.status === 200 && !!sr.json.nudge && sr.json.nudge.kind === 'formcheck' && sr.json.nudge.lastDate === null,
+          sr.json && sr.json.nudge);
+        sr = await snzApi(fiona.jar, 'POST', '/api/my/nudge/snooze', { kind: 'formcheck' });
+        check('v35: snoozing the formcheck kind answers ok', sr.status === 200 && sr.json.ok === true && sr.json.kind === 'formcheck', sr.json);
+        sr = await snzApi(fiona.jar, 'GET', '/api/my/week');
+        check('v35: a snoozed formcheck nudge is suppressed',
+          sr.status === 200 && sr.json.nudge === null, sr.json && sr.json.nudge);
+      } finally {
+        snzChild.kill('SIGKILL');
+        fs.rmSync(SNZ_DIR, { recursive: true, force: true });
       }
     }
 
