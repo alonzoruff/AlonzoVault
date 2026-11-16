@@ -7436,6 +7436,177 @@ async function waitForServer(tries = 60) {
   }
 
   /* ================================================================
+     Studies (Learn > Studies): the read-only research library.
+     Content rules, the STUDIES_ENABLED switch, draft hiding, the
+     standing safety lines, and the read-only guarantees.
+     ================================================================ */
+  {
+    const studiesLib = require(path.join(APP_DIR, 'lib', 'studies.js'));
+    const raw = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'content', 'studies.json'), 'utf8'));
+
+    /* Content file: every entry follows the schema. */
+    check('studies.json is a list of entries', Array.isArray(raw) && raw.length >= 1, typeof raw);
+    const verdictReport = studiesLib.checkStudies(raw);
+    check('every entry in studies.json passes validation',
+      verdictReport.skipped.length === 0, verdictReport.skipped);
+    check('study ids are unique', new Set(raw.map(s => s.id)).size === raw.length);
+    const draftEntry = raw.find(s => s.id === 'flywheel-vs-traditional-speed');
+    check('the held flywheel entry stays a draft until Luna clears it',
+      !!draftEntry && draftEntry.status === 'draft', draftEntry && draftEntry.status);
+    const pub = studiesLib.publicStudies(raw);
+    check('drafts and retired entries are never public',
+      pub.length === raw.filter(s => s.status === 'published').length &&
+      !pub.some(s => s.id === 'flywheel-vs-traditional-speed'), pub.map(s => s.id));
+    check('internal fields never leave the server',
+      pub.every(s => s.status === undefined && s.verified_by === undefined), pub[0]);
+    check('every public entry has the number, takeaway and a real verdict',
+      pub.every(s => s.key_number && s.takeaway && studiesLib.VERDICTS.includes(s.verdict) &&
+        studiesLib.TOPICS.includes(s.topic)));
+    check('every injury-topic entry is flagged so it carries the athletic trainer line',
+      raw.filter(s => s.topic === 'Injury research').every(s => s.is_injury_topic === true));
+    check('every public link is https or marked pending (nothing invented)',
+      pub.every(s => (s.link && /^https:\/\//.test(s.link)) || (s.link === '' && s.link_pending === true)));
+
+    /* The validator rejects bad entries. */
+    const good = pub[0] ? Object.assign({}, raw.find(s => s.id === pub[0].id)) : null;
+    const bad = (patch) => studiesLib.validateStudy(Object.assign({}, good, patch));
+    check('validator accepts a good entry', bad({}).length === 0, bad({}));
+    check('validator rejects a missing key number', bad({ key_number: '' }).length > 0);
+    check('validator rejects an unknown verdict', bad({ verdict: 'great' }).length > 0);
+    check('validator rejects an unknown topic', bad({ topic: 'Nutrition' }).length > 0);
+    check('validator rejects a non-https link', bad({ link: 'http://example.com/x' }).length > 0);
+    check('validator rejects a javascript: link', bad({ link: 'javascript:alert(1)' }).length > 0);
+    check('validator rejects a published entry with no link and no pending flag',
+      bad({ link: '', link_pending: undefined }).length > 0);
+    check('validator rejects a published entry nobody verified', bad({ verified_by: '' }).length > 0);
+    check('validator rejects an injury entry that is not flagged',
+      bad({ topic: 'Injury research', is_injury_topic: false }).length > 0);
+    check('validator rejects a bad id', bad({ id: 'Not A Slug' }).length > 0);
+    const dup = studiesLib.checkStudies([good, Object.assign({}, good)]);
+    check('a duplicate id is skipped and logged, not fatal',
+      dup.valid.length === 1 && dup.skipped.length === 1, dup);
+    check('a malformed file yields an empty library, not a crash',
+      studiesLib.checkStudies({ not: 'a list' }).valid.length === 0);
+
+    /* Server with Studies ON. */
+    const SB = 'http://127.0.0.1:3228';
+    const ST_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-studies-on-'));
+    let stLog = '';
+    const stChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: Object.assign({}, process.env, {
+        PORT: '3228', DATA_DIR: ST_DIR, SESSION_SECRET: 'studies-secret', STUDIES_ENABLED: '1',
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    stChild.stdout.on('data', d => { stLog += d; });
+    stChild.stderr.on('data', d => { stLog += d; });
+    /* Server with Studies OFF (the default). */
+    const OB = 'http://127.0.0.1:3229';
+    const OFF_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-studies-off-'));
+    let offLog = '';
+    const offEnv = Object.assign({}, process.env, { PORT: '3229', DATA_DIR: OFF_DIR, SESSION_SECRET: 'studies-off-secret' });
+    delete offEnv.STUDIES_ENABLED;
+    const offChild = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+      env: offEnv, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    offChild.stdout.on('data', d => { offLog += d; });
+    offChild.stderr.on('data', d => { offLog += d; });
+    const waitAt = async (base) => {
+      for (let i = 0; i < 60; i++) {
+        try { if ((await fetch(base + '/api/content')).status === 200) return true; } catch (_) { /* not up */ }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return false;
+    };
+    const get = async (base, p) => {
+      const res = await fetch(base + p);
+      let json = null; try { json = await res.json(); } catch (_) { /* none */ }
+      return { status: res.status, json };
+    };
+    try {
+      check('studies-on server starts', await waitAt(SB), stLog);
+      check('studies-off server starts', await waitAt(OB), offLog);
+
+      let sr = await get(SB, '/api/studies');
+      check('GET /api/studies is public and answers 200 when the switch is on',
+        sr.status === 200 && Array.isArray(sr.json.studies), sr.status);
+      check('the list holds exactly the published entries, no draft',
+        sr.json.studies.length === pub.length &&
+        !sr.json.studies.some(s => s.id === 'flywheel-vs-traditional-speed'),
+        sr.json.studies.map(s => s.id));
+      check('the list carries the confirmed topic order',
+        JSON.stringify(sr.json.topics) === JSON.stringify(['Acceleration', 'Max velocity', 'Strength and power', 'Plyometrics', 'Recovery', 'Injury research']),
+        sr.json.topics);
+      check('the API never leaks status or verified_by',
+        sr.json.studies.every(s => s.status === undefined && s.verified_by === undefined));
+      check('injury entries arrive flagged',
+        sr.json.studies.filter(s => s.topic === 'Injury research').every(s => s.is_injury_topic === true) &&
+        sr.json.studies.some(s => s.is_injury_topic === true));
+      for (const s of sr.json.studies) {
+        const d = await get(SB, '/api/studies/' + s.id);
+        check('detail for ' + s.id + ' is 200 with the full entry',
+          d.status === 200 && d.json.study.id === s.id && d.json.study.key_number === s.key_number &&
+          d.json.study.takeaway === s.takeaway, d.status);
+      }
+      let dr = await get(SB, '/api/studies/flywheel-vs-traditional-speed');
+      check('the draft entry is a 404 by direct id', dr.status === 404, dr.status);
+      dr = await get(SB, '/api/studies/does-not-exist');
+      check('an unknown study id is a 404', dr.status === 404, dr.status);
+      const wr = await fetch(SB + '/api/studies', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"id":"x"}' });
+      check('Studies cannot be written to through the API (POST is not a 2xx)', wr.status >= 400, wr.status);
+      const wr2 = await fetch(SB + '/api/studies/sleep-extension-sprint', { method: 'DELETE' });
+      check('Studies cannot be deleted through the API', wr2.status >= 400, wr2.status);
+      check('the server wrote no studies data to its data folder',
+        !fs.readdirSync(ST_DIR).some(f => /stud/i.test(f)), fs.readdirSync(ST_DIR));
+
+      /* Switch off: the feature answers 404 and the rest is untouched. */
+      let or = await get(OB, '/api/studies');
+      check('GET /api/studies is a 404 while the switch is off', or.status === 404, or.status);
+      or = await get(OB, '/api/studies/sleep-extension-sprint');
+      check('a study detail is a 404 while the switch is off', or.status === 404, or.status);
+      or = await get(OB, '/api/content');
+      check('with the switch off the rest of the app still serves content',
+        or.status === 200 && Array.isArray(or.json.sessions), or.status);
+    } finally {
+      stChild.kill('SIGKILL');
+      offChild.kill('SIGKILL');
+      fs.rmSync(ST_DIR, { recursive: true, force: true });
+      fs.rmSync(OFF_DIR, { recursive: true, force: true });
+    }
+
+    /* Static shell checks: Nutrition untouched, Studies read-only. */
+    const html = fs.readFileSync(path.join(APP_DIR, 'public', 'index.html'), 'utf8');
+    const appjs = fs.readFileSync(path.join(APP_DIR, 'public', 'app.js'), 'utf8');
+    check('the Nutrition view and its menu row are still in the shell',
+      html.includes('id="view-nutrition"') && html.includes('data-view="nutrition">Nutrition'));
+    check('the Nutrition page still has its seven fueling cards and seven jump chips',
+      (html.match(/class="nu-card/g) || []).length === 7 && (html.match(/data-nu-jump=/g) || []).length === 7);
+    check('Studies has a view and a menu row that starts hidden',
+      html.includes('id="view-studies"') && /id="menu-studies"[^>]*\shidden/.test(html));
+    check('Nutrition is still in the Learn sub-navigation',
+      appjs.includes("['nutrition', 'Nutrition']"));
+    const navLiteral = appjs.slice(appjs.indexOf('const GROUP_SUBNAV = {'), appjs.indexOf('function renderSubnav'));
+    check('Studies is not in the static nav (it is added only when the server says it is on)',
+      navLiteral.includes("'nutrition'") && !navLiteral.includes("'studies'"));
+    const sb = appjs.indexOf('/* STUDIES-BEGIN');
+    const se = appjs.indexOf('/* STUDIES-END */');
+    check('the Studies client code is delimited', sb > 0 && se > sb, [sb, se]);
+    const studyCode = appjs.slice(sb, se);
+    check('Studies client code only reads the API (no POST, PUT or DELETE helpers)',
+      !/apiPost|apiPut|apiDel|method\s*:/.test(studyCode));
+    check('Studies client code stores nothing in the browser',
+      !/localStorage|sessionStorage|indexedDB|document\.cookie/.test(studyCode));
+    check('Studies pages have no forms or text areas to fill in', !/<form|<textarea/i.test(studyCode));
+    check('Studies external links open safely',
+      /target="_blank" rel="noopener noreferrer"/.test(studyCode));
+    check('Studies carries the standing intro and athletic trainer lines word for word',
+      studyCode.includes('Training research in plain language. General information, not medical advice.') &&
+      studyCode.includes('Training research only. Questions about an injury or pain go to the athletic trainer.'));
+    check('all four verdict words appear in the client code',
+      ['Works', 'Mixed', "Doesn't hold up"].every(w => studyCode.includes(w)));
+  }
+
+  /* ================================================================
      Protocols (Learn > Protocols): read-only injury and rehab pages.
      Content rules, the validator, what the public API may show (no
      internal fields, no unapproved video links), the dark switch, the

@@ -406,7 +406,7 @@ function md(src) {
 const VIEW_AREA = {
   home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', race: 'train', records: 'train', leaderboard: 'train',
-  libraryhome: 'learn', videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
+  libraryhome: 'learn', videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', studies: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
   privacy: 'account',
 };
@@ -473,6 +473,206 @@ function closeNavMenus() {
   const toggle = $('#nav-toggle');
   if (toggle) toggle.setAttribute('aria-expanded', 'false');
 }
+/* STUDIES-BEGIN
+   Studies (Learn > Studies): a read-only research library. It only
+   reads /api/studies. It writes nothing: no logging, no forms, no
+   stored state. The server answers 404 while STUDIES_ENABLED is off,
+   and then this whole section stays invisible (no nav item, no menu
+   row). */
+const STUDY_ICONS = {
+  works: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>',
+  mixed: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5c1.4-2.4 2.8-2.4 4.2 0s2.8 2.4 4.2 0"/></svg>',
+  doesnt_hold_up: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+};
+const STUDY_VERDICTS = [
+  ['works', 'Works', 'st-works'],
+  ['mixed', 'Mixed', 'st-mixed'],
+  ['doesnt_hold_up', "Doesn't hold up", 'st-doesnt'],
+];
+const STUDY_INJURY_LINE = 'Training research only. Questions about an injury or pain go to the athletic trainer.';
+const STUDY_INTRO_LINE = 'Training research in plain language. General information, not medical advice.';
+const studiesState = {
+  loaded: false, topics: [], studies: [],
+  topic: 'All', verdict: 'All', query: '', openId: null, scrollY: 0,
+};
+
+function studyVerdictBadge(verdict) {
+  const v = STUDY_VERDICTS.find(x => x[0] === verdict) || STUDY_VERDICTS[1];
+  return `<span class="st-verdict ${v[2]}">${STUDY_ICONS[v[0]] || ''}<span>${esc(v[1])}</span></span>`;
+}
+function studyDateText(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!m) return '';
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December'];
+  const name = months[parseInt(m[2], 10) - 1];
+  return name ? `${name} ${parseInt(m[3], 10)}, ${m[1]}` : '';
+}
+function studyMatches(s) {
+  if (studiesState.topic !== 'All' && s.topic !== studiesState.topic) return false;
+  if (studiesState.verdict !== 'All' && s.verdict !== studiesState.verdict) return false;
+  const q = (studiesState.query || '').trim().toLowerCase();
+  if (!q) return true;
+  return [s.title, s.topic, s.takeaway, s.finding, s.citation, s.key_number]
+    .some(t => String(t || '').toLowerCase().includes(q));
+}
+function studiesVisible() {
+  const order = studiesState.topics;
+  return studiesState.studies.filter(studyMatches).sort((a, b) => {
+    const ta = order.indexOf(a.topic), tb = order.indexOf(b.topic);
+    if (ta !== tb) return ta - tb;
+    return String(b.updated || '').localeCompare(String(a.updated || ''))
+      || String(a.title).localeCompare(String(b.title));
+  });
+}
+function studyCardHtml(s) {
+  return `<button type="button" class="st-card" data-st-open="${esc(s.id)}">
+    <span class="st-card-top"><span class="st-topic">${esc(s.topic)}</span>${studyVerdictBadge(s.verdict)}</span>
+    <span class="st-card-title">${esc(s.title)}</span>
+    <span class="st-card-number"><span class="st-number-label">The number</span>${esc(s.key_number)}</span>
+  </button>`;
+}
+function studiesListHtmlInner() {
+  const rows = studiesVisible();
+  if (!studiesState.studies.length) {
+    return '<p class="muted">No studies yet. New ones are added as they are checked against their sources.</p>';
+  }
+  if (!rows.length) {
+    return '<p class="muted">No studies match those filters.</p>'
+      + '<button type="button" class="btn secondary" data-st-clear>Clear filters</button>';
+  }
+  return rows.map(studyCardHtml).join('');
+}
+function studiesCountText() {
+  const total = studiesState.studies.length;
+  return total ? `Showing ${studiesVisible().length} of ${total} studies.` : '';
+}
+function studiesListHtml() {
+  const all = studiesState.studies;
+  const topicCounts = {};
+  for (const s of all) topicCounts[s.topic] = (topicCounts[s.topic] || 0) + 1;
+  const topics = studiesState.topics.filter(t => topicCounts[t]);
+  const verdictCounts = {};
+  for (const s of all) verdictCounts[s.verdict] = (verdictCounts[s.verdict] || 0) + 1;
+  const chip = (attr, value, label, active) =>
+    `<button type="button" class="chip ${active ? 'active' : ''}" ${attr}="${esc(value)}" aria-pressed="${active ? 'true' : 'false'}">${esc(label)}</button>`;
+  return `
+    <p class="view-sub muted">${esc(STUDY_INTRO_LINE)}</p>
+    <div class="filters card">
+      <label class="st-search-label" for="st-search">Search studies</label>
+      <input id="st-search" type="search" value="${esc(studiesState.query)}" placeholder="Try “sled”, “sleep”, “hamstring”" autocomplete="off">
+      <div class="chip-row" aria-label="Filter by topic">
+        <span class="muted">Topic</span>
+        ${chip('data-st-topic', 'All', `All (${all.length})`, studiesState.topic === 'All')}
+        ${topics.map(t => chip('data-st-topic', t, `${t} (${topicCounts[t]})`, studiesState.topic === t)).join('')}
+      </div>
+      <div class="chip-row" aria-label="Filter by verdict">
+        <span class="muted">Verdict</span>
+        ${chip('data-st-verdict', 'All', 'All', studiesState.verdict === 'All')}
+        ${STUDY_VERDICTS.filter(v => verdictCounts[v[0]]).map(v => chip('data-st-verdict', v[0], `${v[1]} (${verdictCounts[v[0]]})`, studiesState.verdict === v[0])).join('')}
+      </div>
+      <p id="st-count" class="muted" aria-live="polite">${esc(studiesCountText())}</p>
+    </div>
+    <div id="st-list" class="st-list">${studiesListHtmlInner()}</div>`;
+}
+function studyDetailHtml(s) {
+  const link = typeof s.link === 'string' && /^https:\/\//.test(s.link) ? s.link : '';
+  const checked = studyDateText(s.verified_on);
+  const updated = studyDateText(s.updated);
+  const meta = [checked ? `Source checked ${checked}.` : '', updated ? `Updated ${updated}.` : '', s.update_note || '']
+    .filter(Boolean).join(' ');
+  return `
+    <button type="button" class="btn secondary st-back" data-st-back>Back to all studies</button>
+    <article class="st-detail">
+      <p class="st-topic">${esc(s.topic)}</p>
+      <h2 class="st-title">${esc(s.title)}</h2>
+      <div class="st-verdict-row">${studyVerdictBadge(s.verdict)}<p class="st-reason">${esc(s.verdict_reason)}</p></div>
+      ${s.is_injury_topic ? `<p class="st-injury-note">${esc(STUDY_INJURY_LINE)}</p>` : ''}
+      <section class="st-sec"><h3>What was tested</h3><p>${esc(s.tested)}</p></section>
+      <section class="st-sec"><h3>What they found</h3><p>${esc(s.finding)}</p>
+        <p class="st-number"><span class="st-number-label">The number</span>${esc(s.key_number)}</p></section>
+      <section class="st-takeaway"><h3>Takeaway</h3><p>${esc(s.takeaway)}</p></section>
+      ${s.limits ? `<section class="st-sec"><h3>Limits</h3><p>${esc(s.limits)}</p></section>` : ''}
+      <section class="st-sec st-cite"><h3>Source</h3><p>${esc(s.citation)}</p>
+        ${link
+    ? `<a class="btn secondary" href="${esc(link)}" target="_blank" rel="noopener noreferrer" aria-label="Read the study (opens in a new tab)">Read the study</a>`
+    : '<p class="muted">The link to this study has not been added yet.</p>'}
+      </section>
+      ${meta ? `<p class="st-meta muted">${esc(meta)}</p>` : ''}
+    </article>`;
+}
+function renderStudies() {
+  const root = $('#studies-root');
+  if (!root) return;
+  const open = studiesState.openId ? studiesState.studies.find(s => s.id === studiesState.openId) : null;
+  if (studiesState.openId && !open) studiesState.openId = null;
+  root.innerHTML = open ? studyDetailHtml(open) : studiesListHtml();
+}
+function refreshStudiesList() {
+  const list = $('#st-list');
+  if (list) list.innerHTML = studiesListHtmlInner();
+  const count = $('#st-count');
+  if (count) count.textContent = studiesCountText();
+}
+function studiesBindOnce() {
+  const root = $('#studies-root');
+  if (!root || root.dataset.bound) return;
+  root.dataset.bound = '1';
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-st-open],[data-st-back],[data-st-topic],[data-st-verdict],[data-st-clear]');
+    if (!t || !root.contains(t)) return;
+    if (t.dataset.stOpen) {
+      studiesState.scrollY = window.scrollY;
+      studiesState.openId = t.dataset.stOpen;
+      renderStudies();
+      window.scrollTo(0, 0);
+    } else if (t.hasAttribute('data-st-back')) {
+      studiesState.openId = null;
+      renderStudies();
+      window.scrollTo(0, studiesState.scrollY || 0);
+    } else if (t.dataset.stTopic !== undefined) {
+      studiesState.topic = t.dataset.stTopic;
+      renderStudies();
+    } else if (t.dataset.stVerdict !== undefined) {
+      studiesState.verdict = t.dataset.stVerdict;
+      renderStudies();
+    } else if (t.hasAttribute('data-st-clear')) {
+      studiesState.topic = 'All'; studiesState.verdict = 'All'; studiesState.query = '';
+      renderStudies();
+    }
+  });
+  root.addEventListener('input', (e) => {
+    if (e.target && e.target.id === 'st-search') {
+      studiesState.query = e.target.value;
+      refreshStudiesList();
+    }
+  });
+}
+/* Asks the server whether Studies is on. A 404 (switch off) leaves
+   the app exactly as it was; a 200 adds the nav item and menu row. */
+async function initStudies() {
+  let data;
+  try { data = await api('/api/studies'); } catch (_) { return; }
+  studiesState.topics = Array.isArray(data.topics) ? data.topics : [];
+  studiesState.studies = Array.isArray(data.studies) ? data.studies : [];
+  studiesState.loaded = true;
+  const learn = GROUP_SUBNAV.learn;
+  if (!learn.some(([v]) => v === 'studies')) {
+    const at = learn.findIndex(([v]) => v === 'nutrition');
+    learn.splice(at >= 0 ? at + 1 : learn.length, 0, ['studies', 'Studies']);
+  }
+  buildMainNav();
+  const row = $('#menu-studies');
+  if (row) row.hidden = false;
+  studiesBindOnce();
+  const active = document.querySelector('.view.active');
+  if (active) {
+    const name = active.id.replace(/^view-/, '');
+    $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+    renderSubnav(name, VIEW_AREA[name] || 'home');
+  }
+}
+/* STUDIES-END */
 /* PROTOCOLS-BEGIN
    Protocols (Learn > Protocols): read-only injury and rehab protocol
    pages. It only reads /api/protocols. It writes nothing: no logging,
@@ -732,6 +932,7 @@ async function initProtocols() {
 }
 /* PROTOCOLS-END */
 buildMainNav();
+initStudies();
 initProtocols();
 $$('.nav-group-btn').forEach(btn => btn.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -858,6 +1059,8 @@ function showView(name) {
   if (name === 'devices') renderDevices();
   if (name === 'coverage') renderCoverage();
   if (name === 'exercises') renderExercises();
+  if (name === 'studies') { studiesState.openId = null; renderStudies(); }
+  if (name === 'protocols') { protocolsState.openId = null; renderProtocols(); }
   if (name === 'libraryhome') renderLibraryHome();
   if (name === 'privacy') renderPrivacy();
   updateNavIndicators();
@@ -1060,7 +1263,6 @@ function openWarmupCard() {
    its coaching cue), four big tiles into the learning surfaces, and
    a fuel prompt matched to whether today is a hard or easy day.
    Everything is a link into an existing view — no new data, no new
-  if (name === 'protocols') { protocolsState.openId = null; renderProtocols(); }
    endpoints, and nothing here pre-fills or records anything. */
 function dayOfYear(d) {
   const start = new Date(d.getFullYear(), 0, 0);

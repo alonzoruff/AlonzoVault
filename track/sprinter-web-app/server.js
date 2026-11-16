@@ -52,8 +52,9 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CONTENT_DIR = path.join(__dirname, 'content');
-const COOKIE_NAME = 'swa_session';
+const studiesLib = require('./lib/studies');
 const protocolsLib = require('./lib/protocols');
+const COOKIE_NAME = 'swa_session';
 const SESSION_DAYS = 30;
 
 /* ------------------------------------------------------------------ */
@@ -656,10 +657,24 @@ function loadCoachEducation() {
   return [];
 }
 const CONTENT = loadContent();
-const SESSION_BY_ID = new Map(CONTENT.sessions.map(s => [s.id, s]));
-const SESSION_IDS = new Set(SESSION_BY_ID.keys());
-const XT_IDS = new Set(CONTENT.sessions.filter(s => s.id.startsWith('XT-')).map(s => s.id));
 
+/* Studies (Learn > Studies): read-only research library. Ships behind
+   STUDIES_ENABLED so it can go out dark and be switched on after QC.
+   Entries live in content/studies.json; a bad entry is logged and
+   skipped, never a crash. Drafts and retired entries never render. */
+const STUDIES_ENABLED = /^(1|true|on|yes)$/i.test(process.env.STUDIES_ENABLED || '');
+const STUDIES = (() => {
+  if (!STUDIES_ENABLED) return [];
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'studies.json'), 'utf8'));
+    const { skipped } = studiesLib.checkStudies(raw);
+    for (const sk of skipped) console.warn('Studies: skipped "' + sk.id + '": ' + sk.problems.join('; '));
+    return studiesLib.publicStudies(raw);
+  } catch (err) {
+    console.warn('Studies: could not load content/studies.json (' + err.message + '). Studies will be empty.');
+    return [];
+  }
+})();
 /* Protocols (Learn > Protocols): read-only injury and rehab protocol
    pages. Ships behind PROTOCOLS_ENABLED so it can go out dark and be
    switched on after QC. Entries live in content/protocols.json; a bad
@@ -682,6 +697,9 @@ const PROTOCOLS = (() => {
     return empty;
   }
 })();
+const SESSION_BY_ID = new Map(CONTENT.sessions.map(s => [s.id, s]));
+const SESSION_IDS = new Set(SESSION_BY_ID.keys());
+const XT_IDS = new Set(CONTENT.sessions.filter(s => s.id.startsWith('XT-')).map(s => s.id));
 
 /* ------------------------------------------------------------------ */
 /* Preloaded test battery + weekly metrics                             */
@@ -3142,6 +3160,21 @@ async function handleApi(req, res, url) {
         Object.assign(publicRecord(r), { rank: i + 1 })),
     }));
     return sendJson(res, 200, { board });
+  }
+
+  /* Studies: public reads like the other content endpoints. The
+     whole feature answers 404 while STUDIES_ENABLED is off. */
+  if (p === '/api/studies' && req.method === 'GET') {
+    if (!STUDIES_ENABLED) return sendJson(res, 404, { error: 'not found' });
+    return sendJson(res, 200, {
+      topics: studiesLib.TOPICS, studies: STUDIES,
+    });
+  }
+  if (p.startsWith('/api/studies/') && req.method === 'GET') {
+    if (!STUDIES_ENABLED) return sendJson(res, 404, { error: 'not found' });
+    const found = STUDIES.find(st => st.id === p.slice('/api/studies/'.length));
+    if (!found) return sendJson(res, 404, { error: 'not found' });
+    return sendJson(res, 200, { study: found });
   }
 
   /* Protocols: public reads like Studies. The whole feature answers

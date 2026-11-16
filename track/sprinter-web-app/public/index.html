@@ -144,6 +144,7 @@
       <button type="button" class="menu-item" data-view="definitions">Definitions <span>Every term in plain language, with the coaching cue<em class="menu-count" id="lc-defs"></em></span></button>
       <button type="button" class="menu-item" data-view="exercises">Exercise Library <span>Movements saved from Instagram, with cues and sources<em class="menu-count" id="lc-ex"></em></span></button>
       <button type="button" class="menu-item" data-view="nutrition">Nutrition <span>What to eat and when, on practice days and meet days</span></button>
+      <button type="button" class="menu-item" id="menu-studies" data-view="studies" hidden>Studies <span>What the research says works in sprinting, and what does not</span></button>
       <button type="button" class="menu-item" data-view="education">Coach Education <span>Clinics and courses for coaches</span></button>
       <button type="button" class="menu-item" data-view="guide">How to use this app <span>The whole system in plain words</span></button>
     </div>
@@ -540,6 +541,14 @@
         <li><strong>The proven stack is boring:</strong> breakfast, carbs around training, protein at meals, water, and sleep.</li>
       </ul>
     </article>
+  </section>
+
+  <!-- STUDIES (read-only research library; hidden unless the server has STUDIES_ENABLED on) -->
+  <section id="view-studies" class="view">
+    <h1>Studies</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <div id="studies-root"></div>
   </section>
 
   <!-- LIBRARY HOME -->
