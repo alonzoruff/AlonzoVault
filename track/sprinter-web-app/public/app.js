@@ -107,6 +107,8 @@ const state = {
   importReport: null,
   importText: '',
   amsProfileId: null,
+  chAnnEditId: null,
+  coachHome: null,
   amsQ: '',
   amsGroup: '',
   amsStatus: '',
@@ -151,7 +153,7 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v60';
+const APP_VERSION = 'v62';
 const APP_BUILD_LABEL = 'Cadets Sprint · App v59';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
@@ -413,14 +415,22 @@ const VIEW_AREA = {
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'School Records'], ['leaderboard', 'Leaderboard'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training'], ['race', 'Race Strategy']],
   learn: [['libraryhome', 'Library'], ['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['announce', 'Announcements'], ['inventory', 'Inventory'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  /* v63: same coach views, ordered the way Coach home groups them
+     (today, athletes, testing and meets, reports, weight room and
+     devices, plans, upkeep), so the menu and the home page agree. */
+  coachhub: [['coach', "Today's Checklist"], ['announce', 'Announcements'], ['ams', 'AMS'], ['groups', 'Roster & Groups'], ['goals', 'Goals'], ['top', 'Top Athletes'], ['testing', 'Testing'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['reports', 'Reports'], ['digest', 'Digest'], ['weightroom', 'Weight Room'], ['devices', 'Devices'], ['tv', 'TV Board'], ['calendar', 'Calendar'], ['programs', 'Programs'], ['custom', 'Custom Workouts'], ['inventory', 'Inventory'], ['data', 'Data'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
   const activeSection = document.getElementById('view-' + name);
   $$('.subnav-slot').forEach(slot => {
     if (!items || slot.closest('.view') !== activeSection) { slot.innerHTML = ''; return; }
-    slot.innerHTML = '<nav class="seg" aria-label="In this section">' + items.map(([v, label]) =>
+    /* v63: for a coach, every inner view opens with a way back to
+       Coach home (Train views too: the leaderboard and school
+       records are doors from the home page's data hub). */
+    const homeLink = isCoachUser()
+      ? '<button type="button" class="ch-back" data-view="coachhub"><span aria-hidden="true">‹</span> Coach home</button>' : '';
+    slot.innerHTML = homeLink + '<nav class="seg" aria-label="In this section">' + items.map(([v, label]) =>
       `<button type="button" class="seg-btn${v === name ? ' active' : ''}" data-view="${v}">${label}</button>`).join('') + '</nav>';
   });
   /* The active pill can sit off the right edge of the scrolling strip on
@@ -441,7 +451,8 @@ function renderSubnav(name, area) {
    outside click, and on Escape. */
 const NAV_GROUP_LABELS = { train: 'Train', learn: 'Learn', coachhub: 'Coach' };
 function navMenuItemsHtml(area) {
-  return `<button type="button" class="nav-item nav-overview" data-view="${area}">${NAV_GROUP_LABELS[area]} overview</button>` +
+  const overview = area === 'coachhub' ? 'Coach home' : NAV_GROUP_LABELS[area] + ' overview';
+  return `<button type="button" class="nav-item nav-overview" data-view="${area}">${overview}</button>` +
     GROUP_SUBNAV[area].map(([v, label]) =>
       `<button type="button" class="nav-item" data-view="${v}">${label}</button>`).join('');
 }
@@ -1039,6 +1050,7 @@ function showView(name) {
   if (name === 'home' || name === 'log') renderCheckin();
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
+  if (name === 'coachhub') renderCoachHome();
   if (name === 'coach') renderCoach();
   if (name === 'groups') renderGroups();
   if (name === 'testing') renderTesting();
@@ -1486,39 +1498,20 @@ async function renderCoachToday() {
     if (sid && state.sessions.get(sid)) runTargets = [{ sessionId: sid, groupName: null }];
   }
   const runHtml = runTargets.map(runTodayButtonHtml).join('');
-  const open = data.healthFlags || [];
-  const healthHtml = open.length ? open.slice(0, 8).map(c => `
-    <div class="roster-row">
-      <span>${c.flagged ? '🚩 ' : ''}<strong>${esc(c.athleteName)}</strong> — ${c.source === 'athlete' ? 'athlete reported: ' + esc(c.note || 'something hurts') : `${esc(AREA_LABELS[c.area] || c.area)} (${esc(c.side)}), pain ${c.pain}/10`}${c.impact === 'stopped' ? ' · stopped training' : ''}</span>
-      <span class="badge ${c.status === 'new' ? 'high' : 'plain'}">${esc(STATUS_LABELS[c.status] || c.status).toUpperCase()}</span>
-    </div>`).join('') + (open.length > 8 ? `<p class="muted">…and ${open.length - 8} more open — work them from the athlete's AMS page.</p>` : '')
-    : '<p class="muted">No open health flags. Good news.</p>';
-  const heldList = data.heldAthletes || [];
-  const heldHtml = heldList.length ? `<h3>Held — clearance required (${heldList.length})</h3>`
-    + heldList.map(h => `<div class="roster-row"><span>⛔ <strong>${esc(h.name)}</strong></span><span class="badge high">HELD</span></div>`).join('')
-    + '<p class="muted">Head-related concern open. The hold lifts only when written clearance from a licensed provider is recorded on the concern, on the AMS athlete page.</p>' : '';
-  const w = data.wellness || { checkedIn: 0, total: 0, flagged: [] };
-  const wellHtml = w.total
-    ? `<p>Wellness: <strong>${w.checkedIn}/${w.total} checked in</strong>${w.flagged.length ? ` · ${w.flagged.length} flagged` : ''}</p>`
-      + w.flagged.map(f => `<div class="roster-row"><span>🚩 <strong>${esc(f.name)}</strong></span><span class="muted">${f.flags.map(fl => esc(CHECKIN_FLAG_LABELS[fl] || fl)).join(' · ')}</span></div>`).join('')
-    : '<p class="muted">No roster yet — check-ins appear here once athletes are linked.</p>';
+  /* v63: today's picture (check-ins, pain flags, held athletes,
+     health concerns) moved to Coach home, the one place every coach
+     reads it. This card keeps the practice: assignments, completion,
+     and the Run buttons. */
   el.innerHTML = `<div class="card">
-    <h2>Coach summary</h2>
+    <h2>Today's practice</h2>
     <p class="muted">${esc(fmtDate(parseDate(data.date)))} · ${planLabel}</p>
-    <h3>Today's assignments</h3>
     ${groupsHtml}
     ${runHtml}
-    <p><button class="btn secondary" id="ct-open-coach" type="button">Open today's checklist</button></p>
-    <h3>Health flags${open.length ? ` (${open.length} open)` : ''}</h3>
-    ${healthHtml}
-    ${heldHtml}
-    <p><button class="btn secondary" id="ct-open-ams" type="button">Open AMS — work concerns &amp; clearances</button></p>
-    <h3>Daily wellness</h3>
-    ${wellHtml}
+    <p><button class="btn secondary" id="ct-open-coach" type="button">Open today's checklist</button>
+    <button class="btn secondary" type="button" data-view="coachhub">Check-ins and health on Coach home</button></p>
   </div>`;
   $('#ct-open-coach').addEventListener('click', () => { state.feedDate = data.date; renderCoach(); showView('coach'); });
   wireRunTodayButtons(el);
-  $('#ct-open-ams').addEventListener('click', () => { state.amsProfileId = null; renderAms(); showView('ams'); });
 }
 function renderHomeLogs() {
   const el = $('#home-logs');
@@ -2881,7 +2874,7 @@ function syncAuthUi() {
   renderAccount(); renderAppearance(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderInventory();
   renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderAnnouncements(); renderCustomWorkouts();
-  renderPrograms(); renderCalendar();
+  renderPrograms(); renderCalendar(); renderCoachHome();
   renderWarmupCards();
   if (isCoach) loadMedia();
   updateNavIndicators();
@@ -7364,7 +7357,8 @@ function announcePostHtml(a, manage) {
     ${a.title ? `<p><strong>${esc(a.title)}</strong></p>` : ''}
     <p>${esc(a.body).replace(/\n/g, '<br>')}</p>
     <p class="muted">${esc(a.authorLabel)}${a.updatedAt !== a.createdAt ? ' · edited ' + esc(fmtDate(parseDate(String(a.updatedAt).slice(0, 10)))) : ''}</p>
-    ${manage ? `<p><button class="btn secondary" data-ann-edit="${a.id}" type="button">Edit</button>
+    ${manage ? `<p class="ann-actions"><button class="btn secondary" data-ann-edit="${a.id}" type="button">Edit</button>
+      <button class="btn secondary" data-ann-pin="${a.id}" type="button">${a.pinned ? 'Unpin' : 'Pin'}</button>
       <button class="btn danger" data-ann-del="${a.id}" type="button">Delete</button></p>` : ''}
   </div>`;
 }
@@ -8203,6 +8197,10 @@ function announcementInWindow(date) {
   } catch (_) { return true; }
 }
 
+/* The full Announcements page. The same composer and post list
+   also sit on Coach home (renderCoachHomeAnnouncements); both are
+   drawn by paintAnnouncements with their own element ids, so the two
+   can be on the page at once without colliding. */
 async function renderAnnouncements() {
   const el = $('#announce-main');
   if (!el) return;
@@ -8214,71 +8212,289 @@ async function renderAnnouncements() {
     el.innerHTML = '<p class="error">Could not load announcements: ' + esc(err.message) + '</p>';
     return;
   }
-  const posts = state.announcements;
-  const editing = state.annEditId ? posts.find(a => a.id === state.annEditId) : null;
-  if (state.annEditId && !editing) state.annEditId = null;
+  paintAnnouncements(el, { prefix: 'ann', editKey: 'annEditId' });
+}
+/* After any post, edit, pin, or delete: redraw every surface that
+   shows announcements, so the page a coach is on is never stale. */
+function refreshAnnouncementSurfaces() {
+  renderAnnouncements();
+  renderCoachHomeAnnouncements();
+  renderAnnouncePanel();
+}
+/* Draw the composer and the post list into el. opts.prefix keeps
+   element ids unique per surface; opts.editKey names the state slot
+   holding the post being edited; opts.limit caps the list (the
+   home base shows the newest few, with a link to the rest). */
+function paintAnnouncements(el, opts) {
+  const pre = opts.prefix;
+  const id = (k) => pre + '-' + k;
+  const posts = state.announcements || [];
+  const editId = state[opts.editKey];
+  const editing = editId ? posts.find(a => a.id === editId) : null;
+  if (editId && !editing) state[opts.editKey] = null;
+  const shown = opts.limit ? posts.slice(0, opts.limit) : posts;
   const audOpts = (sel) => `<option value="team" ${sel === 'team' ? 'selected' : ''}>Whole team</option>`
     + state.groups.map(g => `<option value="${g.id}" ${sel === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
   el.innerHTML = `
-    <form class="card" id="ann-form">
-      <h2>${editing ? 'Edit announcement' : 'New announcement'}</h2>
-      <label>Title <span class="muted">(optional)</span> <input type="text" id="ann-title" maxlength="80" value="${editing ? esc(editing.title) : ''}" placeholder="e.g. Practice moved to 4 PM"></label>
-      <label>Message <textarea id="ann-body" rows="4" maxlength="2000" required placeholder="What does the team need to know?">${editing ? esc(editing.body) : ''}</textarea></label>
+    <form class="card" id="${id('form')}">
+      <h${opts.limit ? '3' : '2'}>${editing ? 'Edit announcement' : 'New announcement'}</h${opts.limit ? '3' : '2'}>
+      <label>Title <span class="muted">(optional)</span> <input type="text" id="${id('title')}" maxlength="80" value="${editing ? esc(editing.title) : ''}" placeholder="e.g. Practice moved to 4 PM"></label>
+      <label>Message <textarea id="${id('body')}" rows="${opts.limit ? 3 : 4}" maxlength="2000" required placeholder="What does the team need to know?">${editing ? esc(editing.body) : ''}</textarea></label>
       <div class="filter-row">
-        <label>Send to <select id="ann-audience">${audOpts(editing ? editing.audience : 'team')}</select></label>
+        <label>Send to <select id="${id('audience')}">${audOpts(editing ? editing.audience : 'team')}</select></label>
       </div>
-      <label class="check-line"><input type="checkbox" id="ann-pinned" ${editing && editing.pinned ? 'checked' : ''}> Pin to the top of the feed</label>
-      <button class="btn primary" type="submit">${editing ? 'Save changes' : 'Post announcement'}</button>
-      ${editing ? '<button class="btn secondary" id="ann-cancel" type="button">Cancel edit</button>' : ''}
-      <p class="muted" id="ann-window-note" hidden>Outside the usual 6 AM–10 PM communication window. You can still post — tap the button again to send anyway.</p>
-      <p class="error" id="ann-err"></p>
+      <label class="check-line"><input type="checkbox" id="${id('pinned')}" ${editing && editing.pinned ? 'checked' : ''}> Pin to the top of the feed</label>
+      <button class="btn ${opts.limit ? 'secondary ch-post-btn' : 'primary'}" type="submit">${editing ? 'Save changes' : 'Post announcement'}</button>
+      ${editing ? `<button class="btn secondary" id="${id('cancel')}" type="button">Cancel edit</button>` : ''}
+      <p class="muted" id="${id('window-note')}" hidden>Outside the usual 6 AM–10 PM communication window. You can still post — tap the button again to send anyway.</p>
+      <p class="error" id="${id('err')}"></p>
     </form>
-    ${posts.length
-      ? posts.map(a => announcePostHtml(a, true)).join('')
+    ${shown.length
+      ? shown.map(a => announcePostHtml(a, true)).join('')
+        + (opts.limit && posts.length > shown.length
+          ? `<p class="muted">Showing the newest ${shown.length} of ${posts.length} posts. <button type="button" class="ch-link" data-view="announce">See all posts</button></p>` : '')
       : '<div class="card"><h2>No announcements yet</h2><p class="muted">Posts to the whole team — or to one group — show up here and on every athlete\'s Today page. Meet-week reminders, schedule changes, what to bring: one post and the whole team has it.</p></div>'}`;
   el.querySelectorAll('[data-ann-edit]').forEach(b => b.addEventListener('click', () => {
-    state.annEditId = b.dataset.annEdit;
-    renderAnnouncements();
-    const f = $('#ann-form');
+    state[opts.editKey] = b.dataset.annEdit;
+    paintAnnouncements(el, opts);
+    const f = document.getElementById(id('form'));
     if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  el.querySelectorAll('[data-ann-pin]').forEach(b => b.addEventListener('click', async () => {
+    const post = posts.find(a => a.id === b.dataset.annPin);
+    if (!post) return;
+    b.disabled = true;
+    try {
+      await apiPut('/api/announcements/' + encodeURIComponent(post.id), { pinned: !post.pinned });
+      refreshAnnouncementSurfaces();
+    } catch (err) { b.disabled = false; alert(err.message); }
   }));
   el.querySelectorAll('[data-ann-del]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('Delete this announcement? Athletes will no longer see it.')) return;
     try {
       await apiDel('/api/announcements/' + encodeURIComponent(b.dataset.annDel));
-      if (state.annEditId === b.dataset.annDel) state.annEditId = null;
-      renderAnnouncements();
-      renderAnnouncePanel();
+      if (state[opts.editKey] === b.dataset.annDel) state[opts.editKey] = null;
+      refreshAnnouncementSurfaces();
     } catch (err) { alert(err.message); }
   }));
-  const cancelBtn = $('#ann-cancel');
-  if (cancelBtn) cancelBtn.addEventListener('click', () => { state.annEditId = null; renderAnnouncements(); });
+  const cancelBtn = document.getElementById(id('cancel'));
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { state[opts.editKey] = null; paintAnnouncements(el, opts); });
   let annWindowWarned = false;
-  $('#ann-form').addEventListener('submit', async (e) => {
+  document.getElementById(id('form')).addEventListener('submit', async (e) => {
     e.preventDefault();
     /* Soft window notice (not a block): outside 6 AM–10 PM
        America/New_York the first submit shows the note and the
        second posts. Edits are exempt — they do not re-notify. */
-    if (!state.annEditId && !annWindowWarned && !announcementInWindow(new Date())) {
+    if (!state[opts.editKey] && !annWindowWarned && !announcementInWindow(new Date())) {
       annWindowWarned = true;
-      const note = $('#ann-window-note');
+      const note = document.getElementById(id('window-note'));
       if (note) note.hidden = false;
       return;
     }
     const payload = {
-      title: $('#ann-title').value,
-      body: $('#ann-body').value,
-      audience: $('#ann-audience').value,
-      pinned: $('#ann-pinned').checked,
+      title: document.getElementById(id('title')).value,
+      body: document.getElementById(id('body')).value,
+      audience: document.getElementById(id('audience')).value,
+      pinned: document.getElementById(id('pinned')).checked,
     };
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
     try {
-      if (state.annEditId) await apiPut('/api/announcements/' + encodeURIComponent(state.annEditId), payload);
+      if (state[opts.editKey]) await apiPut('/api/announcements/' + encodeURIComponent(state[opts.editKey]), payload);
       else await apiPost('/api/announcements', payload);
-      state.annEditId = null;
-      renderAnnouncements();
-      renderAnnouncePanel();
-    } catch (err) { $('#ann-err').textContent = err.message; }
+      state[opts.editKey] = null;
+      refreshAnnouncementSurfaces();
+    } catch (err) {
+      if (submitBtn) submitBtn.disabled = false;
+      document.getElementById(id('err')).textContent = err.message;
+    }
   });
+}
+
+/* ================================================================
+   COACH HOME (v63) — the one page every coach lands on.
+   Top to bottom: the pinned announcement, the one primary action
+   (today's checklist), today's picture (who checked in, wellness
+   averages, pain 8 or higher, athletes held for head symptoms,
+   open health concerns), the announcements composer and newest
+   posts, the week at a glance, and the team data hub. Everything
+   live comes from GET /api/coach/home and GET /api/announcements,
+   both coach-only on the server. Every number is a real count from
+   that payload: when there is nothing to count, the page says so
+   in words instead of showing a made-up figure.
+   ================================================================ */
+const CH_KIND = {
+  hard: ['HARD', 'high'], easy: ['EASY', 'low'], off: ['OFF', 'plain'],
+  meet: ['MEET', 'plain'], test: ['TEST', 'plain'], none: ['', 'plain'],
+};
+const CH_DAY_ABBR = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+const CH_COUNT_WORDS = {
+  athletes: ['athlete', 'athletes'], groups: ['group', 'groups'], goals: ['goal', 'goals'],
+  testDays: ['test day', 'test days'], meetResults: ['mark', 'marks'], meets: ['meet', 'meets'],
+  records: ['record', 'records'], deviceDays: ['device test day', 'device test days'],
+  programs: ['program', 'programs'], inventory: ['item', 'items'],
+};
+function chCount(n, words) { return n + ' ' + (n === 1 ? words[0] : words[1]); }
+function chAvg(v) { return v === null || v === undefined ? null : String(Math.round(v * 10) / 10); }
+function chAthleteBtn(a, extra) {
+  return `<button type="button" class="ch-athlete" data-ch-athlete="${esc(a.profileId)}">${esc(a.name)}${extra ? ` <span class="muted">${extra}</span>` : ''}</button>`;
+}
+function chTile(num, label, warn) {
+  return `<div class="hero-stat ch-tile${warn ? ' ch-warn' : ''}"><span class="stat-num">${num}</span><span class="stat-label">${label}</span></div>`;
+}
+async function renderCoachHome() {
+  const todayEl = $('#ch-today');
+  if (!todayEl) return;
+  if (!isCoachUser()) {
+    gateHtml(todayEl, 'Coach home lives here.');
+    ['#ch-announce', '#ch-week', '#ch-pinned'].forEach(sel => { const x = $(sel); if (x) x.innerHTML = ''; });
+    return;
+  }
+  let data;
+  try { data = await api('/api/coach/home'); }
+  catch (err) {
+    todayEl.removeAttribute('aria-busy');
+    todayEl.innerHTML = `<div class="card"><p class="error">Could not load today's picture: ${esc(err.message)}</p><button class="btn secondary" id="ch-retry" type="button">Try again</button></div>`;
+    const rb = $('#ch-retry'); if (rb) rb.addEventListener('click', renderCoachHome);
+    return;
+  }
+  state.coachHome = data;
+  const dateEl = $('#ch-date');
+  if (dateEl) {
+    dateEl.textContent = fmtDate(parseDate(data.date))
+      + (data.inSeason && data.week ? ` · Week ${data.week} · ${data.phase || ''}` : ' · Outside the season plan');
+  }
+  paintCoachToday(data);
+  paintCoachWeek(data);
+  paintCoachHubCounts(data.counts || {});
+  renderCoachHomeAnnouncements();
+}
+function paintCoachToday(data) {
+  const el = $('#ch-today');
+  if (!el) return;
+  el.removeAttribute('aria-busy');
+  const t = data.today;
+  if (!t.total) {
+    el.innerHTML = `<div class="card"><p>No athletes on the roster yet. Once they are added and linked, their check-ins show up here.</p>
+      <button class="btn secondary" type="button" data-view="groups">Go to roster and groups</button></div>`;
+    return;
+  }
+  const tiles = `<div class="hero-stats ch-tiles">
+    ${chTile(`${t.checkedIn.length}<small> of ${t.total}</small>`, 'checked in', false)}
+    ${chTile(t.painFlags.length, 'pain 8 or higher', t.painFlags.length > 0)}
+    ${chTile(t.held.length, 'held, head symptoms', t.held.length > 0)}
+    ${chTile(t.openConcerns, 'open health concerns', t.urgentConcerns > 0)}
+  </div>`;
+  let wellness;
+  if (t.checkedIn.length) {
+    const parts = [];
+    if (chAvg(t.avgSleep) !== null) parts.push(`sleep ${chAvg(t.avgSleep)} hours`);
+    if (chAvg(t.avgEnergy) !== null) parts.push(`energy ${chAvg(t.avgEnergy)} out of 5`);
+    if (chAvg(t.avgPain) !== null) parts.push(`body pain ${chAvg(t.avgPain)} out of 10`);
+    const lows = [];
+    if (t.lowSleep) lows.push(`${chCount(t.lowSleep, ['athlete', 'athletes'])} slept under 6 hours`);
+    if (t.lowEnergy) lows.push(`${chCount(t.lowEnergy, ['athlete', 'athletes'])} reported energy of 2 or lower`);
+    wellness = `<p>Averages from ${chCount(t.checkedIn.length, ['check-in', 'check-ins'])} today: ${parts.join(', ')}.</p>`
+      + (lows.length ? `<p class="muted">${lows.join('. ')}.</p>` : '');
+  } else {
+    wellness = '<p class="muted">Nobody has checked in yet today.</p>';
+  }
+  const painHtml = t.painFlags.length
+    ? `<h3>Pain 8 or higher</h3><div class="ch-athletes">${t.painFlags.map(a => chAthleteBtn(a, `pain ${a.pain} of 10`)).join('')}</div>`
+    : '';
+  const heldHtml = t.held.length
+    ? `<h3>Held for head symptoms</h3><div class="ch-athletes">${t.held.map(a => chAthleteBtn(a, 'held until cleared')).join('')}</div>
+      <p class="muted">The hold lifts only when written clearance from a licensed provider is recorded on the athlete's page.</p>`
+    : '';
+  const concernNote = t.openConcerns
+    ? `<p class="muted">Open health concerns: ${t.openConcerns}${t.urgentConcerns ? `, with ${t.urgentConcerns} at high pain or stopping training` : ''}. Each one is worked from the athlete's page.</p>`
+    : '';
+  const lists = `<details class="ch-details"><summary>Checked in (${t.checkedIn.length})</summary>
+      ${t.checkedIn.length ? `<div class="ch-athletes">${t.checkedIn.map(a => chAthleteBtn(a)).join('')}</div>` : '<p class="muted">Nobody yet.</p>'}</details>
+    <details class="ch-details"><summary>Not checked in yet (${t.notCheckedIn.length})</summary>
+      ${t.notCheckedIn.length ? `<div class="ch-athletes">${t.notCheckedIn.map(a => chAthleteBtn(a)).join('')}</div>` : '<p class="muted">Everyone has checked in.</p>'}</details>`;
+  el.innerHTML = `${tiles}<div class="card">${wellness}${painHtml}${heldHtml}${concernNote}${lists}
+    <p><button class="btn secondary" type="button" data-view="ams">Open athlete profiles</button></p></div>`;
+  el.querySelectorAll('[data-ch-athlete]').forEach(b => b.addEventListener('click', () => {
+    state.amsProfileId = b.dataset.chAthlete;
+    showView('ams');
+  }));
+}
+function paintCoachWeek(data) {
+  const el = $('#ch-week');
+  if (!el) return;
+  const strip = (data.weekStrip || []).map(d => {
+    const k = CH_KIND[d.kind] || CH_KIND.none;
+    const dd = parseDate(d.date);
+    return `<div role="listitem" class="ch-day${d.today ? ' ch-today' : ''}"${d.planText ? ` title="${esc(d.planText)}"` : ''}>
+      <span class="ch-day-name">${CH_DAY_ABBR[d.dayKey]}</span>
+      <span class="ch-day-num">${dd.getDate()}</span>
+      ${k[0] ? `<span class="badge ${k[1]}">${k[0]}</span>` : '<span class="ch-day-blank" aria-hidden="true"></span>'}
+    </div>`;
+  }).join('');
+  const groups = data.groups || [];
+  const groupsHtml = groups.length ? groups.map(g => `
+    <div class="roster-row">
+      <span><strong>${esc(g.group.name)}</strong>: ${g.assignment.sessionId
+        ? `<a class="code-link" data-code="${esc(g.assignment.sessionId)}">${esc(g.assignment.sessionId)}</a> ${esc(g.assignment.sessionName)}`
+        : esc(g.assignment.planText || 'Rest day')}
+      ${g.assignment.source === 'override' ? '<span class="badge plain">YOUR PICK</span>' : ''}</span>
+      <span class="muted">${g.completed} of ${g.total} done</span>
+    </div>`).join('') : '<p class="muted">No groups yet. Set them up in Roster and groups.</p>';
+  const runHtml = todayRunTargets(groups).filter(t => state.sessions.get(t.sessionId))
+    .map(t => runTodayButtonHtml(t).replace('btn primary', 'btn secondary')).join('');
+  const up = data.upcoming || [];
+  const upHtml = up.length ? up.map(ev => `
+    <div class="roster-row">
+      <span><span class="badge plain">${ev.kind === 'meet' ? 'MEET' : 'TEST'}</span> <strong>${esc(fmtDate(parseDate(ev.date)))}</strong> ${esc(String(ev.title || '').replace(/^(TEST|MEET)\s*:\s*/i, ''))}</span>
+      ${ev.detail ? `<span class="muted">${esc(ev.detail)}</span>` : ''}
+    </div>`).join('') : '<p class="muted">No meets or test days in the next six weeks.</p>';
+  el.innerHTML = `<div class="ch-strip" role="list" aria-label="This week">${strip}</div>
+    <div class="card">
+      <h3>On today</h3>
+      ${data.inSeason && data.planText ? `<p>${esc(data.planText)}</p>` : '<p class="muted">Nothing in the season plan today.</p>'}
+      ${groupsHtml}
+      ${runHtml ? `<div class="ch-run">${runHtml}</div>` : ''}
+    </div>
+    <div class="card">
+      <h3>Coming up</h3>
+      ${upHtml}
+    </div>`;
+  wireRunTodayButtons(el);
+}
+function paintCoachHubCounts(counts) {
+  $$('[data-hub-count]').forEach(em => {
+    const key = em.dataset.hubCount;
+    const n = counts[key];
+    em.textContent = typeof n === 'number' && CH_COUNT_WORDS[key] ? ' · ' + chCount(n, CH_COUNT_WORDS[key]) : '';
+  });
+}
+/* Announcements on Coach home: the newest pinned post up top (the
+   staff's note to everyone), then the composer and the newest
+   posts, managed in place. Coaches see every post, whatever its
+   audience; the server does that filtering. */
+async function renderCoachHomeAnnouncements() {
+  const el = $('#ch-announce');
+  const pinEl = $('#ch-pinned');
+  if (!el) return;
+  if (!isCoachUser()) { el.innerHTML = ''; if (pinEl) pinEl.innerHTML = ''; return; }
+  try {
+    const data = await api('/api/announcements');
+    state.announcements = data.announcements || [];
+  } catch (err) {
+    el.innerHTML = `<p class="error">Could not load announcements: ${esc(err.message)}</p>`;
+    return;
+  }
+  const pinned = state.announcements.find(a => a.pinned);
+  if (pinEl) {
+    pinEl.innerHTML = pinned ? `<div class="card ch-pin">
+      <div class="ch-pin-label">Pinned for ${pinned.audience === 'team' ? 'the whole team' : esc(pinned.groupName || 'a group')}</div>
+      ${pinned.title ? `<p class="ch-pin-title">${esc(pinned.title)}</p>` : ''}
+      <p>${esc(pinned.body).replace(/\n/g, '<br>')}</p>
+      <p class="muted">${esc(pinned.authorLabel)}</p>
+    </div>` : '';
+  }
+  paintAnnouncements(el, { prefix: 'chann', editKey: 'chAnnEditId', limit: 3 });
 }
 
 /* ================================================================
@@ -9020,6 +9236,9 @@ function tvStopTimers() {
   /* syncAuthUi (not the individual renders) is what un-hides the Coach
      tabs for a coach whose session survived a reload. */
   syncAuthUi();
+  /* v63: coaches open the app on Coach home, the same page every
+     coach lands on; athletes and visitors open on Today. */
+  if (isCoachUser()) showView('coachhub');
   showAppUpdatedToast();
   renderLibrary();
 })();

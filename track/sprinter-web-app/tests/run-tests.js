@@ -452,8 +452,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v60',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v61"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v63 (coach home base)',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v63"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2377,8 +2377,8 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v60'") &&
-    swJs.text.includes("sprinter-app-v61"));
+    appJs.text.includes("const APP_VERSION = 'v62'") &&
+    swJs.text.includes("sprinter-app-v63"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
@@ -2534,9 +2534,9 @@ async function main() {
     appJs.text.includes('Soreness ${c.soreness}/5'));
   check('v56: privacy copy describes the pain scale and the coach-only high-pain flag',
     appJs.text.includes('body pain from 1 to 10') && appJs.text.includes('high-pain flag'));
-  check('qa (v58): the wellness view is gone; flagged check-ins surface on Today\'s Checklist instead',
+  check('qa (v58, v63): the wellness view is gone; flagged check-ins surface on Coach home instead',
     !appJs.text.includes('const triage') && !appJs.text.includes('wellness-row') &&
-    appJs.text.includes('w.flagged.map'));
+    appJs.text.includes('t.painFlags.map'));
   check('qa: roster cards show account-link status without opening Edit profile',
     appJs.text.includes('🔗 Linked:') && appJs.text.includes('Not linked — open Edit profile'));
   check('qa: checklist group cards carry the shared Run button',
@@ -7923,6 +7923,98 @@ async function waitForServer(tries = 60) {
       /\.pr-guard \{[^}]*background: var\(--high-bg\)[^}]*color: #1c1c1e/.test(prCss));
     check('Protocols styles use theme tokens only (no hard-coded brand colors outside the tokens)',
       !/\.pr-[^{]*\{[^}]*#(?:cc0033|990026)/i.test(prCss));
+  }
+
+  {
+  /* ---------------- Coach home base (v63) ----------------
+     GET /api/coach/home feeds the one page every coach lands on.
+     Coach-only like the rest of team data. Every count is checked
+     against another endpoint or a fixture, never a hard-coded guess:
+     the pain line is body pain 8 or higher (8 in, 7 out), held
+     athletes come from the open head concern, and the hub counts
+     match the stored data. Runs last, on its own fixtures, so the
+     exact-count checks above are untouched. */
+  const coach = ctx.coach;
+  let r = await api(null, 'POST', '/api/login', { email: 'athlete@test.com', password: 'testpass123' });
+  const athlete = cookieOf(r);
+  r = await api(coach, 'POST', '/api/groups', { name: 'Coach home group' });
+  const wGroup = r.json.group;
+  for (const [first, last, email, pain] of [['Pam', 'Eight', 'pam8@test.com', 8], ['Pete', 'Seven', 'pete7@test.com', 7]]) {
+    r = await api(coach, 'POST', '/api/profiles', { firstName: first, lastName: last, groupId: wGroup.id, events: ['sprinter'] });
+    const pid = r.json.profile.id;
+    await api(coach, 'PUT', '/api/profiles/' + pid + '/link', { email });
+    r = await api(null, 'POST', '/api/register', { email, password: 'testpass123', ageAttested: true });
+    await api(cookieOf(r), 'POST', '/api/checkin', { sleep: 8, pain, energy: 4, headSymptoms: pain === 7 });
+  }
+  r = await api(coach, 'GET', '/api/coach/home');
+  const ch = r.json;
+  check('coach home loads for a coach', r.status === 200 && !!ch && !!ch.today, r.status);
+  const chAth = await api(athlete, 'GET', '/api/coach/home');
+  const chNone = await api(null, 'GET', '/api/coach/home');
+  check('coach home is coach-only (athlete 403, logged out 401)',
+    chAth.status === 403 && chNone.status === 401, [chAth.status, chNone.status]);
+  const chWell = await api(coach, 'GET', '/api/wellness/today');
+  check('coach home check-in counts match the wellness endpoint',
+    ch.today.total === chWell.json.summary.total &&
+    ch.today.checkedIn.length === chWell.json.summary.checkedIn &&
+    ch.today.checkedIn.length + ch.today.notCheckedIn.length === ch.today.total,
+    [ch.today.total, ch.today.checkedIn.length, chWell.json.summary]);
+  const chPainNames = ch.today.painFlags.map(f => f.name);
+  check('pain line is body pain 8 or higher (8 in, 7 out), worst first',
+    chPainNames.includes('Pam Eight') && !chPainNames.includes('Pete Seven') &&
+    ch.today.painFlags.every(f => f.pain >= 8) &&
+    ch.today.painFlags.every((f, i, a) => i === 0 || a[i - 1].pain >= f.pain), ch.today.painFlags);
+  const chConcerns = await api(coach, 'GET', '/api/concerns');
+  const chActive = new Set((await api(coach, 'GET', '/api/profiles')).json.profiles.filter(pr => !pr.archived).map(pr => pr.id));
+  const chHeldIds = [...chActive].filter(id => chConcerns.json.concerns
+    .some(c => c.profileId === id && c.headRelated && c.status !== 'cleared'));
+  check('held list is every active athlete with an open head concern, name only',
+    ch.today.held.some(h => h.name === 'Pete Seven') &&
+    ch.today.held.length === chHeldIds.length && chHeldIds.every(id => ch.today.held.some(h => h.profileId === id)) &&
+    ch.today.held.every(h => Object.keys(h).sort().join(',') === 'name,profileId,since'), ch.today.held);
+  check('open concern count matches the open concerns on file for the active roster',
+    ch.today.openConcerns === chConcerns.json.concerns
+      .filter(c => chActive.has(c.profileId) && (c.status === 'new' || c.status === 'monitoring')).length,
+    ch.today.openConcerns);
+  check('week strip is Monday to Sunday with today marked once',
+    ch.weekStrip.length === 7 && ch.weekStrip[0].dayKey === 'mon' && ch.weekStrip[6].dayKey === 'sun' &&
+    ch.weekStrip.filter(d => d.today).length === 1 && ch.weekStrip.find(d => d.today).date === ch.date,
+    ch.weekStrip);
+  check('coming up is soonest first, never in the past, five at most',
+    Array.isArray(ch.upcoming) && ch.upcoming.length <= 5 &&
+    ch.upcoming.every((e, i, a) => e.date >= ch.date && (i === 0 || a[i - 1].date <= e.date)), ch.upcoming);
+  const chGroups = await api(coach, 'GET', '/api/groups');
+  const chProfiles = await api(coach, 'GET', '/api/profiles');
+  check('data hub counts are real counts',
+    ch.counts.groups === chGroups.json.groups.length &&
+    ch.counts.athletes === chProfiles.json.profiles.filter(pr => !pr.archived).length &&
+    ch.counts.athletes === ch.today.total, [ch.counts, chGroups.json.groups.length]);
+  check('coach home groups match the Today summary groups',
+    JSON.stringify(ch.groups) === JSON.stringify((await api(coach, 'GET', '/api/coach/today')).json.groups));
+  {
+    const chPage = await apiText(null, '/');
+    const chJs = await apiText(null, '/app.js');
+    check('coach home page: today first, announcements, week, then the data hub',
+      ['id="ch-pinned"', 'id="ch-today"', 'id="ch-announce"', 'id="ch-week"', 'id="ch-hub-h"']
+        .map(x => chPage.text.indexOf(x)).every((v, i, a) => v > 0 && (i === 0 || a[i - 1] < v)));
+    check('coach home has one primary action and every data hub door',
+      (chPage.text.slice(chPage.text.indexOf('id="view-coachhub"'), chPage.text.indexOf('id="ch-hub-h"'))
+        .match(/btn primary/g) || []).length === 1 &&
+      ['ams', 'testing', 'leaderboard', 'reports', 'devices', 'weightroom', 'calendar', 'meets', 'goals']
+        .every(v => chPage.text.slice(chPage.text.indexOf('id="ch-hub-h"')).includes('data-view="' + v + '"')));
+    check('coach home wiring: coaches land on it, every coach view links back',
+      chJs.text.includes('/api/coach/home') && chJs.text.includes('function renderCoachHome') &&
+      chJs.text.includes("if (isCoachUser()) showView('coachhub');") &&
+      chJs.text.includes('class="ch-back" data-view="coachhub"'));
+    const tvStart = chJs.text.indexOf('function tvTodayInfo');
+    const tvEnd = chJs.text.indexOf('function tvStartTimers');
+    check('the TV board never reads the coach home payload',
+      tvStart > 0 && tvEnd > tvStart && !chJs.text.slice(tvStart, tvEnd).includes('/api/coach/home'));
+    const wrStart = chJs.text.indexOf('function enterWeightRoom');
+    check('the weight room never reads the coach home payload',
+      wrStart > 0 && !chJs.text.slice(wrStart, tvStart).includes('/api/coach/home'));
+  }
+
   }
 
   } catch (err) {
