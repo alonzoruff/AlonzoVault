@@ -3,7 +3,11 @@
    the offline fallback. Static assets use stale-while-revalidate.
    API calls always go to the network — log data is never cached. */
 const CACHE = '__BRAND_CACHE__';
-const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/assets/rp-logo.svg'];
+/* The stylesheet and script carry the release version, matching the
+   URLs index.html asks for, so a release never pairs new markup with
+   an older cached stylesheet or script. */
+const SHELL_ASSETS = ['/styles.css?v=__APP_VERSION__', '/app.js?v=__APP_VERSION__'];
+const SHELL = ['/', '/index.html', ...SHELL_ASSETS, '/manifest.json', '/assets/rp-logo.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -37,6 +41,18 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(networkFirstNavigation(event.request));
+    return;
+  }
+
+  // The page's own stylesheet and script: network first, cache only offline.
+  if (url.pathname === '/styles.css' || url.pathname === '/app.js') {
+    event.respondWith(fetch(event.request).then((res) => {
+      if (res.ok && event.request.method === 'GET') {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(event.request, copy));
+      }
+      return res;
+    }).catch(() => caches.match(event.request)));
     return;
   }
 
