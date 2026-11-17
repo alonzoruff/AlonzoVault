@@ -9226,11 +9226,12 @@ async function waitForServer(tries = 60) {
           ivJs.text.includes('function rpSetLandingPage') && ivJs.text.includes('function rpSectionFor') &&
           ivCss.text.includes('#view-landing.lp[data-page] .lp-band { display: none; }'),
           '');
-        check('redesign: homepage carries the Exercise of the Day, the three protocols and two photo slots',
+        check("redesign: homepage carries the Exercise of the Day, the app's three programs and two photo slots",
           lp.includes('id="exercise-of-the-day"') && lp.includes('Nordic hamstring curl') &&
           lp.includes('2 sets of 4 slow reps. Skip it the day before a meet.') &&
-          lp.includes('Hamstring Protocol') && lp.includes('Knee Strengthening Protocol') &&
-          lp.includes('Ankle Strengthening Protocol') &&
+          lp.includes('<h3>Winter Base Protocol</h3>') && lp.includes('<h3>Hip and Ankle Armor Protocol</h3>') &&
+          lp.includes('<h3>First Step Protocol</h3>') &&
+          !lp.includes('Hamstring Protocol') && !lp.includes('Knee Strengthening') && !lp.includes('Speed Development') &&
           (lp.match(/data-photo-slot=/g) || []).length === 2 && !lp.includes('class="landing-hero"'),
           '');
         check("redesign: AJ's answers are stated once each",
