@@ -77,11 +77,14 @@
       </div>
     </a>
     <nav class="public-nav" id="public-nav" aria-label="Site">
+      <a href="/programs" data-route="programs">Programs</a>
       <a href="/plans" data-route="plans">Plans</a>
-      <a href="/how-it-works" data-route="how-it-works">How It Works</a>
+      <a href="/how-it-works" data-route="how-it-works">How it works</a>
+      <a href="/about" data-route="about">About Coach AJ</a>
       <a href="/faq" data-route="faq">FAQ</a>
-      <a href="/about" data-route="about">About</a>
+      <a href="/contact" data-route="contact">Contact</a>
       <a href="/login" data-route="account" class="public-nav-signin">Sign In</a>
+      <a href="/plans" data-route="plans" class="public-nav-cta">Pick a plan</a>
     </nav>
     <div class="topbar-right">
       <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
@@ -109,204 +112,300 @@
 
 <main id="app">
   <!-- LANDING (the logged-out home: AJ's own membership, invite-only pilot) -->
-  <section id="view-landing" class="view active">
-    <div class="landing-hero">
-      <div class="landing-hero-content">
-        <div class="landing-brandmark">
-          <img class="landing-logo" src="/assets/rp-logo.svg" alt="">
-          <span class="landing-wordmark">__BRAND_NAME__</span>
-        </div>
-        <h1>Speed development, built on evidence.</h1>
-        <p class="landing-subline">Measured speed, not promised speed.</p>
-        <p class="landing-forline">I'm Coach AJ. I coach 10th to 12th grade, college and adult athletes in person in the Maryland/DC area and online from anywhere, and I put a number on every step. Parents see the same numbers I do.</p>
-        <div class="landing-actions">
-          <button class="btn landing-cta" type="button" data-invite-tier="unsure">Request an Invitation</button>
-          <a class="btn landing-compare-link" href="/plans" data-route="plans">See plans</a>
-        </div>
-        <p class="landing-talk-line">Not sure yet? <button class="landing-textlink" type="button" data-view="book">Book a free Lab Talk</button></p>
-        <p class="landing-pilot-note">The Lab is in its founding pilot, so membership is by invitation.</p>
-      </div>
-    </div>
-
-    <div class="landing-measures" aria-label="What we measure">
-      <div class="landing-measure">
-        <span class="landing-measure-label">Acceleration</span>
-        <span class="landing-measure-value">10m</span>
-      </div>
-      <div class="landing-measure">
-        <span class="landing-measure-label">Max Velocity</span>
-        <span class="landing-measure-value">Fly 10</span>
-      </div>
-      <div class="landing-measure">
-        <span class="landing-measure-label">Progress</span>
-        <span class="landing-measure-value">Retest</span>
-      </div>
-    </div>
-
-    <div class="card landing-card landing-section" id="how-it-works">
-      <h2>How it works</h2>
-      <ol class="landing-steps">
-        <li><h3>Get invited</h3><p>You send a request. If the Lab fits, I invite your email and you create your account with it. Your first <span data-trial-days>3</span> days are a free trial at the Lab Access level, with no card.</p></li>
-        <li><h3>Test your baseline</h3><p>In week one you run a 40-yard dash, a vertical jump and a broad jump. Athletes under 18 need a parent or guardian to sign off on intake first. Every later number is measured against this one.</p></li>
-        <li><h3>Train, log and check in</h3><p>You follow your week, watch the demo videos, log your work and answer a 20-second daily check-in on sleep, soreness and energy. I read it before your next session and adjust.</p></li>
-        <li><h3>Test again and see the change</h3><p>At the end of each training block (a set stretch of weeks with one focus) you repeat the same tests the same way. Your Lab Report shows the result.</p></li>
-      </ol>
-    </div>
-
-    <div class="card landing-card landing-sample" aria-label="Sample Lab Report">
-      <div class="landing-sample-head">
-        <h2>Your Lab Report</h2>
-        <span class="landing-sample-tag">Sample</span>
-      </div>
-      <p class="muted">You get a report like this at intake and again at every re-test. A re-test is the same tests, run again, so the change is a number.</p>
-      <div data-sample-report></div>
-      <p class="muted landing-sample-note">Sample numbers for one training block. Your report carries your own.</p>
-    </div>
-
-    <div class="card landing-card landing-section" id="portal-preview">
-      <h2>What's inside the portal</h2>
-      <p>Take a look around before you ask for an invitation.</p>
-      <div class="portal-preview">
-        <div class="portal-preview-tabs" role="tablist" aria-label="Portal preview">
-          <button class="portal-preview-tab active" type="button" role="tab" id="preview-tab-training" aria-selected="true" aria-controls="preview-panel-training" tabindex="0">Training sessions</button>
-          <button class="portal-preview-tab" type="button" role="tab" id="preview-tab-videos" aria-selected="false" aria-controls="preview-panel-videos" tabindex="-1">Video library</button>
-          <button class="portal-preview-tab" type="button" role="tab" id="preview-tab-report" aria-selected="false" aria-controls="preview-panel-report" tabindex="-1">Lab Report</button>
-        </div>
-        <div class="portal-preview-panel" role="tabpanel" id="preview-panel-training" aria-labelledby="preview-tab-training">
-          <figure class="portal-shot"><img src="/assets/preview-training.jpg" alt="The Training sessions screen in the member portal" loading="lazy" onerror="this.closest('figure').hidden=true"></figure>
-          <ul class="landing-list">
-            <li>Your training week, set by me, with lifting loads worked out from your own tested maxes.</li>
-            <li>Your own log for what you ran and lifted, with effort and notes, so work away from me still counts.</li>
-            <li>A daily check-in on sleep, soreness and energy. If you report poor sleep or high soreness, I see it before your next session and can change the work.</li>
+  <section id="view-landing" class="view active lp">
+    <!-- Homepage redesign (Nov 2026). The homepage is a front door: each
+         topic appears once, briefly. /programs, /plans, /how-it-works,
+         /about, /faq and /contact show one section on its own as a page
+         (data-page on this element, set by rpRoute). Plan buttons open the
+         invitation request with the plan picked (data-invite-tier). -->
+    <div class="lp-band lp-hero" data-lp-home>
+      <div class="lp-wrap lp-hero-grid">
+        <div>
+          <span class="lp-eyebrow">Speed and strength coaching</span>
+          <h1>Get faster with a coach who <em>measures it.</em></h1>
+          <p class="lp-lead">__BRAND_NAME__ is coaching for athletes in 10th to 12th grade, college athletes and adults, straight from Coach AJ. You test at the start, train with a plan, and test again, so you can see exactly what changed.</p>
+          <div class="lp-cta-row">
+            <a class="lp-btn lp-btn-primary" href="/plans" data-route="plans">Pick a plan</a>
+            <button class="lp-btn lp-btn-ghost" type="button" data-view="book">Book a free Lab Talk</button>
+          </div>
+          <ul class="lp-hero-facts">
+            <li>Plans from $10 a month</li>
+            <li><span><span data-trial-days>3</span> days free, no card</span></li>
+            <li>In person in Maryland and DC, or online</li>
           </ul>
         </div>
-        <div class="portal-preview-panel" role="tabpanel" id="preview-panel-videos" aria-labelledby="preview-tab-videos" hidden>
-          <figure class="portal-shot"><img src="/assets/preview-videos.jpg" alt="The Video library screen in the member portal" loading="lazy" onerror="this.closest('figure').hidden=true"></figure>
-          <ul class="landing-list">
-            <li>A demo library I filmed myself, so every drill and lift looks the way I teach it.</li>
-            <li>Form checks: send a video of a sprint or a lift and get my reply in the app. Lab Training includes 1 form check per week. Lab Pass members get priority review within 48 hours.</li>
-          </ul>
+        <!-- PHOTO SLOT 1: drop a real photo of Coach AJ coaching at
+             public/assets/coach-aj-hero.jpg (portrait, 4:5, 1200px wide or
+             more). Until then the brand mark shows. No stock or generated images. -->
+        <figure class="lp-photo lp-photo-hero" data-photo-slot="hero">
+          <img src="/assets/coach-aj-hero.jpg" alt="Coach AJ coaching on the track" onerror="this.remove()">
+          <img class="lp-photo-mark" src="/assets/rp-logo.svg" alt="" aria-hidden="true">
+        </figure>
+      </div>
+    </div>
+
+    <div class="lp-band lp-alt" id="exercise-of-the-day" data-lp-home>
+      <div class="lp-wrap">
+        <div class="lp-head">
+          <span class="lp-eyebrow">Exercise of the day</span>
+          <h2>One exercise, done well.</h2>
+          <p class="lp-lead">One exercise from Coach AJ's library, with why it matters and how to do it. Free for everyone.</p>
         </div>
-        <div class="portal-preview-panel" role="tabpanel" id="preview-panel-report" aria-labelledby="preview-tab-report" hidden>
-          <figure class="portal-shot"><img src="/assets/preview-report.jpg" alt="The Lab Report screen in the member portal" loading="lazy" onerror="this.closest('figure').hidden=true"></figure>
+        <article class="lp-eotd">
+          <div class="lp-eotd-side" aria-hidden="true">
+            <img src="/assets/rp-logo.svg" alt="">
+            <span>Demo video in the Lab library</span>
+          </div>
+          <div class="lp-eotd-body">
+            <h3>Nordic hamstring curl</h3>
+            <ul class="lp-chips" aria-label="What it targets">
+              <li>Hamstrings</li>
+              <li>Glutes</li>
+              <li>Trunk control</li>
+            </ul>
+            <div class="lp-eotd-cols">
+              <div>
+                <h4>Why it is good</h4>
+                <p>When you sprint, your hamstrings have to brake the lower leg while they stretch. The Nordic trains exactly that kind of strength. Research in field sports links regular Nordic work with fewer hamstring strains.</p>
+              </div>
+              <div>
+                <h4>How to do it</h4>
+                <ol>
+                  <li>Kneel on a pad with your ankles held by a partner or anchored.</li>
+                  <li>Keep one straight line from knees to shoulders.</li>
+                  <li>Lower forward as slowly as you can, then catch yourself with your hands and push back up.</li>
+                </ol>
+              </div>
+            </div>
+            <p class="lp-dose"><span class="lp-dose-label">Today's dose</span><span>2 sets of 4 slow reps. Skip it the day before a meet. Stop if you feel sharp pain.</span></p>
+            <a class="lp-more" href="/programs" data-route="programs">See the programs</a>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div class="lp-band" id="programs" data-lp-section="programs">
+      <div class="lp-wrap">
+        <div class="lp-head">
+          <span class="lp-eyebrow">Programs</span>
+          <h2>Speed is the core. Protocols keep you on the track.</h2>
+          <p class="lp-lead">Each protocol is a week by week plan with a short check before you move to the next stage, so you only progress when you are ready.</p>
+        </div>
+        <div class="lp-programs">
+          <div class="lp-prog lp-prog-feature">
+            <span class="lp-prog-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg></span>
+            <span class="lp-kind">Flagship program</span>
+            <h3>Speed Development</h3>
+            <p>Sprint mechanics, acceleration and top speed work, written around your own test numbers and adjusted as your log and check-ins come in.</p>
+            <ul class="lp-ticks">
+              <li>Starts and acceleration</li>
+              <li>Top speed mechanics</li>
+              <li>Drills with a demo video for every one</li>
+              <li>Tested at the start and end of every block</li>
+            </ul>
+          </div>
+          <div class="lp-prog">
+            <span class="lp-prog-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3c0 6 2 9 5 11s5 4 5 7"/><path d="M12 14l-4 7"/></svg></span>
+            <span class="lp-kind">Protocol</span>
+            <h3>Hamstring Protocol</h3>
+            <p>Bridges and holds first, then Nordics and fast work. Builds the hamstring strength sprinters lean on most.</p>
+          </div>
+          <div class="lp-prog">
+            <span class="lp-prog-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 2v8a3 3 0 0 0 6 0V2"/><path d="M12 13v9"/><circle cx="12" cy="10" r="1.5"/></svg></span>
+            <span class="lp-kind">Protocol</span>
+            <h3>Knee Strengthening Protocol</h3>
+            <p>Strengthens the quads and hips that take load off the knee, starting easy and building to single leg and landing work.</p>
+          </div>
+          <div class="lp-prog">
+            <span class="lp-prog-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 2v12l-5 4v3h16v-2l-6-3V2"/></svg></span>
+            <span class="lp-kind">Protocol</span>
+            <h3>Ankle Strengthening Protocol</h3>
+            <p>Balance, then calf strength, then hops. Gets the ankle ready for hard cuts and fast ground contacts.</p>
+          </div>
+          <div class="lp-prog lp-prog-soon">
+            <span class="lp-kind">More on the way</span>
+            <h3>New protocols are added as Coach AJ checks them.</h3>
+            <p>Each one goes live only after it has been reviewed.</p>
+          </div>
+        </div>
+        <p class="lp-note"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>Protocols are training, not treatment. If something hurts or you are coming back from an injury, check with a doctor or athletic trainer before you start.</span></p>
+        <p class="lp-page-only"><a class="lp-btn lp-btn-primary" href="/plans" data-route="plans">Pick a plan</a></p>
+      </div>
+    </div>
+
+    <div class="lp-band lp-alt" id="how-it-works" data-lp-section="how-it-works">
+      <div class="lp-wrap">
+        <div class="lp-head">
+          <span class="lp-eyebrow">How it works</span>
+          <h2>Test. Train. Test again.</h2>
+        </div>
+        <ol class="lp-steps">
+          <li><h3>Request an invite</h3><p>Pick a plan and send a short request. Once Coach AJ invites you, your first <span data-trial-days>3</span> days of Lab Access are free, no card needed. For athletes under 18, a parent or guardian sends the request and signs off first.</p></li>
+          <li><h3>Test your baseline</h3><p>In week one you run the 40 yard dash and do the vertical jump and broad jump. Those numbers become your first Lab Report.</p></li>
+          <li><h3>Train and log</h3><p>Follow your week in the app, watch the demo for each exercise, and log how it went. A quick daily check-in tells Coach AJ how you slept and recovered.</p></li>
+          <li><h3>Test again</h3><p>At the end of each six week training block you repeat the same tests, and your Lab Report shows the change.</p></li>
+        </ol>
+        <div class="lp-report">
+          <div>
+            <span class="lp-sample-tag">Sample report</span>
+            <h3>Your Lab Report</h3>
+            <p class="lp-muted">Every test, side by side, after every block. It is the page you show a parent or a coach. These are sample numbers, not a real athlete.</p>
+            <a class="lp-more lp-home-only" href="/how-it-works" data-route="how-it-works">See how it works</a>
+          </div>
           <div data-sample-report></div>
-          <p>Your tests over time: your baseline, your best and the change between them, updated at every re-test.</p>
         </div>
       </div>
     </div>
 
-    <div class="card landing-card landing-flat" id="plans">
-      <h2>Plans</h2>
-      <p>Every plan opens the same Lab: the portal, the training library and your Lab Report. Prices are per month, for athletes in 10th to 12th grade, college and adults.</p>
-      <div class="landing-tiers" id="landing-tiers-cards">
-        <div class="landing-tier">
-          <p class="landing-tier-pill">Start here</p>
-          <h3>Lab Access</h3>
-          <p class="landing-price">$10<span>/mo</span></p>
-          <p class="landing-tier-bestfor">For the athlete who wants the full Lab and trains on their own.</p>
-          <p class="landing-incl">What's included</p>
-          <ul class="landing-list landing-checks">
-            <li>The full Lab portal</li>
-            <li>Lab Sessions to follow week to week</li>
-            <li>The Inside the Lab video library, with new videos every week</li>
-            <li>Your Lab Report at intake and every <span class="nb">re-test</span></li>
-            <li>Workout log and daily check-in</li>
+    <div class="lp-band" id="plans" data-lp-section="plans">
+      <div class="lp-wrap">
+        <div class="lp-head">
+          <span class="lp-eyebrow">Plans</span>
+          <h2>Three plans. The athlete pays monthly.</h2>
+          <p class="lp-lead">Every plan includes the Lab: the app, the video library and your Lab Report. Moving up adds more of Coach AJ's time.</p>
+        </div>
+        <div class="lp-plans" id="landing-tiers-cards">
+          <article class="lp-plan">
+            <span class="lp-plan-tag lp-quiet">Start here</span>
+            <h3>Lab Access</h3>
+            <p class="lp-price">$10 <small>/ month</small></p>
+            <p class="lp-per">Athlete pays</p>
+            <p class="lp-who">For the athlete who wants the full Lab and trains on their own.</p>
+            <h4>What you get</h4>
+            <ul class="lp-ticks">
+              <li>The Lab app with your training week</li>
+              <li>The video library, with new videos every week</li>
+              <li>Your Lab Report at the start and after each block</li>
+              <li>Workout log and daily check-in</li>
+            </ul>
+            <p class="lp-upgrade">Want a plan written just for you? That starts at Lab Training.</p>
+            <button class="lp-btn lp-btn-ghost lp-btn-block" type="button" data-invite-tier="access">Request Lab Access</button>
+          </article>
+          <article class="lp-plan lp-plan-mid">
+            <span class="lp-plan-tag">Coach writes your plan</span>
+            <h3>Lab Training</h3>
+            <p class="lp-price">$49.99 <small>/ month</small></p>
+            <p class="lp-per">Athlete pays</p>
+            <p class="lp-who">For the athlete who wants Coach AJ writing the plan.</p>
+            <h4>Everything in Lab Access, plus</h4>
+            <ul class="lp-ticks">
+              <li>A plan written for you, not a template</li>
+              <li>Your plan changes with your log and check-ins</li>
+              <li>One form check a week: send a video, get a reply in the app</li>
+            </ul>
+            <p class="lp-upgrade">Want live sessions and in person time? That is Lab Pass.</p>
+            <button class="lp-btn lp-btn-primary lp-btn-block" type="button" data-invite-tier="training">Request Lab Training</button>
+          </article>
+          <article class="lp-plan">
+            <span class="lp-plan-tag lp-quiet">Most coach time</span>
+            <h3>Lab Pass</h3>
+            <p class="lp-price">$99 <small>/ month</small></p>
+            <p class="lp-per">Athlete pays</p>
+            <p class="lp-who">For the athlete who wants the most time with Coach AJ.</p>
+            <h4>Everything in Lab Training, plus</h4>
+            <ul class="lp-ticks">
+              <li>Live video sessions, twice a month</li>
+              <li>In person sessions in Maryland and DC, announced to Lab Pass members as they are scheduled</li>
+              <li>Form checks reviewed first, within 48 hours</li>
+            </ul>
+            <p class="lp-upgrade">You can move up or down a plan at any time.</p>
+            <button class="lp-btn lp-btn-ghost lp-btn-block" type="button" data-invite-tier="pass">Request Lab Pass</button>
+          </article>
+        </div>
+        <div class="lp-plan-foot">
+          <div><h3>Free trial</h3>Your first <span data-trial-days>3</span> days are free at Lab Access, no card needed. When the trial ends, access pauses until you pick a plan. Nothing is ever charged on its own.</div>
+          <div><h3>For parents</h3>If your athlete is under 18, you send the request and sign off before training starts, and you can see your own athlete's Lab Report on every plan.</div>
+          <div><h3>By invitation</h3>The Lab is in its founding pilot, so joining starts with a short request. Coach AJ reads every one himself and replies within two business days.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lp-band lp-alt" id="about" data-lp-section="about">
+      <div class="lp-wrap lp-about">
+        <!-- PHOTO SLOT 2: drop a real headshot or coaching moment at
+             public/assets/coach-aj-about.jpg (square, 1000px or more). -->
+        <figure class="lp-photo lp-photo-about" data-photo-slot="about">
+          <img src="/assets/coach-aj-about.jpg" alt="Coach AJ" onerror="this.remove()">
+          <img class="lp-photo-mark" src="/assets/rp-logo.svg" alt="" aria-hidden="true">
+        </figure>
+        <div>
+          <span class="lp-eyebrow">About Coach AJ</span>
+          <h2>Alonzo “AJ” Ruffin</h2>
+          <p class="lp-lead">AJ is a sprint coach and sports medicine teacher in the Maryland and DC area. He also coaches speed and conditioning with <a href="https://accelerateyourgame.com" target="_blank" rel="noopener">Accelerate Your Game</a>. __BRAND_NAME__ is how he coaches athletes one on one, wherever they train.</p>
+          <ul class="lp-beliefs">
+            <li><span>Measure first.</span>You should know where you started before anyone tells you how to train.</li>
+            <li><span>Every rep has a reason.</span>If it is in your plan, you can ask why and get a real answer.</li>
+            <li><span>No promised times.</span>Hard work and good coaching, then the stopwatch tells the truth.</li>
           </ul>
-          <p class="muted landing-tier-note">A plan written for you starts at Lab Training.</p>
-          <button class="btn landing-join" type="button" data-invite-tier="access">Request an Invitation</button>
         </div>
-        <div class="landing-tier">
-          <h3>Lab Training</h3>
-          <p class="landing-price">$49.99<span>/mo</span></p>
-          <p class="landing-tier-bestfor">For the athlete who wants me writing the plan.</p>
-          <p class="landing-incl">Everything in Lab Access, plus</p>
-          <ul class="landing-list landing-checks">
-            <li>A training plan I write for you, not a template</li>
-            <li>Your plan changes as you train, based on your log and check-ins</li>
-            <li>1 form check per week: send a video, get my reply in the app</li>
+      </div>
+    </div>
+
+    <div class="lp-band" id="faq" data-lp-section="faq">
+      <div class="lp-wrap">
+        <div class="lp-head">
+          <span class="lp-eyebrow">Questions</span>
+          <h2>Good to know before you start.</h2>
+        </div>
+        <div class="lp-faq">
+          <details>
+            <summary>What happens when my free trial ends?</summary>
+            <p>Your access pauses until you pick a plan. No card is taken for the trial, so nothing is charged on its own.</p>
+          </details>
+          <details>
+            <summary>I am under 18. How do I sign up?</summary>
+            <p>A parent or guardian sends the request for you and signs off before your first session. They can see your Lab Report on every plan.</p>
+          </details>
+          <details>
+            <summary>Can I change or cancel my plan?</summary>
+            <p>You can move up or down a plan at any time. To cancel, go to your account settings. You keep access through the end of the month you paid for.</p>
+          </details>
+          <details>
+            <summary>Do I need to live near Coach AJ?</summary>
+            <p>No. Lab Access and Lab Training work anywhere. In person sessions are part of Lab Pass and take place in the Maryland and DC area.</p>
+          </details>
+          <details class="lp-page-only">
+            <summary>What is the Lab?</summary>
+            <p>A speed and strength coaching membership built around real training and measurable progress. Your program, Coach AJ's demo videos and your test numbers all live in one app.</p>
+          </details>
+          <details class="lp-page-only">
+            <summary>How do I know I am getting faster?</summary>
+            <p>You test a baseline in your first week, then test again at the end of every six week block. Your Lab Report shows the change, so progress is a number, not a promise.</p>
+          </details>
+          <details class="lp-page-only">
+            <summary>Can Coach AJ check my technique?</summary>
+            <p>Yes, on Lab Training and Lab Pass. Send a video of a sprint or a lift and get a reply in the app. Lab Training includes one form check a week, and Lab Pass form checks are reviewed first, within 48 hours.</p>
+          </details>
+          <details class="lp-page-only">
+            <summary>How do I join?</summary>
+            <p>Pick a plan and send a short request, or book a free Lab Talk first. Coach AJ replies within two business days. When he invites your email, you create your account with it.</p>
+          </details>
+        </div>
+        <p class="lp-home-only lp-after"><a class="lp-more" href="/faq" data-route="faq">All questions</a></p>
+      </div>
+    </div>
+
+    <div class="lp-band lp-alt" id="contact" data-lp-section="contact">
+      <div class="lp-wrap">
+        <div class="lp-contact">
+          <div>
+            <span class="lp-eyebrow">Contact</span>
+            <h2>Questions? Ask Coach AJ.</h2>
+            <p class="lp-lead">Reach Coach AJ about plans, parents, your account or privacy. He replies within two business days.</p>
+            <div class="lp-cta-row">
+              <a class="lp-btn lp-btn-primary" href="mailto:__CONTACT_EMAIL__" data-contact-mailto hidden>Email Coach AJ</a>
+              <button class="lp-btn lp-btn-primary" type="button" data-invite-tier="unsure" data-contact-fallback>Send a request</button>
+              <button class="lp-btn lp-btn-ghost" type="button" data-view="book">Book a free Lab Talk</button>
+            </div>
+          </div>
+          <ul class="lp-contact-list">
+            <li data-contact-only hidden><h3>Email</h3><span><a href="mailto:__CONTACT_EMAIL__" data-contact-mailto>__CONTACT_EMAIL__</a></span></li>
+            <li><h3>Free Lab Talk</h3><span>A 30 minute video call about your goals and which plan fits.</span></li>
+            <li><h3>Where</h3><span>Maryland and DC area, and online everywhere</span></li>
+            <li data-contact-only hidden><h3>Locked out?</h3><span>Email Coach AJ and he will reset your access.</span></li>
           </ul>
-          <button class="btn landing-join" type="button" data-invite-tier="training">Request an Invitation</button>
-        </div>
-        <div class="landing-tier">
-          <h3>Lab Pass</h3>
-          <p class="landing-price">$99<span>/mo</span></p>
-          <p class="landing-tier-bestfor">For the athlete who wants the most time with me.</p>
-          <p class="landing-incl">Everything in Lab Training, plus</p>
-          <ul class="landing-list landing-checks">
-            <li>Live web sessions with me</li>
-            <li>In-person training with me in the Maryland/DC area when I have openings. I confirm the place and time with you</li>
-            <li>Priority form-check review within 48 hours</li>
-            <li>Parent access to the Lab Report</li>
-            <li>Move up to Lab Pass from another plan any time</li>
-          </ul>
-          <button class="btn landing-join" type="button" data-invite-tier="pass">Request an Invitation</button>
         </div>
       </div>
-      <p class="landing-trial">Invitation-first trial: when I invite you, your first <span data-trial-days>3</span> days are free at the Lab Access level. No card needed.</p>
-    </div>
-
-    <div class="card landing-card landing-faq" id="faq">
-      <h2>Questions, answered</h2>
-      <div class="faq-list">
-        <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-1" aria-expanded="true" aria-controls="faq-panel-1">What is the Lab?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
-          <div class="faq-panel" id="faq-panel-1" role="region" aria-labelledby="faq-q-1">
-            <p>A speed and strength coaching membership built around real training and measurable progress. Your program, my demo videos and your testing numbers all live in one portal, and I review the work every week.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-2" aria-expanded="false" aria-controls="faq-panel-2">How do I know if I am getting faster?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
-          <div class="faq-panel" id="faq-panel-2" role="region" aria-labelledby="faq-q-2" hidden>
-            <p>You test a baseline in your first week, then test again at the end of every training block. Your Lab Report shows your baseline, your best and the change, so progress is a number, not a promise.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-3" aria-expanded="false" aria-controls="faq-panel-3">Who is the Lab for?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
-          <div class="faq-panel" id="faq-panel-3" role="region" aria-labelledby="faq-q-3" hidden>
-            <p>Athletes in 10th to 12th grade, college athletes and adults. If your athlete is under 18, a parent or guardian makes the request and signs off on intake.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-4" aria-expanded="false" aria-controls="faq-panel-4">Is there a trial?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
-          <div class="faq-panel" id="faq-panel-4" role="region" aria-labelledby="faq-q-4" hidden>
-            <p>Yes. When I invite you, your first <span data-trial-days>3</span> days are free at the Lab Access level, and no card is needed to start. The trial does not include a personal plan, live web sessions or in-person training. The trial starts after I invite you, so the first step is a request or a free Lab Talk.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-5" aria-expanded="false" aria-controls="faq-panel-5">Can parents see their athlete's progress?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
-          <div class="faq-panel" id="faq-panel-5" role="region" aria-labelledby="faq-q-5" hidden>
-            <p>Yes. Lab Pass includes parent access to the Lab Report, which shows baseline and best results in plain numbers. Parents see the same numbers I do.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-6" aria-expanded="false" aria-controls="faq-panel-6">Can you check my technique?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
-          <div class="faq-panel" id="faq-panel-6" role="region" aria-labelledby="faq-q-6" hidden>
-            <p>Yes, on Lab Training and Lab Pass. Send a video of a sprint or a lift and get my reply in the app. Lab Training includes 1 form check per week. Lab Pass members get priority review within 48 hours.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <h3 class="faq-q-wrap"><button class="faq-q" type="button" id="faq-q-7" aria-expanded="false" aria-controls="faq-panel-7">How do I join?<span class="faq-icon" aria-hidden="true">+</span></button></h3>
-          <div class="faq-panel" id="faq-panel-7" role="region" aria-labelledby="faq-q-7" hidden>
-            <p>Request an invitation here, or book a free Lab Talk, a 30 minute video call where we go over your goals and which plan fits. When I invite your email, you create your account with it and you are in.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card landing-card" id="about">
-      <h2>About Coach AJ</h2>
-      <p>I'm Alonzo “AJ” Ruffin, a sprint coach in the Maryland/DC area. I train fast on the hard days, recover on the easy days and measure everything. The same structure, testing and workout library that I coach with are what run this app.</p>
-      <p class="muted">I also work with <a href="https://accelerateyourgame.com" target="_blank" rel="noopener">Accelerate Your Game</a> on speed and conditioning in Maryland. I never guarantee a time. I measure, train and measure again, and you see the same numbers I do.</p>
-    </div>
-
-    <div class="card landing-card landing-final">
-      <h2>Ready to be measured?</h2>
-      <p>Send a request and I'll reply by email. If the Lab fits you, I'll invite you.</p>
-      <div class="landing-actions">
-        <button class="btn landing-cta" type="button" data-invite-tier="unsure">Request an Invitation</button>
-        <button class="btn secondary" type="button" data-view="book">Book a free Lab Talk</button>
-      </div>
-      <p class="muted">A Lab Talk is a free 30 minute video call with me: your goals, the plans and which one fits.</p>
     </div>
   </section>
 
@@ -1303,7 +1402,7 @@
     <a href="/terms" data-route="terms">Terms</a>
     <a href="mailto:__CONTACT_EMAIL__" id="footer-contact" data-contact hidden>__CONTACT_EMAIL__</a>
   </div>
-  <div>Your log entries are private to your account.</div>
+  <div class="footer-member-note">Your log entries are private to your account.</div>
   <div class="app-version" data-app-version="__APP_VERSION__">© <span id="footer-year">2026</span> __BRAND_NAME__</div>
 </footer>
 
