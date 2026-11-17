@@ -506,7 +506,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is the RP v29 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v35"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("ruffin-performance-v36"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2519,15 +2519,15 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v35'") &&
-    swJs.text.includes("ruffin-performance-v35"));
+    appJs.text.includes("const APP_VERSION = 'v36'") &&
+    swJs.text.includes("ruffin-performance-v36"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v35"') &&
+    pageHtml.text.includes('data-app-version="v36"') &&
     pageHtml.text.includes('<span id="footer-year">') &&
     appJs.text.includes('appVersionHtml'));
 
@@ -2568,8 +2568,8 @@ async function main() {
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v35' &&
-    v23Content.brand.cache === 'ruffin-performance-v35', v23Content.brand);
+    !!v23Content.brand && v23Content.brand.version === 'v36' &&
+    v23Content.brand.cache === 'ruffin-performance-v36', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2789,9 +2789,9 @@ async function main() {
 
 
   check('v34: BRAND version and cache stamps are v34',
-    pageHtml.text.includes('data-app-version="v35"') &&
-    appJs.text.includes("const APP_VERSION = 'v35'") &&
-    swJs.text.includes('ruffin-performance-v35'),
+    pageHtml.text.includes('data-app-version="v36"') &&
+    appJs.text.includes("const APP_VERSION = 'v36'") &&
+    swJs.text.includes('ruffin-performance-v36'),
     compareSlice.slice(0, 120));
   /* Portal preview tabs (v33): interactive preview of what is
      inside the portal in section 02, replacing the static list.
@@ -2822,9 +2822,9 @@ async function main() {
     stylesCss.text.includes('.portal-preview-panel'),
     portalSlice.slice(0, 120));
   check('v34: BRAND version and cache stamps are v34 in the portal preview checks',
-    pageHtml.text.includes('data-app-version="v35"') &&
-    appJs.text.includes("const APP_VERSION = 'v35'") &&
-    swJs.text.includes('ruffin-performance-v35'),
+    pageHtml.text.includes('data-app-version="v36"') &&
+    appJs.text.includes("const APP_VERSION = 'v36'") &&
+    swJs.text.includes('ruffin-performance-v36'),
     portalSlice.slice(0, 120));
   /* Training Session Completion Summary (v34): after a member
      saves a workout log, a summary card at the top of My Log
@@ -2848,9 +2848,9 @@ async function main() {
     appJs.text.includes('state.mlSummary = { log:') &&
     appJs.text.includes('state.mlSummary = null'), appJs.text.slice(0, 120));
   check('v34: BRAND version and cache stamps are v34',
-    pageHtml.text.includes('data-app-version="v35"') &&
-    appJs.text.includes("const APP_VERSION = 'v35'") &&
-    swJs.text.includes('ruffin-performance-v35'),
+    pageHtml.text.includes('data-app-version="v36"') &&
+    appJs.text.includes("const APP_VERSION = 'v36'") &&
+    swJs.text.includes('ruffin-performance-v36'),
     appJs.text.slice(0, 120));
   /* Landing FAQ accordion (v19): one card between the tiers and
      the parents card, eight plain answers, trial and prices
@@ -5572,9 +5572,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v35"') &&
-    appJs.text.includes("const APP_VERSION = 'v35'") &&
-    swJs.text.includes('ruffin-performance-v35'));
+    pageHtml.text.includes('data-app-version="v36"') &&
+    appJs.text.includes("const APP_VERSION = 'v36'") &&
+    swJs.text.includes('ruffin-performance-v36'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -5711,11 +5711,13 @@ async function main() {
       twTvStart >= 0 && twTvEnd > twTvStart && !twTvCode.includes('my/week') &&
       !twTvCode.includes('thisweek') && !twTvCode.includes('this week'), twTvCode.length);
   }
-  check('landing leads with the Canva headline, measured-speed subline and invitation CTA',
-    pageHtml.text.includes('Speed development, built on evidence.') &&
-    pageHtml.text.includes('Measured speed, not promised speed.') &&
+  /* Homepage redesign (Nov 2026): the hero says who it is for and
+     leads to the plans; every way in is the invitation request. */
+  check('landing leads with the redesign headline, the plans CTA and the Lab Talk',
+    pageHtml.text.includes('Get faster with a coach who <em>measures it.</em>') &&
+    pageHtml.text.includes('>Pick a plan<') && pageHtml.text.includes('Book a free Lab Talk') &&
     !pageHtml.text.includes('SPEED · POWER · DATA') &&
-    pageHtml.text.includes('Request an Invitation'));
+    pageHtml.text.includes('data-invite-tier='));
 
   check('landing photo hero and silver accent stay scoped to the landing',
     stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
@@ -8941,7 +8943,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v35' &&
+          br.status === 200 && br.json.brand.version === 'v36' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -9016,7 +9018,7 @@ async function waitForServer(tries = 60) {
         const lrPage = await lrText(null, '/');
         const lrJs = await lrText(null, '/app.js');
         check('the landing sample report and the member view carry the new name',
-          lrPage.status === 200 && lrPage.text.includes('<h2>Your Lab Report</h2>') &&
+          lrPage.status === 200 && lrPage.text.includes('<h3>Your Lab Report</h3>') &&
           lrPage.text.includes('<h1>Lab Report</h1>') &&
           lrJs.text.includes("['speedreport', 'Lab Report']") &&
           lrJs.text.includes('See your Lab Report'), lrPage.status);
@@ -9060,7 +9062,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v35',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v36',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
@@ -9152,23 +9154,29 @@ async function waitForServer(tries = 60) {
         check('v35: the landing has ONE pricing section with the three tiers and locked prices',
           (lp.match(/id="plans"/g) || []).length === 1 &&
           !lp.includes('Compare plans') && !lp.includes('tier-compare') && !lp.includes('Included in every tier') &&
-          plansSlice.includes('Lab Access') && plansSlice.includes('$10<span>') &&
-          plansSlice.includes('Lab Training') && plansSlice.includes('$49.99<span>') &&
-          plansSlice.includes('Lab Pass') && plansSlice.includes('$99<span>') && !lp.includes('$149'),
+          plansSlice.includes('Lab Access') && plansSlice.includes('$10 <small>') &&
+          plansSlice.includes('Lab Training') && plansSlice.includes('$49.99 <small>') &&
+          plansSlice.includes('Lab Pass') && plansSlice.includes('$99 <small>') && !lp.includes('$149'),
           plansSlice.slice(0, 120));
         check('v35: every plan button asks for an invitation with that plan; no dead buttons',
           (plansSlice.match(/data-invite-tier="access"/g) || []).length === 1 &&
           (plansSlice.match(/data-invite-tier="training"/g) || []).length === 1 &&
           (plansSlice.match(/data-invite-tier="pass"/g) || []).length === 1 &&
-          (lp.match(/>Request an Invitation</g) || []).length >= 5 &&
+          plansSlice.includes('>Request Lab Access<') && plansSlice.includes('>Request Lab Training<') &&
+          plansSlice.includes('>Request Lab Pass<') &&
           !lp.includes('data-join-tier') && !/>(Join|Choose) Lab /.test(lp) &&
           !lp.includes('checkout') && !lp.includes('stripe'),
-          (lp.match(/>Request an Invitation</g) || []).length);
+          (plansSlice.match(/data-invite-tier=/g) || []).length);
+        /* Homepage redesign: AJ's answers, Nov 17. One parent rule on
+           every plan (no longer a Lab Pass perk), live sessions twice a
+           month, in-person sessions announced as scheduled. */
         check('v35: plan lists carry real quantities and a defined in-person line',
-          plansSlice.includes('1 form check per week') &&
-          plansSlice.includes('Priority form-check review within 48 hours') &&
-          plansSlice.includes('Parent access to the Lab Report') &&
-          plansSlice.includes('In-person training with me in the Maryland/DC area') &&
+          plansSlice.includes('One form check a week') &&
+          plansSlice.includes('Form checks reviewed first, within 48 hours') &&
+          plansSlice.includes('Live video sessions, twice a month') &&
+          plansSlice.includes('announced to Lab Pass members as they are scheduled') &&
+          plansSlice.includes("see your own athlete's Lab Report on every plan") &&
+          !plansSlice.includes('Parent access to the Lab Report') &&
           !plansSlice.includes('No personalized training'),
           plansSlice.slice(0, 120));
         check('v35: eligibility is stated and the trial length comes from one place',
@@ -9190,7 +9198,7 @@ async function waitForServer(tries = 60) {
           !ivJs.text.includes("chip.textContent = 'Not logged in'"),
           '');
         check('v35: one sample Lab Report with baseline, best and change columns',
-          (lp.match(/data-sample-report/g) || []).length === 2 &&
+          (lp.match(/data-sample-report/g) || []).length === 1 &&
           ivJs.text.includes('RP_SAMPLE_REPORT') && ivJs.text.includes('>Baseline<') && ivJs.text.includes('>Best<') &&
           ivJs.text.includes('>Change<'),
           '');
@@ -9206,6 +9214,40 @@ async function waitForServer(tries = 60) {
           loginShell.status === 200 && loginShell.text.includes('id="view-account"') &&
           plansShell.status === 200 && plansShell.text.includes('id="plans"'),
           loginShell.status + ' ' + plansShell.status);
+        /* Homepage redesign (Nov 2026). */
+        const programsShell = await apiText(null, '/programs');
+        const contactShell = await apiText(null, '/contact');
+        check('redesign: /programs and /contact serve the shell with their sections',
+          programsShell.status === 200 && programsShell.text.includes('data-lp-section="programs"') &&
+          contactShell.status === 200 && contactShell.text.includes('data-lp-section="contact"'),
+          programsShell.status + ' ' + contactShell.status);
+        check('redesign: section addresses are their own pages, and a member keeps the Programs view',
+          ivJs.text.includes("'/programs': 'programs'") && ivJs.text.includes("'/contact': 'contact'") &&
+          ivJs.text.includes('function rpSetLandingPage') && ivJs.text.includes('function rpSectionFor') &&
+          ivCss.text.includes('#view-landing.lp[data-page] .lp-band { display: none; }'),
+          '');
+        check("redesign: homepage carries the Exercise of the Day, the app's three programs and two photo slots",
+          lp.includes('id="exercise-of-the-day"') && lp.includes('Nordic hamstring curl') &&
+          lp.includes('2 sets of 4 slow reps. Skip it the day before a meet.') &&
+          lp.includes('<h3>Winter Base Protocol</h3>') && lp.includes('<h3>Hip and Ankle Armor Protocol</h3>') &&
+          lp.includes('<h3>First Step Protocol</h3>') &&
+          !lp.includes('Hamstring Protocol') && !lp.includes('Knee Strengthening') && !lp.includes('Speed Development') &&
+          (lp.match(/data-photo-slot=/g) || []).length === 2 && !lp.includes('class="landing-hero"'),
+          '');
+        check("redesign: AJ's answers are stated once each",
+          lp.includes('six week training block') &&
+          lp.includes('access pauses until you pick a plan') &&
+          lp.includes('To cancel, go to your account settings. You keep access through the end of the month you paid for.') &&
+          lp.includes('replies within two business days') && !lp.includes('school days'),
+          '');
+        check('redesign: the contact address comes only from CONTACT_EMAIL',
+          lp.includes('data-contact-mailto') && lp.includes('data-contact-fallback') &&
+          ivJs.text.includes("[data-contact-mailto]") && !lp.includes('@gmail.com'),
+          '');
+        check('redesign: red accent is scoped to the public pages',
+          ivCss.text.includes('#view-landing.lp {') && ivCss.text.includes('--lp-accent: #e3242b') &&
+          ivCss.text.includes('body.logged-out .footer-member-note { display: none; }'),
+          '');
         check('v35: landing makes no school or CSCS claims and keeps exactly one AYG link',
           !lp.includes('CSCS') && !/\bUniversity\b/.test(lp) &&
           (lp.match(/accelerateyourgame\.com/g) || []).length === 1,

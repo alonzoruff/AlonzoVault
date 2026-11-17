@@ -688,6 +688,7 @@ function showView(name) {
   if (name === 'coverage') renderCoverage();
   if (name === 'exercises') renderExercises();
   syncBackHome(name);
+  if (name !== 'landing') rpSetLandingPage(null);
   document.body.classList.toggle('rp-public', !state.user && RP_PUBLIC_VIEWS.has(name));
   rpSyncUrl(name);
   window.scrollTo(0, 0);
@@ -8730,7 +8731,8 @@ const RP_PUBLIC_VIEWS = new Set(['landing', 'book', 'invite', 'account', 'privac
 /* Landing sections that have their own address. They show the
    landing page and scroll to the section. */
 const RP_SECTION_PATHS = {
-  '/plans': 'plans', '/how-it-works': 'how-it-works', '/faq': 'faq', '/about': 'about',
+  '/programs': 'programs', '/plans': 'plans', '/how-it-works': 'how-it-works',
+  '/faq': 'faq', '/about': 'about', '/contact': 'contact',
 };
 const RP_VIEW_PATHS = {
   landing: '/', home: '/', account: '/login', invite: '/request-invitation',
@@ -8740,7 +8742,8 @@ const RP_PATH_VIEWS = {};
 Object.keys(RP_VIEW_PATHS).forEach(k => { if (k !== 'home') RP_PATH_VIEWS[RP_VIEW_PATHS[k]] = k; });
 RP_PATH_VIEWS['/'] = 'landing';
 const RP_TITLES = {
-  plans: 'Plans', 'how-it-works': 'How It Works', faq: 'FAQ', about: 'About',
+  programs: 'Programs', plans: 'Plans', 'how-it-works': 'How It Works', faq: 'FAQ', about: 'About',
+  contact: 'Contact',
   account: 'Sign In', invite: 'Request an Invitation', book: 'Book a Lab Talk',
   privacy: 'Privacy', terms: 'Terms',
 };
@@ -8760,17 +8763,31 @@ function rpSyncUrl(name) {
   if (rpSuppressPush || location.pathname === want) return;
   try { history.pushState({ view: name }, '', want); } catch (_) { /* address bar not available */ }
 }
-function rpScrollToSection(id) {
-  const t = document.getElementById(id);
-  if (t) t.scrollIntoView({ block: 'start', behavior: 'auto' });
+/* Homepage redesign: a section address is its own page. The
+   landing view shows only that section (CSS reads data-page), so
+   /plans, /programs and the rest are not the homepage scrolled. */
+function rpSetLandingPage(section) {
+  const v = document.getElementById('view-landing');
+  if (!v) return;
+  if (section) v.setAttribute('data-page', section);
+  else v.removeAttribute('data-page');
+}
+/* A member view can share a public address (/programs is also the
+   coach's Programs view). Signed in, the member view wins. */
+function rpSectionFor(path) {
+  const section = RP_SECTION_PATHS[path];
+  if (!section) return null;
+  if (state.user && document.getElementById('view-' + path.slice(1))) return null;
+  return section;
 }
 /* Open an address: a landing section, a public page, or any view. */
 function rpRoute(path, replaceUnknown) {
   path = (path || '/').replace(/\/+$/, '') || '/';
-  const section = RP_SECTION_PATHS[path];
+  const section = rpSectionFor(path);
+  rpSetLandingPage(section);
   rpSuppressPush = true;
   try {
-    if (section) { showView('landing'); rpScrollToSection(section); document.title = RP_TITLES[section] + ' | ' + RP_BASE_TITLE; }
+    if (section) { showView('landing'); document.title = RP_TITLES[section] + ' | ' + RP_BASE_TITLE; }
     else if (path === '/') showView(state.user ? 'home' : 'landing');
     else {
       const name = RP_PATH_VIEWS[path] || path.slice(1);
@@ -8783,11 +8800,12 @@ function rpRoute(path, replaceUnknown) {
   } finally { rpSuppressPush = false; }
 }
 function rpGo(route) {
-  if (RP_SECTION_PATHS['/' + route]) {
+  if (rpSectionFor('/' + route)) {
     rpPendingPath = '/' + route;
+    rpSetLandingPage(RP_SECTION_PATHS['/' + route]);
     showView('landing');
-    rpScrollToSection(route);
   } else if (route === 'home') {
+    rpSetLandingPage(null);
     showView(state.user ? 'home' : 'landing');
   } else {
     showView(route);
@@ -8809,7 +8827,6 @@ document.addEventListener('click', (e) => {
 /* One sample Lab Report, shown wherever the page shows one. */
 const RP_SAMPLE_REPORT = [
   ['40-yard dash', '4.91 s', '4.78 s', '−0.13 s'],
-  ['Fly 10', '1.04 s', '0.99 s', '−0.05 s'],
   ['Vertical jump', '24.5″', '27.0″', '+2.5″'],
   ['Broad jump', '7′6″', '8′1″', '+7″'],
 ];
@@ -8828,6 +8845,17 @@ function rpFillPublicBits() {
     if (RP_CONTACT_EMAIL) { c.href = 'mailto:' + RP_CONTACT_EMAIL; c.textContent = RP_CONTACT_EMAIL; c.hidden = false; }
     else c.remove();
   }
+  /* Contact section: the address comes from CONTACT_EMAIL. Until it
+     is set, the email rows stay hidden and the request form is the
+     way in. */
+  $$('[data-contact-mailto]').forEach(a => {
+    if (RP_CONTACT_EMAIL) {
+      a.href = 'mailto:' + RP_CONTACT_EMAIL; a.hidden = false;
+      if (!a.classList.contains('lp-btn')) a.textContent = RP_CONTACT_EMAIL;
+    } else a.hidden = true;
+  });
+  $$('[data-contact-only]').forEach(n => { n.hidden = !RP_CONTACT_EMAIL; });
+  $$('[data-contact-fallback]').forEach(n => { n.hidden = !!RP_CONTACT_EMAIL; });
   const pc = document.querySelector('[data-contact-line]');
   if (pc && RP_CONTACT_EMAIL) pc.innerHTML = `Email me at <a href="mailto:${esc(RP_CONTACT_EMAIL)}">${esc(RP_CONTACT_EMAIL)}</a> and I will answer.`;
 }
