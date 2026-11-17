@@ -109,8 +109,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v36',
-  cache: 'ruffin-performance-v36',
+  version: 'v37',
+  cache: 'ruffin-performance-v37',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute

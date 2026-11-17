@@ -219,6 +219,12 @@ const hadServiceWorkerController = !!(
 );
 let swUpdateReloadStarted = false;
 if ('serviceWorker' in navigator && navigator.serviceWorker) {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    navigator.serviceWorker.getRegistration()
+      .then((reg) => reg && reg.update())
+      .catch(() => {});
+  });
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadServiceWorkerController || swUpdateReloadStarted) return;
     swUpdateReloadStarted = true;
