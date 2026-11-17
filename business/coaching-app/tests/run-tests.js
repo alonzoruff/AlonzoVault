@@ -3641,7 +3641,8 @@ async function main() {
   /* Last-30-days window edges: today counts, 30 days ago does not. */
   const attPad2 = (n) => String(n).padStart(2, '0');
   const dstrOf = (d) => d.getFullYear() + '-' + attPad2(d.getMonth() + 1) + '-' + attPad2(d.getDate());
-  const attNow = new Date();
+  /* The server counts days in New York time, so the test must too. */
+  const attNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const todayS2 = dstrOf(attNow);
   const oldS = dstrOf(new Date(attNow.getFullYear(), attNow.getMonth(), attNow.getDate() - 30));
   await api(coach, 'PUT', '/api/attendance/' + todayS2 + '/' + annaA, { status: 'present' });
