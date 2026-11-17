@@ -2259,3 +2259,62 @@ body.tv-mode {
   .pr-step { grid-template-columns: 24px 1fr; gap: 8px; }
   .pr-step-n { width: 24px; height: 24px; font-size: 12px; }
 }
+
+/* ---------------------------------------------------------------
+   Coach home (v63): the one page every coach lands on. Built from
+   the existing tokens and components (cards, hero-stat tiles,
+   badges, menu items), so all three themes carry it unchanged.
+   One scarlet slab (today's checklist) is the page's primary
+   action; everything else is secondary. Health tiles turn to the
+   High Load colors only when there is something to act on.
+   --------------------------------------------------------------- */
+.ch-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.ch-head h1 { margin-bottom: 4px; }
+.ch-date { margin: 0; font-weight: 600; }
+.ch-primary { min-height: 52px; font-size: 16.5px; margin: 0 0 18px; }
+.ch-block { margin: 0 0 22px; }
+.ch-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ch-link {
+  background: none; border: none; padding: 6px 0; min-height: 44px; cursor: pointer;
+  color: var(--red-dark); font-size: 14.5px; font-weight: 700;
+}
+.ch-link:hover, .ch-link:focus-visible { text-decoration: underline; }
+.ch-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 var(--card-gap); }
+.ch-tile { min-width: 0; }
+.ch-tile .stat-num small { font-size: 15px; font-weight: 700; color: var(--muted); }
+.ch-tile.ch-warn { background: var(--high-bg); border-color: var(--high); }
+.ch-tile.ch-warn .stat-num, .ch-tile.ch-warn .stat-label { color: var(--high); }
+@media (max-width: 560px) { .ch-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ch-athletes { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+.ch-athlete {
+  min-height: 44px; padding: 8px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  font-size: 14.5px; font-weight: 600;
+}
+.ch-athlete .muted { font-size: 13px; font-weight: 500; }
+.ch-details { border-top: 1px solid var(--line); padding: 4px 0; }
+.ch-details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.ch-pin { border-left: 5px solid var(--red); background: var(--accent-soft-bg); }
+.ch-pin-label { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--red-dark); }
+.ch-pin-title { font-weight: 700; margin: 4px 0 0; }
+.ch-pin p { margin: 6px 0; }
+.ch-post-btn { width: 100%; }
+.ann-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ch-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 0 0 var(--card-gap); }
+.ch-day {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
+  padding: 8px 2px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card);
+}
+.ch-day.ch-today { border: 2px solid var(--red); }
+.ch-day-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+.ch-day-num { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ch-day .badge { font-size: 10px; padding: 1px 6px; }
+.ch-day-blank { height: 17px; }
+@media (max-width: 400px) { .ch-day .badge { font-size: 9px; padding: 1px 4px; letter-spacing: 0; } }
+.ch-run { margin-top: 10px; }
+.ch-run .run-today-btn { width: 100%; }
+.hub-label { margin: 16px 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ch-back {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 4px 0; margin: 0 0 4px;
+  background: none; border: none; cursor: pointer; color: var(--red-dark); font-size: 14.5px; font-weight: 700;
+}

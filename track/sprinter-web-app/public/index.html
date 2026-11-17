@@ -152,35 +152,91 @@
 
   <!-- COACH (hub, coaches only) -->
   <section id="view-coachhub" class="view">
-    <h1>Coach</h1>
-    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
-    <p class="view-sub muted">Coach tools only. Athletes never see this section. Everything for running the team lives here.</p>
-    <div class="menu-list">
-      <button type="button" class="menu-item" data-view="coach">Today's Checklist <span>Each group's workout for the day, with check-offs</span></button>
-      <button type="button" class="menu-item" data-view="tv">TV Board <span>The weight-room display: the full Workout of the Day, one page per group</span></button>
-      <button type="button" class="menu-item" data-view="weightroom">Weight Room <span>Every athlete's workout side by side. Walk each panel through its steps and check them off</span></button>
-      <button type="button" class="menu-item" data-view="custom">Custom Workouts <span>Build your own blocks, rounds, and rests, then run it step by step</span></button>
-      <button type="button" class="menu-item" data-view="programs">Programs <span>Reusable week-by-week training templates. Build once, apply to any group</span></button>
-      <button type="button" class="menu-item" data-view="calendar">Team Calendar <span>The whole month at a glance: every group's sessions, meets, and test days</span></button>
-      <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
-      <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, attention flags, and the full picture, with wellness, testing, meets, health, goals, and private coach notes</span></button>
-      <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
-      <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
-      <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked. The same board the athletes see</span></button>
-      <button type="button" class="menu-item" data-view="meets">Meet Results <span>Race and field marks, PRs, and the team PR board</span></button>
-      <button type="button" class="menu-item" data-view="meetday">Meet Day <span>Run the meet: entries by event, a live checklist, and fast results with PR flags</span></button>
-      <button type="button" class="menu-item" data-view="goals">Goals <span>Season target marks for every athlete, with progress from their real results</span></button>
-      <button type="button" class="menu-item" data-view="records">School Records <span>Manage the all-time top 10 board</span></button>
-      <button type="button" class="menu-item" data-view="reports">Reports <span>Team trends, completion and load charts, and athlete report cards</span></button>
-      <button type="button" class="menu-item" data-view="digest">Weekly Digest <span>Last week at a glance: check-ins, training, PRs, health, and the week coming</span></button>
-      <button type="button" class="menu-item" data-view="announce">Announcements <span>One-way posts to the whole team or a single group. Athletes read them on Today</span></button>
-      <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
-      <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
-      <button type="button" class="menu-item" data-view="devices">Devices <span>ForceDecks, NordBord, and T-APEX: import each device's results file and they land in every athlete's testing history, labeled by device</span></button>
-      <button type="button" class="menu-item" data-view="coverage">Demo Coverage <span>The filming map: every drill and test marked as your video, a placeholder, or still to film</span></button>
-      <button type="button" class="menu-item" data-view="libraryhome">Coach's Corner <span>Your short clips for the athletes, filmed and managed in the Library</span></button>
-      <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access, under Account</span></button>
+    <!-- COACH HOME (v63): the one page every coach lands on. Today's
+         picture first, announcements with the composer, the week at a
+         glance, then the data hub. The live parts render into the
+         ch-* slots from GET /api/coach/home; the data hub is static
+         here so every door is on the page before the data arrives. -->
+    <div class="ch-head">
+      <h1>Coach home</h1>
+      <p class="ch-date muted" id="ch-date">Today</p>
     </div>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div id="ch-pinned"></div>
+    <button type="button" class="btn primary ch-primary" data-view="coach">Open today's checklist</button>
+
+    <section class="ch-block" aria-labelledby="ch-today-h">
+      <h2 id="ch-today-h">Today's picture</h2>
+      <div id="ch-today" aria-busy="true"><div class="skel skel-card"></div></div>
+    </section>
+
+    <section class="ch-block" aria-labelledby="ch-ann-h">
+      <div class="ch-block-head">
+        <h2 id="ch-ann-h">Announcements</h2>
+        <button type="button" class="ch-link" data-view="announce">See all posts</button>
+      </div>
+      <div id="ch-announce"><div class="skel skel-card"></div></div>
+    </section>
+
+    <section class="ch-block" aria-labelledby="ch-week-h">
+      <div class="ch-block-head">
+        <h2 id="ch-week-h">This week</h2>
+        <button type="button" class="ch-link" data-view="calendar">Open the calendar</button>
+      </div>
+      <div id="ch-week"><div class="skel skel-card"></div></div>
+    </section>
+
+    <section class="ch-block" aria-labelledby="ch-hub-h">
+      <h2 id="ch-hub-h">Team data</h2>
+      <p class="view-sub muted">Everything the app holds on the team, sorted by what you are looking for. Coaches only. Athletes never see this page.</p>
+
+      <h3 class="hub-label">Athletes</h3>
+      <div class="menu-list">
+        <button type="button" class="menu-item" data-view="ams">Athlete profiles <span>One page per athlete: wellness, testing, meets, health, goals, and private coach notes<em class="menu-count" data-hub-count="athletes"></em></span></button>
+        <button type="button" class="menu-item" data-view="groups">Roster and groups <span>Add athletes, set their group and events<em class="menu-count" data-hub-count="groups"></em></span></button>
+        <button type="button" class="menu-item" data-view="goals">Season goals <span>Target marks for every athlete, with progress from real results<em class="menu-count" data-hub-count="goals"></em></span></button>
+        <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers and graphs for your starred athletes</span></button>
+      </div>
+
+      <h3 class="hub-label">Testing and meets</h3>
+      <div class="menu-list">
+        <button type="button" class="menu-item" data-view="testing">Testing results <span>Test days, fast entry, personal bests, and a ranked table for every test<em class="menu-count" data-hub-count="testDays"></em></span></button>
+        <button type="button" class="menu-item" data-view="leaderboard">Leaderboards <span>The best testing numbers, ranked (coaches only), and the meet PR leaders</span></button>
+        <button type="button" class="menu-item" data-view="meets">Meet results <span>Race and field marks, PRs, and the team PR board<em class="menu-count" data-hub-count="meetResults"></em></span></button>
+        <button type="button" class="menu-item" data-view="meetday">Meet Day <span>Run a meet: entries by event, a live checklist, and fast results<em class="menu-count" data-hub-count="meets"></em></span></button>
+        <button type="button" class="menu-item" data-view="records">School records <span>Manage the all-time top 10 board<em class="menu-count" data-hub-count="records"></em></span></button>
+      </div>
+
+      <h3 class="hub-label">Reports</h3>
+      <div class="menu-list">
+        <button type="button" class="menu-item" data-view="reports">Report library <span>Completion trend, period comparison, team assessment, load and health charts, and athlete report cards</span></button>
+        <button type="button" class="menu-item" data-view="digest">Weekly digest <span>Last week on one page: check-ins, training, PRs, health, and the week coming</span></button>
+      </div>
+
+      <h3 class="hub-label">Weight room and devices</h3>
+      <div class="menu-list">
+        <button type="button" class="menu-item" data-view="weightroom">Weight Room floor view <span>Every athlete's workout side by side. Walk each panel and check it off</span></button>
+        <button type="button" class="menu-item" data-view="devices">Device results <span>ForceDecks, NordBord, and T-APEX files, read into each athlete's testing history<em class="menu-count" data-hub-count="deviceDays"></em></span></button>
+        <button type="button" class="menu-item" data-view="tv">TV board <span>The weight-room screen: workouts and groups only, never health data</span></button>
+      </div>
+
+      <h3 class="hub-label">Plans and calendar</h3>
+      <div class="menu-list">
+        <button type="button" class="menu-item" data-view="calendar">Team calendar <span>The whole month: every group's sessions, meets, and test days</span></button>
+        <button type="button" class="menu-item" data-view="coach">Today's checklist <span>Each group's workout for the day, with check-offs</span></button>
+        <button type="button" class="menu-item" data-view="programs">Programs <span>Week-by-week training templates. Build once, apply to any group<em class="menu-count" data-hub-count="programs"></em></span></button>
+        <button type="button" class="menu-item" data-view="custom">Custom workouts <span>Build your own blocks, rounds, and rests, then run them step by step</span></button>
+      </div>
+
+      <h3 class="hub-label">Program upkeep</h3>
+      <div class="menu-list">
+        <button type="button" class="menu-item" data-view="inventory">Equipment <span>What the program owns and where it lives<em class="menu-count" data-hub-count="inventory"></em></span></button>
+        <button type="button" class="menu-item" data-view="data">Backups and spreadsheets <span>Back up the team to a file, restore from one, download spreadsheets</span></button>
+        <button type="button" class="menu-item" data-view="coverage">Demo video map <span>Which drills and tests have your video, a placeholder, or still need filming</span></button>
+        <button type="button" class="menu-item" data-view="libraryhome">Coach's Corner <span>Your short clips for the athletes, in the Library</span></button>
+        <button type="button" class="menu-item" data-view="account">Coach accounts and invites <span>Who has coach access, under Account</span></button>
+      </div>
+    </section>
   </section>
 
   <!-- LIBRARY -->

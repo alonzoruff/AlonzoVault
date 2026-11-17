@@ -2016,6 +2016,109 @@ function openHeadConcernFor(profileId) {
   return (db.concerns[profileId] || [])
     .find(c => c.headRelated && c.status !== 'cleared') || null;
 }
+/* ------------------------------------------------------------------ */
+/* Coach home base helpers (v63)                                       */
+/* ------------------------------------------------------------------ */
+/* Each group's resolved workout for a date, with how many of its
+   athletes are checked off. Shared by the Today coach summary and
+   the coach home base so the two can never disagree. */
+function coachGroupsFor(date) {
+  return db.groups.map(g => {
+    const a = resolveAssignment(g.id, date);
+    const members = db.profiles.filter(pr => !pr.archived && pr.groupId === g.id);
+    const done = members.filter(pr => completionFor(pr.id, date)).length;
+    return {
+      group: { id: g.id, name: g.name },
+      assignment: {
+        sessionId: a.sessionId, sessionName: a.sessionName, source: a.source,
+        note: a.note || '', planText: a.planText || '', warmup: a.warmup || null,
+      },
+      completed: done, total: members.length,
+    };
+  });
+}
+/* True when the date falls inside the 29-week plan (planDayFor
+   itself clamps outside dates to the first or last week). */
+function inSeasonDate(dateString) {
+  const weeks = CONTENT.weeks;
+  if (!weeks.length) return false;
+  return dateString >= weeks[0].start && dateString <= weeks[weeks.length - 1].end;
+}
+/* Monday to Sunday around a date, each day typed from the plan. */
+function weekStripFor(dateString) {
+  const d = parseDateStr(dateString);
+  if (!d) return [];
+  const monday = addDaysStr(dateString, -((d.getDay() + 6) % 7));
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const day = addDaysStr(monday, i);
+    const inside = inSeasonDate(day);
+    const plan = inside ? planDayFor(day) : null;
+    let kind = 'none';
+    if (plan) {
+      if (plan.isMeet) kind = 'meet';
+      else if (plan.isTest) kind = 'test';
+      else if (plan.isOff) kind = 'off';
+      else kind = plan.isHigh ? 'hard' : 'easy';
+    }
+    out.push({ date: day, dayKey: DAY_KEYS[i], today: day === dateString, kind,
+      planText: plan ? plan.planText : '' });
+  }
+  return out;
+}
+/* What is coming up, soonest first: meets the coaches added, test
+   days they scheduled, and the meet and test days written into the
+   season plan. A plan day that already has a coach-added meet or
+   test day on the same date is not listed twice.
+   MASTER CALENDAR MERGE POINT: when the v62 Master Calendar lands,
+   its coach-added events (meets and practices) join this list here,
+   so the home base shows them without a second calendar. */
+function upcomingCoachEvents(fromDate, horizonDays, limit) {
+  const until = addDaysStr(fromDate, horizonDays);
+  const events = [];
+  const meetDates = new Set();
+  const testDates = new Set();
+  for (const m of db.meets) {
+    if (!m.date || m.date < fromDate || m.date > until) continue;
+    meetDates.add(m.date);
+    events.push({ date: m.date, kind: 'meet', title: m.name, detail: m.location || '', source: 'meets' });
+  }
+  for (const t of db.testDays) {
+    if (t.device || !t.date || t.date < fromDate || t.date > until) continue;
+    testDates.add(t.date);
+    events.push({ date: t.date, kind: 'test', title: t.title || 'Test day', detail: '', source: 'testing' });
+  }
+  for (let i = 0; i <= horizonDays; i++) {
+    const day = addDaysStr(fromDate, i);
+    if (!inSeasonDate(day)) continue;
+    const plan = planDayFor(day);
+    if (!plan) continue;
+    if (plan.isMeet && !meetDates.has(day)) {
+      events.push({ date: day, kind: 'meet', title: plan.planText, detail: 'From the season plan', source: 'plan' });
+    } else if (plan.isTest && !plan.isMeet && !testDates.has(day)) {
+      events.push({ date: day, kind: 'test', title: plan.planText, detail: 'From the season plan', source: 'plan' });
+    }
+  }
+  events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return events.slice(0, limit);
+}
+/* Real counts for the data hub labels. Counted, never estimated. */
+function coachHubCounts() {
+  const active = db.profiles.filter(pr => !pr.archived);
+  return {
+    athletes: active.length,
+    groups: db.groups.length,
+    testDays: db.testDays.filter(t => !t.device).length,
+    deviceDays: db.testDays.filter(t => !!t.device).length,
+    meets: db.meets.length,
+    meetResults: db.meetResults.length,
+    goals: db.goals.length,
+    announcements: db.announcements.length,
+    programs: db.programs.length,
+    records: db.schoolRecords.length,
+    inventory: db.inventory.length,
+  };
+}
 function heldInfoFor(profileId) {
   const c = openHeadConcernFor(profileId);
   if (!c) return { held: false, since: null, concernId: null };
@@ -4072,19 +4175,7 @@ async function handleApi(req, res, url) {
     const date = todayStr();
     const plan = planDayFor(date);
     const d = parseDateStr(date);
-    const groups = db.groups.map(g => {
-      const a = resolveAssignment(g.id, date);
-      const members = db.profiles.filter(pr => !pr.archived && pr.groupId === g.id);
-      const done = members.filter(pr => completionFor(pr.id, date)).length;
-      return {
-        group: { id: g.id, name: g.name },
-        assignment: {
-          sessionId: a.sessionId, sessionName: a.sessionName, source: a.source,
-          note: a.note || '', planText: a.planText || '', warmup: a.warmup || null,
-        },
-        completed: done, total: members.length,
-      };
-    });
+    const groups = coachGroupsFor(date);
     const boardOnly = q.get('board') === '1';
     // Open health flags: New or Monitoring concerns, worst first.
     const healthFlags = [];
@@ -4127,6 +4218,80 @@ async function handleApi(req, res, url) {
       healthFlags: boardOnly ? [] : healthFlags,
       heldAthletes: boardOnly ? [] : heldAthletes,
       wellness: boardOnly ? null : wellnessTodaySummary(),
+    });
+  }
+
+  /* ---------- coach home base (v63) ----------
+     Everything the Coach home screen shows, in one coach-only
+     payload: today's picture (who checked in, the wellness
+     averages, pain 8 or higher, athletes held for head symptoms,
+     open health concerns), today's practice per group, the week
+     strip, what is coming up, and real counts for the data hub.
+     Every number is counted from the stored data on this request;
+     nothing is estimated or filled in. It sits below the coach
+     gate like everything here: athletes get 403, logged-out 401.
+     The TV board never calls it (it keeps /api/coach/today?board=1,
+     which strips all health and wellness data). */
+  if (p === '/api/coach/home' && req.method === 'GET') {
+    const date = todayStr();
+    const plan = planDayFor(date);
+    const d = parseDateStr(date);
+    const roster = db.profiles.filter(pr => !pr.archived)
+      .slice()
+      .sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+    const nameOf = (pr) => pr.firstName + ' ' + pr.lastName;
+    const checkedIn = [];
+    const notCheckedIn = [];
+    const painFlags = [];
+    const todays = [];
+    let lowSleep = 0, lowEnergy = 0;
+    for (const pr of roster) {
+      const c = (db.checkins[pr.id] || {})[date];
+      if (!c) { notCheckedIn.push({ profileId: pr.id, name: nameOf(pr) }); continue; }
+      todays.push(c);
+      checkedIn.push({ profileId: pr.id, name: nameOf(pr) });
+      const flags = checkinFlags(c);
+      if (flags.includes('low-sleep')) lowSleep++;
+      if (flags.includes('low-energy')) lowEnergy++;
+      /* The pain flag line is body pain 8 or higher: the same
+         'high-pain' rule the check-in itself uses. */
+      if (flags.includes('high-pain')) {
+        painFlags.push({ profileId: pr.id, name: nameOf(pr), pain: c.pain });
+      }
+    }
+    painFlags.sort((a, b) => b.pain - a.pain || a.name.localeCompare(b.name));
+    const held = [];
+    let openConcerns = 0, urgentConcerns = 0;
+    for (const pr of roster) {
+      const h = heldInfoFor(pr.id);
+      if (h.held) held.push({ profileId: pr.id, name: nameOf(pr), since: h.since });
+      for (const c of db.concerns[pr.id] || []) {
+        if (c.status !== 'new' && c.status !== 'monitoring') continue;
+        openConcerns++;
+        if (c.pain >= 7 || c.impact === 'stopped') urgentConcerns++;
+      }
+    }
+    return sendJson(res, 200, {
+      date,
+      dayName: d ? d.toLocaleDateString('en-US', { weekday: 'long' }) : '',
+      inSeason: !!plan && inSeasonDate(date),
+      week: plan ? plan.week : null,
+      phase: plan ? plan.phase : null,
+      planText: plan && inSeasonDate(date) ? plan.planText : '',
+      weekStrip: weekStripFor(date),
+      groups: coachGroupsFor(date),
+      today: {
+        total: roster.length,
+        checkedIn, notCheckedIn,
+        avgSleep: avgNumeric(todays, 'sleep'),
+        avgEnergy: avgNumeric(todays, 'energy'),
+        avgPain: avgNumeric(todays, 'pain'),
+        lowSleep, lowEnergy,
+        painFlags, held,
+        openConcerns, urgentConcerns,
+      },
+      upcoming: upcomingCoachEvents(date, 42, 5),
+      counts: coachHubCounts(),
     });
   }
 
