@@ -1,6 +1,7 @@
 # Sprinter Workout App — the real web app version
 
-St. John's College High School — Cadets Track & Field.
+By Alonzo. Signed out, the app shows one simple welcome screen; signing in
+opens everything else.
 
 This is the standalone version of the Sprinter Workout App. It is a normal
 website: anybody can open it at its web address, look through the workout
@@ -45,6 +46,19 @@ accounts, no athlete typing.
   the rest. Re-importing the same list creates no duplicates. Filter the
   roster by group, event, or Top Athletes; archive athletes who leave
   (their records stay saved).
+- **Team roster (v64)**: Coach home opens with the whole roster, grouped by
+  training group, each athlete with a color-coded team level (Varsity A,
+  Varsity B, JV, always written out too), their event groups, and
+  tap-to-email or tap-to-call. Coaches only. Each athlete's level, event
+  groups, email and phone are edited on the roster screen.
+- **Importing a Google Sheet (v64)**: download the tab as CSV (File →
+  Download → CSV) and pick it in the bulk import. The app reads columns by
+  name: `First Name`, `Last Name`, `Classification`, `Event Group`, and any
+  email or phone column. Sprinters, hurdlers and jumpers are added;
+  distance- and throws-only rows are left out and listed. Athletes already
+  on the roster are updated, not doubled. A file with only names, emails
+  and phones (like interest-form answers) fills in contact info and adds
+  nobody; every other column (notes, health answers) is ignored.
 - **Assignments & the daily checklist**: every group automatically gets
   the season plan's workout for each day — zero setup. In the Coach view
   you can override any group's workout for any date (with a short note),
@@ -203,7 +217,7 @@ that gets backed up) so the file survives restarts on its own.
 - `server.js` — the whole engine: serves the pages, runs the accounts,
   saves the data. One file, no outside packages.
 - `public/` — what people see: the pages, styling, and app logic, plus
-  the official SJC logo in `public/assets/`.
+  the app mark in `public/assets/app-mark.svg`.
 - `content/` — the workouts, drills, season plan, and written guides,
   copied in so the app stands on its own. One file in here gets special
   handling: `movement_media.json`, the demo-video library. Its source of
@@ -236,8 +250,8 @@ that gets backed up) so the file survives restarts on its own.
 
 ## One known gap
 
-The app icon uses the school's official logo as an SVG file (in
-`public/assets/sjc-logo-header.svg`, referenced by the web app manifest).
+The app icon is an SVG file (`public/assets/app-mark.svg`, referenced by
+the web app manifest).
 Some phones prefer a PNG icon; if the home-screen icon ever looks off,
-a 192×192 and 512×512 PNG can be exported from that same logo file and
+a 192×192 and 512×512 PNG can be exported from that same file and
 dropped into `public/assets/` later — no other changes needed.
