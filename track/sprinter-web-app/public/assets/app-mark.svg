@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sprinter Workout App">
+  <rect width="64" height="64" rx="14" fill="#111214"/>
+  <path d="M14 44 L30 20 H38 L22 44 Z" fill="#e8eaed"/>
+  <path d="M28 44 L44 20 H50 L34 44 Z" fill="#9aa1ab"/>
+  <rect x="12" y="48" width="40" height="3" rx="1.5" fill="#5c626b"/>
+</svg>

@@ -153,8 +153,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v62';
-const APP_BUILD_LABEL = 'Cadets Sprint · App v59';
+const APP_VERSION = 'v64';
+const APP_BUILD_LABEL = 'Sprinter Workout App · v64';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -171,7 +171,7 @@ function appVersionHtml() {
    theme: their CSS pins the baseline treatment. */
 const THEME_KEY = 'sjc-theme';
 const THEMES = [
-  { id: 'cadet', name: 'Cadet', meta: '#CC0033',
+  { id: 'cadet', name: 'Classic', meta: '#CC0033',
     desc: 'The standard look: light, scarlet and white, the way the app has always looked.',
     bg: '#f4f5f7', card: '#ffffff', line: '#e3e3e6', ink: '#1c1c1e', muted: '#68707b', accent: '#CC0033' },
   { id: 'floodlight', name: 'Floodlight', meta: '#101216',
@@ -1033,7 +1033,12 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 requestAnimationFrame(updateNavIndicators);
 
+/* v64: signed out, the app is just the welcome screen and the sign-in
+   form. Every other view waits for a signed-in account. */
+const SIGNED_OUT_VIEWS = ['welcome', 'account'];
 function showView(name) {
+  if (state.authKnown && !state.user && !SIGNED_OUT_VIEWS.includes(name)) name = 'welcome';
+  document.body.classList.toggle('on-welcome', name === 'welcome');
   closeTermPop();
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const area = VIEW_AREA[name] || 'home';
@@ -2781,7 +2786,7 @@ function renderPrivacy() {
   el.innerHTML = `
     <div class="card">
       <h2>What this app holds</h2>
-      <p>This is the St. John's track &amp; field team app. For each athlete it can hold: their name, team group and events, and school email; daily wellness check-ins (sleep, body pain from 1 to 10, energy, and a yes/no answer about head symptoms); health concerns — above all the head-symptom reports described below, which the coaching staff work through with the athlete; training and testing results; meet results; and the coach's training notes.</p>
+      <p>This is a track &amp; field team app. For each athlete it can hold: their name, team group and events, and school email; daily wellness check-ins (sleep, body pain from 1 to 10, energy, and a yes/no answer about head symptoms); health concerns — above all the head-symptom reports described below, which the coaching staff work through with the athlete; training and testing results; meet results; and the coach's training notes.</p>
       <p>When an athlete reports body pain of 8 or higher in a check-in, the coaching staff see a high-pain flag on their screens so someone follows up with the athlete in person. Athletes never see that flag, and it never appears on the TV boards or leaderboards.</p>
       <h2>Who can see it</h2>
       <p>Only the coaching staff, through their coach accounts. Athletes can see their own check-ins, their own lifting loads, their goals, and team meet results. Health details — check-ins, concerns, coach notes — are never shown on the weight-room TV boards, never on leaderboards, and never to other athletes.</p>
@@ -2843,7 +2848,7 @@ function renderAccount() {
       </form>
       <form id="register-form" class="card">
         <h2>Create an account</h2>
-        <p class="muted">This app is invite-only — it's for SJC track athletes and coaches. Athletes: sign up with the email your coach added to your roster profile (your school email) — that is how your account links you for the daily check-in, and it holds your practice log and cross-training swaps. Coaches: sign up with the email the head coach invited.</p>
+        <p class="muted">This app is invite-only — it's for our track athletes and coaches. Athletes: sign up with the email your coach added to your roster profile (your school email) — that is how your account links you for the daily check-in, and it holds your practice log and cross-training swaps. Coaches: sign up with the email the head coach invited.</p>
         <label>Email <input type="email" id="rg-email" required autocomplete="email"></label>
         <label>Password (8+ characters) <input type="password" id="rg-pass" required autocomplete="new-password" minlength="8"></label>
         <label class="check-line"><input type="checkbox" id="rg-age" required> I am 13 or older</label>
@@ -2870,6 +2875,7 @@ function renderAccount() {
 }
 function syncAuthUi() {
   const isCoach = !!(state.user && state.user.role === 'coach');
+  document.body.classList.toggle('signed-out', !!state.authKnown && !state.user);
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderAppearance(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderInventory();
@@ -3208,7 +3214,7 @@ function amsConcernCard(c) {
    audit trail, ready to paste or print for the athletic trainer. */
 function amsTrainerSummaryText(c, athleteName) {
   const lines = [
-    "Health concern summary — St. John's track & field",
+    "Health concern summary — track & field",
     'Athlete: ' + athleteName,
     'Concern: ' + (AREA_LABELS[c.area] || c.area || 'Health concern') + ' (' + (c.side || '—') + ') · '
       + (FEELING_LABELS[c.feeling] || c.feeling) + ' · started ' + c.started,
@@ -3597,7 +3603,7 @@ function openMedia(id, title, editOnly) {
     const vu = (state.content && state.content.videoUpload) || null;
     ed.innerHTML = `<label>Demo link — YouTube or a .gif
       <input type="url" id="media-url" value="${m ? esc(m.url) : ''}" placeholder="https://www.youtube.com/watch?v=…"></label>
-      <label class="check-line"><input type="checkbox" id="media-athlete" ${m && m.athleteFeatures ? 'checked' : ''}> Features an SJC athlete</label>
+      <label class="check-line"><input type="checkbox" id="media-athlete" ${m && m.athleteFeatures ? 'checked' : ''}> Features one of our athletes</label>
       <label class="check-line" id="media-consent-wrap" ${m && m.athleteFeatures ? '' : 'hidden'}><input type="checkbox" id="media-consent"> I have specific written parent/guardian permission to use this athlete's video</label>
       ${m && m.athleteFeatures && m.consent ? `<p class="muted">Consent attested by ${esc(m.consent.email || '')} on ${esc(String(m.consent.at || '').slice(0, 10))}.</p>` : ''}
       <div class="filter-row">
@@ -4033,6 +4039,31 @@ async function renderCoachInvites() {
 }
 
 /* ---------------- groups + roster ---------------- */
+/* v64 roster: team level chips (color plus words, so the level never
+   depends on color alone) and contact links. */
+const LEVELS = [
+  { id: 'varsity-a', name: 'Varsity A' },
+  { id: 'varsity-b', name: 'Varsity B' },
+  { id: 'jv', name: 'JV' },
+];
+function levelName(id) { const l = LEVELS.find(x => x.id === id); return l ? l.name : ''; }
+function levelChip(id) {
+  return id && levelName(id)
+    ? `<span class="lvl lvl-${id}">${esc(levelName(id))}</span>`
+    : '<span class="lvl lvl-none">No level</span>';
+}
+function levelOpts(sel) {
+  return '<option value="">No level yet</option>' + LEVELS.map(l =>
+    `<option value="${l.id}" ${l.id === sel ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+}
+function telHref(phone) { return 'tel:' + String(phone || '').replace(/[^0-9+]/g, ''); }
+function contactLinks(pr) {
+  const bits = [];
+  if (pr.email) bits.push(`<a class="contact-link" href="mailto:${esc(pr.email)}">✉ ${esc(pr.email)}</a>`);
+  if (pr.phone) bits.push(`<a class="contact-link" href="${esc(telHref(pr.phone))}">☎ ${esc(pr.phone)}</a>`);
+  return bits.length ? bits.join(' ') : '<span class="muted">No email or phone yet</span>';
+}
+
 async function renderGroups() {
   const el = $('#groups-main');
   if (!el) return;
@@ -4059,12 +4090,13 @@ async function renderGroups() {
     return `<h3>${esc(gname || '')}</h3>` + (members.length ? '' : '<p class="muted">No athletes in this group yet.</p>') + members.map(pr => `
       <div class="card roster-card">
         <div class="roster-row">
-          <span><strong>${esc(pr.name)}</strong> ${pr.topAthlete ? '<span class="badge star">★ TOP</span>' : ''} ${eventBadges(pr)}</span>
+          <span>${levelChip(pr.level)} <strong>${esc(pr.name)}</strong> ${pr.topAthlete ? '<span class="badge star">★ TOP</span>' : ''} ${eventBadges(pr)}</span>
           <span class="roster-actions">
             <button class="btn secondary" data-star="${pr.id}" type="button">${pr.topAthlete ? 'Unstar' : '★ Star'}</button>
             <button class="btn secondary" data-archive="${pr.id}" type="button">Archive</button>
           </span>
         </div>
+        <p class="roster-meta">${(pr.eventGroups || []).length ? esc(pr.eventGroups.join(' · ')) + ' · ' : ''}${contactLinks(pr)}</p>
         <p class="muted">${pr.linkedEmail ? `🔗 Linked: ${esc(pr.linkedEmail)} — this athlete can check in` : '⚠ Not linked — open Edit profile below to link this athlete\'s account for the daily check-in'}</p>
         <label>Group <select data-move="${pr.id}">${groupOpts(pr.groupId)}</select></label>
         <details>
@@ -4073,6 +4105,11 @@ async function renderGroups() {
           <label>Last name <input type="text" id="el-${pr.id}" value="${esc(pr.lastName)}"></label>
           <label>Events (comma list — sprinter, jumper, hurdler…)
             <input type="text" id="ee-${pr.id}" value="${esc((pr.events || []).join(', '))}"></label>
+          <label>Team level <select id="elv-${pr.id}">${levelOpts(pr.level)}</select></label>
+          <label>Event groups (comma list — short sprints, hurdles, long jump…)
+            <input type="text" id="eg-${pr.id}" value="${esc((pr.eventGroups || []).join(', '))}"></label>
+          <label>Email <input type="email" id="em-${pr.id}" value="${esc(pr.email || '')}" placeholder="athlete@example.com"></label>
+          <label>Phone <input type="tel" id="ph-${pr.id}" value="${esc(pr.phone || '')}" placeholder="555-555-5555"></label>
           <button class="btn primary" data-save-profile="${pr.id}" type="button">Save profile</button>
           <h3>Account link — daily check-in</h3>
           <p class="muted">Link the email this athlete uses for their account and they can log the daily check-in (sleep, body pain, energy) themselves. Nothing else opens up.</p>
@@ -4111,6 +4148,12 @@ async function renderGroups() {
       </div>
       <label>Group <select id="np-group">${groupOpts(null)}</select></label>
       <label>Events (comma list) <input type="text" id="np-events" placeholder="sprinter, hurdler"></label>
+      <label>Team level <select id="np-level">${levelOpts('')}</select></label>
+      <label>Event groups (comma list) <input type="text" id="np-egroups" placeholder="short sprints, long jump"></label>
+      <div class="filter-row">
+        <label>Email <input type="email" id="np-email" placeholder="athlete@example.com"></label>
+        <label>Phone <input type="tel" id="np-phone" placeholder="555-555-5555"></label>
+      </div>
       <label class="check-line"><input type="checkbox" id="np-top"> Top Athlete ★</label>
       <button class="btn primary" type="submit">Add athlete</button>
       <p class="error" id="np-err"></p>
@@ -4129,6 +4172,8 @@ async function renderGroups() {
       <p class="muted">One athlete per line: <code>Last, First | Group | events (comma list) | Top (optional: yes)</code><br>
       Example: <code>Doe, John | 100/200 | sprinter, hurdler | yes</code><br>
       A simple CSV with a <code>name,group,events,top</code> header also works. Groups are created as needed; duplicate names in the same group are skipped and reported.</p>
+      <p class="muted"><strong>From a Google Sheet:</strong> in the sheet, choose File → Download → CSV, then pick that file below. The app reads the columns by name: <code>First Name</code>, <code>Last Name</code>, <code>Classification</code> (Var A, Var B, JV), <code>Event Group</code>, and email and phone columns. Sprinters, hurdlers and jumpers are added; distance- and throws-only rows are left out. Athletes already on the roster get their level, event groups, email and phone filled in instead of being added twice. A file with only names, emails and phones (like the interest form answers) just fills in contact info.</p>
+      <label>CSV file <input type="file" id="import-file" accept=".csv,text/csv,text/plain"></label>
       <label>Roster lines <textarea id="import-text" rows="6" placeholder="Doe, John | 100/200 | sprinter | yes">${esc(state.importText || '')}</textarea></label>
       <button class="btn primary" id="import-btn" type="button">Import roster</button>
       <div id="import-report">${state.importReport ? importReportHtml(state.importReport) : ''}</div>
@@ -4168,6 +4213,10 @@ async function renderGroups() {
         firstName: $('#ef-' + CSS.escape(id)).value,
         lastName: $('#el-' + CSS.escape(id)).value,
         events: $('#ee-' + CSS.escape(id)).value.split(',').map(s => s.trim()).filter(Boolean),
+        level: $('#elv-' + CSS.escape(id)).value || null,
+        eventGroups: $('#eg-' + CSS.escape(id)).value.split(',').map(s => s.trim()).filter(Boolean),
+        email: $('#em-' + CSS.escape(id)).value,
+        phone: $('#ph-' + CSS.escape(id)).value,
       });
       renderGroups();
     } catch (err) { alert(err.message); }
@@ -4204,6 +4253,10 @@ async function renderGroups() {
         groupId: $('#np-group').value || null,
         events: $('#np-events').value.split(',').map(s => s.trim()).filter(Boolean),
         topAthlete: $('#np-top').checked,
+        level: $('#np-level').value || null,
+        eventGroups: $('#np-egroups').value.split(',').map(s => s.trim()).filter(Boolean),
+        email: $('#np-email').value,
+        phone: $('#np-phone').value,
       });
       renderGroups();
     } catch (err) { $('#np-err').textContent = err.message; }
@@ -4214,6 +4267,14 @@ async function renderGroups() {
       await apiPost('/api/groups', { name: $('#ng-name').value });
       renderGroups();
     } catch (err) { $('#ng-err').textContent = err.message; }
+  });
+  $('#import-file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (f.size > 200 * 1024) { alert('That file is too big for one import. Split it into smaller files.'); return; }
+    const rd = new FileReader();
+    rd.onload = () => { state.importText = String(rd.result || ''); $('#import-text').value = state.importText; };
+    rd.readAsText(f);
   });
   $('#import-btn').addEventListener('click', async () => {
     try {
@@ -4227,7 +4288,10 @@ async function renderGroups() {
   renderArchived();
 }
 function importReportHtml(r) {
-  return `<div class="ok-note">Import done: <strong>${r.created}</strong> athlete${r.created === 1 ? '' : 's'} created, <strong>${r.groupsCreated}</strong> group${r.groupsCreated === 1 ? '' : 's'} created.</div>
+  const updated = r.updated ? `, <strong>${r.updated}</strong> already on the roster updated` : '';
+  const left = (r.left || []).length
+    ? `<div class="muted">Left out ${r.left.length} distance or throws athlete${r.left.length === 1 ? '' : 's'}: ${r.left.map(s => esc(s.text)).join(', ')}.</div>` : '';
+  return `<div class="ok-note">Import done: <strong>${r.created}</strong> athlete${r.created === 1 ? '' : 's'} created${updated}, <strong>${r.groupsCreated}</strong> group${r.groupsCreated === 1 ? '' : 's'} created.</div>${left}
     ${r.skipped.length ? `<div class="flag">Skipped ${r.skipped.length}:<br>${r.skipped.map(s => `Line ${s.line}: ${esc(s.text)} — ${esc(s.reason)}`).join('<br>')}</div>` : ''}
     ${r.errors.length ? `<div class="flag">Could not read ${r.errors.length} line${r.errors.length === 1 ? '' : 's'}:<br>${r.errors.map(s => `Line ${s.line}: ${esc(s.text)} — ${esc(s.reason)}`).join('<br>')}</div>` : ''}`;
 }
@@ -7033,7 +7097,7 @@ async function renderRecords() {
         <thead><tr><th>#</th><th>Athlete</th><th>Mark</th><th>Year</th><th>Meet</th></tr></thead>
         <tbody>${sel.entries.map(r => `<tr><td>${r.rank}</td><td><strong>${esc(r.name)}</strong></td><td><strong>${esc(r.mark)}</strong></td><td>${r.year ? esc(r.year) : '—'}</td><td>${esc(r.meet || '—')}</td></tr>`).join('')}</tbody></table></div>`
         : `<p class="muted">No records yet${sel ? ' for the ' + esc(sel.name) : ''} — the board fills in as real marks are added.</p>`}
-      ${anyMarks ? '' : '<p class="muted">The board starts empty on purpose: every mark here is real St. John\'s history, added by a coach.</p>'}
+      ${anyMarks ? '' : '<p class="muted">The board starts empty on purpose: every mark here is real program history, added by a coach.</p>'}
     </div>`;
   main.querySelectorAll('[data-rec-event]').forEach(b => b.addEventListener('click', () => {
     state.recEvent = b.dataset.recEvent;
@@ -8347,9 +8411,10 @@ async function renderCoachHome() {
   if (!todayEl) return;
   if (!isCoachUser()) {
     gateHtml(todayEl, 'Coach home lives here.');
-    ['#ch-announce', '#ch-week', '#ch-pinned'].forEach(sel => { const x = $(sel); if (x) x.innerHTML = ''; });
+    ['#ch-announce', '#ch-week', '#ch-pinned', '#ch-roster'].forEach(sel => { const x = $(sel); if (x) x.innerHTML = ''; });
     return;
   }
+  renderCoachRoster();
   let data;
   try { data = await api('/api/coach/home'); }
   catch (err) {
@@ -8368,6 +8433,80 @@ async function renderCoachHome() {
   paintCoachWeek(data);
   paintCoachHubCounts(data.counts || {});
   renderCoachHomeAnnouncements();
+}
+/* v64 Team roster on Coach home. Grouped by training group, level
+   chips double as filters, search narrows by name, and each name
+   carries tap-to-email / tap-to-call. */
+async function renderCoachRoster() {
+  const el = $('#ch-roster');
+  if (!el) return;
+  await refreshProfiles();
+  el.removeAttribute('aria-busy');
+  const all = activeProfiles();
+  if (!all.length) {
+    el.innerHTML = `<div class="card"><p>No athletes on the roster yet. Open the roster to add them one at a time or import your roster sheet.</p>
+      <button class="btn secondary" type="button" data-view="groups">Go to roster and groups</button></div>`;
+    return;
+  }
+  const lvFilter = state.chLevel || '';
+  const q = (state.chRosterQ || '').trim().toLowerCase();
+  const count = (id) => all.filter(pr => (pr.level || '') === id).length;
+  const noLevel = all.filter(pr => !pr.level).length;
+  const chip = (id, label, n) => `<button type="button" class="lvl-filter ${id ? 'lvl lvl-' + id : 'lvl lvl-all'} ${lvFilter === id ? 'on' : ''}"
+      data-ch-level="${id}" aria-pressed="${lvFilter === id}">${esc(label)} <b>${n}</b></button>`;
+  let list = all;
+  if (lvFilter === 'none') list = list.filter(pr => !pr.level);
+  else if (lvFilter) list = list.filter(pr => pr.level === lvFilter);
+  if (q) list = list.filter(pr => pr.name.toLowerCase().includes(q));
+  const order = { 'varsity-a': 0, 'varsity-b': 1, jv: 2 };
+  const byGroup = new Map();
+  for (const pr of list) {
+    const k = pr.groupId || '__none';
+    if (!byGroup.has(k)) byGroup.set(k, []);
+    byGroup.get(k).push(pr);
+  }
+  const keys = [...state.groups.map(g => g.id), '__none'].filter(k => byGroup.has(k));
+  const sections = keys.map(k => {
+    const gname = k === '__none' ? 'No group yet' : (state.groups.find(g => g.id === k) || {}).name || '';
+    const members = byGroup.get(k).slice().sort((a, b) =>
+      ((order[a.level] ?? 3) - (order[b.level] ?? 3)) || (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+    return `<div class="ch-roster-group">
+      <h3>${esc(gname)} <span class="muted">${members.length}</span></h3>
+      <ul class="ch-roster-list">${members.map(pr => `
+        <li class="ch-roster-row lvl-row-${esc(pr.level || 'none')}">
+          ${levelChip(pr.level)}
+          <span class="ch-roster-name"><strong>${esc(pr.name)}</strong>
+            ${(pr.eventGroups || []).length ? `<small class="muted">${esc(pr.eventGroups.join(' · '))}</small>` : ''}</span>
+          <span class="ch-roster-contact">
+            ${pr.email ? `<a class="icon-link" href="mailto:${esc(pr.email)}" title="Email ${esc(pr.name)}" aria-label="Email ${esc(pr.name)}">✉</a>` : ''}
+            ${pr.phone ? `<a class="icon-link" href="${esc(telHref(pr.phone))}" title="Call ${esc(pr.name)}" aria-label="Call ${esc(pr.name)}">☎</a>` : ''}
+          </span>
+        </li>`).join('')}</ul>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div class="card ch-roster">
+    <div class="lvl-filters" role="group" aria-label="Filter by team level">
+      ${chip('', 'Everyone', all.length)}
+      ${LEVELS.map(l => chip(l.id, l.name, count(l.id))).join('')}
+      ${noLevel ? chip('none', 'No level', noLevel) : ''}
+    </div>
+    <label class="ch-roster-search"><span class="sr-only">Search athletes</span>
+      <input type="search" id="ch-roster-q" value="${esc(state.chRosterQ || '')}" placeholder="Search athletes"></label>
+    ${sections || '<p class="muted">No athletes match.</p>'}
+  </div>`;
+  el.querySelectorAll('[data-ch-level]').forEach(b => b.addEventListener('click', () => {
+    state.chLevel = state.chLevel === b.dataset.chLevel ? '' : b.dataset.chLevel;
+    renderCoachRoster();
+  }));
+  const qi = $('#ch-roster-q');
+  if (qi) qi.addEventListener('input', (e) => {
+    state.chRosterQ = e.target.value;
+    const t = e.target.value.trim().toLowerCase();
+    el.querySelectorAll('.ch-roster-row').forEach(row => {
+      const n = row.querySelector('.ch-roster-name strong');
+      row.style.display = !t || (n && n.textContent.toLowerCase().includes(t)) ? '' : 'none';
+    });
+  });
 }
 function paintCoachToday(data) {
   const el = $('#ch-today');
@@ -9231,6 +9370,7 @@ function tvStopTimers() {
   if (nuView) nuView.innerHTML = decorateTerms(nuView.innerHTML, state.content.glossary || []);
   $('#log-date').value = todayStr();
   try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
+  state.authKnown = true;
   try { state.wuOverrides = (await api('/api/warmup-cards')).cards || {}; } catch (_) { state.wuOverrides = {}; }
   await refreshUserData();
   /* syncAuthUi (not the individual renders) is what un-hides the Coach
@@ -9239,6 +9379,9 @@ function tvStopTimers() {
   /* v63: coaches open the app on Coach home, the same page every
      coach lands on; athletes and visitors open on Today. */
   if (isCoachUser()) showView('coachhub');
+  else if (!state.user) showView('welcome');
+  const brand = document.querySelector('.brand-block');
+  if (brand) brand.addEventListener('click', () => { if (!state.user) showView('welcome'); });
   showAppUpdatedToast();
   renderLibrary();
 })();

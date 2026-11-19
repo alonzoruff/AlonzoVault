@@ -37,7 +37,7 @@
  * Registration is invite-only: past the first account, an email can
  * sign up only when a coach has already claimed it — a coach invite,
  * or the linked email on a roster profile; everyone else gets a 403
- * explaining the app is for SJC track athletes and coaches. The
+ * explaining the app is for the team's track athletes and coaches. The
  * per-account practice log and cross-training swaps are the coach's
  * own notebook and work as they always have.
  */
@@ -112,6 +112,8 @@ let db = {
 /* Coach-set athlete status (the AMS layer): every profile carries
    one; anything missing or unrecognized reads as active. */
 const PROFILE_STATUSES = ['active', 'injured', 'inactive'];
+/* v64: team level on the roster card (Varsity A / Varsity B / JV). */
+const PROFILE_LEVELS = ['varsity-a', 'varsity-b', 'jv'];
 
 function migrate() {
   db.users = Array.isArray(db.users) ? db.users : [];
@@ -163,7 +165,7 @@ function migrate() {
   // name, profileId, year, meet, date, createdAt } — the all-time
   // top 10 per event. name is free text (most record holders are not
   // on the current roster); profileId links a current athlete when
-  // the mark is theirs. Starts empty — real SJC history only.
+  // the mark is theirs. Starts empty — real program history only.
   db.schoolRecords = Array.isArray(db.schoolRecords) ? db.schoolRecords : [];
   // Coach-built custom workouts for runner mode: a flat list of
   // { id, title, blocks: [{ rounds, restBetweenRounds, restAfterBlock,
@@ -1487,7 +1489,7 @@ function mergedMedia() {
     if (e) {
       out[id] = Object.assign({}, e, { source: 'coach' });
       /* Athlete-video consent rides with a coach entry: whether
-         the video features an SJC athlete, and the attestation
+         the video features one of our athletes, and the attestation
          recorded when the coach saved it. */
       if (raw.athleteFeatures) {
         out[id].athleteFeatures = true;
@@ -1791,6 +1793,12 @@ function publicProfile(pr) {
     events: pr.events || [], topAthlete: !!pr.topAthlete, archived: !!pr.archived,
     status: PROFILE_STATUSES.includes(pr.status) ? pr.status : 'active',
     linkedEmail: linkedEmailForProfile(pr.id),
+    // v64 roster fields. Coach-only: every route that returns a
+    // profile sits behind the coach gate.
+    level: PROFILE_LEVELS.includes(pr.level) ? pr.level : null,
+    eventGroups: Array.isArray(pr.eventGroups) ? pr.eventGroups.slice() : [],
+    email: pr.email || '',
+    phone: pr.phone || '',
   };
 }
 function publicUser(u) {
@@ -3217,6 +3225,118 @@ const cleanEvents = (v) => {
   return out.slice(0, 6);
 };
 
+/* ---------- v64 roster fields ----------
+   Level: accepts "varsity-a", "Var A", "Varsity A", "A", "JV" ... and
+   returns the stored id, '' for "clear it", or null for "not a level". */
+const parseLevel = (v) => {
+  const t = String(v == null ? '' : v).trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (!t) return '';
+  if (t === 'varsitya' || t === 'vara' || t === 'a') return 'varsity-a';
+  if (t === 'varsityb' || t === 'varb' || t === 'b') return 'varsity-b';
+  if (t === 'jv' || t === 'juniorvarsity') return 'jv';
+  return null;
+};
+/* Email field: '' clears; null means "not an email". */
+const parseContactEmail = (v) => {
+  const t = String(v == null ? '' : v).trim().toLowerCase().slice(0, 200);
+  if (!t) return '';
+  return EMAIL_RE.test(t) ? t : null;
+};
+/* Phone field: digits plus the usual punctuation. '' clears; null
+   means "not a phone number" (fewer than 7 digits, or letters). */
+const parseContactPhone = (v) => {
+  const t = String(v == null ? '' : v).trim().slice(0, 30);
+  if (!t) return '';
+  if (!/^[0-9+().\-\s]+$/.test(t)) return null;
+  const digits = t.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  if (digits.length === 10 && !/^\+/.test(t)) return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+  if (digits.length === 11 && digits[0] === '1') return digits.slice(1, 4) + '-' + digits.slice(4, 7) + '-' + digits.slice(7);
+  return t.replace(/\s+/g, ' ');
+};
+/* Event groups: the sprint/hurdle/jump tags a coach reads on the
+   roster ("SS, LJ" -> Short sprints, Long jump). Unknown words are
+   kept as written so nothing a coach typed is lost. */
+const EVENT_GROUP_CODES = {
+  ss: 'Short sprints', 'short sprints': 'Short sprints', 'short sprint': 'Short sprints', sprints: 'Sprints', sprint: 'Sprints',
+  ls: 'Long sprints', 'long sprints': 'Long sprints', 'long sprint': 'Long sprints',
+  h: 'Hurdles', hurdles: 'Hurdles', hurdle: 'Hurdles',
+  lj: 'Long jump', 'long jump': 'Long jump',
+  tj: 'Triple jump', 'triple jump': 'Triple jump',
+  hj: 'High jump', 'high jump': 'High jump',
+  jumps: 'Jumps', jump: 'Jumps',
+  multis: 'Multis', multi: 'Multis', everything: 'Multis',
+  distance: 'Distance', md: 'Distance', d: 'Distance',
+  throws: 'Throws', throw: 'Throws',
+};
+const cleanEventGroups = (v) => {
+  const raw = Array.isArray(v) ? v : String(v == null ? '' : v).split(/[,;/]+/);
+  const out = [];
+  for (const item of raw) {
+    let t = String(item || '').trim().replace(/[?!.*]+$/g, '').trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    let label = EVENT_GROUP_CODES[key];
+    if (!label && /\b55\s*m?\b|\b60\s*m\b|\b400\s*m?\b/.test(key) && !/800|1600|3200/.test(key)) label = 'Sprints';
+    if (!label) label = t.slice(0, 30);
+    if (!out.includes(label)) out.push(label);
+  }
+  return out.slice(0, 6);
+};
+/* Distance and throws are other coaches' groups: a roster import into
+   the sprinter app leaves an athlete out when those are their only
+   groups. */
+const NON_SPRINT_GROUPS = ['Distance', 'Throws'];
+const isSprintJumpHurdle = (groups) => groups.some(g => !NON_SPRINT_GROUPS.includes(g));
+/* Name matching for imports: case, spacing and curly apostrophes. */
+const nameKey = (first, last) => (String(first || '') + '|' + String(last || ''))
+  .toLowerCase().replace(/[‘’ʼ`]/g, "'").replace(/\s+/g, ' ').trim();
+/* Whole-file CSV reader (quoted cells may hold commas and line
+   breaks, as Google Forms answers do). Returns rows of trimmed cells. */
+const parseCsvRows = (text) => {
+  const rows = [];
+  let row = [], cur = '', inQ = false;
+  const src = String(text || '').replace(/^﻿/, '');
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQ) {
+      if (ch === '"' && src[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') inQ = false;
+      else cur += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ',') { row.push(cur.trim()); cur = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && src[i + 1] === '\n') i++;
+      row.push(cur.trim()); rows.push(row); row = []; cur = '';
+    } else cur += ch;
+  }
+  if (cur !== '' || row.length) { row.push(cur.trim()); rows.push(row); }
+  return rows;
+};
+/* A header row this import understands by column name: it needs a
+   first+last name pair (or a single "name" column) plus at least one
+   of level, event group, email or phone. Returns the column map or
+   null. "Best email address?" wins over a form's sign-in "Email
+   Address"; any other column (notes, health answers) is ignored. */
+const rosterHeaderMap = (cells) => {
+  const h = cells.map(c => String(c || '').trim().toLowerCase());
+  const find = (re, not) => h.findIndex(x => re.test(x) && !(not && not.test(x)));
+  const map = {
+    first: find(/^first\s*name/),
+    last: find(/^last\s*name/),
+    name: find(/^(athlete\s*)?name$/),
+    level: find(/^(classification|level|team\s*level|team)\b/),
+    groups: find(/^event\s*groups?\b/),
+    group: find(/^(training\s*)?group$/),
+    email: find(/best\s*email/),
+    phone: find(/(cell|phone|mobile)/),
+  };
+  if (map.email < 0) map.email = find(/^(athlete\s*)?e-?mail(\s*address)?\b/);
+  const hasName = (map.first >= 0 && map.last >= 0) || map.name >= 0;
+  const hasField = map.level >= 0 || map.groups >= 0 || map.email >= 0 || map.phone >= 0;
+  return hasName && hasField ? map : null;
+};
+
 /* ------------------------------------------------------------------ */
 /* API                                                                 */
 /* ------------------------------------------------------------------ */
@@ -3333,7 +3453,7 @@ async function handleApi(req, res, url) {
     const rosterLinked = !!(linkProf && !linkProf.archived);
     if (!firstAccount && !db.coachInvites.includes(email) && !rosterLinked) {
       return sendJson(res, 403, {
-        error: 'This app is invite-only — it\'s for SJC track athletes and coaches. If that\'s you, ask Coach AJ to add your email first, then sign up.',
+        error: 'This app is invite-only — it\'s for our track athletes and coaches. If that\'s you, ask Coach AJ to add your email first, then sign up.',
       });
     }
     const user = {
@@ -3860,6 +3980,29 @@ async function handleApi(req, res, url) {
     list.sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
     return sendJson(res, 200, { profiles: list.map(publicProfile) });
   }
+  /* v64: level / event groups / email / phone from a request body.
+     Only keys present in the body are returned; a bad value returns
+     { error }. */
+  const rosterFieldsFromBody = (body) => {
+    const out = {};
+    if (body.level !== undefined && body.level !== null) {
+      const lv = parseLevel(body.level);
+      if (lv === null) return { error: 'Level must be Varsity A, Varsity B, or JV.' };
+      out.level = lv || null;
+    } else if (body.level === null) out.level = null;
+    if (body.email !== undefined) {
+      const em = parseContactEmail(body.email);
+      if (em === null) return { error: 'That email address does not look right.' };
+      out.email = em;
+    }
+    if (body.phone !== undefined) {
+      const ph = parseContactPhone(body.phone);
+      if (ph === null) return { error: 'That phone number does not look right.' };
+      out.phone = ph;
+    }
+    if (body.eventGroups !== undefined) out.eventGroups = cleanEventGroups(body.eventGroups);
+    return { fields: out };
+  };
   if (p === '/api/profiles' && req.method === 'POST') {
     const body = await readBody(req);
     const firstName = clean(body.firstName, 40);
@@ -3877,10 +4020,14 @@ async function handleApi(req, res, url) {
         return sendJson(res, 400, { error: 'Status must be active, injured, or inactive.' });
       }
     }
+    const rf = rosterFieldsFromBody(body);
+    if (rf.error) return sendJson(res, 400, { error: rf.error });
     const prof = {
       id: crypto.randomUUID(), firstName, lastName,
       groupId: gid, events: cleanEvents(body.events),
       topAthlete: !!body.topAthlete, archived: false, status,
+      level: rf.fields.level || null, eventGroups: rf.fields.eventGroups || [],
+      email: rf.fields.email || '', phone: rf.fields.phone || '',
       createdAt: new Date().toISOString(),
     };
     db.profiles.push(prof);
@@ -3923,6 +4070,126 @@ async function handleApi(req, res, url) {
       if (words.length >= 2) return { firstName: words[0], lastName: words.slice(1).join(' ') };
       return { firstName: '', lastName: '' };
     };
+    /* v64: a spreadsheet export read by its column names, such as the
+       Final Roster tab (First Name, Last Name, Classification, Event
+       Group) or the interest-form responses (First Name, Last Name,
+       Best email address?, Cell phone number?).
+       - A file with an Event Group column adds the sprint, hurdle and
+         jump athletes and leaves out distance- and throws-only rows.
+       - Athletes already on the roster are updated, never doubled:
+         level, event groups, email and phone fill in; their training
+         group is left as the coach set it.
+       - A file with no Event Group column (contacts only) only updates
+         athletes already on the roster.
+       - A blank cell never wipes a value already saved. */
+    {
+      const rows = parseCsvRows(text);
+      let hIdx = -1, map = null;
+      for (let i = 0; i < rows.length && i < 5; i++) {
+        if (!rows[i].some(c => c)) continue;
+        map = rosterHeaderMap(rows[i]);
+        hIdx = i;
+        break;
+      }
+      if (map) {
+        const report = { created: 0, updated: 0, groupsCreated: 0, skipped: [], errors: [], left: [] };
+        const cell = (row, i) => (i >= 0 && i < row.length ? String(row[i] || '').trim() : '');
+        const addsAthletes = map.groups >= 0;
+        const seen = new Set();
+        for (let r = hIdx + 1; r < rows.length; r++) {
+          const row = rows[r];
+          const lineNo = r + 1;
+          if (!row.some(c => c)) continue;
+          let firstName, lastName;
+          if (map.first >= 0 && map.last >= 0) {
+            firstName = clean(cell(row, map.first), 40);
+            lastName = clean(cell(row, map.last), 40);
+          } else {
+            const sn = splitName(cell(row, map.name));
+            firstName = clean(sn.firstName, 40);
+            lastName = clean(sn.lastName, 40);
+          }
+          if (!firstName && !lastName) {
+            // Legend cells and notes beside the table: nothing to import.
+            const rest = row.filter(c => c).join(' · ');
+            if (addsAthletes && (cell(row, map.level) || cell(row, map.groups))) {
+              report.errors.push({ line: lineNo, text: rest.slice(0, 80), reason: 'No name on this row.' });
+            }
+            continue;
+          }
+          // A name typed all in lower case ("taggart") gets capital
+          // letters; any other spelling is kept exactly as typed.
+          const capName = (n) => (n && n === n.toLowerCase()
+            ? n.replace(/(^|[\s\-'\u2019])([a-z])/g, (m, a, b) => a + b.toUpperCase()) : n);
+          firstName = capName(firstName);
+          lastName = capName(lastName);
+          const label = (firstName + ' ' + lastName).trim();
+          if (!firstName || !lastName) {
+            report.errors.push({ line: lineNo, text: label, reason: 'Needs both a first and a last name.' });
+            continue;
+          }
+          const key = nameKey(firstName, lastName);
+          if (seen.has(key)) {
+            report.skipped.push({ line: lineNo, text: label, reason: 'Listed twice in this file; used the first row.' });
+            continue;
+          }
+          seen.add(key);
+          const lvRaw = cell(row, map.level);
+          const lv = lvRaw ? parseLevel(lvRaw) : '';
+          const groups = map.groups >= 0 ? cleanEventGroups(cell(row, map.groups)) : [];
+          const emRaw = cell(row, map.email);
+          const em = emRaw ? parseContactEmail(emRaw) : '';
+          const phRaw = cell(row, map.phone);
+          const ph = phRaw ? parseContactPhone(phRaw) : '';
+          const notes = [];
+          if (lv === null) notes.push('level "' + lvRaw.slice(0, 20) + '" not understood');
+          if (em === null) notes.push('email not saved (does not look like an email)');
+          if (ph === null) notes.push('phone not saved (does not look like a phone number)');
+          const existing = db.profiles.find(pr => !pr.archived && nameKey(pr.firstName, pr.lastName) === key)
+            || db.profiles.find(pr => nameKey(pr.firstName, pr.lastName) === key);
+          if (addsAthletes && !groups.length && !existing) {
+            report.skipped.push({ line: lineNo, text: label, reason: 'No event group listed, so not added.' });
+            continue;
+          }
+          if (addsAthletes && groups.length && !isSprintJumpHurdle(groups) && !existing) {
+            report.left.push({ line: lineNo, text: label, reason: groups.join(', ') + ' only.' });
+            continue;
+          }
+          if (existing) {
+            let changed = false;
+            if (lv) { if (existing.level !== lv) changed = true; existing.level = lv; }
+            if (groups.length) { if (JSON.stringify(existing.eventGroups || []) !== JSON.stringify(groups)) changed = true; existing.eventGroups = groups; }
+            if (em) { if (existing.email !== em) changed = true; existing.email = em; }
+            if (ph) { if (existing.phone !== ph) changed = true; existing.phone = ph; }
+            if (changed) report.updated++;
+            if (notes.length) report.errors.push({ line: lineNo, text: label, reason: notes.join('; ') + '.' });
+            continue;
+          }
+          if (!addsAthletes) {
+            report.skipped.push({ line: lineNo, text: label, reason: 'Not on the roster, so nothing to update.' });
+            continue;
+          }
+          // New athlete: training group = their first sprint/hurdle/jump group.
+          const primary = groups.find(g => !NON_SPRINT_GROUPS.includes(g));
+          let group = groupByName(primary);
+          if (!group) {
+            group = { id: crypto.randomUUID(), name: primary, createdAt: new Date().toISOString() };
+            db.groups.push(group);
+            report.groupsCreated++;
+          }
+          db.profiles.push({
+            id: crypto.randomUUID(), firstName, lastName,
+            groupId: group.id, events: [], topAthlete: false, archived: false, status: 'active',
+            level: lv || null, eventGroups: groups, email: em || '', phone: ph || '',
+            createdAt: new Date().toISOString(),
+          });
+          report.created++;
+          if (notes.length) report.errors.push({ line: lineNo, text: label, reason: notes.join('; ') + '.' });
+        }
+        saveDb();
+        return sendJson(res, 200, { report });
+      }
+    }
     const report = { created: 0, groupsCreated: 0, skipped: [], errors: [] };
     const seenInImport = new Set();
     let csvMode = false;
@@ -4004,6 +4271,8 @@ async function handleApi(req, res, url) {
     if (body.status !== undefined && !PROFILE_STATUSES.includes(clean(body.status, 20))) {
       return sendJson(res, 400, { error: 'Status must be active, injured, or inactive.' });
     }
+    const rf = rosterFieldsFromBody(body);
+    if (rf.error) return sendJson(res, 400, { error: rf.error });
     const nextFirst = body.firstName !== undefined ? (clean(body.firstName, 40) || prof.firstName) : prof.firstName;
     const nextLast = body.lastName !== undefined ? (clean(body.lastName, 40) || prof.lastName) : prof.lastName;
     if ((nextFirst !== prof.firstName || nextLast !== prof.lastName)
@@ -4026,6 +4295,7 @@ async function handleApi(req, res, url) {
       prof.archived = next;
     }
     if (body.status !== undefined) prof.status = clean(body.status, 20);
+    Object.assign(prof, rf.fields);
     saveDb();
     return sendJson(res, 200, { profile: publicProfile(prof) });
   }
@@ -5037,12 +5307,14 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/export/roster.csv' && req.method === 'GET') {
-    const rows = [['Name', 'Group', 'Events', 'Top Athlete']];
+    const rows = [['Name', 'Group', 'Events', 'Top Athlete', 'Level', 'Event Groups', 'Email', 'Phone']];
     const list = db.profiles.filter(pr => !pr.archived)
       .sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
     for (const pr of list) {
       const pub = publicProfile(pr);
-      rows.push([pub.name, pub.groupName || '', (pr.events || []).join('; '), pr.topAthlete ? 'yes' : 'no']);
+      const lvl = { 'varsity-a': 'Varsity A', 'varsity-b': 'Varsity B', jv: 'JV' }[pub.level] || '';
+      rows.push([pub.name, pub.groupName || '', (pr.events || []).join('; '), pr.topAthlete ? 'yes' : 'no',
+        lvl, pub.eventGroups.join('; '), pub.email, pub.phone]);
     }
     logDataEvent(user, 'csv', 'roster.csv');
     saveDb();
@@ -6710,7 +6982,7 @@ async function handleApi(req, res, url) {
         : 'That link is not a YouTube video or a GIF. Paste a YouTube watch/share link or a direct .gif link.' });
     }
     /* Athlete-video consent guard: a demo marked as featuring an
-       SJC athlete can only be saved with the coach's attestation
+       athlete of ours can only be saved with the coach's attestation
        that specific written parent/guardian permission is on
        file. The attestation (who + when) is stored on the entry
        and surfaces in Demo Coverage. Coach-only footage is
@@ -6718,7 +6990,7 @@ async function handleApi(req, res, url) {
     const athleteFeatures = body.athleteFeatures === true;
     if (athleteFeatures && body.consentAttested !== true) {
       return sendJson(res, 400, {
-        error: 'This video is marked as featuring an SJC athlete. Saving it requires confirming: "I have specific written parent/guardian permission to use this athlete\'s video."',
+        error: 'This video is marked as featuring one of our athletes. Saving it requires confirming: "I have specific written parent/guardian permission to use this athlete\'s video."',
       });
     }
     db.mediaOverrides[movementId] = {

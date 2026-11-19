@@ -453,7 +453,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is bumped to v63 (coach home base)',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v63"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v64"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2377,16 +2377,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v62'") &&
-    swJs.text.includes("sprinter-app-v63"));
+    appJs.text.includes("const APP_VERSION = 'v64'") &&
+    swJs.text.includes("sprinter-app-v64"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v59"') &&
-    pageHtml.text.includes('Cadets Sprint · App v59') &&
+    pageHtml.text.includes('data-app-version="v64"') &&
+    pageHtml.text.includes('Sprinter Workout App · v64') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v59) ----------------
@@ -5362,7 +5362,7 @@ async function waitForServer(tries = 60) {
         gr = await gApi(null, 'POST', '/api/register', { email: 'stranger@gate.test', password: 'testpass123', ageAttested: true });
         check('unclaimed email is refused 403 with the invite-only message',
           gr.status === 403 && gr.json.error ===
-            "This app is invite-only — it's for SJC track athletes and coaches. If that's you, ask Coach AJ to add your email first, then sign up.",
+            "This app is invite-only — it's for our track athletes and coaches. If that's you, ask Coach AJ to add your email first, then sign up.",
           gr.json);
         gr = await gApi(null, 'POST', '/api/login', { email: 'stranger@gate.test', password: 'testpass123' });
         check('the refused sign-up created no account (login is 401)', gr.status === 401, gr.status);
@@ -7039,7 +7039,7 @@ async function waitForServer(tries = 60) {
         cpJs.text.includes('Copy summary for the athletic trainer') &&
         cpJs.text.includes('HELD — CLEARANCE REQUIRED') && cpJs.text.includes('Audit trail'), cpJs.status);
       check('media editor ships the athlete-video consent guard',
-        cpJs.text.includes('Features an SJC athlete') &&
+        cpJs.text.includes('Features one of our athletes') &&
         cpJs.text.includes('specific written parent/guardian permission'), cpJs.status);
 
       /* ---- roster fixtures ---- */
@@ -8013,6 +8013,137 @@ async function waitForServer(tries = 60) {
     const wrStart = chJs.text.indexOf('function enterWeightRoom');
     check('the weight room never reads the coach home payload',
       wrStart > 0 && !chJs.text.slice(wrStart, tvStart).includes('/api/coach/home'));
+  }
+
+  /* ---------------- v64: simpler look + team roster ----------------
+     AJ: no St. John's branding, a plain signed-out welcome ("Sprinter
+     Workout App. By Alonzo."), the full roster right after login, and
+     per athlete an event group, email, phone and a color-coded level
+     (Varsity A / Varsity B / JV). All test names below are made up. */
+  {
+    const v64Page = await apiText(null, '/');
+    const v64Js = await apiText(null, '/app.js');
+    const v64Manifest = await apiText(null, '/manifest.json');
+    const v64Sw = await apiText(null, '/sw.js');
+    check('v64: no St. John\'s / SJC / Cadets branding in the page, manifest or service worker',
+      !/st\.? ?john|\bsjc\b|cadets/i.test(v64Page.text.replace(/sjc-theme/g, '')) &&
+      !/st\.? ?john|\bsjc\b|cadets/i.test(v64Manifest.text) &&
+      !/sjc-logo/.test(v64Sw.text) && !/sjc-logo/.test(v64Page.text));
+    check('v64: the app is named "Sprinter Workout App" by Alonzo, with its own mark',
+      v64Page.text.includes('<title>Sprinter Workout App · By Alonzo</title>') &&
+      v64Page.text.includes('<div class="identity">Sprinter Workout App</div>') &&
+      v64Page.text.includes('<div class="app-name">By Alonzo</div>') &&
+      v64Page.text.includes('/assets/app-mark.svg') &&
+      JSON.parse(v64Manifest.text).name === 'Sprinter Workout App' &&
+      (await apiText(null, '/assets/app-mark.svg')).status === 200);
+    const welcome = v64Page.text.slice(v64Page.text.indexOf('id="view-welcome"'), v64Page.text.indexOf('<!-- TODAY -->'));
+    check('v64: signed-out welcome says only the name, "By Alonzo" and Sign in',
+      welcome.includes('<h1 id="welcome-h">Sprinter Workout App</h1>') &&
+      welcome.includes('By Alonzo') && welcome.includes('data-view="account">Sign in</button>') &&
+      !/data-view="(home|train|learn|log|coachhub)"/.test(welcome));
+    check('v64: signed out, every view but welcome and sign-in sends you to welcome',
+      v64Js.text.includes("const SIGNED_OUT_VIEWS = ['welcome', 'account'];") &&
+      v64Js.text.includes("if (state.authKnown && !state.user && !SIGNED_OUT_VIEWS.includes(name)) name = 'welcome';") &&
+      v64Js.text.includes("else if (!state.user) showView('welcome');"));
+    check('v64: Team roster sits on Coach home above today\'s checklist',
+      v64Page.text.indexOf('id="ch-roster"') > v64Page.text.indexOf('id="view-coachhub"') &&
+      v64Page.text.indexOf('id="ch-roster"') < v64Page.text.indexOf('id="ch-today"') &&
+      v64Js.text.includes('function renderCoachRoster') && v64Js.text.includes('renderCoachRoster();'));
+    check('v64: level chips always say the level in words (color is never the only signal)',
+      v64Js.text.includes("{ id: 'varsity-a', name: 'Varsity A' }") &&
+      v64Js.text.includes("'<span class=\"lvl lvl-none\">No level</span>'") &&
+      (await apiText(null, '/styles.css')).text.includes('.lvl-varsity-a {'));
+
+    // Fields on create / edit, with validation.
+    r = await api(coach, 'POST', '/api/profiles', {
+      firstName: 'Testy', lastName: 'Vee', level: 'Var A', eventGroups: 'SS, LJ',
+      email: 'Testy.Vee@Example.com', phone: '(555) 010-2030' });
+    check('v64: a new athlete saves level, event groups, email and phone',
+      r.status === 201 && r.json.profile.level === 'varsity-a' &&
+      JSON.stringify(r.json.profile.eventGroups) === JSON.stringify(['Short sprints', 'Long jump']) &&
+      r.json.profile.email === 'testy.vee@example.com' && r.json.profile.phone === '555-010-2030', r.json);
+    const tvId = r.json.profile.id;
+    r = await api(coach, 'POST', '/api/profiles', { firstName: 'Bad', lastName: 'Level', level: 'Varsity C' });
+    check('v64: an unknown level is refused', r.status === 400 && /Varsity A, Varsity B, or JV/.test(r.json.error), r.json);
+    r = await api(coach, 'POST', '/api/profiles', { firstName: 'Bad', lastName: 'Mail', email: 'not-an-email' });
+    check('v64: a bad email is refused', r.status === 400, r.json);
+    r = await api(coach, 'POST', '/api/profiles', { firstName: 'Bad', lastName: 'Phone', phone: 'call me' });
+    check('v64: a bad phone is refused', r.status === 400, r.json);
+    r = await api(coach, 'PUT', '/api/profiles/' + tvId, { level: 'jv', phone: '', email: '' });
+    check('v64: edit changes the level and clears contact fields',
+      r.status === 200 && r.json.profile.level === 'jv' && r.json.profile.phone === '' && r.json.profile.email === '', r.json);
+    r = await api(coach, 'PUT', '/api/profiles/' + tvId, { level: null });
+    check('v64: edit can clear the level', r.status === 200 && r.json.profile.level === null, r.json);
+    r = await api(athlete, 'GET', '/api/profiles');
+    check('v64: athletes cannot read the roster (contact info stays with coaches)', r.status === 403, r.status);
+
+    // Import by column names: a Final Roster-style tab.
+    const finalTab = [
+      'Notes,First Name ,Last Name,Classification,Event Group,SS,55m-400m sprints',
+      ',Rhea,Quickstep,Var A,"SS, Hurdles",LS,400m-800',
+      ',Dash,Okafor-Test,Var B ,LS,MD,800m-3200m',
+      'Late note,Mo,Mileson,JV,Distance,D,1600m-3200m',
+      ',Tess,Throwe,Var A,Throws,LJ,Long Jump',
+      ',Jamie,Leaper,JV,"LJ, TJ, HJ ",TJ,Triple Jump',
+      ',Nogroup,Kid,JV,,HJ,High Jump',
+      ',,,JV,"SS, LJ"',
+      ',Pat,Allround,Var A,Everything!!',
+      ',lower,case-name,JV,SS',
+      ',Testy,Vee,Var B,"Jumps, Hurdles"',
+      ',Rhea,Quickstep,JV,SS',
+    ].join('\n');
+    r = await api(coach, 'POST', '/api/profiles/import', { text: finalTab });
+    const rep = r.json.report || {};
+    check('v64: Final Roster import adds sprinters, hurdlers and jumpers only',
+      r.status === 200 && rep.created === 5 && rep.left.length === 2 &&
+      rep.left.map(x => x.text).sort().join('|') === 'Mo Mileson|Tess Throwe', rep);
+    check('v64: an athlete already on the roster is updated, not doubled',
+      rep.updated === 1 && rep.skipped.some(x => /twice/.test(x.reason)) &&
+      rep.skipped.some(x => x.text === 'Nogroup Kid' && /No event group/.test(x.reason)) &&
+      rep.errors.some(x => /No name/.test(x.reason)), rep);
+    r = await api(coach, 'GET', '/api/profiles');
+    const byName = (n) => r.json.profiles.find(pr => pr.name === n);
+    check('v64: imported levels and event groups land on the athlete',
+      byName('Rhea Quickstep').level === 'varsity-a' &&
+      byName('Rhea Quickstep').eventGroups.join('|') === 'Short sprints|Hurdles' &&
+      byName('Dash Okafor-Test').level === 'varsity-b' &&
+      byName('Jamie Leaper').eventGroups.join('|') === 'Long jump|Triple jump|High jump' &&
+      byName('Pat Allround').eventGroups.join('|') === 'Multis' &&
+      byName('Testy Vee').level === 'varsity-b' && byName('Testy Vee').eventGroups.join('|') === 'Jumps|Hurdles' &&
+      !byName('Mo Mileson') && !byName('Tess Throwe') && !!byName('Lower Case-Name'), r.json.profiles.map(p => [p.name, p.level, p.eventGroups]));
+    check('v64: a new athlete\'s training group is their first event group; an existing one keeps theirs',
+      byName('Rhea Quickstep').groupName === 'Short sprints' &&
+      byName('Jamie Leaper').groupName === 'Long jump' && !byName('Testy Vee').groupName);
+
+    // Contacts-only file (interest-form shape): fills email + phone, adds nobody.
+    const formTab = [
+      'Timestamp,Email Address,First Name,Last Name,Best email address?,Cell phone number? ,Any injuries?',
+      '11/1/2026 10:00,signin@example.com,Rhea,Quickstep,rhea.q@example.com,5550102222,"none, all good',
+      'really"',
+      '11/1/2026 10:05,x@example.com,Someone,Notonroster,s.n@example.com,555-010-3333,',
+      '11/1/2026 10:06,y@example.com,jamie,LEAPER,bad-email,12,',
+    ].join('\n');
+    r = await api(coach, 'POST', '/api/profiles/import', { text: formTab });
+    const rep2 = r.json.report || {};
+    check('v64: a contacts-only file fills in email and phone and adds nobody',
+      r.status === 200 && rep2.created === 0 && rep2.updated === 1 &&
+      rep2.skipped.some(x => x.text === 'Someone Notonroster'), rep2);
+    check('v64: bad contact values are reported, never saved',
+      rep2.errors.some(x => x.text === 'Jamie LEAPER' && /email not saved/.test(x.reason) && /phone not saved/.test(x.reason)), rep2);
+    r = await api(coach, 'GET', '/api/profiles');
+    const rq = r.json.profiles.find(pr => pr.name === 'Rhea Quickstep');
+    const jl = r.json.profiles.find(pr => pr.name === 'Jamie Leaper');
+    check('v64: "Best email" wins over the form sign-in email; the phone is tidied',
+      rq.email === 'rhea.q@example.com' && rq.phone === '555-010-2222' && jl.email === '' && jl.phone === '', [rq, jl]);
+    check('v64: health answers in the form are never stored on the athlete',
+      !JSON.stringify(r.json.profiles).includes('all good'));
+    const v64Csv = await apiText(coach, '/api/export/roster.csv');
+    check('v64: roster CSV carries level, event groups, email and phone',
+      v64Csv.text.split('\n')[0].includes('Level,Event Groups,Email,Phone') &&
+      v64Csv.text.includes('Varsity A,Short sprints; Hurdles,rhea.q@example.com,555-010-2222'), v64Csv.text.slice(0, 300));
+    // The old pipe format still works unchanged.
+    r = await api(coach, 'POST', '/api/profiles/import', { text: 'Pipe, Still | 100/200 | sprinter |' });
+    check('v64: the pipe-line import format still works', r.status === 200 && r.json.report.created === 1, r.json);
   }
 
   }
