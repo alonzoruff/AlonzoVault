@@ -107,6 +107,9 @@ let db = {
   floorProgress: {},
   exportLog: [],
   settings: { retentionMonths: 12, weightRoomSharedDisplay: true },
+  sessionPlans: [],
+  handoffs: [],
+  staff: {},
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -254,6 +257,18 @@ function migrate() {
   // their applications onto the team calendar. An application carries
   // an exact snapshot of every override it wrote, so removing it
   // deletes precisely those overrides and nothing else.
+  /* v65: one plan per group per day, with versions and a logged
+     status (Draft, Needs review, Approved, Published, Updated,
+     Archived); the staff handoff queue; and per-coach staff
+     settings (display name, landing groups, approver). */
+  db.sessionPlans = Array.isArray(db.sessionPlans)
+    ? db.sessionPlans.filter(pl => pl && typeof pl.id === 'string' && Array.isArray(pl.versions) && pl.versions.length)
+    : [];
+  db.handoffs = Array.isArray(db.handoffs)
+    ? db.handoffs.filter(h => h && typeof h.id === 'string' && h.about && h.assign)
+    : [];
+  for (const h of db.handoffs) if (!Array.isArray(h.history)) h.history = [];
+  db.staff = (db.staff && typeof db.staff === 'object' && !Array.isArray(db.staff)) ? db.staff : {};
   db.programs = Array.isArray(db.programs) ? db.programs : [];
   db.programApplications = Array.isArray(db.programApplications) ? db.programApplications : [];
   db.users.forEach((u, i) => {
@@ -1813,6 +1828,28 @@ function userByEmail(email) { return db.users.find(u => u.email === email) || nu
    sessions — so codes is how multi-session days survive resolution.
    It is additive: every older reader keeps using sessionId alone. */
 function resolveAssignment(groupId, dateString) {
+  /* v65: a published plan is the single source of truth for its
+     group and day. Drafts and unpublished versions never resolve
+     here, so they never reach the checklist, the TV board, or an
+     athlete. */
+  const pl = db.sessionPlans.find(x => x.groupId === groupId && x.date === dateString && !x.archived);
+  const live = pl && pl.publishedN ? pl.versions.find(v => v.n === pl.publishedN && v.status === 'published') : null;
+  if (live) {
+    const base = resolveAssignmentBase(groupId, dateString);
+    const f = live.fields || {};
+    const s = f.sessionId ? SESSION_BY_ID.get(f.sessionId) : null;
+    return {
+      date: dateString, source: 'published', sessionId: f.sessionId || null,
+      codes: f.sessionId ? [f.sessionId] : [],
+      sessionName: f.title || (s ? s.name : ''), note: '',
+      planText: base.planText || '', warmup: base.warmup || null,
+      cns: s ? s.cns_demand : null, isOff: false,
+      planId: pl.id, version: live.n,
+    };
+  }
+  return resolveAssignmentBase(groupId, dateString);
+}
+function resolveAssignmentBase(groupId, dateString) {
   const ov = db.overrides[groupId + '|' + dateString];
   const plan = planDayFor(dateString);
   if (ov) {
@@ -2127,6 +2164,343 @@ function coachHubCounts() {
     inventory: db.inventory.length,
   };
 }
+/* ------------------------------------------------------------------ */
+/* v65: Coach Today, the single published workout, attendance, and    */
+/* the staff handoff queue                                             */
+/* ------------------------------------------------------------------ */
+/* Staff settings per coach account: { userId: { displayName,
+   groupIds, canApprove, changesSeenAt, notesSeenAt } }. The head
+   coach (owner) sets groups and who may approve; every coach may set
+   their own display name. Nothing here widens what a coach can read:
+   every coach already reads all team data behind the coach gate. The
+   groups decide only where an event coach LANDS on Coach Today. */
+function staffFor(u) {
+  const s = (u && db.staff[u.id]) || {};
+  return {
+    displayName: typeof s.displayName === 'string' ? s.displayName : '',
+    groupIds: Array.isArray(s.groupIds) ? s.groupIds.filter(id => groupById(id)) : [],
+    canApprove: !!(u && (u.isOwner || s.canApprove)),
+    changesSeenAt: s.changesSeenAt || null,
+    notesSeenAt: s.notesSeenAt || null,
+  };
+}
+function staffRecord(userId) {
+  if (!db.staff[userId] || typeof db.staff[userId] !== 'object') db.staff[userId] = {};
+  return db.staff[userId];
+}
+/* How a coach is named on screen: the display name they set, else
+   their account email. Coach-only surfaces use the full label; the
+   athlete-facing plan card uses the display name only (never an
+   email), falling back to plain "Coach". */
+function coachLabel(userId) {
+  const u = db.users.find(x => x.id === userId);
+  if (!u) return 'A coach who no longer has an account';
+  const s = staffFor(u);
+  return s.displayName || u.email;
+}
+function coachPublicName(userId) {
+  const u = db.users.find(x => x.id === userId);
+  const s = u ? staffFor(u) : null;
+  return s && s.displayName ? s.displayName : 'Coach';
+}
+function publicStaff(u) {
+  const s = staffFor(u);
+  return {
+    id: u.id, email: u.email, isOwner: !!u.isOwner,
+    displayName: s.displayName, label: s.displayName || u.email,
+    groupIds: s.groupIds, canApprove: s.canApprove,
+    role: u.isOwner ? 'Head coach' : (s.groupIds.length ? 'Event coach' : 'Assistant coach'),
+  };
+}
+
+/* Workout status, exactly these six labels. A version moves
+   draft -> review -> approved -> published; an older published
+   version becomes "superseded" when a revision is published over
+   it, and a revision that is thrown away is "discarded". The plan's
+   status is worked out from its versions (see planStatusKey). */
+const PLAN_STATUS_LABELS = {
+  draft: 'Draft', review: 'Needs review', approved: 'Approved',
+  published: 'Published', updated: 'Updated', archived: 'Archived',
+};
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+/* Medical detail never goes into a workout note or a handoff: it
+   belongs with the athletic trainer and the athlete's concern
+   record. This is a plain word check, so it can be strict without
+   reading anyone's meaning: a match refuses the save with a plain
+   explanation, and nothing is stored. */
+const MEDICAL_WORDS_RE = /\b(concuss\w*|diagnos\w*|medicat\w*|medicine|prescri\w*|injur\w*|sprain\w*|fractur\w*|broken bone|surger\w*|surgical|acl|mcl|tendin\w*|tendon\w*|physical therap\w*|physio\w*|doctor|physician|mri|x-?rays?|illness|asthma\w*|inhaler|insulin|diabet\w*|seizure\w*|ibuprofen|advil|tylenol|clearance|cleared to|heart condition|mental health|anxiety|depress\w*)\b/i;
+const HANDOFF_EXTRA_MEDICAL_RE = /\b(pain\w*|hurt\w*|sick|symptom\w*|rehab\w*|limp\w*|swell\w*|swollen)\b/i;
+const MEDICAL_REFUSAL = 'Please keep medical details out of this. Health and injury information goes to the athletic trainer, or into the athlete\'s concern record in Athlete profiles.';
+function hasMedicalDetail(text, strict) {
+  const t = String(text || '');
+  return MEDICAL_WORDS_RE.test(t) || (strict && HANDOFF_EXTRA_MEDICAL_RE.test(t));
+}
+
+const PLAN_LOG_LABELS = { superseded: 'Replaced by a newer version', discarded: 'Discarded' };
+function planDayLabel(date) {
+  const d = parseDateStr(date);
+  return d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }) : date;
+}
+function planById(id) { return db.sessionPlans.find(pl => pl.id === id) || null; }
+function planFor(groupId, date) {
+  return db.sessionPlans.find(pl => pl.groupId === groupId && pl.date === date && !pl.archived) || null;
+}
+function planLatest(pl) { return pl.versions[pl.versions.length - 1]; }
+function planVersion(pl, n) { return pl.versions.find(v => v.n === n) || null; }
+function planStatusKey(pl) {
+  if (pl.archived) return 'archived';
+  if (pl.publishedN) return pl.publishedN !== pl.firstPublishedN ? 'updated' : 'published';
+  const v = planLatest(pl);
+  return v && PLAN_STATUS_LABELS[v.status] ? v.status : 'draft';
+}
+/* The version athletes follow: the published one, nothing else.
+   A draft, a version under review, or an approved version that has
+   not been published is never returned here. */
+function planLiveVersion(pl) {
+  if (!pl || pl.archived || !pl.publishedN) return null;
+  const v = planVersion(pl, pl.publishedN);
+  return v && v.status === 'published' ? v : null;
+}
+function planLastEvent(pl) {
+  let last = { by: pl.createdBy, at: pl.createdAt };
+  for (const v of pl.versions) {
+    for (const e of v.log || []) if (e.at > last.at) last = { by: e.by, at: e.at };
+    if (v.editedAt && v.editedAt > last.at) last = { by: v.editedBy, at: v.editedAt };
+  }
+  if (pl.archivedAt && pl.archivedAt > last.at) last = { by: pl.archivedBy, at: pl.archivedAt };
+  return last;
+}
+function versionFieldsOut(v) {
+  const f = v.fields || {};
+  const s = f.sessionId ? SESSION_BY_ID.get(f.sessionId) : null;
+  return {
+    title: f.title || (s ? s.name : ''), sessionId: f.sessionId || '',
+    sessionName: s ? s.name : '', objective: f.objective || '',
+    location: f.location || '', startTime: f.startTime || '',
+    athleteNotes: f.athleteNotes || '', leadCoachId: f.leadCoachId || '',
+  };
+}
+function publishEventOf(v) {
+  const e = (v.log || []).slice().reverse().find(x => x.to === 'published');
+  return e || null;
+}
+/* The coach-side view of one plan (all coaches read every plan). */
+function publicPlan(pl, withHistory) {
+  const key = planStatusKey(pl);
+  const latest = planLatest(pl);
+  const live = planLiveVersion(pl);
+  const last = planLastEvent(pl);
+  const pending = latest && pl.publishedN && latest.n > pl.publishedN
+    && ['draft', 'review', 'approved'].includes(latest.status) ? latest : null;
+  const show = live || latest;
+  const out = {
+    id: pl.id, groupId: pl.groupId, date: pl.date, rev: pl.rev,
+    status: key, statusLabel: PLAN_STATUS_LABELS[key],
+    archived: !!pl.archived,
+    shown: show ? Object.assign({ version: show.n, versionStatus: show.status }, versionFieldsOut(show)) : null,
+    leadCoach: show && show.fields.leadCoachId ? coachLabel(show.fields.leadCoachId) : '',
+    live: live ? { version: live.n } : null,
+    latest: latest ? {
+      version: latest.n, status: latest.status,
+      changeSummary: latest.changeSummary || '',
+      editedBy: coachLabel(latest.editedBy || latest.createdBy),
+      editedAt: latest.editedAt || latest.createdAt,
+      fields: versionFieldsOut(latest),
+    } : null,
+    pendingRevision: pending ? {
+      version: pending.n, status: pending.status,
+      statusLabel: PLAN_STATUS_LABELS[pending.status] || pending.status,
+      changeSummary: pending.changeSummary || '',
+    } : null,
+    changeNotice: null,
+    lastUpdated: { by: coachLabel(last.by), at: last.at },
+    copiedFrom: pl.copiedFrom || null,
+  };
+  if (live && key === 'updated') {
+    const ev = publishEventOf(live);
+    out.changeNotice = {
+      summary: live.changeSummary || '',
+      by: ev ? coachLabel(ev.by) : '', at: ev ? ev.at : null, version: live.n,
+    };
+  }
+  if (withHistory) {
+    out.history = pl.versions.map(v => ({
+      version: v.n, status: v.status, changeSummary: v.changeSummary || '',
+      createdBy: coachLabel(v.createdBy), createdAt: v.createdAt,
+      fields: versionFieldsOut(v),
+      log: (v.log || []).map(e => ({ to: e.to, toLabel: PLAN_STATUS_LABELS[e.to] || PLAN_LOG_LABELS[e.to] || e.to, by: coachLabel(e.by), at: e.at })),
+    })).reverse();
+    if (pl.archived) out.history.unshift({ version: null, status: 'archived', archivedBy: coachLabel(pl.archivedBy), archivedAt: pl.archivedAt, log: [] });
+  }
+  return out;
+}
+/* What a linked athlete sees: the published version only, with the
+   change notice when it replaced an earlier published version, and
+   the lead coach's display name (never an email). */
+function athletePlanView(pl) {
+  const live = planLiveVersion(pl);
+  if (!live) return null;
+  const f = versionFieldsOut(live);
+  const g = groupById(pl.groupId);
+  const out = {
+    groupName: g ? g.name : '', date: pl.date,
+    title: f.title, sessionId: f.sessionId, sessionName: f.sessionName,
+    objective: f.objective, location: f.location, startTime: f.startTime,
+    athleteNotes: f.athleteNotes,
+    leadCoach: f.leadCoachId ? coachPublicName(f.leadCoachId) : '',
+    status: planStatusKey(pl), statusLabel: PLAN_STATUS_LABELS[planStatusKey(pl)],
+    changeNotice: null,
+  };
+  if (out.status === 'updated') {
+    const ev = publishEventOf(live);
+    out.changeNotice = {
+      summary: live.changeSummary || '',
+      by: ev ? coachPublicName(ev.by) : 'Coach', at: ev ? ev.at : null,
+    };
+  }
+  return out;
+}
+/* Validate the editable fields of a version. Returns { fields } or
+   { error }. A plan needs a title or a library session. */
+function validatePlanFields(body, base) {
+  const src = Object.assign({}, base || {});
+  const next = {};
+  const take = (k, max) => {
+    if (body[k] === undefined) return src[k] || '';
+    return typeof body[k] === 'string' ? body[k].trim().slice(0, max) : '';
+  };
+  next.title = take('title', 80);
+  next.sessionId = take('sessionId', 20).toUpperCase();
+  next.objective = take('objective', 200);
+  next.location = take('location', 80);
+  next.startTime = take('startTime', 5);
+  next.athleteNotes = take('athleteNotes', 600);
+  next.leadCoachId = take('leadCoachId', 80);
+  if (next.sessionId && !SESSION_IDS.has(next.sessionId)) return { error: 'That session code is not in the workout library.' };
+  if (!next.title && !next.sessionId) return { error: 'Give the workout a name, or pick a session from the library.' };
+  if (next.startTime && !TIME_RE.test(next.startTime)) return { error: 'Start time should look like 15:30.' };
+  if (next.leadCoachId) {
+    const c = db.users.find(u => u.id === next.leadCoachId);
+    if (!c || c.role !== 'coach') return { error: 'The lead coach has to be a coach account.' };
+  }
+  if (hasMedicalDetail(next.objective + ' ' + next.athleteNotes + ' ' + next.title, false)) {
+    return { error: MEDICAL_REFUSAL };
+  }
+  return { fields: next };
+}
+function planLog(v, to, user) {
+  v.log = v.log || [];
+  v.log.push({ to, by: user.id, at: new Date().toISOString() });
+}
+
+/* Attendance: { 'YYYY-MM-DD': { profileId: { status, updatedAt,
+   updatedBy, history: [ { status, by, at } ] } } }. Present, Late
+   and Absent are entered by a coach. Anything else, including no
+   entry at all, is "Not recorded": it is never counted as absent. */
+const ATTENDANCE_STATUSES = ['present', 'late', 'absent'];
+function attendanceFor(date, profileId) {
+  const rec = (db.attendance[date] || {})[profileId];
+  return rec && ATTENDANCE_STATUSES.includes(rec.status) ? rec : null;
+}
+function groupMembers(groupId) {
+  return db.profiles.filter(pr => !pr.archived && pr.groupId === groupId)
+    .slice().sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+}
+function attendanceCounts(members, date) {
+  const out = { expected: members.length, present: 0, late: 0, absent: 0, notRecorded: 0 };
+  for (const pr of members) {
+    const rec = attendanceFor(date, pr.id);
+    if (rec) out[rec.status]++; else out.notRecorded++;
+  }
+  return out;
+}
+function setAttendance(date, profileId, status, user) {
+  db.attendance[date] = db.attendance[date] || {};
+  const prev = db.attendance[date][profileId];
+  const at = new Date().toISOString();
+  const history = prev && Array.isArray(prev.history) ? prev.history.slice() : [];
+  if (prev && prev.status && !history.length) {
+    history.push({ status: prev.status, by: prev.updatedBy || null, at: prev.updatedAt || null });
+  }
+  history.push({ status: status || 'not-recorded', by: user.id, at });
+  db.attendance[date][profileId] = {
+    status: status || null, updatedAt: at, updatedBy: user.id, history: history.slice(-20),
+  };
+}
+
+/* Staff handoffs: structured coaching coordination only. */
+const HANDOFF_CATEGORIES = ['workout', 'testing', 'attendance', 'scheduling', 'equipment', 'other'];
+const HANDOFF_CATEGORY_LABELS = {
+  workout: 'Workout', testing: 'Testing', attendance: 'Attendance',
+  scheduling: 'Scheduling', equipment: 'Equipment', other: 'Other',
+};
+const HANDOFF_STATUS_LABELS = { open: 'Open', acknowledged: 'Acknowledged', resolved: 'Resolved' };
+const HANDOFF_NEXT = { open: ['acknowledged', 'resolved'], acknowledged: ['resolved'], resolved: [] };
+function handoffAboutLabel(h) {
+  if (h.about.kind === 'athlete') {
+    const pr = profileById(h.about.id);
+    return pr ? pr.firstName + ' ' + pr.lastName : 'An athlete no longer on the roster';
+  }
+  if (h.about.kind === 'group') {
+    const g = groupById(h.about.id);
+    return g ? g.name : 'A group that was removed';
+  }
+  if (h.about.kind === 'session') {
+    const pl = planById(h.about.id);
+    if (!pl) return 'A workout that was removed';
+    const g = groupById(pl.groupId);
+    const sh = planLatest(pl);
+    const f = sh ? versionFieldsOut(sh) : { title: '' };
+    return (g ? g.name + ' workout, ' : 'Workout, ') + planDayLabel(pl.date) + (f.title ? ' (' + f.title + ')' : '');
+  }
+  return '';
+}
+/* Who an assignment points at, as a list of coach user ids (for
+   "assigned to me") and a label. */
+function handoffAssignees(h) {
+  const coaches = db.users.filter(u => u.role === 'coach');
+  if (h.assign.kind === 'coach') {
+    return { ids: [h.assign.id], label: coachLabel(h.assign.id) };
+  }
+  if (h.assign.kind === 'head-coach') {
+    return { ids: coaches.filter(u => u.isOwner).map(u => u.id), label: 'Head coach' };
+  }
+  if (h.assign.kind === 'group-coach') {
+    const g = groupById(h.assign.id);
+    const ids = coaches.filter(u => staffFor(u).groupIds.includes(h.assign.id)).map(u => u.id);
+    return { ids, label: (g ? g.name : 'Group') + ' coaches' + (ids.length ? '' : ' (no coach assigned to this group yet)') };
+  }
+  return { ids: [], label: 'Unassigned' };
+}
+function publicHandoff(h, user) {
+  const asg = handoffAssignees(h);
+  const ackEv = (h.history || []).find(e => e.to === 'acknowledged');
+  const resEv = (h.history || []).find(e => e.to === 'resolved');
+  return {
+    id: h.id, category: h.category, categoryLabel: HANDOFF_CATEGORY_LABELS[h.category] || h.category,
+    about: { kind: h.about.kind, id: h.about.id, label: handoffAboutLabel(h) },
+    update: h.update, nextAction: h.nextAction || '',
+    assign: { kind: h.assign.kind, id: h.assign.id || null, label: asg.label },
+    assignedToMe: !!user && asg.ids.includes(user.id),
+    dueDate: h.dueDate || null,
+    overdue: !!h.dueDate && h.status !== 'resolved' && h.dueDate < todayStr(),
+    status: h.status, statusLabel: HANDOFF_STATUS_LABELS[h.status],
+    author: coachLabel(h.authorId), createdAt: h.createdAt,
+    acknowledged: ackEv ? { by: coachLabel(ackEv.by), at: ackEv.at } : null,
+    resolved: resEv ? { by: coachLabel(resEv.by), at: resEv.at } : null,
+    readOnly: h.status === 'resolved',
+    next: HANDOFF_NEXT[h.status] || [],
+  };
+}
+function handoffOrder(a, b) {
+  const rank = { open: 0, acknowledged: 1, resolved: 2 };
+  if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status];
+  if (a.status === 'resolved') return (b.resolvedAt || '') < (a.resolvedAt || '') ? -1 : 1;
+  const ad = a.dueDate || '9999', bd = b.dueDate || '9999';
+  if (ad !== bd) return ad < bd ? -1 : 1;
+  return a.createdAt < b.createdAt ? 1 : -1;
+}
+
 function heldInfoFor(profileId) {
   const c = openHeadConcernFor(profileId);
   if (!c) return { held: false, since: null, concernId: null };
@@ -3022,6 +3396,7 @@ const BACKUP_ARRAY_KEYS = {
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
   announcements: 'id', deviceRows: 'id', coachClips: 'id',
+  sessionPlans: 'id', handoffs: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
@@ -3051,6 +3426,8 @@ function buildBackupData() {
     deviceRows: db.deviceRows,
     coachClips: db.coachClips,
     pathProgress: db.pathProgress,
+    sessionPlans: db.sessionPlans,
+    handoffs: db.handoffs,
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -3694,6 +4071,19 @@ async function handleApi(req, res, url) {
      progress computed from their meet results. The profile always
      comes from the caller's own binding, never from the request,
      so another athlete's goals are unreachable by construction. */
+  /* v65: the workout a linked athlete's group is following today.
+     Only a PUBLISHED version is ever returned: a draft, a version
+     under review, or an approved-but-not-published version never
+     reaches an athlete. No coach notes, attendance, handoffs, or
+     emails ride along. */
+  if (p === '/api/my/plan' && req.method === 'GET') {
+    const prof = user.role === 'athlete' ? linkedProfileFor(user) : null;
+    const date = todayStr();
+    if (!prof || prof.archived || !prof.groupId) return sendJson(res, 200, { linked: !!prof, date, plan: null });
+    const pl = planFor(prof.groupId, date);
+    return sendJson(res, 200, { linked: true, date, plan: pl ? athletePlanView(pl) : null });
+  }
+
   if (p === '/api/goals/mine' && req.method === 'GET') {
     const prof = linkedProfileFor(user);
     if (!prof) return sendJson(res, 200, { linked: false, goals: [] });
@@ -4375,6 +4765,12 @@ async function handleApi(req, res, url) {
     if (!groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
     if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
     const key = groupId + '|' + date;
+    /* v65: a published plan cannot be changed from here. It changes
+       only through a revision that is approved and published. */
+    const livePlan = planFor(groupId, date);
+    if (livePlan && planLiveVersion(livePlan)) {
+      return sendJson(res, 409, { error: 'This day has a published workout on Coach Today. Change it there with a revision, so athletes see what changed.' });
+    }
     if (body.sessionId === null || body.sessionId === '') {
       delete db.overrides[key];
       saveDb();
@@ -4563,6 +4959,495 @@ async function handleApi(req, res, url) {
       upcoming: upcomingCoachEvents(date, 42, 5),
       counts: coachHubCounts(),
     });
+  }
+
+  /* ================================================================
+     v65: COACH TODAY. One coach-only payload that answers the five
+     questions: what each group is doing (the plan and its status),
+     where and when, who is expected, checked in and not recorded,
+     what changed since this coach last looked, and what needs an
+     approval, a review, or a reply. Every number is counted from the
+     stored records on this request. Nothing is estimated, and a
+     missing value is sent as missing so the screen can say so.
+     ================================================================ */
+  if (p === '/api/coach/today-board' && req.method === 'GET') {
+    const today = todayStr();
+    const date = clean(q.get('date') || today, 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const tomorrow = addDaysStr(date, 1);
+    const me = staffFor(user);
+    const d = parseDateStr(date);
+    const groupsOut = db.groups.map(g => {
+      const members = groupMembers(g.id);
+      const pl = planFor(g.id, date);
+      const plT = planFor(g.id, tomorrow);
+      const a = resolveAssignmentBase(g.id, date);
+      return {
+        id: g.id, name: g.name,
+        coaches: db.users.filter(u => u.role === 'coach' && staffFor(u).groupIds.includes(g.id)).map(u => coachLabel(u.id)),
+        attendance: attendanceCounts(members, date),
+        plan: pl ? publicPlan(pl, false) : null,
+        tomorrow: plT ? { id: plT.id, status: planStatusKey(plT), statusLabel: PLAN_STATUS_LABELS[planStatusKey(plT)],
+          title: versionFieldsOut(planLiveVersion(plT) || planLatest(plT)).title } : null,
+        /* What the season plan (or an older direct override) says
+           for the day: the starting point for a new plan. */
+        seasonPlan: {
+          sessionId: a.sessionId || null, sessionName: a.sessionName || '',
+          source: a.source, planText: a.planText || '',
+          note: a.source === 'override' ? a.note || '' : '', isOff: !!a.isOff,
+        },
+      };
+    });
+    /* Action queue. */
+    const approvals = [];
+    for (const pl of db.sessionPlans) {
+      if (pl.archived || pl.date < addDaysStr(today, -1)) continue;
+      const v = planLatest(pl);
+      if (!v || (v.status !== 'review' && v.status !== 'approved')) continue;
+      const g = groupById(pl.groupId);
+      approvals.push({
+        planId: pl.id, groupId: pl.groupId, groupName: g ? g.name : '', date: pl.date,
+        version: v.n, status: v.status, statusLabel: PLAN_STATUS_LABELS[v.status],
+        isRevision: !!pl.publishedN, title: versionFieldsOut(v).title,
+        by: coachLabel(planLastEvent(pl).by), at: planLastEvent(pl).at,
+      });
+    }
+    approvals.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+    const notesSince = me.notesSeenAt || new Date(Date.now() - 7 * 864e5).toISOString();
+    const newNotes = [];
+    for (const pr of db.profiles) {
+      if (pr.archived) continue;
+      for (const n of db.coachNotes[pr.id] || []) {
+        if (n.authorId === user.id || !(n.createdAt > notesSince)) continue;
+        newNotes.push({ profileId: pr.id, athleteName: pr.firstName + ' ' + pr.lastName,
+          author: coachLabel(n.authorId), at: n.createdAt });
+      }
+    }
+    newNotes.sort((x, y) => (x.at < y.at ? 1 : -1));
+    const missingLogs = [];
+    for (let i = 7; i >= 1; i--) {
+      const day = addDaysStr(today, -i);
+      for (const g of db.groups) {
+        const pl = planFor(g.id, day);
+        if (!pl || !planLiveVersion(pl)) continue;
+        const c = attendanceCounts(groupMembers(g.id), day);
+        if (c.notRecorded > 0) {
+          missingLogs.push({ groupId: g.id, groupName: g.name, date: day, notRecorded: c.notRecorded, expected: c.expected });
+        }
+      }
+    }
+    const recentTests = [];
+    const fromT = addDaysStr(today, -7);
+    for (const t of db.testDays) {
+      if (!t.date || t.date < fromT || t.date > today) continue;
+      let n = 0;
+      for (const list of Object.values(db.testResults)) {
+        for (const r of list || []) if (r.testDayId === t.id) n++;
+      }
+      if (n > 0) recentTests.push({ testDayId: t.id, title: t.title || (t.device ? 'Device results' : 'Test day'), date: t.date, results: n, device: !!t.device });
+    }
+    recentTests.sort((x, y) => (x.date < y.date ? 1 : -1));
+    /* What changed since this coach last said "Got it": plan status
+       moves and handoffs, by other coaches. */
+    const since = me.changesSeenAt || new Date(Date.now() - 24 * 3600e3).toISOString();
+    const changes = [];
+    for (const pl of db.sessionPlans) {
+      const g = groupById(pl.groupId);
+      const gname = g ? g.name : 'A group';
+      for (const v of pl.versions) {
+        for (const e of v.log || []) {
+          if (e.by === user.id || !(e.at > since)) continue;
+          const verb = { draft: 'started a draft of', review: 'sent for review', approved: 'approved',
+            published: v.n === pl.firstPublishedN ? 'published' : 'published a revision of', discarded: 'discarded a revision of' }[e.to] || 'changed';
+          changes.push({ at: e.at, by: coachLabel(e.by), text: verb + ' the ' + gname + ' workout for ' + planDayLabel(pl.date),
+            planId: pl.id, groupId: pl.groupId, date: pl.date });
+        }
+      }
+      if (pl.archived && pl.archivedBy !== user.id && pl.archivedAt > since) {
+        changes.push({ at: pl.archivedAt, by: coachLabel(pl.archivedBy), text: 'archived the ' + gname + ' workout for ' + planDayLabel(pl.date), planId: pl.id, groupId: pl.groupId, date: pl.date });
+      }
+    }
+    for (const h of db.handoffs) {
+      for (const e of h.history || []) {
+        if (e.by === user.id || !(e.at > since)) continue;
+        const verb = { open: 'added a handoff', acknowledged: 'acknowledged a handoff', resolved: 'resolved a handoff' }[e.to] || 'changed a handoff';
+        changes.push({ at: e.at, by: coachLabel(e.by), text: verb + ' about ' + handoffAboutLabel(h), handoffId: h.id });
+      }
+    }
+    changes.sort((x, y) => (x.at < y.at ? 1 : -1));
+    const openHandoffs = db.handoffs.filter(h => h.status !== 'resolved').slice().sort(handoffOrder)
+      .map(h => publicHandoff(h, user));
+    const landing = me.groupIds.find(id => groupById(id)) || null;
+    return sendJson(res, 200, {
+      asOf: new Date().toISOString(),
+      date, today, tomorrow, isToday: date === today,
+      dayName: d ? d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }) : '',
+      me: { id: user.id, label: coachLabel(user.id), displayName: me.displayName, isOwner: !!user.isOwner,
+        canApprove: me.canApprove, groupIds: me.groupIds,
+        landingGroupId: user.isOwner ? null : landing },
+      groups: groupsOut,
+      unassigned: db.profiles.filter(pr => !pr.archived && !pr.groupId).length,
+      actions: {
+        approvals, notes: { since: notesSince, count: newNotes.length, items: newNotes.slice(0, 8) },
+        missingLogs, recentTests,
+      },
+      handoffs: {
+        open: openHandoffs.filter(h => h.status === 'open').length,
+        acknowledged: openHandoffs.filter(h => h.status === 'acknowledged').length,
+        mine: openHandoffs.filter(h => h.assignedToMe).length,
+        items: openHandoffs,
+      },
+      changes: { since, count: changes.length, items: changes.slice(0, 12) },
+    });
+  }
+  if (p === '/api/coach/today-board/seen' && req.method === 'POST') {
+    const body = await readBody(req);
+    const rec = staffRecord(user.id);
+    const now = new Date().toISOString();
+    if (body.what === 'changes') rec.changesSeenAt = now;
+    else if (body.what === 'notes') rec.notesSeenAt = now;
+    else return sendJson(res, 400, { error: 'Say which list you have read: changes or notes.' });
+    saveDb();
+    return sendJson(res, 200, { ok: true, at: now });
+  }
+
+  /* ---------- staff: names, groups, approvers ---------- */
+  if (p === '/api/staff' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      staff: db.users.filter(u => u.role === 'coach').map(publicStaff),
+      groups: db.groups.map(g => ({ id: g.id, name: g.name })),
+    });
+  }
+  const staffMatch = p.match(/^\/api\/staff\/([^/]+)$/);
+  if (staffMatch && req.method === 'PUT') {
+    const target = db.users.find(u => u.id === decodeURIComponent(staffMatch[1]));
+    if (!target || target.role !== 'coach') return sendJson(res, 404, { error: 'Coach account not found.' });
+    const body = await readBody(req);
+    const self = target.id === user.id;
+    if (!self && !user.isOwner) return sendJson(res, 403, { error: 'Only the head coach can change another coach\'s settings.' });
+    if ((body.groupIds !== undefined || body.canApprove !== undefined) && !user.isOwner) {
+      return sendJson(res, 403, { error: 'Only the head coach assigns groups and approvers.' });
+    }
+    const rec = staffRecord(target.id);
+    if (body.displayName !== undefined) {
+      const n = clean(body.displayName, 40);
+      rec.displayName = n;
+    }
+    if (body.groupIds !== undefined) {
+      if (!Array.isArray(body.groupIds) || body.groupIds.some(id => !groupById(id))) {
+        return sendJson(res, 400, { error: 'Pick groups from the roster\'s group list.' });
+      }
+      rec.groupIds = [...new Set(body.groupIds)].slice(0, 12);
+    }
+    if (body.canApprove !== undefined) {
+      if (target.isOwner) return sendJson(res, 400, { error: 'The head coach can always approve.' });
+      rec.canApprove = body.canApprove === true;
+    }
+    saveDb();
+    return sendJson(res, 200, { coach: publicStaff(target) });
+  }
+
+  /* ---------- the single published workout ----------
+     One plan per group per day. Every save is a version that keeps
+     who made it and when; a status change is a logged step a named
+     coach takes. Athletes see only the published version. A change
+     to a published workout is a new version that has to be reviewed,
+     approved and published before athletes see it, and when it goes
+     live they see what changed, who changed it, and when. */
+  if (p === '/api/plans' && req.method === 'GET') {
+    const groupId = clean(q.get('groupId'), 80);
+    const date = clean(q.get('date'), 10);
+    if (groupId && date) {
+      const pl = planFor(groupId, date);
+      return sendJson(res, 200, { plan: pl ? publicPlan(pl, true) : null });
+    }
+    const from = clean(q.get('from'), 10) || addDaysStr(todayStr(), -7);
+    const to = clean(q.get('to'), 10) || addDaysStr(todayStr(), 14);
+    const plans = db.sessionPlans.filter(pl => pl.date >= from && pl.date <= to
+      && (!groupId || pl.groupId === groupId))
+      .map(pl => publicPlan(pl, false));
+    return sendJson(res, 200, { plans });
+  }
+  if (p === '/api/plans' && req.method === 'POST') {
+    const body = await readBody(req);
+    const groupId = clean(body.groupId, 80);
+    const date = clean(body.date, 10);
+    if (!groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (planFor(groupId, date)) return sendJson(res, 409, { error: 'That group already has a plan for that day. Open it instead.', plan: publicPlan(planFor(groupId, date), true) });
+    let base = null;
+    let copiedFrom = null;
+    if (body.copyFromPlanId) {
+      const src = planById(clean(body.copyFromPlanId, 80));
+      if (!src) return sendJson(res, 404, { error: 'The workout to copy was not found.' });
+      const sv = planLiveVersion(src) || planLatest(src);
+      base = Object.assign({}, sv.fields);
+      copiedFrom = { planId: src.id, date: src.date, groupId: src.groupId };
+    }
+    const v = validatePlanFields(body, base);
+    if (v.error) return sendJson(res, 400, { error: v.error });
+    const now = new Date().toISOString();
+    const pl = {
+      id: crypto.randomUUID(), groupId, date, rev: 1,
+      createdAt: now, createdBy: user.id, copiedFrom,
+      publishedN: null, firstPublishedN: null, archived: false,
+      versions: [{ n: 1, status: 'draft', fields: v.fields, changeSummary: '',
+        createdBy: user.id, createdAt: now, editedBy: user.id, editedAt: now,
+        log: [{ to: 'draft', by: user.id, at: now }] }],
+    };
+    db.sessionPlans.push(pl);
+    saveDb();
+    return sendJson(res, 201, { plan: publicPlan(pl, true) });
+  }
+  const planMatch = p.match(/^\/api\/plans\/([^/]+)(?:\/(status|revise|archive))?$/);
+  if (planMatch && (req.method === 'PUT' || req.method === 'POST')) {
+    const pl = planById(decodeURIComponent(planMatch[1]));
+    if (!pl) return sendJson(res, 404, { error: 'Workout plan not found.' });
+    const action = planMatch[2] || (req.method === 'PUT' ? 'edit' : '');
+    if (!action) return sendJson(res, 404, { error: 'Not found.' });
+    const body = await readBody(req);
+    /* Conflict protection: every change names the plan revision it
+       was made against. If another coach changed the plan since, the
+       save is refused and the current plan comes back, so nothing is
+       silently overwritten. */
+    if (body.rev !== pl.rev) {
+      const last = planLastEvent(pl);
+      return sendJson(res, 409, {
+        error: coachLabel(last.by) + ' changed this plan since you opened it. Here is the current version. Check it, then make your change again.',
+        plan: publicPlan(pl, true),
+      });
+    }
+    if (pl.archived) return sendJson(res, 400, { error: 'This plan is archived. It is kept for the record and cannot change.' });
+    const latest = planLatest(pl);
+    const finish = (status) => { pl.rev++; saveDb(); return sendJson(res, status || 200, { plan: publicPlan(pl, true) }); };
+    if (action === 'edit') {
+      if (latest.status !== 'draft') {
+        return sendJson(res, 400, { error: latest.status === 'published'
+          ? 'This workout is published. Start a revision to change it, so athletes keep the current version until the change is approved.'
+          : 'Only a draft can be edited. Move it back to Draft first.' });
+      }
+      const v = validatePlanFields(body, latest.fields);
+      if (v.error) return sendJson(res, 400, { error: v.error });
+      latest.fields = v.fields;
+      if (body.changeSummary !== undefined) latest.changeSummary = clean(body.changeSummary, 240);
+      latest.editedBy = user.id; latest.editedAt = new Date().toISOString();
+      return finish();
+    }
+    if (action === 'revise') {
+      if (latest.status !== 'published') {
+        return sendJson(res, 400, { error: 'There is already a revision in progress, or this plan has not been published yet.' });
+      }
+      const now = new Date().toISOString();
+      pl.versions.push({ n: latest.n + 1, status: 'draft', fields: Object.assign({}, latest.fields),
+        changeSummary: '', createdBy: user.id, createdAt: now, editedBy: user.id, editedAt: now,
+        log: [{ to: 'draft', by: user.id, at: now }] });
+      return finish(201);
+    }
+    if (action === 'archive') {
+      if (!staffFor(user).canApprove) return sendJson(res, 403, { error: 'Only the head coach or an approver can archive a workout.' });
+      pl.archived = true; pl.archivedAt = new Date().toISOString(); pl.archivedBy = user.id;
+      return finish();
+    }
+    /* status */
+    const to = clean(body.to, 20);
+    const approver = staffFor(user).canApprove;
+    if (to === 'discard') {
+      if (!pl.publishedN || latest.n === pl.publishedN) {
+        return sendJson(res, 400, { error: 'There is no revision to discard. To retire this plan, archive it.' });
+      }
+      latest.status = 'discarded'; planLog(latest, 'discarded', user);
+      return finish();
+    }
+    const allowed = { draft: ['review'], review: ['approved', 'draft'], approved: ['published', 'draft'] }[latest.status] || [];
+    if (!allowed.includes(to)) {
+      const label = PLAN_STATUS_LABELS[latest.status] || latest.status;
+      return sendJson(res, 400, { error: 'A workout in ' + label + ' cannot move to ' + (PLAN_STATUS_LABELS[to] || to) + '. The order is Draft, Needs review, Approved, Published.' });
+    }
+    if ((to === 'approved' || to === 'published') && !approver) {
+      return sendJson(res, 403, { error: 'Only the head coach or a coach the head coach made an approver can ' + (to === 'approved' ? 'approve' : 'publish') + ' a workout.' });
+    }
+    const isRevision = !!pl.publishedN;
+    if (body.changeSummary !== undefined && latest.status !== 'published') {
+      const cs = clean(body.changeSummary, 240);
+      if (cs && hasMedicalDetail(cs, false)) return sendJson(res, 400, { error: MEDICAL_REFUSAL });
+      if (cs) latest.changeSummary = cs;
+    }
+    if (isRevision && (to === 'review' || to === 'published') && !latest.changeSummary) {
+      return sendJson(res, 400, { error: 'Say what changed in this revision. Athletes see that note when it is published.' });
+    }
+    if (to === 'published') {
+      if (isRevision) {
+        const prev = planVersion(pl, pl.publishedN);
+        if (prev) { prev.status = 'superseded'; planLog(prev, 'superseded', user); }
+      }
+      latest.status = 'published';
+      pl.publishedN = latest.n;
+      if (!pl.firstPublishedN) pl.firstPublishedN = latest.n;
+    } else {
+      latest.status = to;
+    }
+    planLog(latest, to, user);
+    return finish();
+  }
+
+  /* ---------- attendance ----------
+     Present, Late or Absent, entered by a coach. No entry is "Not
+     recorded" and stays that way: nothing here turns a blank into an
+     absence. Every correction keeps the earlier value in history. */
+  if (p === '/api/attendance' && req.method === 'GET') {
+    const date = clean(q.get('date') || todayStr(), 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    const groupId = clean(q.get('groupId'), 80);
+    if (groupId && !groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
+    const members = groupId ? groupMembers(groupId)
+      : db.profiles.filter(pr => !pr.archived && pr.groupId)
+        .slice().sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+    return sendJson(res, 200, {
+      date, groupId: groupId || null,
+      counts: attendanceCounts(members, date),
+      athletes: members.map(pr => {
+        const rec = attendanceFor(date, pr.id);
+        const g = groupById(pr.groupId);
+        return {
+          profileId: pr.id, name: pr.firstName + ' ' + pr.lastName, groupName: g ? g.name : '',
+          status: rec ? rec.status : 'not-recorded',
+          updatedBy: rec ? coachLabel(rec.updatedBy) : null, updatedAt: rec ? rec.updatedAt : null,
+          corrections: rec && Array.isArray(rec.history) ? Math.max(0, rec.history.length - 1) : 0,
+        };
+      }),
+    });
+  }
+  if (p === '/api/attendance' && req.method === 'POST') {
+    const body = await readBody(req);
+    const date = clean(body.date || todayStr(), 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (date > addDaysStr(todayStr(), 0)) return sendJson(res, 400, { error: 'Attendance can only be recorded for today or an earlier day.' });
+    const prof = profileById(clean(body.profileId, 80));
+    if (!prof || prof.archived) return sendJson(res, 404, { error: 'Athlete not found on the roster.' });
+    const status = body.status === null || body.status === '' || body.status === 'not-recorded' ? null : clean(body.status, 20);
+    if (status !== null && !ATTENDANCE_STATUSES.includes(status)) {
+      return sendJson(res, 400, { error: 'Attendance is Present, Late, or Absent.' });
+    }
+    setAttendance(date, prof.id, status, user);
+    saveDb();
+    const rec = (db.attendance[date] || {})[prof.id];
+    return sendJson(res, 200, { ok: true, profileId: prof.id, date,
+      status: status || 'not-recorded', updatedBy: coachLabel(rec.updatedBy), updatedAt: rec.updatedAt,
+      counts: prof.groupId ? attendanceCounts(groupMembers(prof.groupId), date) : null });
+  }
+  if (p === '/api/attendance/bulk' && req.method === 'POST') {
+    const body = await readBody(req);
+    const date = clean(body.date || todayStr(), 10);
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (date > todayStr()) return sendJson(res, 400, { error: 'Attendance can only be recorded for today or an earlier day.' });
+    const groupId = clean(body.groupId, 80);
+    if (!groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
+    if (body.status !== 'present') return sendJson(res, 400, { error: 'The quick fill only marks athletes Present.' });
+    let marked = 0;
+    for (const pr of groupMembers(groupId)) {
+      if (attendanceFor(date, pr.id)) continue;
+      setAttendance(date, pr.id, 'present', user);
+      marked++;
+    }
+    saveDb();
+    return sendJson(res, 200, { ok: true, marked, counts: attendanceCounts(groupMembers(groupId), date) });
+  }
+
+  /* ---------- staff handoffs (v65, phase 2) ----------
+     A structured note from one coach to another, tied to an athlete,
+     a group, or a workout: category, one short update, the next
+     action, who it is for, a due date only if there is a real one,
+     and who wrote it when. Open, then Acknowledged, then Resolved.
+     Resolved handoffs stay in the history and can no longer change.
+     Coaching coordination only: medical detail is refused, because
+     it belongs with the athletic trainer. Handoffs are coach-only;
+     no athlete payload, export, or TV surface reads them. */
+  if (p === '/api/handoffs' && req.method === 'GET') {
+    const view = clean(q.get('view'), 20) || 'unresolved';
+    let list = db.handoffs.slice();
+    if (view === 'unresolved') list = list.filter(h => h.status !== 'resolved');
+    else if (view === 'mine') list = list.filter(h => h.status !== 'resolved' && handoffAssignees(h).ids.includes(user.id));
+    else if (view === 'history') list = list.filter(h => h.status === 'resolved');
+    else if (view !== 'all') return sendJson(res, 400, { error: 'View is unresolved, mine, history, or all.' });
+    list.sort(handoffOrder);
+    return sendJson(res, 200, {
+      view,
+      counts: {
+        open: db.handoffs.filter(h => h.status === 'open').length,
+        acknowledged: db.handoffs.filter(h => h.status === 'acknowledged').length,
+        resolved: db.handoffs.filter(h => h.status === 'resolved').length,
+        mine: db.handoffs.filter(h => h.status !== 'resolved' && handoffAssignees(h).ids.includes(user.id)).length,
+      },
+      handoffs: list.map(h => publicHandoff(h, user)),
+    });
+  }
+  if (p === '/api/handoffs' && req.method === 'POST') {
+    const body = await readBody(req);
+    const category = clean(body.category, 20);
+    if (!HANDOFF_CATEGORIES.includes(category)) {
+      return sendJson(res, 400, { error: 'Pick a category: workout, testing, attendance, scheduling, equipment, or other.' });
+    }
+    const about = body.about && typeof body.about === 'object' ? body.about : {};
+    const aboutKind = clean(about.kind, 20);
+    const aboutId = clean(about.id, 80);
+    if (aboutKind === 'athlete') {
+      const pr = profileById(aboutId);
+      if (!pr || pr.archived) return sendJson(res, 400, { error: 'Pick an athlete who is on the roster.' });
+    } else if (aboutKind === 'group') {
+      if (!groupById(aboutId)) return sendJson(res, 400, { error: 'Pick a group from the roster.' });
+    } else if (aboutKind === 'session') {
+      if (!planById(aboutId)) return sendJson(res, 400, { error: 'Pick a workout that has a plan.' });
+    } else {
+      return sendJson(res, 400, { error: 'Say what the handoff is about: an athlete, a group, or a workout.' });
+    }
+    const update = clean(body.update, 280);
+    if (!update) return sendJson(res, 400, { error: 'Write one short update.' });
+    const nextAction = clean(body.nextAction, 200);
+    if (!nextAction) return sendJson(res, 400, { error: 'Say what needs to happen next.' });
+    if (hasMedicalDetail(update + ' ' + nextAction, true)) return sendJson(res, 400, { error: MEDICAL_REFUSAL });
+    const assign = body.assign && typeof body.assign === 'object' ? body.assign : {};
+    const assignKind = clean(assign.kind, 20);
+    const assignId = clean(assign.id, 80);
+    if (assignKind === 'coach') {
+      const c = db.users.find(u => u.id === assignId);
+      if (!c || c.role !== 'coach') return sendJson(res, 400, { error: 'Assign it to a coach account.' });
+    } else if (assignKind === 'group-coach') {
+      if (!groupById(assignId)) return sendJson(res, 400, { error: 'Pick the group whose coach should take it.' });
+    } else if (assignKind !== 'head-coach') {
+      return sendJson(res, 400, { error: 'Assign it to a coach, the head coach, or a group\'s coach.' });
+    }
+    let dueDate = clean(body.dueDate, 10);
+    if (dueDate && !parseDateStr(dueDate)) return sendJson(res, 400, { error: 'Due date must be a real date, or leave it empty.' });
+    const now = new Date().toISOString();
+    const h = {
+      id: crypto.randomUUID(), category,
+      about: { kind: aboutKind, id: aboutId },
+      update, nextAction,
+      assign: { kind: assignKind, id: assignKind === 'head-coach' ? null : assignId },
+      dueDate: dueDate || null, status: 'open',
+      authorId: user.id, createdAt: now, resolvedAt: null,
+      history: [{ to: 'open', by: user.id, at: now }],
+    };
+    db.handoffs.push(h);
+    saveDb();
+    return sendJson(res, 201, { handoff: publicHandoff(h, user) });
+  }
+  const handoffMatch = p.match(/^\/api\/handoffs\/([^/]+)\/status$/);
+  if (handoffMatch && req.method === 'POST') {
+    const h = db.handoffs.find(x => x.id === decodeURIComponent(handoffMatch[1]));
+    if (!h) return sendJson(res, 404, { error: 'Handoff not found.' });
+    const body = await readBody(req);
+    const to = clean(body.to, 20);
+    if (h.status === 'resolved') return sendJson(res, 400, { error: 'This handoff is resolved. It stays in the history as it is.' });
+    if (!(HANDOFF_NEXT[h.status] || []).includes(to)) {
+      return sendJson(res, 400, { error: 'A handoff moves from Open to Acknowledged to Resolved.' });
+    }
+    const now = new Date().toISOString();
+    h.status = to;
+    if (to === 'resolved') h.resolvedAt = now;
+    h.history.push({ to, by: user.id, at: now });
+    saveDb();
+    return sendJson(res, 200, { handoff: publicHandoff(h, user) });
   }
 
   /* ---------- AMS (athlete management system) ----------

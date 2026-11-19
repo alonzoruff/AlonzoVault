@@ -424,7 +424,7 @@ async function main() {
     pageHtml.text.includes('id="view-coachhub"'));
   check('primary nav carries the five destinations plus the coach area',
     ['data-view="home"', 'data-view="train"', 'data-view="learn"', 'data-view="log"',
-     'data-view="account"', 'data-view="coachhub"'].every(s => pageHtml.text.includes(s)));
+     'data-view="account"', 'data-area="coachhub"', 'data-view="coachtoday"'].every(s => pageHtml.text.includes(s)));
   check('mobile bottom tab bar is in the served page',
     pageHtml.text.includes('id="tab-bar"') && pageHtml.text.includes('tabbar'));
   check('every surviving view section is still in the page',
@@ -452,8 +452,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v63 (coach home base)',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v64"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v65 (Coach Today)',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v65"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2377,16 +2377,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v64'") &&
-    swJs.text.includes("sprinter-app-v64"));
+    appJs.text.includes("const APP_VERSION = 'v65'") &&
+    swJs.text.includes("sprinter-app-v65"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v64"') &&
-    pageHtml.text.includes('Sprinter Workout App · v64') &&
+    pageHtml.text.includes('data-app-version="v65"') &&
+    pageHtml.text.includes('Sprinter Workout App · v65') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v59) ----------------
@@ -3103,16 +3103,20 @@ async function main() {
   check('v56: attendance view is gone from the served page',
     !pageHtml.text.includes('id="view-attendance"') && !pageHtml.text.includes('id="attendance-main"') &&
     !pageHtml.text.includes('data-view="attendance"'));
-  check('v56: attendance wiring is gone from the served JS',
+  check('v56: the old attendance roll-book wiring is gone from the served JS',
     !appJs.text.includes("['attendance', 'Attendance']") && !appJs.text.includes('renderAttendance') &&
-    !appJs.text.includes('/api/attendance'));
+    !appJs.text.includes('/api/attendance/summary') && !appJs.text.includes('mark-all-present'));
   const attTvStart = appJs.text.indexOf('TV BOARD');
   const attTvEnd = appJs.text.indexOf('/* ---------------- boot', attTvStart);
   const attTvCode = attTvStart >= 0 && attTvEnd > attTvStart ? appJs.text.slice(attTvStart, attTvEnd) : '';
   check('TV board render path never references attendance',
     attTvCode.length > 500 && !attTvCode.toLowerCase().includes('attendance'), attTvCode.length);
+  /* v65 brings back a small, coach-only attendance count for Coach
+     Today (GET/POST /api/attendance). The v56 roll-book routes below
+     stay gone. */
   r = await api(coach, 'GET', '/api/attendance');
-  check('v56: GET /api/attendance is 404', r.status === 404, r.status);
+  check('v65: coach GET /api/attendance defaults to today',
+    r.status === 200 && r.json && r.json.counts && typeof r.json.counts.notRecorded === 'number', r.status);
   r = await api(coach, 'GET', '/api/attendance/summary');
   check('v56: the attendance summary report is 404', r.status === 404, r.status);
   r = await api(coach, 'PUT', '/api/attendance/2027-01-04/' + willP.id, { status: 'present' });
@@ -8002,9 +8006,10 @@ async function waitForServer(tries = 60) {
         .match(/btn primary/g) || []).length === 1 &&
       ['ams', 'testing', 'leaderboard', 'reports', 'devices', 'weightroom', 'calendar', 'meets', 'goals']
         .every(v => chPage.text.slice(chPage.text.indexOf('id="ch-hub-h"')).includes('data-view="' + v + '"')));
-    check('coach home wiring: coaches land on it, every coach view links back',
+    check('coach home wiring: coaches land on Coach Today (v65), every coach view links back to Coach home',
       chJs.text.includes('/api/coach/home') && chJs.text.includes('function renderCoachHome') &&
-      chJs.text.includes("if (isCoachUser()) showView('coachhub');") &&
+      chJs.text.includes("if (isCoachUser()) showView('coachtoday');") &&
+      chJs.text.includes('data-view="coachhub">Coach home and roster') &&
       chJs.text.includes('class="ch-back" data-view="coachhub"'));
     const tvStart = chJs.text.indexOf('function tvTodayInfo');
     const tvEnd = chJs.text.indexOf('function tvStartTimers');
@@ -8144,6 +8149,309 @@ async function waitForServer(tries = 60) {
     // The old pipe format still works unchanged.
     r = await api(coach, 'POST', '/api/profiles/import', { text: 'Pipe, Still | 100/200 | sprinter |' });
     check('v64: the pipe-line import format still works', r.status === 200 && r.json.report.created === 1, r.json);
+  }
+
+  /* ---------------- v65: Coach Today + staff handoffs ----------------
+     One published workout per group per day with a reviewed path to
+     athletes, coach-only attendance where a blank stays Not recorded,
+     and coach-to-coach handoffs that refuse medical detail. Runs on
+     its own group and athletes so earlier counts are untouched. */
+  {
+    const coach = ctx.coach;
+    const T = (await api(coach, 'GET', '/api/coach/today-board')).json.today;
+    const addD = (s, n) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    const TOM = addD(T, 1), YEST = addD(T, -1);
+    let r = await api(null, 'POST', '/api/login', { email: 'athlete@test.com', password: 'testpass123' });
+    const athleteAny = cookieOf(r);
+    r = await api(coach, 'POST', '/api/groups', { name: 'V65 Jumps' });
+    const jg = r.json.group;
+    // A linked athlete in the group, and two more on the roster.
+    r = await api(coach, 'POST', '/api/profiles', { firstName: 'Vee', lastName: 'Jumper', groupId: jg.id, events: ['sprinter'] });
+    const vee = r.json.profile;
+    await api(coach, 'PUT', '/api/profiles/' + vee.id + '/link', { email: 'v65ath@test.com' });
+    r = await api(null, 'POST', '/api/register', { email: 'v65ath@test.com', password: 'testpass123', ageAttested: true });
+    const veeCookie = cookieOf(r);
+    r = await api(coach, 'POST', '/api/profiles', { firstName: 'Ana', lastName: 'Bound', groupId: jg.id, events: ['sprinter'] });
+    const ana = r.json.profile;
+    r = await api(coach, 'POST', '/api/profiles', { firstName: 'Cy', lastName: 'Hop', groupId: jg.id, events: ['sprinter'] });
+    const cy = r.json.profile;
+    // A second coach who is not an approver.
+    await api(coach, 'POST', '/api/coach-invites', { email: 'v65coach@test.com' });
+    r = await api(null, 'POST', '/api/register', { email: 'v65coach@test.com', password: 'testpass123', ageAttested: true });
+    const c2 = cookieOf(r);
+    const c2Me = (await api(c2, 'GET', '/api/me')).json;
+    check('v65: the invited assistant is a coach', c2Me && c2Me.role === 'coach', c2Me);
+
+    // ---- gates ----
+    for (const [m, p] of [['GET', '/api/coach/today-board'], ['GET', '/api/plans?from=' + T + '&to=' + T], ['GET', '/api/attendance?date=' + T],
+      ['GET', '/api/handoffs'], ['GET', '/api/staff'], ['POST', '/api/plans'], ['POST', '/api/handoffs'], ['POST', '/api/attendance']]) {
+      const ra = await api(veeCookie, m, p, m === 'POST' ? {} : undefined);
+      const rn = await api(null, m, p, m === 'POST' ? {} : undefined);
+      check('v65: ' + m + ' ' + p.split('?')[0] + ' is coach-only (athlete 403, signed out 401)', ra.status === 403 && rn.status === 401, [ra.status, rn.status]);
+    }
+
+    // ---- empty state ----
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    let jb = r.json.groups.find(g => g.id === jg.id);
+    check('v65: a group with nothing planned has no plan and its attendance is all Not recorded',
+      jb && jb.plan === null && jb.attendance.expected === 3 && jb.attendance.notRecorded === 3 &&
+      jb.attendance.present === 0 && jb.attendance.absent === 0, jb);
+    r = await api(veeCookie, 'GET', '/api/my/plan');
+    check('v65: an athlete sees no workout before one is published', r.status === 200 && r.json.plan === null && r.json.linked === true, r.json);
+
+    // ---- create, validate ----
+    r = await api(coach, 'POST', '/api/plans', { groupId: jg.id, date: T, sessionId: 'ZZZ-999' });
+    check('v65: a session code outside the library is refused', r.status === 400, r.json);
+    r = await api(coach, 'POST', '/api/plans', { groupId: jg.id, date: T, title: 'Bounding', objective: 'Work around his ankle sprain' });
+    check('v65: a workout note with medical detail is refused', r.status === 400 && /athletic trainer/.test(r.json.error), r.json);
+    r = await api(coach, 'POST', '/api/plans', { groupId: jg.id, date: T, title: 'Bounding and short approaches', objective: 'Rhythm on the runway',
+      location: 'Main track', startTime: '15:30', athleteNotes: 'Bring spikes', leadCoachId: c2Me.id });
+    check('v65: a coach creates a draft workout', r.status === 201 && r.json.plan.status === 'draft' && r.json.plan.statusLabel === 'Draft', r.json);
+    let plan = r.json.plan;
+    r = await api(coach, 'POST', '/api/plans', { groupId: jg.id, date: T, title: 'Second plan' });
+    check('v65: one plan per group per day', r.status === 409 && r.json.plan && r.json.plan.id === plan.id, r.status);
+    r = await api(coach, 'POST', '/api/plans', { groupId: jg.id, date: TOM, title: 'Tomorrow draft' });
+    const tomPlan = r.json.plan;
+
+    // ---- drafts never leak ----
+    r = await api(veeCookie, 'GET', '/api/my/plan');
+    check('v65: an athlete does not see a draft', r.json.plan === null, r.json);
+    r = await api(coach, 'GET', '/api/coach/today?board=1');
+    let tvg = (r.json.groups || []).find(x => x.group.id === jg.id);
+    check('v65: the TV board does not show a draft', tvg && tvg.assignment.source !== 'published', tvg);
+    r = await api(coach, 'GET', '/api/coach/feed?date=' + T);
+    let fg = (r.json.groups || []).find(x => x.group && x.group.id === jg.id);
+    check('v65: the checklist does not follow a draft', fg && fg.assignment.source !== 'published', fg && fg.assignment);
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    jb = r.json.groups.find(g => g.id === jg.id);
+    check('v65: Coach Today shows the draft with its fields, lead coach and tomorrow\'s status',
+      jb.plan.status === 'draft' && jb.plan.shown.location === 'Main track' && jb.plan.shown.startTime === '15:30' &&
+      jb.plan.leadCoach === 'v65coach@test.com' && jb.tomorrow && jb.tomorrow.status === 'draft' && jb.tomorrow.statusLabel === 'Draft', jb);
+
+    // ---- edit with conflict protection ----
+    r = await api(coach, 'PUT', '/api/plans/' + plan.id, { rev: plan.rev, objective: 'Rhythm and posture' });
+    check('v65: editing a draft saves and bumps the revision', r.status === 200 && r.json.plan.rev === plan.rev + 1, r.json);
+    r = await api(c2, 'PUT', '/api/plans/' + plan.id, { rev: plan.rev, objective: 'Stale save' });
+    check('v65: a save made against an old revision is refused with the current plan and who changed it',
+      r.status === 409 && r.json.plan && r.json.plan.latest.fields.objective === 'Rhythm and posture' && /changed this plan/.test(r.json.error), r.json);
+    plan = (await api(coach, 'GET', '/api/plans?groupId=' + jg.id + '&date=' + T)).json.plan;
+    r = await api(coach, 'PUT', '/api/plans/' + plan.id, { objective: 'No rev' });
+    check('v65: a save with no revision is refused', r.status === 409, r.status);
+
+    // ---- status path and approver rules ----
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'published' });
+    check('v65: a draft cannot jump straight to Published', r.status === 400, r.json);
+    r = await api(c2, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'review' });
+    check('v65: any coach can send a draft for review', r.status === 200 && r.json.plan.status === 'review' && r.json.plan.statusLabel === 'Needs review', r.json);
+    plan = r.json.plan;
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    check('v65: a workout in review shows in the approvals queue',
+      r.json.actions.approvals.some(a => a.planId === plan.id && a.status === 'review'), r.json.actions.approvals);
+    r = await api(coach, 'PUT', '/api/plans/' + plan.id, { rev: plan.rev, title: 'Edit in review' });
+    check('v65: only a draft can be edited', r.status === 400, r.json);
+    r = await api(c2, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'approved' });
+    check('v65: a coach who is not an approver cannot approve', r.status === 403, r.status);
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'approved' });
+    check('v65: the head coach approves', r.status === 200 && r.json.plan.status === 'approved', r.json);
+    plan = r.json.plan;
+    r = await api(veeCookie, 'GET', '/api/my/plan');
+    check('v65: an athlete does not see an approved but unpublished workout', r.json.plan === null, r.json);
+    r = await api(c2, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'published' });
+    check('v65: a coach who is not an approver cannot publish', r.status === 403, r.status);
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'published' });
+    check('v65: the head coach publishes', r.status === 200 && r.json.plan.status === 'published' && r.json.plan.statusLabel === 'Published', r.json);
+    plan = r.json.plan;
+
+    // ---- published reaches athletes, TV, checklist ----
+    r = await api(veeCookie, 'GET', '/api/my/plan');
+    const ap = r.json.plan;
+    check('v65: the athlete sees the published workout, with the coach shown without an email',
+      ap && ap.title === 'Bounding and short approaches' && ap.location === 'Main track' && ap.startTime === '15:30' &&
+      ap.leadCoach === 'Coach' && !JSON.stringify(r.json).includes('@'), r.json);
+    check('v65: the athlete payload carries no coach-only fields',
+      ap && !('history' in ap) && !('rev' in ap) && !('latest' in ap) && !('pendingRevision' in ap), Object.keys(ap || {}));
+    r = await api(coach, 'GET', '/api/coach/today?board=1');
+    tvg = (r.json.groups || []).find(x => x.group.id === jg.id);
+    check('v65: the TV board shows the published workout', tvg && tvg.assignment.source === 'published' && tvg.assignment.sessionName === 'Bounding and short approaches', tvg && tvg.assignment);
+    r = await api(coach, 'GET', '/api/coach/feed?date=' + T);
+    fg = (r.json.groups || []).find(x => x.group && x.group.id === jg.id);
+    check('v65: the checklist follows the published workout', fg && fg.assignment.source === 'published', fg && fg.assignment);
+    r = await api(coach, 'POST', '/api/assignments/override', { groupId: jg.id, date: T, sessionId: 'SE-02', note: 'swap' });
+    check('v65: an old-style override cannot quietly replace a published workout', r.status === 409 && /revision/.test(r.json.error), r.json);
+
+    // ---- revision: athletes keep the live version until the change is published ----
+    r = await api(c2, 'POST', '/api/plans/' + plan.id + '/revise', { rev: plan.rev });
+    check('v65: a change to a published workout starts a new draft version', r.status === 201 && r.json.plan.pendingRevision && r.json.plan.pendingRevision.version === 2 && r.json.plan.status === 'published', r.json);
+    plan = r.json.plan;
+    r = await api(c2, 'PUT', '/api/plans/' + plan.id, { rev: plan.rev, location: 'Gym' });
+    plan = r.json.plan;
+    r = await api(veeCookie, 'GET', '/api/my/plan');
+    check('v65: athletes keep the published version while a revision is a draft', r.json.plan && r.json.plan.location === 'Main track', r.json.plan);
+    r = await api(c2, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'review' });
+    check('v65: a revision needs a note on what changed before review', r.status === 400 && /what changed/i.test(r.json.error), r.json);
+    r = await api(c2, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'review', changeSummary: 'Moved to the gym because of rain' });
+    plan = r.json.plan;
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'approved' });
+    plan = r.json.plan;
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'published' });
+    plan = r.json.plan;
+    check('v65: a published revision reads Updated, with what changed, who and when',
+      plan.status === 'updated' && plan.statusLabel === 'Updated' && plan.changeNotice &&
+      plan.changeNotice.summary === 'Moved to the gym because of rain' && plan.changeNotice.by === 'coach@test.com' && !!plan.changeNotice.at, plan);
+    r = await api(veeCookie, 'GET', '/api/my/plan');
+    check('v65: the athlete sees the new version and the change note',
+      r.json.plan && r.json.plan.location === 'Gym' && r.json.plan.status === 'updated' &&
+      r.json.plan.changeNotice && r.json.plan.changeNotice.summary === 'Moved to the gym because of rain', r.json.plan);
+    check('v65: version history keeps every version and every step',
+      plan.history.length === 2 && plan.history[1].status === 'superseded' &&
+      plan.history[0].log.map(e => e.to).join(',') === 'draft,review,approved,published', plan.history);
+    r = await api(c2, 'POST', '/api/plans/' + plan.id + '/revise', { rev: plan.rev });
+    plan = r.json.plan;
+    r = await api(c2, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'discard' });
+    check('v65: a revision in progress can be discarded, and the live version stays', r.status === 200 && r.json.plan.status === 'updated' && !r.json.plan.pendingRevision, r.json.plan);
+    plan = r.json.plan;
+
+    // ---- copy ----
+    r = await api(c2, 'POST', '/api/plans', { groupId: jg.id, date: addD(T, 7), copyFromPlanId: plan.id });
+    check('v65: copying a workout makes a new draft and records where it came from',
+      r.status === 201 && r.json.plan.status === 'draft' && r.json.plan.latest.fields.location === 'Gym' && r.json.plan.copiedFrom.planId === plan.id, r.json);
+    const copyPlan = r.json.plan;
+
+    // ---- archive ----
+    r = await api(c2, 'POST', '/api/plans/' + copyPlan.id + '/archive', { rev: copyPlan.rev });
+    check('v65: only an approver can archive', r.status === 403, r.status);
+
+    // ---- staff: names, groups, approvers ----
+    r = await api(c2, 'PUT', '/api/staff/' + c2Me.id, { groupIds: [jg.id] });
+    check('v65: a coach cannot assign their own groups', r.status === 403, r.status);
+    r = await api(c2, 'PUT', '/api/staff/' + c2Me.id, { displayName: 'Coach Vega' });
+    check('v65: a coach sets their own display name', r.status === 200 && r.json.coach.label === 'Coach Vega', r.json);
+    r = await api(coach, 'PUT', '/api/staff/' + c2Me.id, { groupIds: [jg.id], canApprove: true });
+    check('v65: the head coach assigns groups and approvers', r.status === 200 && r.json.coach.canApprove === true && r.json.coach.role === 'Event coach', r.json);
+    r = await api(c2, 'GET', '/api/coach/today-board');
+    check('v65: an event coach lands on their own group; the board names them', r.json.me.landingGroupId === jg.id && r.json.me.canApprove === true, r.json.me);
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    check('v65: the head coach lands on the whole team', r.json.me.landingGroupId === null, r.json.me);
+    r = await api(veeCookie, 'GET', '/api/my/plan');
+    check('v65: athletes see the lead coach by display name, never an email', r.json.plan && r.json.plan.leadCoach === 'Coach Vega', r.json.plan);
+    r = await api(c2, 'POST', '/api/plans/' + copyPlan.id + '/archive', { rev: copyPlan.rev });
+    check('v65: an approver archives; the plan stops being live', r.status === 200 && r.json.plan.status === 'archived', r.json);
+    r = await api(c2, 'PUT', '/api/plans/' + copyPlan.id, { rev: r.json.plan.rev, title: 'x' });
+    check('v65: an archived plan cannot change', r.status === 400, r.status);
+    await api(coach, 'PUT', '/api/staff/' + c2Me.id, { canApprove: false });
+
+    // ---- "since you last looked" ----
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    check('v65: changes by other coaches show under Since you last looked, with readable dates',
+      r.json.changes.items.some(c => c.by === 'Coach Vega' && /V65 Jumps workout for \w{3}, \w{3} \d+/.test(c.text)), r.json.changes.items.slice(0, 4));
+    await api(coach, 'POST', '/api/coach/today-board/seen', { what: 'changes' });
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    check('v65: Got it clears the changes list', r.json.changes.count === 0, r.json.changes);
+
+    // ---- attendance ----
+    r = await api(coach, 'POST', '/api/attendance', { date: TOM, profileId: vee.id, status: 'present' });
+    check('v65: attendance cannot be recorded for a future day', r.status === 400, r.status);
+    r = await api(coach, 'POST', '/api/attendance', { date: T, profileId: vee.id, status: 'excused' });
+    check('v65: attendance takes only Present, Late or Absent', r.status === 400, r.status);
+    r = await api(coach, 'POST', '/api/attendance', { date: T, profileId: vee.id, status: 'late' });
+    check('v65: a coach records one athlete as Late', r.status === 200, r.json);
+    r = await api(c2, 'POST', '/api/attendance', { date: T, profileId: vee.id, status: 'present' });
+    r = await api(coach, 'GET', '/api/attendance?date=' + T + '&groupId=' + jg.id);
+    const veeRow = r.json.athletes.find(a => a.profileId === vee.id);
+    check('v65: a correction keeps who changed it and that it was corrected',
+      veeRow.status === 'present' && veeRow.updatedBy === 'Coach Vega' && veeRow.corrections === 1, veeRow);
+    check('v65: athletes nobody marked stay Not recorded, never Absent',
+      r.json.counts.present === 1 && r.json.counts.absent === 0 && r.json.counts.notRecorded === 2 &&
+      r.json.athletes.filter(a => a.status === 'not-recorded').length === 2, r.json.counts);
+    await api(coach, 'POST', '/api/attendance', { date: T, profileId: ana.id, status: 'absent' });
+    r = await api(coach, 'POST', '/api/attendance/bulk', { date: T, groupId: jg.id, status: 'present' });
+    check('v65: Mark everyone not recorded as Present fills only the blanks',
+      r.status === 200 && r.json.marked === 1 && r.json.counts.present === 2 && r.json.counts.absent === 1 && r.json.counts.notRecorded === 0, r.json);
+    r = await api(coach, 'POST', '/api/attendance/bulk', { date: T, groupId: jg.id, status: 'absent' });
+    check('v65: the quick fill never marks anyone Absent', r.status === 400, r.status);
+    r = await api(coach, 'POST', '/api/attendance', { date: T, profileId: cy.id, status: null });
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    jb = r.json.groups.find(g => g.id === jg.id);
+    check('v65: clearing a mark puts the athlete back to Not recorded, and the board counts match',
+      jb.attendance.present === 1 && jb.attendance.absent === 1 && jb.attendance.notRecorded === 1 && jb.attendance.expected === 3, jb.attendance);
+    // A published workout yesterday with nobody marked shows as a missing log.
+    r = await api(coach, 'POST', '/api/plans', { groupId: jg.id, date: YEST, title: 'Yesterday' });
+    let yp = r.json.plan;
+    for (const to of ['review', 'approved', 'published']) { r = await api(coach, 'POST', '/api/plans/' + yp.id + '/status', { rev: yp.rev, to }); yp = r.json.plan; }
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    check('v65: a published day with blanks shows as a missing attendance log',
+      r.json.actions.missingLogs.some(m => m.groupId === jg.id && m.date === YEST && m.notRecorded === 3), r.json.actions.missingLogs);
+
+    // ---- handoffs ----
+    const ho = (who, body) => api(who, 'POST', '/api/handoffs', body);
+    r = await ho(c2, { category: 'workout', about: { kind: 'athlete', id: vee.id }, update: 'Says the knee pain is back', nextAction: 'Check with her', assign: { kind: 'head-coach' } });
+    check('v65: a handoff with health detail is refused, and nothing is saved', r.status === 400 && /athletic trainer/.test(r.json.error), r.json);
+    r = await ho(c2, { category: 'workout', about: { kind: 'athlete', id: vee.id }, update: 'Missed the last two approach sessions', assign: { kind: 'head-coach' } });
+    check('v65: a handoff needs a next step', r.status === 400, r.json);
+    r = await ho(c2, { category: 'weather', about: { kind: 'group', id: jg.id }, update: 'x', nextAction: 'y', assign: { kind: 'head-coach' } });
+    check('v65: a handoff needs one of the set categories', r.status === 400, r.json);
+    r = await ho(c2, { category: 'equipment', about: { kind: 'group', id: jg.id }, update: 'Hurdles are still in the shed', nextAction: 'Get the key before practice', assign: { kind: 'head-coach' }, dueDate: YEST });
+    check('v65: a coach adds a handoff for the head coach', r.status === 201 && r.json.handoff.status === 'open' && r.json.handoff.about.label === 'V65 Jumps', r.json);
+    const h1 = r.json.handoff;
+    r = await ho(coach, { category: 'scheduling', about: { kind: 'session', id: plan.id }, update: 'Start time may move', nextAction: 'Confirm with the AD', assign: { kind: 'group-coach', id: jg.id } });
+    check('v65: a handoff can be about a workout and go to a group\'s coaches', r.status === 201 && r.json.handoff.assign.label === 'V65 Jumps coaches', r.json);
+    r = await api(coach, 'GET', '/api/handoffs?view=mine');
+    check('v65: the head coach sees a handoff assigned to them, marked past due',
+      r.json.handoffs.some(h => h.id === h1.id && h.assignedToMe && h.overdue), r.json.handoffs);
+    r = await api(c2, 'GET', '/api/handoffs?view=mine');
+    check('v65: a group coach sees the handoff sent to their group', r.json.handoffs.some(h => h.category === 'scheduling' && h.assignedToMe), r.json.handoffs);
+    r = await api(coach, 'POST', '/api/handoffs/' + h1.id + '/status', { to: 'acknowledged' });
+    check('v65: a handoff moves to Acknowledged with who and when', r.status === 200 && r.json.handoff.acknowledged.by === 'coach@test.com', r.json);
+    r = await api(coach, 'POST', '/api/handoffs/' + h1.id + '/status', { to: 'open' });
+    check('v65: a handoff does not move backwards', r.status === 400, r.status);
+    r = await api(coach, 'POST', '/api/handoffs/' + h1.id + '/status', { to: 'resolved' });
+    check('v65: a handoff resolves', r.status === 200 && r.json.handoff.readOnly === true && r.json.handoff.resolved.by === 'coach@test.com', r.json);
+    r = await api(c2, 'POST', '/api/handoffs/' + h1.id + '/status', { to: 'acknowledged' });
+    check('v65: a resolved handoff can no longer change', r.status === 400, r.status);
+    r = await api(coach, 'GET', '/api/handoffs?view=history');
+    check('v65: resolved handoffs stay in the history', r.json.handoffs.some(h => h.id === h1.id), r.json.handoffs);
+    r = await api(coach, 'GET', '/api/coach/today-board');
+    check('v65: Coach Today counts the unresolved handoffs', r.json.handoffs.open >= 1 && !r.json.handoffs.items.some(h => h.id === h1.id), r.json.handoffs);
+    r = await api(veeCookie, 'GET', '/api/my/plan');
+    check('v65: nothing from handoffs or attendance reaches the athlete payload',
+      !/Hurdles are still|Start time may move|attendance|handoff/i.test(JSON.stringify(r.json)), r.json);
+
+    // ---- backup carries the new records ----
+    r = await api(coach, 'GET', '/api/export/backup');
+    check('v65: the backup carries workout plans and handoffs',
+      r.status === 200 && Array.isArray(r.json.data.sessionPlans) && r.json.data.sessionPlans.some(p => p.id === plan.id) &&
+      Array.isArray(r.json.data.handoffs) && r.json.data.handoffs.some(h => h.id === h1.id), Object.keys(r.json.data || {}));
+
+    // ---- the page ----
+    const pageV65 = await apiText(null, '/');
+    const jsV65 = await apiText(null, '/app.js');
+    const cssV65 = await apiText(null, '/styles.css');
+    check('v65: the page has Coach Today, Staff Handoffs, the sheet and the athlete workout slot',
+      ['id="view-coachtoday"', 'id="ct-main"', 'id="view-handoffs"', 'id="ho-main"', 'id="ct-sheet"', 'id="my-plan-slot"']
+        .every(x => pageV65.text.includes(x)));
+    check('v65: coaches land on Coach Today, with Coach home one tap away',
+      jsV65.text.includes("if (isCoachUser()) showView('coachtoday');") &&
+      jsV65.text.includes("showView(state.user.role === 'coach' ? 'coachtoday' : 'home')") &&
+      jsV65.text.includes("['coachtoday', 'Coach Today'], ['handoffs', 'Staff Handoffs']"));
+    check('v65: every status carries a word and a shape, never color alone',
+      ['draft', 'review', 'approved', 'published', 'updated', 'archived', 'present', 'late', 'absent', 'unrecorded', 'open', 'acknowledged', 'resolved']
+        .every(k => new RegExp('\\n  ' + k + ": '<svg").test(jsV65.text)) && jsV65.text.includes('function ctPill'));
+    check('v65: the empty state says plainly that nothing is published',
+      jsV65.text.includes('No workout published yet') && jsV65.text.includes('Nothing needs you right now.'));
+    check('v65: Coach Today controls are iPad-sized (48px chips and days, 52px main buttons)',
+      /\.ct-gchip \{[^}]*min-height: 48px/.test(cssV65.text) && /\.ct-day, \.ct-daystep \{[^}]*min-height: 48px/.test(cssV65.text) &&
+      /\.btn\.ct-big \{ min-height: 52px/.test(cssV65.text) && /\.ct-att-btn \{[^}]*min-height: 52px/.test(cssV65.text));
+    check('v65: Coach Today widens for an iPad and splits into two columns from 760px',
+      cssV65.text.includes('body.ct-wide main, body.ct-wide .topbar-inner, body.ct-wide .mainnav, body.ct-wide .footer { max-width: 1180px; }') && /@media \(min-width: 900px\) \{\s*\.ct-grid/.test(cssV65.text));
+    const tvS = jsV65.text.indexOf('function tvTodayInfo');
+    const tvE = jsV65.text.indexOf('function tvStartTimers');
+    check('v65: the TV board never reads Coach Today, attendance or handoffs',
+      tvS > 0 && tvE > tvS && !/today-board|\/api\/attendance|\/api\/handoffs/.test(jsV65.text.slice(tvS, tvE)));
+    const fnNames = (jsV65.text.match(/^(?:async )?function ([A-Za-z0-9_$]+)/gm) || []).map(x => x.replace(/^(?:async )?function /, ''));
+    const dupFns = fnNames.filter((n, i) => fnNames.indexOf(n) !== i);
+    check('v65: no two top-level functions in app.js share a name (a later one would silently replace the earlier)',
+      fnNames.length > 100 && dupFns.length === 0, dupFns);
+    void athleteAny;
   }
 
   }

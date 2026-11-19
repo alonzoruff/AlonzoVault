@@ -153,8 +153,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v64';
-const APP_BUILD_LABEL = 'Sprinter Workout App · v64';
+const APP_VERSION = 'v65';
+const APP_BUILD_LABEL = 'Sprinter Workout App · v65';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -406,7 +406,7 @@ function md(src) {
    .subnav-slot. Every nav control carries data-view; one delegated
    listener below routes them all. */
 const VIEW_AREA = {
-  home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
+  home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub', coachtoday: 'coachhub', handoffs: 'coachhub',
   library: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', race: 'train', records: 'train', leaderboard: 'train',
   libraryhome: 'learn', videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', studies: 'learn', education: 'learn', guide: 'learn',
   coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', ams: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub',
@@ -418,7 +418,7 @@ const GROUP_SUBNAV = {
   /* v63: same coach views, ordered the way Coach home groups them
      (today, athletes, testing and meets, reports, weight room and
      devices, plans, upkeep), so the menu and the home page agree. */
-  coachhub: [['coach', "Today's Checklist"], ['announce', 'Announcements'], ['ams', 'AMS'], ['groups', 'Roster & Groups'], ['goals', 'Goals'], ['top', 'Top Athletes'], ['testing', 'Testing'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['reports', 'Reports'], ['digest', 'Digest'], ['weightroom', 'Weight Room'], ['devices', 'Devices'], ['tv', 'TV Board'], ['calendar', 'Calendar'], ['programs', 'Programs'], ['custom', 'Custom Workouts'], ['inventory', 'Inventory'], ['data', 'Data'], ['coverage', 'Demo Coverage']],
+  coachhub: [['coachtoday', 'Coach Today'], ['handoffs', 'Staff Handoffs'], ['coach', "Today's Checklist"], ['announce', 'Announcements'], ['ams', 'AMS'], ['groups', 'Roster & Groups'], ['goals', 'Goals'], ['top', 'Top Athletes'], ['testing', 'Testing'], ['meets', 'Meet Results'], ['meetday', 'Meet Day'], ['reports', 'Reports'], ['digest', 'Digest'], ['weightroom', 'Weight Room'], ['devices', 'Devices'], ['tv', 'TV Board'], ['calendar', 'Calendar'], ['programs', 'Programs'], ['custom', 'Custom Workouts'], ['inventory', 'Inventory'], ['data', 'Data'], ['coverage', 'Demo Coverage']],
 };
 function renderSubnav(name, area) {
   const items = GROUP_SUBNAV[area];
@@ -1042,7 +1042,7 @@ function showView(name) {
   closeTermPop();
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const area = VIEW_AREA[name] || 'home';
-  $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
+  $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', (VIEW_AREA[t.dataset.view] || t.dataset.view) === area));
   $$('.nav-group-btn').forEach(b => b.classList.toggle('active', b.dataset.area === area));
   $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   closeNavMenus();
@@ -1052,7 +1052,12 @@ function showView(name) {
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'weightroom') enterWeightRoom(); else exitWeightRoom();
+  document.body.classList.toggle('ct-wide', name === 'coachtoday' || name === 'handoffs');
+  if (name !== 'coachtoday' && name !== 'handoffs') ctCloseSheet();
   if (name === 'home' || name === 'log') renderCheckin();
+  if (name === 'home') renderMyPlan();
+  if (name === 'coachtoday') renderCtBoard();
+  if (name === 'handoffs') renderHandoffs();
   if (name === 'home') renderAnnouncePanel();
   if (name === 'announce') renderAnnouncements();
   if (name === 'coachhub') renderCoachHome();
@@ -2861,14 +2866,14 @@ function renderAccount() {
       e.preventDefault();
       try {
         state.user = await apiPost('/api/login', { email: $('#li-email').value, password: $('#li-pass').value });
-        await refreshUserData(); syncAuthUi(); showView(state.user.role === 'coach' ? 'coachhub' : 'home');
+        await refreshUserData(); syncAuthUi(); showView(state.user.role === 'coach' ? 'coachtoday' : 'home');
       } catch (err) { $('#li-err').textContent = err.message; }
     });
     $('#register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
         state.user = await apiPost('/api/register', { email: $('#rg-email').value, password: $('#rg-pass').value, ageAttested: $('#rg-age').checked });
-        await refreshUserData(); syncAuthUi(); showView(state.user.role === 'coach' ? 'coachhub' : 'home');
+        await refreshUserData(); syncAuthUi(); showView(state.user.role === 'coach' ? 'coachtoday' : 'home');
       } catch (err) { $('#rg-err').textContent = err.message; }
     });
   }
@@ -8406,6 +8411,738 @@ function chAthleteBtn(a, extra) {
 function chTile(num, label, warn) {
   return `<div class="hero-stat ch-tile${warn ? ' ch-warn' : ''}"><span class="stat-num">${num}</span><span class="stat-label">${label}</span></div>`;
 }
+/* ================================================================
+   v65 COACH TODAY (phase 1) and STAFF HANDOFFS (phase 2).
+   The page every coach lands on. Built for an iPad in one hand on
+   the track: big targets, one group at a time, and every number
+   counted by the server from the stored records. A status always
+   carries its word and a shape, never color alone. Drafts and
+   unpublished versions never reach athletes, the TV board or the
+   checklist; the server enforces that, this page just says so.
+   ================================================================ */
+const CT_ICON = {
+  draft: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.4 2"/></svg>',
+  review: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg>',
+  approved: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 8.3l2 2 4-4.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  published: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="currentColor"/><path d="M5 8.3l2 2 4-4.3" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  updated: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.6 6.2A4.9 4.9 0 0 0 3.4 6M3.4 9.8a4.9 4.9 0 0 0 9.2.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.9 2.8v3.6H9.3M3.1 13.2V9.6h3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  archived: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="3" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 6v6.5h9V6M6.5 8.6h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+  none: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  present: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.6 8.4l2.9 2.9 5.9-6.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  late: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.6V8l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  absent: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  unrecorded: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.4 2"/></svg>',
+  open: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+  acknowledged: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg>',
+  resolved: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="currentColor"/><path d="M5 8.3l2 2 4-4.3" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const CT_STATUS_HINT = {
+  draft: 'Coaches only. Athletes do not see a draft.',
+  review: 'Waiting for an approver. Athletes do not see it yet.',
+  approved: 'Approved, not yet published. Athletes do not see it yet.',
+  published: 'Athletes see this workout.',
+  updated: 'Athletes see this version and a note on what changed.',
+  archived: 'Kept for the record. Athletes no longer see it.',
+};
+const HANDOFF_CATS = [
+  { id: 'workout', label: 'Workout' }, { id: 'testing', label: 'Testing' }, { id: 'attendance', label: 'Attendance' },
+  { id: 'scheduling', label: 'Scheduling' }, { id: 'equipment', label: 'Equipment' }, { id: 'other', label: 'Other' },
+];
+
+function ctPill(status, label) {
+  const key = CT_ICON[status] ? status : 'none';
+  return `<span class="ct-pill ct-pill-${esc(status || 'none')}">${CT_ICON[key]}<span>${esc(label)}</span></span>`;
+}
+function ctClock(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) return time;
+  const y = new Date(today); y.setDate(today.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return 'yesterday at ' + time;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + time;
+}
+function ctStartTime(hhmm) {
+  if (!hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return '';
+  const [h, m] = hhmm.split(':').map(Number);
+  const d = new Date(2000, 0, 1, h, m);
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+function ctAddDays(str, n) {
+  const d = parseDate(str); d.setDate(d.getDate() + n);
+  const p = (x) => String(x).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function ctDayWord(date) {
+  const t = todayStr();
+  if (date === t) return 'Today';
+  if (date === ctAddDays(t, 1)) return 'Tomorrow';
+  if (date === ctAddDays(t, -1)) return 'Yesterday';
+  return '';
+}
+/* Like api(), but hands back the body on an error too, so a save
+   refused because another coach changed the plan can show the
+   current version instead of a bare message. */
+async function ctCall(path, method, body) {
+  const res = await fetch(path, {
+    method: method || 'GET', credentials: 'same-origin',
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  let data = {};
+  try { data = await res.json(); } catch (_) { /* empty */ }
+  return { ok: res.ok, status: res.status, data };
+}
+
+/* ---------- the sheet: one overlay for every form on these pages ---------- */
+let ctSheetReturn = null;
+function ctOpenSheet(title, html, onMount) {
+  let sheet = $('#ct-sheet');
+  if (!sheet) return;
+  ctSheetReturn = document.activeElement;
+  sheet.innerHTML = `<div class="ct-sheet-backdrop" data-ct-close></div>
+    <div class="ct-sheet-box" role="dialog" aria-modal="true" aria-labelledby="ct-sheet-h">
+      <div class="ct-sheet-head"><h2 id="ct-sheet-h">${esc(title)}</h2>
+        <button type="button" class="btn secondary ct-sheet-x" data-ct-close>Close</button></div>
+      <div class="ct-sheet-body">${html}</div>
+    </div>`;
+  sheet.hidden = false;
+  document.body.classList.add('ct-sheet-open');
+  sheet.querySelectorAll('[data-ct-close]').forEach(b => b.addEventListener('click', ctCloseSheet));
+  if (onMount) onMount(sheet.querySelector('.ct-sheet-body'));
+  const first = sheet.querySelector('.ct-sheet-body input, .ct-sheet-body select, .ct-sheet-body textarea, .ct-sheet-body button');
+  (first || sheet.querySelector('.ct-sheet-x')).focus();
+}
+function ctCloseSheet() {
+  const sheet = $('#ct-sheet');
+  if (!sheet || sheet.hidden) return;
+  sheet.hidden = true; sheet.innerHTML = '';
+  document.body.classList.remove('ct-sheet-open');
+  if (ctSheetReturn && document.contains(ctSheetReturn)) ctSheetReturn.focus();
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') ctCloseSheet(); });
+
+/* ---------- Coach Today ---------- */
+async function renderCtBoard() {
+  const el = $('#ct-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Coach Today lives here.'); return; }
+  state.ct = state.ct || { date: todayStr(), groupId: null };
+  const ct = state.ct;
+  if (!ct.board) el.innerHTML = '<div class="skel skel-card"></div><div class="skel skel-card"></div>';
+  let board;
+  try { board = await api('/api/coach/today-board?date=' + encodeURIComponent(ct.date)); }
+  catch (err) {
+    el.innerHTML = `<div class="card"><p class="error">Could not load Coach Today: ${esc(err.message)}</p>
+      <button class="btn secondary" type="button" id="ct-retry">Try again</button></div>`;
+    $('#ct-retry').addEventListener('click', renderCtBoard);
+    return;
+  }
+  ct.board = board;
+  /* First visit: an event coach lands on their own group, the head
+     coach on the whole-team view. After that the choice sticks. */
+  if (ct.groupId === null) ct.groupId = board.me.landingGroupId || 'all';
+  if (ct.groupId !== 'all' && !board.groups.some(g => g.id === ct.groupId)) ct.groupId = 'all';
+  ctPaint();
+}
+function ctPaint() {
+  const el = $('#ct-main');
+  const ct = state.ct, b = ct.board;
+  if (!el || !b) return;
+  const dWord = ctDayWord(b.date);
+  const longDate = parseDate(b.date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  const g = ct.groupId === 'all' ? null : b.groups.find(x => x.id === ct.groupId);
+  const groupChips = [`<button type="button" class="ct-gchip${!g ? ' on' : ''}" data-ct-group="all" aria-pressed="${!g}">All groups</button>`]
+    .concat(b.groups.map(x => `<button type="button" class="ct-gchip${g && g.id === x.id ? ' on' : ''}" data-ct-group="${esc(x.id)}" aria-pressed="${!!(g && g.id === x.id)}">${esc(x.name)}${b.me.groupIds.includes(x.id) ? ' <small>Yours</small>' : ''}</button>`)).join('');
+  el.innerHTML = `
+    <div class="ct-head">
+      <div class="ct-title">
+        <p class="ct-eyebrow">${esc(dWord || 'Coach Today')}</p>
+        <h1>${esc(longDate)}</h1>
+        <p class="ct-asof muted">As of ${esc(ctClock(b.asOf))} <button type="button" class="ct-textbtn" id="ct-refresh">Refresh</button></p>
+      </div>
+      <button type="button" class="btn secondary ct-home-link" data-view="coachhub">Coach home and roster</button>
+    </div>
+    <div class="ct-daybar" role="group" aria-label="Pick a day">
+      <button type="button" class="ct-daystep" data-ct-step="-1" aria-label="Previous day">‹</button>
+      <button type="button" class="ct-day${b.date === b.today ? ' on' : ''}" data-ct-date="${esc(b.today)}" aria-pressed="${b.date === b.today}">Today</button>
+      <button type="button" class="ct-day${b.date === ctAddDays(b.today, 1) ? ' on' : ''}" data-ct-date="${esc(ctAddDays(b.today, 1))}" aria-pressed="${b.date === ctAddDays(b.today, 1)}">Tomorrow</button>
+      <label class="ct-daypick"><span class="sr-only">Pick a date</span><input type="date" id="ct-date" value="${esc(b.date)}"></label>
+      <button type="button" class="ct-daystep" data-ct-step="1" aria-label="Next day">›</button>
+    </div>
+    <div class="ct-groups" role="group" aria-label="Pick a group">${groupChips}</div>
+    ${b.groups.length ? '' : `<div class="card"><p>No training groups yet. Groups come from the roster.</p>
+      <button type="button" class="btn secondary" data-view="groups">Set up groups on the roster</button></div>`}
+    <div class="ct-grid">
+      <div class="ct-col-main">${g ? ctGroupHtml(g) : ctOverviewHtml()}</div>
+      <aside class="ct-col-side" aria-label="Needs you">${ctSideHtml()}</aside>
+    </div>
+    <details class="ct-staff" id="ct-staff"><summary>Staff names, groups and approvers</summary><div id="ct-staff-body"><p class="muted">Loading…</p></div></details>`;
+  ctWire(el);
+}
+function ctOverviewHtml() {
+  const b = state.ct.board;
+  if (!b.groups.length) return '';
+  const rows = b.groups.map(g => {
+    const pl = g.plan;
+    const st = pl ? pl.status : 'none';
+    const label = pl ? pl.statusLabel : 'Nothing planned';
+    const title = pl && pl.shown ? pl.shown.title : (g.seasonPlan.sessionName ? 'Season plan: ' + g.seasonPlan.sessionName : 'No workout planned yet');
+    const when = pl && pl.shown ? [pl.shown.location, ctStartTime(pl.shown.startTime)].filter(Boolean).join(' · ') : '';
+    const a = g.attendance;
+    const tom = g.tomorrow;
+    return `<button type="button" class="ct-orow" data-ct-group="${esc(g.id)}">
+      <span class="ct-orow-top"><strong class="ct-orow-name">${esc(g.name)}</strong>${ctPill(st, label)}</span>
+      <span class="ct-orow-title">${esc(title)}</span>
+      ${when ? `<span class="ct-orow-meta muted">${esc(when)}</span>` : ''}
+      <span class="ct-orow-foot">
+        <span class="ct-orow-att">${a.expected ? `${a.present + a.late} of ${a.expected} here${a.notRecorded ? ` · ${a.notRecorded} not recorded` : ''}` : 'No athletes in this group'}</span>
+        <span class="ct-orow-tom">Tomorrow: ${tom ? ctPill(tom.status, tom.statusLabel) : ctPill('none', 'Nothing planned')}</span>
+      </span>
+    </button>`;
+  }).join('');
+  return `<section class="ct-block" aria-labelledby="ct-ov-h">
+    <h2 id="ct-ov-h">Every group</h2>
+    <div class="ct-orows">${rows}</div>
+    ${b.unassigned ? `<p class="muted">${b.unassigned} athlete${b.unassigned === 1 ? ' is' : 's are'} not in a group yet, so they are not counted here. <button type="button" class="ct-textbtn" data-view="groups">Open the roster</button></p>` : ''}
+  </section>`;
+}
+function ctGroupHtml(g) {
+  return `${ctWorkoutHtml(g)}${ctTomorrowHtml(g)}${ctAttendanceHtml(g)}`;
+}
+function ctWorkoutHtml(g) {
+  const b = state.ct.board, pl = g.plan;
+  const approver = b.me.canApprove;
+  if (!pl) {
+    const sp = g.seasonPlan;
+    const hint = sp.isOff ? 'The season plan has this as a day off.'
+      : sp.sessionName ? `The season plan has ${esc(sp.sessionName)}${sp.sessionId ? ` (${esc(sp.sessionId)})` : ''} for this day. Start from it, or pick another session.`
+      : 'The season plan has nothing for this day.';
+    return `<section class="card ct-workout ct-workout-empty" aria-labelledby="ct-w-h">
+      <div class="ct-w-top"><h2 id="ct-w-h">${esc(g.name)} workout</h2>${ctPill('none', 'Nothing planned')}</div>
+      <p class="ct-empty-title">No workout published yet</p>
+      <p class="muted">${hint}</p>
+      <div class="ct-actions">
+        <button type="button" class="btn primary ct-big" data-ct-act="create">Plan this workout</button>
+        <button type="button" class="btn secondary ct-big" data-ct-act="copy-in">Copy from another day</button>
+      </div>
+    </section>`;
+  }
+  const s = pl.shown || {};
+  const latest = pl.latest || {};
+  const pend = pl.pendingRevision;
+  /* The buttons follow the version that is still moving: the
+     pending revision when there is one, otherwise the plan. */
+  const moving = pend ? pend.status : (pl.status === 'published' || pl.status === 'updated' ? 'live' : pl.status);
+  const acts = [];
+  if (pl.status === 'archived') {
+    acts.push(`<p class="muted">This plan is archived.</p>`);
+  } else if (moving === 'draft') {
+    acts.push(`<button type="button" class="btn primary ct-big" data-ct-act="edit">${pend ? 'Edit the revision' : 'Edit the draft'}</button>`);
+    acts.push(`<button type="button" class="btn secondary ct-big" data-ct-act="to-review">Send for review</button>`);
+  } else if (moving === 'review') {
+    if (approver) acts.push(`<button type="button" class="btn primary ct-big" data-ct-act="to-approved">Approve</button>`);
+    else acts.push(`<p class="ct-wait">Waiting for the head coach or an approver.</p>`);
+    acts.push(`<button type="button" class="btn secondary ct-big" data-ct-act="to-draft">Back to draft</button>`);
+  } else if (moving === 'approved') {
+    if (approver) acts.push(`<button type="button" class="btn primary ct-big" data-ct-act="to-published">Publish to athletes</button>`);
+    else acts.push(`<p class="ct-wait">Approved. The head coach or an approver publishes it.</p>`);
+    acts.push(`<button type="button" class="btn secondary ct-big" data-ct-act="to-draft">Back to draft</button>`);
+  } else if (moving === 'live') {
+    acts.push(`<button type="button" class="btn secondary ct-big" data-ct-act="revise">Change this workout</button>`);
+  }
+  if (pend && pl.status !== 'archived') acts.push(`<button type="button" class="btn secondary ct-big danger" data-ct-act="discard">Discard the revision</button>`);
+  if (pl.status !== 'archived') acts.push(`<button type="button" class="btn secondary ct-big" data-ct-act="copy-out">Copy to another day</button>`);
+  if (approver && pl.status !== 'archived') acts.push(`<button type="button" class="btn secondary ct-big danger" data-ct-act="archive">Archive</button>`);
+  const when = [s.location, ctStartTime(s.startTime)].filter(Boolean);
+  const hist = (pl.history || []);
+  return `<section class="card ct-workout ct-st-${esc(pl.status)}" aria-labelledby="ct-w-h">
+    <div class="ct-w-top"><h2 id="ct-w-h" class="ct-w-group">${esc(g.name)} workout</h2>${ctPill(pl.status, pl.statusLabel)}</div>
+    <p class="ct-w-title">${esc(s.title || 'Untitled workout')}</p>
+    ${s.sessionId ? `<p class="ct-w-session"><a class="code-link" data-code="${esc(s.sessionId)}">${esc(s.sessionId)}</a> ${esc(s.sessionName)}</p>` : ''}
+    <p class="ct-w-hint">${esc(CT_STATUS_HINT[pl.status] || '')}</p>
+    <dl class="ct-facts">
+      <div><dt>Where and when</dt><dd>${when.length ? esc(when.join(' · ')) : '<span class="muted">Not set</span>'}</dd></div>
+      <div><dt>Lead coach</dt><dd>${pl.leadCoach ? esc(pl.leadCoach) : '<span class="muted">Not set</span>'}</dd></div>
+      ${s.objective ? `<div class="ct-fact-wide"><dt>Goal</dt><dd>${esc(s.objective)}</dd></div>` : ''}
+      ${s.athleteNotes ? `<div class="ct-fact-wide"><dt>Notes athletes see</dt><dd>${esc(s.athleteNotes)}</dd></div>` : ''}
+    </dl>
+    ${pl.changeNotice ? `<div class="ct-notice">${CT_ICON.updated}<span><strong>What changed:</strong> ${esc(pl.changeNotice.summary)}<br><span class="muted">${esc(pl.changeNotice.by)}, ${esc(ctClock(pl.changeNotice.at))}. Athletes see this note.</span></span></div>` : ''}
+    ${pend ? `<div class="ct-pending">${ctPill(pend.status, pend.statusLabel)} <span>A change is in progress (version ${pend.version}). Athletes keep version ${pl.live ? pl.live.version : ''} until it is published.${pend.changeSummary ? ` What changes: ${esc(pend.changeSummary)}` : ''}</span></div>` : ''}
+    <p class="ct-w-updated muted">Version ${s.version || latest.version || 1}. Last updated by ${esc(pl.lastUpdated.by)}, ${esc(ctClock(pl.lastUpdated.at))}.${pl.copiedFrom ? ` Copied from ${esc(fmtDate(parseDate(pl.copiedFrom.date)))}.` : ''}</p>
+    <div class="ct-actions">${acts.join('')}</div>
+    ${hist.length ? `<details class="ct-hist"><summary>Version history</summary><ol class="ct-hist-list">${hist.map(h => h.version === null
+      ? `<li><strong>Archived</strong> by ${esc(h.archivedBy)}, ${esc(ctClock(h.archivedAt))}</li>`
+      : `<li><strong>Version ${h.version}</strong>${h.changeSummary ? `: ${esc(h.changeSummary)}` : ''}<ul>${(h.log || []).map(e =>
+        `<li>${esc(e.toLabel)} by ${esc(e.by)}, ${esc(ctClock(e.at))}</li>`).join('')}</ul></li>`).join('')}</ol></details>` : ''}
+  </section>`;
+}
+function ctTomorrowHtml(g) {
+  const b = state.ct.board;
+  if (b.date !== b.today) return '';
+  const t = g.tomorrow;
+  return `<button type="button" class="card ct-tomorrow" data-ct-date="${esc(b.tomorrow)}">
+    <span class="ct-tom-label">Tomorrow</span>
+    ${t ? ctPill(t.status, t.statusLabel) : ctPill('none', 'Nothing planned')}
+    <span class="ct-tom-title">${esc(t ? t.title : 'No workout planned yet')}</span>
+    <span class="ct-tom-go" aria-hidden="true">›</span>
+  </button>`;
+}
+function ctAttendanceHtml(g) {
+  const b = state.ct.board, a = g.attendance;
+  const future = b.date > b.today;
+  const tile = (key, icon, label, n) => `<div class="ct-att-tile ct-att-${key}">${CT_ICON[icon]}<span class="ct-att-n">${n}</span><span class="ct-att-l">${label}</span></div>`;
+  return `<section class="card ct-att" aria-labelledby="ct-att-h">
+    <div class="ct-w-top"><h2 id="ct-att-h">Attendance</h2><span class="muted">${a.expected} expected</span></div>
+    ${a.expected ? `<div class="ct-att-tiles">
+      ${tile('present', 'present', 'Present', a.present)}
+      ${tile('late', 'late', 'Late', a.late)}
+      ${tile('absent', 'absent', 'Absent', a.absent)}
+      ${tile('unrec', 'unrecorded', 'Not recorded', a.notRecorded)}
+    </div>
+    ${future ? '<p class="muted">Attendance opens on the day.</p>'
+      : `<button type="button" class="btn ${g.plan ? 'secondary' : 'secondary'} ct-big ct-att-go" data-ct-act="attendance">Take attendance</button>`}
+    <p class="muted ct-att-note">Nobody is marked absent unless a coach marks them. A blank stays Not recorded.</p>`
+      : '<p class="muted">No athletes are in this group yet.</p>'}
+  </section>`;
+}
+function ctSideHtml() {
+  const b = state.ct.board, A = b.actions, H = b.handoffs, C = b.changes;
+  const needs = [];
+  for (const x of A.approvals) {
+    needs.push(`<li><button type="button" class="ct-q" data-ct-jump="${esc(x.groupId)}|${esc(x.date)}">
+      ${ctPill(x.status, x.statusLabel)}<span><strong>${esc(x.groupName)}, ${esc(fmtDate(parseDate(x.date)))}</strong>
+      ${esc(x.isRevision ? 'A change to a published workout' : x.title)}. ${x.status === 'review' ? (b.me.canApprove ? 'Needs your approval.' : 'Waiting for an approver.') : (b.me.canApprove ? 'Ready to publish.' : 'Waiting to be published.')}</span></button></li>`);
+  }
+  for (const x of A.missingLogs) {
+    needs.push(`<li><button type="button" class="ct-q" data-ct-att="${esc(x.groupId)}|${esc(x.date)}">
+      <span class="ct-q-icon">${CT_ICON.unrecorded}</span><span><strong>${esc(x.groupName)}, ${esc(fmtDate(parseDate(x.date)))}</strong>
+      ${x.notRecorded} of ${x.expected} not recorded.</span></button></li>`);
+  }
+  if (A.notes.count) {
+    needs.push(`<li class="ct-q ct-q-static"><span class="ct-q-icon">${CT_ICON.open}</span><span><strong>${A.notes.count} new coach note${A.notes.count === 1 ? '' : 's'}</strong>
+      ${esc(A.notes.items.slice(0, 3).map(n => n.athleteName + ' (' + n.author + ')').join(', '))}${A.notes.count > 3 ? ' and more' : ''}.
+      <button type="button" class="ct-textbtn" data-view="ams">Open athlete profiles</button>
+      <button type="button" class="ct-textbtn" data-ct-seen="notes">Got it</button></span></li>`);
+  }
+  for (const x of A.recentTests.slice(0, 3)) {
+    needs.push(`<li><button type="button" class="ct-q" data-view="testing"><span class="ct-q-icon">${CT_ICON.approved}</span>
+      <span><strong>${esc(x.title)}, ${esc(fmtDate(parseDate(x.date)))}</strong> ${x.results} result${x.results === 1 ? '' : 's'} to review.</span></button></li>`);
+  }
+  const hItems = H.items.slice(0, 4).map(h => ctHandoffCard(h, true)).join('');
+  return `
+    <section class="card ct-side" aria-labelledby="ct-needs-h">
+      <h2 id="ct-needs-h">Needs you</h2>
+      ${needs.length ? `<ul class="ct-qlist">${needs.join('')}</ul>` : '<p class="muted">Nothing needs you right now.</p>'}
+    </section>
+    <section class="card ct-side" aria-labelledby="ct-ho-h">
+      <div class="ct-w-top"><h2 id="ct-ho-h">Staff handoffs</h2>
+        <span class="muted">${H.open} open · ${H.acknowledged} acknowledged${H.mine ? ` · ${H.mine} for you` : ''}</span></div>
+      ${hItems || '<p class="muted">No open handoffs.</p>'}
+      <div class="ct-actions ct-actions-tight">
+        <button type="button" class="btn secondary ct-big" data-ct-act="handoff-new">New handoff</button>
+        <button type="button" class="btn secondary ct-big" data-view="handoffs">All handoffs</button>
+      </div>
+    </section>
+    <section class="card ct-side" aria-labelledby="ct-ch-h">
+      <h2 id="ct-ch-h">Since you last looked</h2>
+      ${C.items.length ? `<ul class="ct-changes">${C.items.map(c => `<li><strong>${esc(c.by)}</strong> ${esc(c.text)}. <span class="muted">${esc(ctClock(c.at))}</span></li>`).join('')}</ul>
+        ${C.count > C.items.length ? `<p class="muted">And ${C.count - C.items.length} more.</p>` : ''}
+        <button type="button" class="btn secondary ct-big" data-ct-seen="changes">Got it</button>`
+      : `<p class="muted">No changes by other coaches since ${esc(ctClock(C.since))}.</p>`}
+    </section>`;
+}
+function ctHandoffCard(h, compact) {
+  const acts = h.readOnly ? '' : (h.next || []).map(to =>
+    `<button type="button" class="btn secondary ct-big" data-ho-to="${esc(to)}" data-ho-id="${esc(h.id)}">${to === 'acknowledged' ? 'Acknowledge' : 'Resolve'}</button>`).join('');
+  return `<article class="ct-ho${h.assignedToMe ? ' ct-ho-mine' : ''}${h.overdue ? ' ct-ho-late' : ''}">
+    <div class="ct-ho-top">${ctPill(h.status, h.statusLabel)}<span class="ct-ho-cat">${esc(h.categoryLabel)}</span>
+      ${h.assignedToMe ? '<span class="ct-ho-tag">For you</span>' : ''}${h.overdue ? '<span class="ct-ho-tag ct-ho-tag-late">Past due</span>' : ''}</div>
+    <p class="ct-ho-about"><strong>${esc(h.about.label)}</strong></p>
+    <p class="ct-ho-update">${esc(h.update)}</p>
+    <p class="ct-ho-next"><span class="ct-ho-k">Next:</span> ${esc(h.nextAction)}</p>
+    <p class="ct-ho-meta muted">For ${esc(h.assign.label)}${h.dueDate ? ` · Due ${esc(fmtDate(parseDate(h.dueDate)))}` : ''} · From ${esc(h.author)}, ${esc(ctClock(h.createdAt))}${
+      !compact && h.acknowledged ? ` · Acknowledged by ${esc(h.acknowledged.by)}, ${esc(ctClock(h.acknowledged.at))}` : ''}${
+      !compact && h.resolved ? ` · Resolved by ${esc(h.resolved.by)}, ${esc(ctClock(h.resolved.at))}` : ''}</p>
+    ${acts ? `<div class="ct-ho-acts">${acts}</div>` : ''}
+  </article>`;
+}
+function ctWire(el) {
+  const ct = state.ct;
+  el.querySelectorAll('[data-ct-group]').forEach(x => x.addEventListener('click', () => { ct.groupId = x.dataset.ctGroup; ctPaint(); }));
+  el.querySelectorAll('[data-ct-date]').forEach(x => x.addEventListener('click', () => { ct.date = x.dataset.ctDate; renderCtBoard(); }));
+  el.querySelectorAll('[data-ct-step]').forEach(x => x.addEventListener('click', () => { ct.date = ctAddDays(ct.date, Number(x.dataset.ctStep)); renderCtBoard(); }));
+  const di = $('#ct-date');
+  if (di) di.addEventListener('change', () => { if (/^\d{4}-\d{2}-\d{2}$/.test(di.value)) { ct.date = di.value; renderCtBoard(); } });
+  const rf = $('#ct-refresh'); if (rf) rf.addEventListener('click', renderCtBoard);
+  el.querySelectorAll('[data-ct-jump]').forEach(x => x.addEventListener('click', () => {
+    const [gid, date] = x.dataset.ctJump.split('|'); ct.groupId = gid; ct.date = date; renderCtBoard();
+  }));
+  el.querySelectorAll('[data-ct-att]').forEach(x => x.addEventListener('click', () => {
+    const [gid, date] = x.dataset.ctAtt.split('|'); ctAttendanceSheet(gid, date);
+  }));
+  el.querySelectorAll('[data-ct-seen]').forEach(x => x.addEventListener('click', async () => {
+    x.disabled = true;
+    try { await apiPost('/api/coach/today-board/seen', { what: x.dataset.ctSeen }); } catch (_) { /* refresh shows it */ }
+    renderCtBoard();
+  }));
+  el.querySelectorAll('[data-ho-to]').forEach(x => x.addEventListener('click', () => ctHandoffMove(x, renderCtBoard)));
+  el.querySelectorAll('[data-ct-act]').forEach(x => x.addEventListener('click', () => ctAct(x.dataset.ctAct, x)));
+  const st = $('#ct-staff');
+  if (st) st.addEventListener('toggle', () => { if (st.open) ctStaffPanel(); });
+}
+function ctCurrentGroup() {
+  const b = state.ct.board;
+  return b.groups.find(g => g.id === state.ct.groupId) || null;
+}
+async function ctAct(act, btn) {
+  const g = ctCurrentGroup();
+  const pl = g && g.plan;
+  if (act === 'handoff-new') return ctHandoffSheet({ groupId: g ? g.id : null });
+  if (!g) return;
+  if (act === 'create') return ctPlanSheet(g, null);
+  if (act === 'edit') return ctPlanSheet(g, pl);
+  if (act === 'attendance') return ctAttendanceSheet(g.id, state.ct.board.date);
+  if (act === 'copy-in') return ctCopySheet(g, null);
+  if (act === 'copy-out') return ctCopySheet(g, pl);
+  if (!pl) return;
+  if (act === 'revise') return ctPlanPost(pl, '/revise', {}, btn, (np) => ctPlanSheet(g, np));
+  if (act === 'archive') {
+    if (!confirm('Archive this workout? Athletes stop seeing it. It stays in the history.')) return;
+    return ctPlanPost(pl, '/archive', {}, btn);
+  }
+  if (act === 'discard') {
+    if (!confirm('Discard the change in progress? Athletes keep the published version.')) return;
+    return ctPlanPost(pl, '/status', { to: 'discard' }, btn);
+  }
+  const to = act.replace(/^to-/, '');
+  const isRevision = !!pl.live;
+  if (isRevision && (to === 'review' || to === 'published') && !(pl.latest && pl.latest.changeSummary)) {
+    return ctSummarySheet(g, pl, to);
+  }
+  if (to === 'published' && !confirm(isRevision
+    ? 'Publish this change? Athletes see the new version and the note on what changed.'
+    : 'Publish this workout? Athletes in ' + g.name + ' see it right away.')) return;
+  return ctPlanPost(pl, '/status', { to }, btn);
+}
+async function ctPlanPost(pl, suffix, body, btn, after) {
+  if (btn) btn.disabled = true;
+  const r = await ctCall('/api/plans/' + encodeURIComponent(pl.id) + suffix, 'POST', Object.assign({ rev: pl.rev }, body));
+  if (btn) btn.disabled = false;
+  if (r.status === 409) { alert(r.data.error); renderCtBoard(); return false; }
+  if (!r.ok) { alert(r.data.error || 'That did not save. Try again.'); return false; }
+  await renderCtBoard();
+  if (after) after(r.data.plan);
+  return true;
+}
+async function ctStaffList() {
+  try { state.ctStaff = await api('/api/staff'); } catch (_) { state.ctStaff = state.ctStaff || { staff: [], groups: [] }; }
+  return state.ctStaff;
+}
+async function ctPlanSheet(g, pl) {
+  const b = state.ct.board;
+  const staff = (await ctStaffList()).staff;
+  const isNew = !pl;
+  const f = isNew ? { sessionId: g.seasonPlan.sessionId || '', title: '', objective: '', location: '', startTime: '', athleteNotes: '', leadCoachId: b.me.id }
+    : Object.assign({}, pl.latest.fields);
+  const isRevision = !!(pl && pl.live);
+  const sessions = (state.content && state.content.sessions) || [];
+  const opts = '<option value="">No library session</option>' + sessions.map(s =>
+    `<option value="${esc(s.id)}"${s.id === f.sessionId ? ' selected' : ''}>${esc(s.id)} · ${esc(s.name)}</option>`).join('');
+  const coachOpts = '<option value="">Not set</option>' + staff.map(c =>
+    `<option value="${esc(c.id)}"${c.id === f.leadCoachId ? ' selected' : ''}>${esc(c.label)}</option>`).join('');
+  ctOpenSheet((isNew ? 'Plan the ' : isRevision ? 'Change the ' : 'Edit the ') + g.name + ' workout', `
+    <form id="ct-plan-form" class="ct-form">
+      <p class="muted">${esc(fmtDate(parseDate(b.date)))}. ${isRevision ? 'Athletes keep the published version until this change is approved and published.' : 'This stays a draft. Athletes see nothing until it is published.'}</p>
+      <label>Session from the workout library <select id="pf-session">${opts}</select></label>
+      <label>Workout name <input type="text" id="pf-title" maxlength="80" value="${esc(f.title)}" placeholder="Leave blank to use the session name"></label>
+      <label>Goal for the day <textarea id="pf-objective" maxlength="200" rows="2">${esc(f.objective)}</textarea></label>
+      <div class="ct-form-row">
+        <label>Where <input type="text" id="pf-location" maxlength="80" value="${esc(f.location)}" placeholder="Track, gym, hallway"></label>
+        <label>Start time <input type="time" id="pf-time" value="${esc(f.startTime)}"></label>
+      </div>
+      <label>Lead coach <select id="pf-lead">${coachOpts}</select></label>
+      <label>Notes athletes will see <textarea id="pf-notes" maxlength="600" rows="3">${esc(f.athleteNotes)}</textarea></label>
+      ${isRevision ? `<label>What changed (athletes see this) <input type="text" id="pf-summary" maxlength="240" value="${esc(pl.latest.changeSummary || '')}" placeholder="Moved to the gym because of rain"></label>` : ''}
+      <p class="muted ct-form-note">Keep health and injury details out. Those go to the athletic trainer.</p>
+      <p class="error" id="pf-err" role="alert"></p>
+      <div class="ct-actions"><button type="submit" class="btn primary ct-big">${isNew ? 'Save as draft' : 'Save'}</button>
+        <button type="button" class="btn secondary ct-big" data-ct-close>Cancel</button></div>
+    </form>`, (body) => {
+    body.querySelector('[data-ct-close]').addEventListener('click', ctCloseSheet);
+    body.querySelector('#ct-plan-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fields = {
+        sessionId: $('#pf-session').value, title: $('#pf-title').value, objective: $('#pf-objective').value,
+        location: $('#pf-location').value, startTime: $('#pf-time').value, leadCoachId: $('#pf-lead').value,
+        athleteNotes: $('#pf-notes').value,
+      };
+      if (isRevision) fields.changeSummary = $('#pf-summary').value;
+      const sub = e.target.querySelector('[type="submit"]'); sub.disabled = true;
+      const r = isNew
+        ? await ctCall('/api/plans', 'POST', Object.assign({ groupId: g.id, date: b.date }, fields))
+        : await ctCall('/api/plans/' + encodeURIComponent(pl.id), 'PUT', Object.assign({ rev: pl.rev }, fields));
+      sub.disabled = false;
+      if (r.ok) { ctCloseSheet(); renderCtBoard(); return; }
+      $('#pf-err').textContent = r.data.error || 'That did not save. Try again.';
+      if (r.status === 409) { ctCloseSheet(); alert(r.data.error); renderCtBoard(); }
+    });
+  });
+}
+function ctSummarySheet(g, pl, to) {
+  ctOpenSheet('Say what changed', `
+    <form id="ct-sum-form" class="ct-form">
+      <p class="muted">Athletes in ${esc(g.name)} see this note with the new version.</p>
+      <label>What changed <input type="text" id="cs-summary" maxlength="240" required placeholder="Moved to the gym because of rain"></label>
+      <p class="error" id="cs-err" role="alert"></p>
+      <div class="ct-actions"><button type="submit" class="btn primary ct-big">${to === 'published' ? 'Publish the change' : 'Send for review'}</button>
+        <button type="button" class="btn secondary ct-big" data-ct-close>Cancel</button></div>
+    </form>`, (body) => {
+    body.querySelector('[data-ct-close]').addEventListener('click', ctCloseSheet);
+    body.querySelector('#ct-sum-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const r = await ctCall('/api/plans/' + encodeURIComponent(pl.id) + '/status', 'POST', { rev: pl.rev, to, changeSummary: $('#cs-summary').value });
+      if (r.ok) { ctCloseSheet(); renderCtBoard(); return; }
+      $('#cs-err').textContent = r.data.error || 'That did not save.';
+    });
+  });
+}
+function ctCopySheet(g, pl) {
+  const b = state.ct.board;
+  const groupOpts = b.groups.map(x => `<option value="${esc(x.id)}"${x.id === g.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+  ctOpenSheet(pl ? 'Copy this workout' : 'Copy a workout to ' + fmtDate(parseDate(b.date)), `
+    <form id="ct-copy-form" class="ct-form">
+      ${pl ? `<p class="muted">The copy starts as a draft. It does not change this workout.</p>
+        <div class="ct-form-row"><label>To the day <input type="date" id="cp-date" required value="${esc(ctAddDays(b.date, 7))}"></label>
+        <label>For the group <select id="cp-group">${groupOpts}</select></label></div>`
+      : `<p class="muted">Pick the day to copy from. The copy lands on ${esc(fmtDate(parseDate(b.date)))} for ${esc(g.name)} as a draft.</p>
+        <div class="ct-form-row"><label>From the day <input type="date" id="cp-from" required value="${esc(ctAddDays(b.date, -7))}"></label>
+        <label>From the group <select id="cp-group">${groupOpts}</select></label></div>`}
+      <p class="error" id="cp-err" role="alert"></p>
+      <div class="ct-actions"><button type="submit" class="btn primary ct-big">Make the copy</button>
+        <button type="button" class="btn secondary ct-big" data-ct-close>Cancel</button></div>
+    </form>`, (body) => {
+    body.querySelector('[data-ct-close]').addEventListener('click', ctCloseSheet);
+    body.querySelector('#ct-copy-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = $('#cp-err');
+      let srcId = pl ? pl.id : null, toGroup = g.id, toDate = b.date;
+      if (pl) { toGroup = $('#cp-group').value; toDate = $('#cp-date').value; }
+      else {
+        const r0 = await ctCall('/api/plans?groupId=' + encodeURIComponent($('#cp-group').value) + '&date=' + encodeURIComponent($('#cp-from').value));
+        if (!r0.ok || !r0.data.plan) { err.textContent = 'That group has no workout planned on that day.'; return; }
+        srcId = r0.data.plan.id;
+      }
+      const r = await ctCall('/api/plans', 'POST', { groupId: toGroup, date: toDate, copyFromPlanId: srcId });
+      if (!r.ok) { err.textContent = r.data.error || 'That did not copy.'; return; }
+      ctCloseSheet();
+      state.ct.groupId = toGroup; state.ct.date = toDate;
+      renderCtBoard();
+    });
+  });
+}
+
+/* ---------- attendance sheet ---------- */
+async function ctAttendanceSheet(groupId, date) {
+  const b = state.ct.board;
+  const g = b.groups.find(x => x.id === groupId);
+  let data;
+  try { data = await api('/api/attendance?date=' + encodeURIComponent(date) + '&groupId=' + encodeURIComponent(groupId)); }
+  catch (err) { alert(err.message); return; }
+  const btn = (pid, st, cur, label, icon) => `<button type="button" class="ct-att-btn ct-att-btn-${st}${cur === st ? ' on' : ''}" data-att-pid="${esc(pid)}" data-att-st="${st}" aria-pressed="${cur === st}">${CT_ICON[icon]}<span>${label}</span></button>`;
+  const row = (a) => `<li class="ct-att-row${a.status === 'not-recorded' ? ' ct-att-row-unrec' : ''}" data-row="${esc(a.profileId)}">
+    <span class="ct-att-name"><strong>${esc(a.name)}</strong><small class="muted">${a.status === 'not-recorded' ? 'Not recorded' : 'Marked by ' + esc(a.updatedBy) + ', ' + esc(ctClock(a.updatedAt)) + (a.corrections ? ' · corrected' : '')}${a.status !== 'not-recorded' ? ` <button type="button" class="ct-textbtn ct-att-clear" data-att-pid="${esc(a.profileId)}" data-att-st="" aria-label="Clear the mark for ${esc(a.name)}">Clear</button>` : ''}</small></span>
+    <span class="ct-att-btns" role="group" aria-label="Attendance for ${esc(a.name)}">
+      ${btn(a.profileId, 'present', a.status, 'Present', 'present')}${btn(a.profileId, 'late', a.status, 'Late', 'late')}${btn(a.profileId, 'absent', a.status, 'Absent', 'absent')}
+    </span>
+  </li>`;
+  const counts = (c) => `${c.present} present · ${c.late} late · ${c.absent} absent · ${c.notRecorded} not recorded`;
+  ctOpenSheet('Attendance: ' + (g ? g.name : '') + ', ' + fmtDate(parseDate(date)), `
+    <p class="ct-att-sum" id="att-sum" aria-live="polite">${esc(counts(data.counts))}</p>
+    ${data.counts.notRecorded ? `<button type="button" class="btn secondary ct-big" id="att-all">Mark everyone not recorded as Present</button>` : ''}
+    <ul class="ct-att-list" id="att-list">${data.athletes.map(row).join('')}</ul>
+    <div class="ct-actions"><button type="button" class="btn primary ct-big" data-ct-close>Done</button></div>`, (body) => {
+    body.querySelector('.ct-actions [data-ct-close]').addEventListener('click', ctCloseSheet);
+    const reload = async () => {
+      const d2 = await api('/api/attendance?date=' + encodeURIComponent(date) + '&groupId=' + encodeURIComponent(groupId));
+      data = d2;
+      $('#att-list').innerHTML = d2.athletes.map(row).join('');
+      $('#att-sum').textContent = counts(d2.counts);
+      const all = $('#att-all'); if (all && !d2.counts.notRecorded) all.remove();
+    };
+    body.addEventListener('click', async (e) => {
+      const t = e.target.closest('[data-att-pid]');
+      if (!t) return;
+      t.disabled = true;
+      const r = await ctCall('/api/attendance', 'POST', { date, profileId: t.dataset.attPid, status: t.dataset.attSt || null });
+      if (!r.ok) alert(r.data.error || 'That did not save.');
+      await reload();
+    });
+    const all = $('#att-all');
+    if (all) all.addEventListener('click', async () => {
+      if (!confirm('Mark every athlete who is not recorded yet as Present? Anyone already marked keeps their mark.')) return;
+      all.disabled = true;
+      const r = await ctCall('/api/attendance/bulk', 'POST', { date, groupId, status: 'present' });
+      if (!r.ok) alert(r.data.error || 'That did not save.');
+      await reload();
+    });
+  });
+  /* The page underneath catches up when the sheet closes. */
+  const sheet = $('#ct-sheet');
+  const obs = new MutationObserver(() => { if (sheet.hidden) { obs.disconnect(); renderCtBoard(); } });
+  obs.observe(sheet, { attributes: true, attributeFilter: ['hidden'] });
+}
+
+/* ---------- staff settings ---------- */
+async function ctStaffPanel() {
+  const el = $('#ct-staff-body');
+  if (!el) return;
+  const { staff, groups } = await ctStaffList();
+  const me = state.ct.board.me;
+  const mine = staff.find(c => c.id === me.id);
+  el.innerHTML = `
+    <form class="ct-form" id="st-me">
+      <label>Your name as other coaches see it <input type="text" id="st-name" maxlength="40" value="${esc(mine ? mine.displayName : '')}" placeholder="Coach Ruffin"></label>
+      <p class="muted">Athletes see this name as the lead coach. Without one they see "Coach".</p>
+      <button type="submit" class="btn secondary ct-big">Save my name</button>
+      <p class="muted" id="st-me-msg" aria-live="polite"></p>
+    </form>
+    ${me.isOwner ? `<h3>Groups and approvers</h3>
+      <p class="muted">An event coach lands on their group. An approver can approve and publish workouts. You always can.</p>
+      <ul class="ct-staff-list">${staff.map(c => `<li class="ct-staff-row" data-staff="${esc(c.id)}">
+        <div><strong>${esc(c.label)}</strong> <span class="muted">${esc(c.role)}</span></div>
+        ${c.isOwner ? '<p class="muted">Head coach. Approves and publishes.</p>' : `
+        <div class="ct-staff-groups" role="group" aria-label="Groups for ${esc(c.label)}">${groups.map(gr => `<label class="ct-check"><input type="checkbox" data-st-group="${esc(gr.id)}"${c.groupIds.includes(gr.id) ? ' checked' : ''}> ${esc(gr.name)}</label>`).join('')}</div>
+        <label class="ct-check"><input type="checkbox" data-st-approve${c.canApprove ? ' checked' : ''}> Can approve and publish</label>
+        <button type="button" class="btn secondary ct-big" data-st-save>Save</button><span class="muted" data-st-msg aria-live="polite"></span>`}
+      </li>`).join('')}</ul>` : ''}`;
+  $('#st-me').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const r = await ctCall('/api/staff/' + encodeURIComponent(me.id), 'PUT', { displayName: $('#st-name').value });
+    $('#st-me-msg').textContent = r.ok ? 'Saved.' : (r.data.error || 'That did not save.');
+  });
+  el.querySelectorAll('[data-st-save]').forEach(btn => btn.addEventListener('click', async () => {
+    const li = btn.closest('[data-staff]');
+    const groupIds = [...li.querySelectorAll('[data-st-group]:checked')].map(x => x.dataset.stGroup);
+    const canApprove = li.querySelector('[data-st-approve]').checked;
+    const r = await ctCall('/api/staff/' + encodeURIComponent(li.dataset.staff), 'PUT', { groupIds, canApprove });
+    li.querySelector('[data-st-msg]').textContent = r.ok ? ' Saved.' : ' ' + (r.data.error || 'That did not save.');
+  }));
+}
+
+/* ---------- handoffs ---------- */
+async function ctHandoffMove(btn, after) {
+  btn.disabled = true;
+  const r = await ctCall('/api/handoffs/' + encodeURIComponent(btn.dataset.hoId) + '/status', 'POST', { to: btn.dataset.hoTo });
+  if (!r.ok) alert(r.data.error || 'That did not save.');
+  after();
+}
+async function ctHandoffSheet(opts) {
+  const { staff, groups } = await ctStaffList();
+  await refreshProfiles();
+  const athletes = activeProfiles().slice().sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+  const plans = [];
+  const b = state.ct && state.ct.board;
+  if (b) for (const g of b.groups) if (g.plan && g.plan.status !== 'archived') plans.push({ id: g.plan.id, label: g.name + ' workout, ' + fmtDate(parseDate(b.date)) });
+  const defGroup = (opts && opts.groupId) || '';
+  ctOpenSheet('New staff handoff', `
+    <form id="ho-form" class="ct-form">
+      <fieldset class="ct-fs"><legend>Category</legend><div class="ct-chips">${HANDOFF_CATS.map(({ id, label }, i) =>
+        `<label class="ct-chipradio"><input type="radio" name="ho-cat" value="${id}"${i === 0 ? ' checked' : ''}><span>${label}</span></label>`).join('')}</div></fieldset>
+      <div class="ct-form-row">
+        <label>About <select id="ho-kind"><option value="group">A group</option><option value="athlete">An athlete</option>${plans.length ? '<option value="session">A workout</option>' : ''}</select></label>
+        <label>Which one <select id="ho-about"></select></label>
+      </div>
+      <label>Update <span class="muted" id="ho-count">0 of 280</span><textarea id="ho-update" maxlength="280" rows="3" required placeholder="Hurdles are still in the shed. The key is with the custodian."></textarea></label>
+      <label>What happens next <input type="text" id="ho-next" maxlength="200" required placeholder="Get the key before 3 PM"></label>
+      <div class="ct-form-row">
+        <label>For <select id="ho-for"><option value="head-coach">The head coach</option>
+          ${groups.map(gr => `<option value="group-coach:${esc(gr.id)}">${esc(gr.name)} coaches</option>`).join('')}
+          ${staff.map(c => `<option value="coach:${esc(c.id)}">${esc(c.label)}</option>`).join('')}</select></label>
+        <label>Due date, only if there is one <input type="date" id="ho-due"></label>
+      </div>
+      <p class="muted ct-form-note">Coaching only. Health and injury details go to the athletic trainer, so they are refused here.</p>
+      <p class="error" id="ho-err" role="alert"></p>
+      <div class="ct-actions"><button type="submit" class="btn primary ct-big">Add handoff</button>
+        <button type="button" class="btn secondary ct-big" data-ct-close>Cancel</button></div>
+    </form>`, (body) => {
+    body.querySelector('[data-ct-close]').addEventListener('click', ctCloseSheet);
+    const kind = $('#ho-kind'), about = $('#ho-about');
+    const fill = () => {
+      const k = kind.value;
+      const list = k === 'athlete' ? athletes.map(a => [a.id, a.name])
+        : k === 'session' ? plans.map(p => [p.id, p.label])
+        : groups.map(gr => [gr.id, gr.name]);
+      about.innerHTML = list.map(([id, label]) => `<option value="${esc(id)}"${k === 'group' && id === defGroup ? ' selected' : ''}>${esc(label)}</option>`).join('');
+    };
+    kind.addEventListener('change', fill); fill();
+    const up = $('#ho-update');
+    up.addEventListener('input', () => { $('#ho-count').textContent = up.value.length + ' of 280'; });
+    $('#ho-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const [ak, aid] = $('#ho-for').value.split(':');
+      const r = await ctCall('/api/handoffs', 'POST', {
+        category: body.querySelector('input[name="ho-cat"]:checked').value,
+        about: { kind: kind.value, id: about.value },
+        update: up.value, nextAction: $('#ho-next').value,
+        assign: { kind: ak, id: aid || null }, dueDate: $('#ho-due').value || '',
+      });
+      if (!r.ok) { $('#ho-err').textContent = r.data.error || 'That did not save.'; return; }
+      ctCloseSheet();
+      if ($('#view-handoffs').classList.contains('active')) renderHandoffs(); else renderCtBoard();
+    });
+  });
+}
+async function renderHandoffs() {
+  const el = $('#ho-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Staff handoffs live here.'); return; }
+  state.hoView = state.hoView || 'unresolved';
+  let data;
+  try { data = await api('/api/handoffs?view=' + encodeURIComponent(state.hoView)); }
+  catch (err) { el.innerHTML = `<div class="card"><p class="error">Could not load handoffs: ${esc(err.message)}</p></div>`; return; }
+  const c = data.counts;
+  const seg = (v, label) => `<button type="button" class="seg-btn${state.hoView === v ? ' active' : ''}" data-ho-view="${v}" aria-pressed="${state.hoView === v}">${label}</button>`;
+  const empty = { unresolved: 'No open handoffs. Everything is acknowledged and resolved.', mine: 'Nothing is waiting for you.', history: 'No resolved handoffs yet.' }[state.hoView];
+  el.innerHTML = `
+    <div class="ct-head"><div class="ct-title"><p class="ct-eyebrow">Coaches only</p><h1>Staff handoffs</h1>
+      <p class="muted">${c.open} open · ${c.acknowledged} acknowledged · ${c.mine} for you · ${c.resolved} resolved</p></div>
+      <button type="button" class="btn primary ct-new-ho" id="ho-new">New handoff</button></div>
+    <nav class="seg ct-seg" aria-label="Show">${seg('unresolved', 'Unresolved')}${seg('mine', 'For you')}${seg('history', 'History')}</nav>
+    <div class="ct-ho-grid">${data.handoffs.length ? data.handoffs.map(h => ctHandoffCard(h, false)).join('') : `<div class="card"><p>${esc(empty)}</p></div>`}</div>
+    ${state.hoView === 'history' ? '<p class="muted">Resolved handoffs stay here as they were and can no longer change.</p>' : ''}`;
+  el.querySelectorAll('[data-ho-view]').forEach(x => x.addEventListener('click', () => { state.hoView = x.dataset.hoView; renderHandoffs(); }));
+  el.querySelectorAll('[data-ho-to]').forEach(x => x.addEventListener('click', () => ctHandoffMove(x, renderHandoffs)));
+  $('#ho-new').addEventListener('click', () => ctHandoffSheet({}));
+}
+
+/* ---------- athlete Today: the published workout ----------
+   Only a published version ever comes back from /api/my/plan, so
+   this card can never show a draft. */
+async function renderMyPlan() {
+  const el = $('#my-plan-slot');
+  if (!el) return;
+  if (!state.user || state.user.role !== 'athlete') { el.innerHTML = ''; return; }
+  let d;
+  try { d = await api('/api/my/plan'); } catch (_) { el.innerHTML = ''; return; }
+  const p = d.plan;
+  if (!p) { el.innerHTML = ''; return; }
+  const when = [p.location, ctStartTime(p.startTime)].filter(Boolean).join(' · ');
+  el.innerHTML = `<section class="card my-plan" aria-labelledby="my-plan-h">
+    <p class="ct-eyebrow">Today's workout from your coach${p.groupName ? ', ' + esc(p.groupName) : ''}</p>
+    <h2 id="my-plan-h">${esc(p.title)}</h2>
+    ${p.sessionId ? `<p><a class="code-link" data-code="${esc(p.sessionId)}">${esc(p.sessionId)}</a> ${esc(p.sessionName)}</p>` : ''}
+    ${when ? `<p class="my-plan-when">${esc(when)}</p>` : ''}
+    ${p.objective ? `<p>${esc(p.objective)}</p>` : ''}
+    ${p.athleteNotes ? `<p class="my-plan-notes">${esc(p.athleteNotes)}</p>` : ''}
+    ${p.leadCoach ? `<p class="muted">Lead coach: ${esc(p.leadCoach)}</p>` : ''}
+    ${p.changeNotice ? `<div class="ct-notice">${CT_ICON.updated}<span><strong>Updated:</strong> ${esc(p.changeNotice.summary)} <span class="muted">${esc(p.changeNotice.by)}, ${esc(ctClock(p.changeNotice.at))}</span></span></div>` : ''}
+  </section>`;
+}
+
+
 async function renderCoachHome() {
   const todayEl = $('#ch-today');
   if (!todayEl) return;
@@ -9376,9 +10113,9 @@ function tvStopTimers() {
   /* syncAuthUi (not the individual renders) is what un-hides the Coach
      tabs for a coach whose session survived a reload. */
   syncAuthUi();
-  /* v63: coaches open the app on Coach home, the same page every
-     coach lands on; athletes and visitors open on Today. */
-  if (isCoachUser()) showView('coachhub');
+  /* v65: coaches open the app on Coach Today; Coach home and the
+     roster are one tap away. Athletes and visitors open on Today. */
+  if (isCoachUser()) showView('coachtoday');
   else if (!state.user) showView('welcome');
   const brand = document.querySelector('.brand-block');
   if (brand) brand.addEventListener('click', () => { if (!state.user) showView('welcome'); });
