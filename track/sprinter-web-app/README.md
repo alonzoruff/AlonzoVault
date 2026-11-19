@@ -30,6 +30,30 @@ will live under your hosting account, in your name.
   cross-training swaps on the season plan. Hard-day spacing (the 48-hour
   rule) is checked automatically on every week.
 
+## Coach Today and staff handoffs (v65)
+
+Coaches now land on **Coach Today**, built for an iPad at practice.
+
+- **Pick a day and a group**: Today, Tomorrow, a date, then All groups or one
+  group. Event coaches land on their own group.
+- **One workout per group per day**, with a status that always shows a word
+  and a shape: Draft, Needs review, Approved, Published, Updated, Archived.
+  Athletes, the TV board and Today's Checklist only ever see the Published
+  version. A change to a published workout makes a new version that stays
+  hidden until it is approved and published again, and athletes see a short
+  "What changed" note.
+- **Approvers** are the head coach plus any coach the head coach turns on in
+  "Staff names, groups and approvers". Two coaches editing at once can't
+  overwrite each other; the second one is asked to reload.
+- **Attendance**: Present, Late, Absent or Not recorded, per athlete, per
+  day. Nobody is marked absent unless a coach marks them. "Mark everyone
+  not recorded as Present" fills blanks only. Coaches only; no future dates.
+- **Staff handoffs**: a coach-to-coach note with a next step, an owner and an
+  optional due date. Open, then Acknowledged, then Resolved. No medical
+  detail: the app refuses notes that look medical and points to the
+  athletic trainer instead.
+- **Since you last looked**: what other coaches changed, cleared with Got it.
+
 ## The coach system
 
 Everything below lives behind a coach login and hangs off **athlete
