@@ -3249,6 +3249,38 @@ async function renderAms() {
   $('#ams-group').addEventListener('change', (e) => { state.amsGroup = e.target.value; paintTable(); });
   $('#ams-status-filter').addEventListener('change', (e) => { state.amsStatus = e.target.value; paintTable(); });
 }
+/* v39: the coach's read of one member's readiness, compliance, load
+   and pain, from the same numbers the member sees on Progress. */
+async function renderAmsInsights(profileId, days) {
+  const box = document.getElementById('ams-insights');
+  if (!box) return;
+  const span = days || state.amsInsightsDays || 28;
+  let ins;
+  try { ins = await api('/api/ams/athlete/' + encodeURIComponent(profileId) + '/insights?days=' + span); }
+  catch (err) { box.innerHTML = `<h2>Readiness, training load and pain</h2><p class="error">${esc(err.message)}</p>`; return; }
+  const c = ins.compliance || {}; const win = c.window || {}; const r = ins.readiness || {}; const ld = ins.load || {};
+  box.innerHTML = `<div class="rx-coach-head"><h2>Readiness, training load and pain</h2>
+      <div class="rx-range" role="group" aria-label="Time range">${MX_RANGES.map(([d, lab]) => `<button type="button" class="rx-range-btn${d === span ? ' on' : ''}" data-ams-range="${d}" aria-pressed="${d === span}">${lab}</button>`).join('')}</div></div>
+    ${(ins.notes || []).filter(nt => nt.tone === 'warn').length ? `<ul class="rx-coach-notes">${ins.notes.filter(nt => nt.tone === 'warn').map(nt => `<li>${esc(nt.coachText || nt.text)}</li>`).join('')}</ul>` : ''}
+    <div class="rx-coach-kpis">
+      <div><span class="rx-kpi-num">${win.percent == null ? '-' : win.percent + '%'}</span><span class="rx-kpi-label">Planned sessions done (${win.done || 0} of ${win.planned || 0})</span></div>
+      <div><span class="rx-kpi-num">${r.today == null ? '-' : r.today}</span><span class="rx-kpi-label">Readiness today (normal ${r.normal == null ? '-' : r.normal})</span></div>
+      <div><span class="rx-kpi-num">${ld.changePercent == null ? '-' : (ld.changePercent > 0 ? '+' : '') + ld.changePercent + '%'}</span><span class="rx-kpi-label">Load, last 7 days vs usual week</span></div>
+      <div><span class="rx-kpi-num">${(ins.pain && ins.pain.days.length) || 0}</span><span class="rx-kpi-label">Pain days in window</span></div>
+    </div>
+    <h3>Readiness by day</h3>
+    <div class="rx-chart" id="ams-rx-ready"></div>
+    <h3>Training load by day</h3>
+    <div class="rx-chart" id="ams-rx-load"></div>
+    <p class="muted rx-legend"><span class="rx-key rx-key-band"></span>Normal range <span class="rx-key rx-key-pain"></span>Pain flagged. Load is session RPE times minutes from the member's own logs.</p>
+    <h3>Pain flags</h3>
+    ${rxPainListHtml(ins, true)}`;
+  rxPaintCharts(box, { 'ams-rx-ready': rxReadinessSpec(ins, 'Readiness by day'), 'ams-rx-load': rxLoadSpec(ins, 'Training load by day') });
+  box.querySelectorAll('[data-ams-range]').forEach(b => b.addEventListener('click', () => {
+    state.amsInsightsDays = parseInt(b.dataset.amsRange, 10);
+    renderAmsInsights(profileId, state.amsInsightsDays);
+  }));
+}
 async function renderAmsProfile(el, profileId) {
   let d;
   try { d = await api('/api/ams/athlete/' + encodeURIComponent(profileId)); }
@@ -3302,13 +3334,14 @@ async function renderAmsProfile(el, profileId) {
       ${w.recent.length ? `
       <p class="muted">${w.summary.days} check-ins · avg sleep ${w.summary.avgSleep == null ? '-' : w.summary.avgSleep}h · avg soreness ${w.summary.avgSoreness == null ? '-' : w.summary.avgSoreness}/5 · avg energy ${w.summary.avgEnergy == null ? '-' : w.summary.avgEnergy}/5 · ${w.summary.flaggedDays} flagged day${w.summary.flaggedDays === 1 ? '' : 's'}</p>
       <div class="table-wrap"><table class="ranked">
-        <thead><tr><th>Date</th><th>Sleep</th><th>Soreness</th><th>Energy</th><th>Flags</th></tr></thead>
+        <thead><tr><th>Date</th><th>Readiness</th><th>Sleep</th><th>Soreness</th><th>Energy</th><th>Flags</th></tr></thead>
         <tbody>${w.recent.slice().reverse().map(c => `<tr>
-          <td>${esc(fmtDate(parseDate(c.date)))}</td><td>${c.sleep}h</td><td>${c.soreness}/5</td><td>${c.energy}/5</td>
+          <td>${esc(fmtDate(parseDate(c.date)))}</td><td>${c.readiness == null ? '-' : `<strong>${c.readiness}</strong>${c.readinessFull ? '' : ' <span class="muted">(3 answers)</span>'}`}${c.hurts ? `<br><span class="badge high">PAIN</span> <span class="muted">${esc(rxPainLine(c))}</span>` : ''}</td><td>${c.sleep}h</td><td>${c.soreness}/5</td><td>${c.energy}/5</td>
           <td>${c.flags.length ? c.flags.map(f => `<span class="badge high">${esc(CHECKIN_FLAG_LABELS[f] || f).toUpperCase()}</span>`).join(' ') : '<span class="badge low">OK</span>'}</td>
         </tr>`).join('')}</tbody>
       </table></div>` : '<p class="muted">No check-ins in the last 14 days.</p>'}
     </div>
+    <div class="card rx-coach" id="ams-insights"><h2>Readiness, training load and pain</h2><p class="muted">Loading…</p></div>
     <div class="card">
       <h2>Testing</h2>
       ${d.testing.length ? `<div class="table-wrap"><table class="ranked">
@@ -3377,6 +3410,7 @@ async function renderAmsProfile(el, profileId) {
       </div>
     </div>`;
   $('#ams-back').addEventListener('click', () => { state.amsProfileId = null; renderAms(); window.scrollTo(0, 0); });
+  renderAmsInsights(profileId);
   el.querySelectorAll('[data-ams-log-del]').forEach(b => b.addEventListener('click', async () => {
     if (!window.confirm('Delete this member log? Logs are the member\'s own record. This is a moderation action.')) return;
     try {
@@ -10077,23 +10111,31 @@ function mxGoalHtml(week, logs) {
   </div>`;
 }
 function mxCheckinTileHtml(week) {
+  /* v39: the check-in is the readiness check; the tile shows today's
+     score, or offers the check when it has not been taken. */
   const lc = week.latestCheckin;
   const streak = week.checkinStreak || 0;
   if (week.checkedInToday && lc) {
-    return `<div class="mx-card mx-tile mx-tile-ok">
-      <p class="mx-eyebrow">Check-in</p>
-      <h3>Done for today</h3>
-      <p class="mx-muted">Slept ${esc(String(lc.sleep))} hours, soreness ${esc(String(lc.soreness))} of 5, energy ${esc(String(lc.energy))} of 5.</p>
-      ${streak > 1 ? `<p class="mx-streak">${streak} days in a row</p>` : ''}
-      <button class="mx-btn mx-btn-text" type="button" data-view="checkin">Change it</button>
+    const band = lc.readinessBand || rxBandOf(lc.readiness);
+    const copy = RX_BANDS[band] || { title: 'Checked in', body: '' };
+    const pain = rxPainLine(lc);
+    return `<div class="mx-card mx-tile mx-tile-ok rx-tile">
+      <p class="mx-eyebrow">Readiness today</p>
+      <div class="rx-tile-row">
+        ${rxRingHtml(lc.readiness, 84)}
+        <div><h3>${esc(copy.title)}</h3>
+        ${streak > 1 ? `<p class="mx-streak">${streak} days in a row</p>` : ''}</div>
+      </div>
+      ${pain ? `<p class="rx-pain-flag mx-small">Pain flagged: ${esc(pain)}. Coach AJ can see it.</p>` : ''}
+      <button class="mx-btn mx-btn-text" type="button" data-view="checkin">See details or change answers</button>
     </div>`;
   }
-  return `<div class="mx-card mx-tile mx-tile-todo">
-    <p class="mx-eyebrow">Check-in</p>
-    <h3>How are you feeling?</h3>
-    <p class="mx-muted">Sleep, soreness and energy. About 20 seconds.</p>
+  return `<div class="mx-card mx-tile mx-tile-todo rx-tile">
+    <p class="mx-eyebrow">Readiness check</p>
+    <h3>How ready are you today?</h3>
+    <p class="mx-muted">Five quick questions. About 20 seconds.</p>
     ${streak > 0 ? `<p class="mx-streak">Keep your ${streak} day streak going</p>` : ''}
-    <button class="mx-btn mx-btn-primary mx-btn-block" type="button" data-view="checkin">Check in now</button>
+    <button class="mx-btn mx-btn-primary mx-btn-block" type="button" id="mx-rx-start">Take the readiness check</button>
   </div>`;
 }
 function mxStatsHtml(week) {
@@ -10143,10 +10185,11 @@ async function mxRenderToday() {
     el.innerHTML = mxLockedCard();
     return;
   }
-  const [week, logs, ann] = await Promise.all([
+  const [week, logs, ann, ins] = await Promise.all([
     isAthleteUser() ? mxGet('/api/my/week') : Promise.resolve({ linked: false }),
     isAthleteUser() ? mxGet('/api/my/logs') : Promise.resolve({ linked: false }),
     mxGet('/api/announcements'),
+    isAthleteUser() ? mxGet('/api/my/insights?days=28') : Promise.resolve({ linked: false }),
   ]);
   state.mxWeek = week;
   const first = mxFirstName();
@@ -10178,6 +10221,7 @@ async function mxRenderToday() {
     <div class="mx-today-grid">
       <div class="mx-today-main">
         ${mxGoalHtml(week, logs)}
+        ${ins && ins.linked && ins.notes && ins.notes.length ? rxNotesHtml(ins.notes.filter(nt => nt.tone !== 'good' || nt.kind !== 'compliance').slice(0, 2)) : ''}
         ${fcHtml}
         ${mxNudgeHtml(week)}
         <div class="mx-card">
@@ -10196,6 +10240,9 @@ async function mxRenderToday() {
       </div>
     </div>`;
   wireRunTodayButtons(el);
+  const rxStart = $('#mx-rx-start');
+  if (rxStart) rxStart.addEventListener('click', () => rxOpenSheet(null));
+  rxMaybePrompt(week);
   const today = dateStrOf(todayLocal());
   const logBtn = $('#mx-goal-log');
   if (logBtn) logBtn.addEventListener('click', () => {
@@ -10248,32 +10295,65 @@ function mxBarsHtml(entries, key, max, label, goodHigh) {
   </div>`;
 }
 async function mxRenderCheckinHistory(target) {
+  /* v39: four weeks of readiness as a chart, then the latest days. */
   const el = target || $('#mx-checkin-history');
   if (!el) return;
   if (!isAthleteUser() || mxLocked()) { el.innerHTML = ''; return; }
-  const data = await mxGet('/api/checkin/mine?days=14');
-  if (data.mxError || !data.linked) { el.innerHTML = ''; return; }
-  const entries = data.entries || [];
+  const [ins, data] = await Promise.all([mxGet('/api/my/insights?days=28'), mxGet('/api/checkin/mine?days=14')]);
+  if (ins.mxError || !ins.linked) { el.innerHTML = ''; return; }
+  const entries = (data && data.entries) || [];
   if (!entries.length) {
-    el.innerHTML = mxEmpty('Your last two weeks', 'Your check-ins show up here as you go, so you and Coach AJ can spot a pattern early.');
+    el.innerHTML = mxEmpty('Your last four weeks', 'Your readiness shows up here day by day, so you and Coach AJ can spot a pattern early.');
     return;
   }
+  const r = ins.readiness || {};
   el.innerHTML = `<div class="mx-card mx-history">
-    <h3>Your last two weeks</h3>
-    ${mxBarsHtml(entries, 'sleep', 10, 'Sleep (hours)', true)}
-    ${mxBarsHtml(entries, 'energy', 5, 'Energy (1 to 5)', true)}
-    ${mxBarsHtml(entries, 'soreness', 5, 'Soreness (1 to 5)', false)}
+    <div class="mx-card-head"><h3>Your last four weeks</h3><button class="mx-btn mx-btn-text" type="button" data-view="progress">All trends</button></div>
+    <div class="rx-kpis">
+      <div><span class="rx-kpi-num">${r.normal == null ? '-' : esc(String(r.normal))}</span><span class="rx-kpi-label">Your normal</span></div>
+      <div><span class="rx-kpi-num">${r.last7 == null ? '-' : esc(String(r.last7))}</span><span class="rx-kpi-label">Last 7 days</span></div>
+      <div><span class="rx-kpi-num">${esc(String((ins.compliance && ins.compliance.checkinStreak) || 0))}</span><span class="rx-kpi-label">Day streak</span></div>
+    </div>
+    <div class="rx-chart" id="rx-ci-chart"></div>
+    <p class="mx-muted mx-small rx-legend"><span class="rx-key rx-key-band"></span>Your normal range <span class="rx-key rx-key-pain"></span>Pain flagged</p>
     <ul class="mx-history-list">${entries.slice(0, 5).map(c => `<li>
       <span>${esc(fmtDate(parseDate(c.date)))}</span>
-      <span class="mx-muted">${esc(String(c.sleep))}h sleep, soreness ${esc(String(c.soreness))}, energy ${esc(String(c.energy))}${c.hurts ? ', something hurt' : ''}</span>
+      <span class="mx-muted">${c.readiness == null ? '' : `Readiness <strong class="rx-inline-${esc(c.readinessBand || '')}">${esc(String(c.readiness))}</strong> · `}${esc(String(c.sleep))}h sleep${c.hurts ? ' · ' + esc(rxPainLine(c) || 'something hurt') : ''}</span>
     </li>`).join('')}</ul>
   </div>`;
+  rxPaintCharts(el, { 'rx-ci-chart': rxReadinessSpec(ins) });
 }
-function mxRenderCheckin() {
+async function mxRenderCheckin() {
   const form = $('#mx-checkin-form');
-  if (form && mxLocked()) { form.innerHTML = mxLockedCard(); $('#mx-checkin-history').innerHTML = ''; return; }
-  if (form && !isAthleteUser()) { form.innerHTML = mxPreviewNote() + mxNotLinkedCard('your daily check-in'); }
-  renderCheckin();
+  if (!form) return;
+  if (mxLocked()) { form.innerHTML = mxLockedCard(); $('#mx-checkin-history').innerHTML = ''; return; }
+  if (!isAthleteUser()) {
+    form.innerHTML = mxPreviewNote() + mxNotLinkedCard('your readiness check');
+    $('#mx-checkin-history').innerHTML = '';
+    return;
+  }
+  const today = await mxGet('/api/checkin/today');
+  if (today.mxError) {
+    form.innerHTML = `<div class="mx-card"><p>Could not load your check: ${esc(today.mxError)}</p><button class="mx-btn mx-btn-ghost" type="button" id="rx-retry">Try again</button></div>`;
+    $('#rx-retry').addEventListener('click', mxRenderCheckin);
+    return;
+  }
+  if (!today.linked) { form.innerHTML = mxNotLinkedCard('your readiness check'); mxRenderCheckinHistory(); return; }
+  const showResult = (c) => {
+    form.innerHTML = rxResultHtml(c, {
+      actions: `<div class="mx-actions"><button type="button" class="mx-btn mx-btn-ghost" id="rx-edit">Change my answers</button><button type="button" class="mx-btn mx-btn-text" data-view="today">Back to Today</button></div>`,
+    });
+    $('#rx-edit').addEventListener('click', () => startFlow(c));
+  };
+  const startFlow = (existing) => {
+    form.innerHTML = '<div class="mx-card rx-inline"></div>';
+    rxFlow(form.firstElementChild, {
+      existing, focus: !!existing,
+      onDone: (c) => { showResult(c); mxRenderCheckinHistory(); },
+    });
+  };
+  if (today.checkin && !state.ciEditing) showResult(today.checkin);
+  else startFlow(today.checkin);
   mxRenderCheckinHistory();
 }
 
@@ -10313,18 +10393,20 @@ function mxTestCardHtml(t) {
     ${changeHtml}
   </div>`;
 }
+var MX_RANGES = [[28, '4 weeks'], [56, '8 weeks'], [84, '12 weeks']];
 async function mxRenderProgress() {
   const el = $('#mx-progress');
   if (!el) return;
   const head = `<header class="mx-head"><p class="mx-eyebrow">My progress</p><h1>Your numbers</h1>
-    <p class="mx-lead">Every test is measured against where you started.</p></header>`;
+    <p class="mx-lead">How you show up, how ready you feel, how hard you train, and every test against where you started.</p></header>`;
   if (mxLocked()) { el.removeAttribute('aria-busy'); el.innerHTML = head + mxLockedCard(); return; }
   if (!isAthleteUser()) { el.removeAttribute('aria-busy'); el.innerHTML = head + mxPreviewNote() + mxNotLinkedCard('your test numbers and trends'); return; }
-  const [report, checkins, week, logs] = await Promise.all([
-    mxGet('/api/my/speed-report'), mxGet('/api/checkin/mine?days=14'), mxGet('/api/my/week'), mxGet('/api/my/logs'),
+  const range = state.mxRange || 28;
+  const [report, week, logs, ins] = await Promise.all([
+    mxGet('/api/my/speed-report'), mxGet('/api/my/week'), mxGet('/api/my/logs'), mxGet('/api/my/insights?days=' + range),
   ]);
   el.removeAttribute('aria-busy');
-  if (report.mxError && /link/i.test(report.mxError)) { el.innerHTML = head + mxNotLinkedCard('your test numbers and trends'); return; }
+  if ((report.mxError && /link/i.test(report.mxError)) || ins.linked === false) { el.innerHTML = head + mxNotLinkedCard('your test numbers and trends'); return; }
   const tests = (report.tests || []);
   const withData = tests.filter(t => t.best);
   const next = report.nextTestDate || week.nextTestDate;
@@ -10332,30 +10414,109 @@ async function mxRenderProgress() {
     ? `<div class="mx-tests">${tests.filter(t => t.core || t.best).map(mxTestCardHtml).join('')}</div>
        <div class="mx-actions"><button class="mx-btn mx-btn-ghost" type="button" data-view="speedreport">Open the full Lab Report</button></div>`
     : mxEmpty('Your numbers start with your first test', 'Coach AJ records your sprint and jump marks on test day. They become your starting line, and every retest shows how far you have come.');
-  const entries = (checkins && checkins.entries) || [];
-  const trendHtml = entries.length ? `<div class="mx-card mx-history">
-      <h3>How you have felt, last two weeks</h3>
-      ${mxBarsHtml(entries, 'sleep', 10, 'Sleep (hours)', true)}
-      ${mxBarsHtml(entries, 'energy', 5, 'Energy (1 to 5)', true)}
-      ${mxBarsHtml(entries, 'soreness', 5, 'Soreness (1 to 5)', false)}
-    </div>` : mxEmpty('How you have felt', 'Check in each day and your sleep, energy and soreness trends show up here.', { view: 'checkin', label: 'Check in now' });
   const logCount = logs && logs.linked ? (logs.logs || []).length : 0;
-  el.innerHTML = `${head}
-    ${next ? `<div class="mx-card mx-next"><p class="mx-eyebrow">Next test day</p><h3>${esc(fmtDate(parseDate(next.date)))}</h3>${next.testNames && next.testNames.length ? `<p class="mx-muted">${esc(next.testNames.join(', '))}</p>` : ''}</div>` : ''}
-    <h2 class="mx-section-title">Test results</h2>
-    ${testsHtml}
-    <div class="mx-progress-grid">
-      ${trendHtml}
+  const rangeHtml = `<div class="rx-range" role="group" aria-label="Time range">${MX_RANGES.map(([d, lab]) => `<button type="button" class="rx-range-btn${d === range ? ' on' : ''}" data-rx-range="${d}" aria-pressed="${d === range}">${lab}</button>`).join('')}</div>`;
+  let trendsHtml = '';
+  if (ins.mxError) {
+    trendsHtml = `<div class="mx-card"><p>Could not load your trends: ${esc(ins.mxError)}</p></div>`;
+  } else {
+    const c = ins.compliance || {};
+    const win = c.window || {};
+    const r = ins.readiness || {};
+    const ld = ins.load || {};
+    const s = ins.series || [];
+    const avgOf = (key) => { const v = s.map(d => d[key]).filter(x => x != null); return v.length ? Math.round(v.reduce((x, y) => x + y, 0) / v.length * 10) / 10 : null; };
+    const hasLoad = s.some(d => d.load > 0);
+    const changeTxt = ld.changePercent == null ? (ld.historyDays < 21 ? 'Shows after 3 weeks of logs' : 'No change to show yet')
+      : ld.changePercent === 0 ? 'Same as your usual week'
+        : `${Math.abs(ld.changePercent)}% ${ld.changePercent > 0 ? 'above' : 'under'} your usual week`;
+    const feel = [
+      ['Sleep', avgOf('sleep'), 'h', 'sleep'], ['Energy', avgOf('energy'), '/5', 'energy'], ['Mood', avgOf('mood'), '/5', 'mood'],
+      ['Stress', avgOf('stress'), '/5', 'stress'], ['Soreness', avgOf('soreness'), '/5', 'soreness'],
+    ];
+    trendsHtml = `
+    ${rxNotesHtml(ins.notes)}
+    <div class="rx-section-head"><h2 class="mx-section-title">Showing up</h2>${rangeHtml}</div>
+    <div class="rx-grid-2">
+      <div class="mx-card rx-comply">
+        <div class="rx-comply-top">
+          ${rxRingHtml(win.percent, 104, 'Planned sessions done: ' + (win.percent == null ? 'none planned' : win.percent + ' percent'))}
+          <div>
+            <p class="mx-eyebrow">Planned sessions done</p>
+            <h3>${win.planned ? `${esc(String(win.done))} of ${esc(String(win.planned))}` : 'Nothing planned yet'}</h3>
+            <p class="mx-muted mx-small">${win.extra ? `Plus ${esc(String(win.extra))} extra session${win.extra === 1 ? '' : 's'} on your own. ` : ''}A session counts when you log it or Coach AJ marks it done.</p>
+          </div>
+        </div>
+        <div class="rx-chart" id="rx-comply-chart"></div>
+        <p class="rx-legend mx-muted mx-small"><span class="rx-key rx-key-bar"></span> Each bar is one week <span class="rx-key rx-key-bar is-muted"></span> Under 60% of the plan</p>
+      </div>
       <div class="mx-card">
-        <h3>Your training</h3>
-        <div class="mx-stats">
-          <div class="mx-stat"><span class="mx-stat-num">${esc(String(week.sessionsThisWeek || 0))}</span><span class="mx-stat-label">Sessions this week</span></div>
-          <div class="mx-stat"><span class="mx-stat-num">${esc(String(week.checkinStreak || 0))}</span><span class="mx-stat-label">Day check-in streak</span></div>
+        <h3>Streaks</h3>
+        <div class="mx-stats rx-streaks">
+          <div class="mx-stat"><span class="mx-stat-num">${esc(String(c.trainingStreak || 0))}</span><span class="mx-stat-label">Planned sessions in a row</span></div>
+          <div class="mx-stat"><span class="mx-stat-num">${esc(String(c.checkinStreak || 0))}</span><span class="mx-stat-label">Check-in days in a row</span></div>
+          <div class="mx-stat"><span class="mx-stat-num">${esc(String(c.bestCheckinStreak || 0))}</span><span class="mx-stat-label">Best check-in streak</span></div>
           <div class="mx-stat"><span class="mx-stat-num">${esc(String(logCount))}</span><span class="mx-stat-label">Workouts logged</span></div>
         </div>
+        <p class="mx-muted mx-small">Rest days never break a streak.</p>
         <button class="mx-btn mx-btn-text" type="button" data-view="log">See your log</button>
       </div>
+    </div>
+    <h2 class="mx-section-title">Trends</h2>
+    <div class="rx-grid-2">
+      <div class="mx-card">
+        <div class="mx-card-head"><h3>Readiness</h3><button class="mx-btn mx-btn-text" type="button" data-view="checkin">Today's check</button></div>
+        <div class="rx-kpis">
+          <div><span class="rx-kpi-num">${r.today == null ? '-' : esc(String(r.today))}</span><span class="rx-kpi-label">Today</span></div>
+          <div><span class="rx-kpi-num">${r.last7 == null ? '-' : esc(String(r.last7))}</span><span class="rx-kpi-label">Last 7 days</span></div>
+          <div><span class="rx-kpi-num">${r.normal == null ? '-' : esc(String(r.normal))}</span><span class="rx-kpi-label">Your normal</span></div>
+        </div>
+        ${r.days ? '<div class="rx-chart" id="rx-ready-chart"></div><p class="mx-muted mx-small rx-legend"><span class="rx-key rx-key-band"></span>Your normal range <span class="rx-key rx-key-avg"></span>Your average <span class="rx-key rx-key-pain"></span>Pain flagged</p>'
+          : '<p class="mx-muted">Take the readiness check each day and your trend shows up here.</p>'}
+      </div>
+      <div class="mx-card">
+        <div class="mx-card-head"><h3>Training load</h3><button class="mx-btn mx-btn-text" type="button" data-view="log">Log a workout</button></div>
+        <div class="rx-kpis">
+          <div><span class="rx-kpi-num">${esc(String(ld.last7 || 0))}</span><span class="rx-kpi-label">Last 7 days</span></div>
+          <div><span class="rx-kpi-num">${esc(String(ld.usualWeek || 0))}</span><span class="rx-kpi-label">Usual week</span></div>
+          <div class="rx-kpi-wide"><span class="rx-kpi-label">${esc(changeTxt)}</span></div>
+        </div>
+        ${hasLoad ? '<div class="rx-chart" id="rx-load-chart"></div><p class="mx-muted mx-small rx-legend"><span class="rx-key rx-key-pain"></span>Pain flagged that day</p>'
+          : '<p class="mx-muted">Load comes from your logs: effort (RPE, 1 to 10) times minutes. Add both when you log a workout and this fills in.</p>'}
+        <p class="mx-muted mx-small">Load is effort times minutes for each logged workout. Sudden jumps are worth easing into.</p>
+      </div>
+    </div>
+    <div class="rx-grid-2">
+      <div class="mx-card">
+        <h3>Pain and how it lines up with training</h3>
+        ${rxPainListHtml(ins, false)}
+        ${ins.pain && ins.pain.openConcerns ? `<p class="mx-muted mx-small">${esc(String(ins.pain.openConcerns))} item${ins.pain.openConcerns === 1 ? ' is' : 's are'} open on Coach AJ's health log for you.</p>` : ''}
+      </div>
+      <div class="mx-card">
+        <h3>How you have felt</h3>
+        <ul class="rx-feel">${feel.map(([name, v, unit, key]) => `<li><span>${esc(name)}</span>
+          <span class="rx-feel-spark">${mxSpark(s.filter(d => d[key] != null).map(d => ({ value: d[key] })), key === 'stress' || key === 'soreness' ? 'lower' : 'higher')}</span>
+          <strong>${v == null ? '-' : esc(String(v)) + '<small>' + esc(unit) + '</small>'}</strong></li>`).join('')}</ul>
+        <p class="mx-muted mx-small">Averages over the last ${esc(MX_RANGES.find(x => x[0] === range)[1])}. Mood and stress start with the five-question check.</p>
+      </div>
     </div>`;
+  }
+  el.innerHTML = `${head}
+    ${next ? `<div class="mx-card mx-next"><p class="mx-eyebrow">Next test day</p><h3>${esc(fmtDate(parseDate(next.date)))}</h3>${next.testNames && next.testNames.length ? `<p class="mx-muted">${esc(next.testNames.join(', '))}</p>` : ''}</div>` : ''}
+    ${trendsHtml}
+    <h2 class="mx-section-title">Test results</h2>
+    ${testsHtml}`;
+  if (!ins.mxError) {
+    rxPaintCharts(el, {
+      'rx-comply-chart': rxComplianceSpec(ins),
+      'rx-ready-chart': rxReadinessSpec(ins),
+      'rx-load-chart': rxLoadSpec(ins),
+    });
+  }
+  el.querySelectorAll('[data-rx-range]').forEach(b => b.addEventListener('click', () => {
+    state.mxRange = parseInt(b.dataset.rxRange, 10);
+    mxRenderProgress();
+  }));
 }
 
 /* ---------- Training ---------- */
@@ -10448,10 +10609,464 @@ function mxRenderAccount() {
   });
 }
 
+/* ---------- Readiness check, insights and charts (v39) ----------
+   The five-question readiness check (sleep, energy, mood, stress,
+   soreness), asked once a day when a member opens the app and kept
+   on the Readiness screen. Answers save through the same
+   /api/checkin as before, so the coach's views, flags and health
+   log keep working; the server scores it 0 to 100. Progress reads
+   /api/my/insights for compliance, trends, load and pain. */
+var RX_QUESTIONS = [
+  { key: 'sleepQuality', title: 'How did you sleep?', sub: 'Think about how rested you feel, not just the hours.',
+    labels: ['Awful', 'Poor', 'OK', 'Good', 'Great'] },
+  { key: 'energy', title: 'How is your energy?', sub: 'Right now, before you train.',
+    labels: ['Empty', 'Low', 'OK', 'Good', 'Full'] },
+  { key: 'mood', title: 'How is your mood?', sub: 'School, work, life. All of it counts.',
+    labels: ['Rough', 'Low', 'OK', 'Good', 'Great'] },
+  { key: 'stress', title: 'How stressed are you?', sub: 'Tests, deadlines, things at home.',
+    labels: ['Calm', 'A little', 'Some', 'High', 'Very high'] },
+  { key: 'soreness', title: 'How sore are you?', sub: 'Your muscles overall, from training.',
+    labels: ['Fresh', 'A little', 'Sore', 'Very sore', 'Wrecked'] },
+];
+var RX_AREAS = [
+  ['hamstring', 'Hamstring'], ['quad', 'Quad'], ['calf', 'Calf'], ['achilles', 'Achilles'], ['shin', 'Shin'],
+  ['knee', 'Knee'], ['ankle', 'Ankle'], ['foot', 'Foot'], ['hip-flexor', 'Hip flexor'], ['hip', 'Hip'],
+  ['groin', 'Groin'], ['glute', 'Glute'], ['lower-back', 'Lower back'], ['shoulder', 'Shoulder'], ['other', 'Somewhere else'],
+];
+var RX_AREA_NAMES = Object.fromEntries(RX_AREAS.map(([k, v]) => [k, v]));
+var RX_BANDS = {
+  high: { title: 'Ready to go', body: 'You are fresh. Train as planned and make the fast reps count.' },
+  good: { title: 'Good to train', body: 'Train as planned. Give the warm-up its full time.' },
+  moderate: { title: 'Take it a bit easier', body: 'Train, but keep the quality high and stop a set early if your speed drops. Coach AJ sees this.' },
+  low: { title: 'Recovery comes first', body: 'Let Coach AJ know before you train hard today. Easy work, mobility and an early night will do more for you.' },
+};
+var RX_LATER_KEY = 'rp-readiness-later';
+function rxTodayStr() { return dateStrOf(todayLocal()); }
+function rxBandOf(score) {
+  if (score == null) return null;
+  return score >= 80 ? 'high' : score >= 60 ? 'good' : score >= 40 ? 'moderate' : 'low';
+}
+/* A score ring. Size in px; the number sits in the middle. */
+function rxRingHtml(score, size, label) {
+  const s = size || 112;
+  const r = (s / 2) - 7;
+  const c = 2 * Math.PI * r;
+  const pct = score == null ? 0 : Math.max(0, Math.min(100, score)) / 100;
+  const band = rxBandOf(score) || 'none';
+  return `<div class="rx-ring rx-${band}" style="width:${s}px;height:${s}px" role="img" aria-label="${esc(label || ('Readiness ' + (score == null ? 'not taken' : score + ' out of 100')))}">
+    <svg viewBox="0 0 ${s} ${s}" width="${s}" height="${s}" aria-hidden="true">
+      <circle class="rx-ring-track" cx="${s / 2}" cy="${s / 2}" r="${r}"/>
+      <circle class="rx-ring-fill" cx="${s / 2}" cy="${s / 2}" r="${r}" stroke-dasharray="${(c * pct).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${s / 2} ${s / 2})"/>
+    </svg>
+    <span class="rx-ring-num">${score == null ? '-' : esc(String(score))}</span>
+  </div>`;
+}
+function rxPartsHtml(c) {
+  const rows = [
+    ['Sleep', c.sleepQuality, false, c.sleep != null ? c.sleep + ' h' : ''],
+    ['Energy', c.energy, false, ''],
+    ['Mood', c.mood, false, ''],
+    ['Stress', c.stress, true, ''],
+    ['Soreness', c.soreness, true, ''],
+  ].filter(rw => rw[1] != null);
+  return `<ul class="rx-parts">${rows.map(([name, v, inverse, extra]) => {
+    const good = inverse ? 6 - v : v;
+    const q = RX_QUESTIONS.find(x => x.title.toLowerCase().includes(name.toLowerCase())) || null;
+    const word = q ? q.labels[v - 1] : String(v);
+    return `<li><span class="rx-part-name">${esc(name)}</span>
+      <span class="rx-part-bar" aria-hidden="true"><span style="width:${good * 20}%" class="${good <= 2 ? 'is-low' : ''}"></span></span>
+      <span class="rx-part-word">${esc(word)}${extra ? ` <span class="mx-muted">${esc(extra)}</span>` : ''}</span></li>`;
+  }).join('')}</ul>`;
+}
+function rxPainLine(c) {
+  if (!c || !c.hurts) return '';
+  const bits = [];
+  if (c.painSide === 'left' || c.painSide === 'right') bits.push(c.painSide === 'left' ? 'Left' : 'Right');
+  const area = c.painArea ? (RX_AREA_NAMES[c.painArea] || c.painArea) : 'Something';
+  bits.push(bits.length ? area.toLowerCase() : area);
+  let line = bits.join(' ') + (c.painSide === 'both' ? ', both sides' : '');
+  if (c.painLevel != null) line += `, ${c.painLevel} out of 10`;
+  return line;
+}
+/* What a member sees once today's check is in. */
+function rxResultHtml(c, opts) {
+  const o = opts || {};
+  const band = c.readinessBand || rxBandOf(c.readiness);
+  const copy = RX_BANDS[band] || { title: 'Thanks for checking in', body: '' };
+  const pain = rxPainLine(c);
+  return `<div class="mx-card rx-result rx-${band || 'none'}">
+    <div class="rx-result-top">
+      ${rxRingHtml(c.readiness, o.compact ? 92 : 120)}
+      <div class="rx-result-words">
+        <p class="mx-eyebrow">${o.eyebrow ? esc(o.eyebrow) : 'Readiness today'}</p>
+        <h2>${esc(copy.title)}</h2>
+        <p class="mx-muted">${esc(copy.body)}</p>
+      </div>
+    </div>
+    ${c.readinessFull === false ? '<p class="mx-muted mx-small">This one came from the older three-question check. Answer all five next time for a full score.</p>' : ''}
+    ${o.compact ? '' : rxPartsHtml(c)}
+    ${pain ? `<p class="rx-pain-flag"><strong>Pain flagged:</strong> ${esc(pain)}. Coach AJ can see it. Do not push through sharp pain.</p>` : ''}
+    ${o.actions || ''}
+  </div>`;
+}
+/* The stepper. host gets the whole flow; onDone(checkin) runs after a
+   successful save. Edits start from today's saved answers. */
+function rxFlow(host, opts) {
+  const o = opts || {};
+  const prev = o.existing || null;
+  const a = {
+    /* Hours start at the member's last answer (or 8) so one tap on the
+       sleep scale is enough; the stepper is right there to change it. */
+    sleep: prev ? prev.sleep : (o.lastSleep != null ? o.lastSleep : 8),
+    sleepQuality: prev && prev.sleepQuality != null ? prev.sleepQuality : null,
+    energy: prev ? prev.energy : null,
+    mood: prev && prev.mood != null ? prev.mood : null,
+    stress: prev && prev.stress != null ? prev.stress : null,
+    soreness: prev ? prev.soreness : null,
+    hurts: prev ? !!prev.hurts : null,
+    painArea: prev ? prev.painArea : null,
+    painSide: prev ? prev.painSide : null,
+    painLevel: prev ? prev.painLevel : null,
+    painText: prev ? prev.painText || '' : '',
+    note: prev ? prev.note || '' : '',
+  };
+  const total = RX_QUESTIONS.length + 1;
+  let step = 0;
+  let saving = false;
+  let errMsg = '';
+  const dots = () => `<div class="rx-progress" aria-hidden="true">${Array.from({ length: total }, (_, i) => `<span class="${i < step ? 'is-done' : i === step ? 'is-now' : ''}"></span>`).join('')}</div>`;
+  const header = () => `<div class="rx-step-head">
+      ${step > 0 ? '<button type="button" class="rx-back" data-rx-back aria-label="Back to the last question">← Back</button>' : '<span></span>'}
+      <span class="rx-count">${step + 1} of ${total}</span>
+      ${o.onLater ? '<button type="button" class="rx-later" data-rx-later>Later</button>' : '<span></span>'}
+    </div>${dots()}`;
+  const scale = (key, labels) => `<div class="rx-scale" role="radiogroup" aria-label="${esc(key)}">${labels.map((lab, i) => {
+    const v = i + 1;
+    return `<button type="button" role="radio" aria-checked="${a[key] === v}" class="rx-opt${a[key] === v ? ' on' : ''}" data-rx-key="${key}" data-rx-val="${v}">
+      <span class="rx-opt-num">${v}</span><span class="rx-opt-label">${esc(lab)}</span></button>`;
+  }).join('')}</div>`;
+  const paint = () => {
+    let body = '';
+    if (step < RX_QUESTIONS.length) {
+      const q = RX_QUESTIONS[step];
+      body = `<h2 class="rx-q" id="rx-q-title" tabindex="-1">${esc(q.title)}</h2>
+        <p class="mx-muted rx-q-sub">${esc(q.sub)}</p>
+        ${scale(q.key, q.labels)}
+        ${q.key === 'sleepQuality' ? `<div class="rx-hours">
+            <span class="rx-hours-label">Hours of sleep</span>
+            <div class="rx-stepper">
+              <button type="button" class="rx-step-btn" data-rx-hours="-0.5" aria-label="Less sleep" ${a.sleep != null && a.sleep <= 3 ? 'disabled' : ''}>−</button>
+              <span class="rx-hours-val" aria-live="polite">${a.sleep == null ? '- h' : esc(String(a.sleep)) + ' h'}</span>
+              <button type="button" class="rx-step-btn" data-rx-hours="0.5" aria-label="More sleep" ${a.sleep != null && a.sleep >= 13 ? 'disabled' : ''}>+</button>
+            </div>
+          </div>
+          <button type="button" class="mx-btn mx-btn-primary mx-btn-block rx-next" data-rx-next ${a.sleep != null && a.sleepQuality != null ? '' : 'disabled'}>Next</button>` : ''}`;
+    } else {
+      body = `<h2 class="rx-q" id="rx-q-title" tabindex="-1">Is anything hurting?</h2>
+        <p class="mx-muted rx-q-sub">Pain, not normal soreness. Coach AJ sees this before your next session.</p>
+        <div class="rx-yesno">
+          <button type="button" class="rx-opt rx-opt-wide${a.hurts === false ? ' on' : ''}" data-rx-hurts="no" aria-pressed="${a.hurts === false}">No, all good</button>
+          <button type="button" class="rx-opt rx-opt-wide${a.hurts === true ? ' on' : ''}" data-rx-hurts="yes" aria-pressed="${a.hurts === true}">Yes, something hurts</button>
+        </div>
+        ${a.hurts ? `<div class="rx-pain">
+          <p class="rx-sub-label">Where?</p>
+          <div class="rx-chips">${RX_AREAS.map(([k, v]) => `<button type="button" class="rx-chip${a.painArea === k ? ' on' : ''}" data-rx-area="${k}" aria-pressed="${a.painArea === k}">${esc(v)}</button>`).join('')}</div>
+          <p class="rx-sub-label">Which side?</p>
+          <div class="rx-chips">${[['left', 'Left'], ['right', 'Right'], ['both', 'Both'], ['na', 'Not sure']].map(([k, v]) => `<button type="button" class="rx-chip${a.painSide === k ? ' on' : ''}" data-rx-side="${k}" aria-pressed="${a.painSide === k}">${v}</button>`).join('')}</div>
+          <p class="rx-sub-label">How bad? <span class="mx-muted">0 is nothing, 10 is the worst</span></p>
+          <div class="rx-level">${Array.from({ length: 11 }, (_, i) => `<button type="button" class="rx-lv${a.painLevel === i ? ' on' : ''}${i >= 7 ? ' is-high' : ''}" data-rx-level="${i}" aria-pressed="${a.painLevel === i}">${i}</button>`).join('')}</div>
+          <label class="rx-field">In your words (optional)<input type="text" id="rx-pain-text" maxlength="240" value="${esc(a.painText)}" placeholder="e.g. Tight at the top of the hamstring when I sprint"></label>
+          ${a.painLevel != null && a.painLevel >= 7 ? '<p class="rx-pain-flag">That is a lot of pain. Do not train through it. Tell Coach AJ, and if it is sudden or severe, get it checked by a doctor or athletic trainer.</p>' : ''}
+        </div>` : ''}
+        <label class="rx-field">Anything else for Coach AJ? (optional)<input type="text" id="rx-note" maxlength="500" value="${esc(a.note)}" placeholder="Short note"></label>
+        ${errMsg ? `<p class="rx-error" role="alert">${esc(errMsg)}</p>` : ''}
+        <button type="button" class="mx-btn mx-btn-primary mx-btn-block rx-next" data-rx-save ${a.hurts == null || saving ? 'disabled' : ''}>${saving ? 'Saving…' : 'See my readiness'}</button>`;
+    }
+    host.innerHTML = `<div class="rx-flow">${header()}<div class="rx-body">${body}</div></div>`;
+    wire();
+  };
+  const go = (n) => { step = Math.max(0, Math.min(total - 1, n)); paint(); const t = host.querySelector('#rx-q-title'); if (t && o.focus !== false) t.focus({ preventScroll: true }); };
+  const keepText = () => {
+    const pt = host.querySelector('#rx-pain-text'); if (pt) a.painText = pt.value;
+    const nt = host.querySelector('#rx-note'); if (nt) a.note = nt.value;
+  };
+  const wire = () => {
+    host.querySelectorAll('[data-rx-key]').forEach(b => b.addEventListener('click', () => {
+      a[b.dataset.rxKey] = parseInt(b.dataset.rxVal, 10);
+      if (b.dataset.rxKey === 'sleepQuality') { paint(); return; }
+      paint();
+      setTimeout(() => go(step + 1), 180);
+    }));
+    host.querySelectorAll('[data-rx-hours]').forEach(b => b.addEventListener('click', () => {
+      const base = a.sleep == null ? 8 : a.sleep;
+      a.sleep = Math.min(13, Math.max(3, Math.round((base + parseFloat(b.dataset.rxHours)) * 2) / 2));
+      paint();
+    }));
+    const next = host.querySelector('[data-rx-next]');
+    if (next) next.addEventListener('click', () => go(step + 1));
+    const back = host.querySelector('[data-rx-back]');
+    if (back) back.addEventListener('click', () => { keepText(); go(step - 1); });
+    const later = host.querySelector('[data-rx-later]');
+    if (later && o.onLater) later.addEventListener('click', o.onLater);
+    host.querySelectorAll('[data-rx-hurts]').forEach(b => b.addEventListener('click', () => {
+      keepText();
+      a.hurts = b.dataset.rxHurts === 'yes';
+      paint();
+    }));
+    host.querySelectorAll('[data-rx-area]').forEach(b => b.addEventListener('click', () => { keepText(); a.painArea = b.dataset.rxArea; paint(); }));
+    host.querySelectorAll('[data-rx-side]').forEach(b => b.addEventListener('click', () => { keepText(); a.painSide = b.dataset.rxSide; paint(); }));
+    host.querySelectorAll('[data-rx-level]').forEach(b => b.addEventListener('click', () => { keepText(); a.painLevel = parseInt(b.dataset.rxLevel, 10); paint(); }));
+    const save = host.querySelector('[data-rx-save]');
+    if (save) save.addEventListener('click', async () => {
+      keepText();
+      if (a.hurts == null || saving) return;
+      saving = true; errMsg = ''; paint();
+      try {
+        const res = await apiPost('/api/checkin', {
+          sleep: a.sleep, sleepQuality: a.sleepQuality, energy: a.energy, mood: a.mood,
+          stress: a.stress, soreness: a.soreness,
+          hurts: !!a.hurts,
+          painArea: a.hurts ? a.painArea : null, painSide: a.hurts ? a.painSide : null,
+          painLevel: a.hurts ? a.painLevel : null, painText: a.hurts ? a.painText : '',
+          note: a.note,
+        });
+        saving = false;
+        try { localStorage.removeItem(RX_LATER_KEY); } catch (_) { /* private mode */ }
+        if (o.onDone) o.onDone(res.checkin);
+      } catch (err) {
+        saving = false; errMsg = err.message || 'Could not save. Try again.'; paint();
+      }
+    });
+  };
+  /* An edit starts at question one with the answers filled in. */
+  paint();
+}
+
+/* The once-a-day prompt: opens over Today when a linked member has
+   not checked in yet. "Later" hides it until tomorrow on this device;
+   the Readiness tab and the Today tile still offer it. */
+function rxLaterToday() {
+  try { return localStorage.getItem(RX_LATER_KEY) === rxTodayStr(); } catch (_) { return false; }
+}
+function rxCloseSheet() {
+  const sh = document.getElementById('rx-sheet');
+  if (sh) sh.remove();
+  document.body.classList.remove('rx-sheet-open');
+  if (state.rxLastFocus && document.contains(state.rxLastFocus)) { try { state.rxLastFocus.focus(); } catch (_) { /* gone */ } }
+}
+function rxOpenSheet(existing) {
+  if (document.getElementById('rx-sheet')) return;
+  state.rxLastFocus = document.activeElement;
+  const sh = document.createElement('div');
+  sh.id = 'rx-sheet';
+  sh.className = 'rx-sheet';
+  sh.innerHTML = `<div class="rx-sheet-backdrop" data-rx-close></div>
+    <div class="rx-sheet-panel" role="dialog" aria-modal="true" aria-label="Readiness check">
+      <p class="mx-eyebrow rx-sheet-eyebrow">Readiness check</p>
+      <div id="rx-sheet-body"></div>
+    </div>`;
+  document.body.appendChild(sh);
+  document.body.classList.add('rx-sheet-open');
+  const later = () => {
+    try { localStorage.setItem(RX_LATER_KEY, rxTodayStr()); } catch (_) { /* private mode */ }
+    rxCloseSheet();
+  };
+  sh.querySelector('[data-rx-close]').addEventListener('click', later);
+  sh.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); later(); return; }
+    if (e.key === 'Tab') {
+      const f = Array.from(sh.querySelectorAll('button:not([disabled]), input, [tabindex="0"]'));
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+  const body = sh.querySelector('#rx-sheet-body');
+  rxFlow(body, {
+    existing,
+    lastSleep: state.rxLastSleep,
+    onLater: later,
+    onDone: (c) => {
+      const eb = sh.querySelector('.rx-sheet-eyebrow');
+      if (eb) eb.remove();
+      body.innerHTML = rxResultHtml(c, {
+        actions: `<div class="mx-actions"><button type="button" class="mx-btn mx-btn-primary" data-rx-finish>Go to today</button></div>`,
+      });
+      const fin = body.querySelector('[data-rx-finish]');
+      fin.addEventListener('click', () => { rxCloseSheet(); showView('today'); });
+      fin.focus();
+    },
+  });
+  const t = sh.querySelector('#rx-q-title'); if (t) t.focus({ preventScroll: true });
+}
+function rxMaybePrompt(week) {
+  if (!isAthleteUser() || mxLocked() || !week || !week.linked || week.checkedInToday) return;
+  if (rxLaterToday()) return;
+  if (state.rxPromptedFor === rxTodayStr()) return;
+  state.rxPromptedFor = rxTodayStr();
+  if (week.latestCheckin && week.latestCheckin.sleep != null) state.rxLastSleep = week.latestCheckin.sleep;
+  rxOpenSheet(null);
+}
+
+/* ---------- charts ----------
+   Drawn at the container's real width so text and dots stay crisp on
+   a phone and on a wide desktop; redrawn when the width changes. */
+function rxChart(el, spec) {
+  if (!el) return;
+  el.__rxSpec = spec;
+  const w = Math.max(240, Math.round(el.clientWidth || 320));
+  const h = spec.height || 170;
+  const padL = 30, padR = 8, padT = spec.markers ? 16 : 8, padB = 22;
+  const n = spec.values.length;
+  const iw = w - padL - padR, ih = h - padT - padB;
+  const lo = spec.yMin != null ? spec.yMin : 0;
+  let hi = spec.yMax != null ? spec.yMax : Math.max(1, ...spec.values.filter(v => v != null));
+  if (hi <= lo) hi = lo + 1;
+  const xAt = (i) => padL + (n <= 1 ? iw / 2 : (spec.type === 'bars' ? (i + 0.5) * (iw / n) : (i / (n - 1)) * iw));
+  const yAt = (v) => padT + ih - ((v - lo) / (hi - lo)) * ih;
+  let g = '';
+  const ticks = spec.yTicks || [lo, Math.round((lo + hi) / 2), hi];
+  ticks.forEach(t => {
+    const y = yAt(t).toFixed(1);
+    g += `<line class="rx-grid" x1="${padL}" x2="${w - padR}" y1="${y}" y2="${y}"/><text class="rx-axis" x="${padL - 6}" y="${(+y + 4).toFixed(1)}" text-anchor="end">${esc(spec.tickFmt ? spec.tickFmt(t) : String(t))}</text>`;
+  });
+  if (spec.band && spec.band[0] != null) {
+    const y1 = yAt(spec.band[1]), y2 = yAt(spec.band[0]);
+    g += `<rect class="rx-band" x="${padL}" y="${y1.toFixed(1)}" width="${iw}" height="${Math.max(1, y2 - y1).toFixed(1)}"/>`;
+  }
+  if (spec.type === 'bars') {
+    const bw = Math.max(2, Math.min(28, (iw / n) * 0.66));
+    spec.values.forEach((v, i) => {
+      if (v == null || v === 0) { g += `<rect class="rx-bar-empty" x="${(xAt(i) - bw / 2).toFixed(1)}" y="${(padT + ih - 2).toFixed(1)}" width="${bw.toFixed(1)}" height="2"/>`; return; }
+      const y = yAt(v);
+      const cls = spec.barClass ? spec.barClass(i, v) : '';
+      g += `<rect class="rx-bar ${cls}" x="${(xAt(i) - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(2, padT + ih - y).toFixed(1)}" rx="2"><title>${esc(spec.titles ? spec.titles[i] : String(v))}</title></rect>`;
+    });
+  } else {
+    let path = '', open = false;
+    spec.values.forEach((v, i) => {
+      if (v == null) { open = false; return; }
+      path += (open ? ' L' : ' M') + xAt(i).toFixed(1) + ' ' + yAt(v).toFixed(1);
+      open = true;
+    });
+    if (spec.avg != null) {
+      const y = yAt(spec.avg).toFixed(1);
+      g += `<line class="rx-avg" x1="${padL}" x2="${w - padR}" y1="${y}" y2="${y}"/>`;
+    }
+    g += `<path class="rx-line" d="${path.trim()}"/>`;
+    spec.values.forEach((v, i) => {
+      if (v == null) return;
+      const cls = spec.dotClass ? spec.dotClass(i, v) : '';
+      g += `<circle class="rx-dot ${cls}" cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="${n > 45 ? 2.6 : 3.6}"><title>${esc(spec.titles ? spec.titles[i] : String(v))}</title></circle>`;
+    });
+  }
+  (spec.markers || []).forEach(i => {
+    const x = xAt(i);
+    g += `<path class="rx-marker" d="M${(x - 5).toFixed(1)} 3 L${(x + 5).toFixed(1)} 3 L${x.toFixed(1)} 11 Z"><title>${esc(spec.markerTitle ? spec.markerTitle(i) : 'Pain flagged')}</title></path>`;
+  });
+  (spec.xLabels || []).forEach(([i, lab], k, arr) => {
+    const anchor = k === 0 && arr.length > 1 ? 'start' : k === arr.length - 1 && arr.length > 1 ? 'end' : 'middle';
+    const x = anchor === 'start' ? Math.max(padL, xAt(i) - 4) : anchor === 'end' ? Math.min(w - padR, xAt(i) + 4) : xAt(i);
+    g += `<text class="rx-axis" x="${x.toFixed(1)}" y="${h - 6}" text-anchor="${anchor}">${esc(lab)}</text>`;
+  });
+  el.innerHTML = `<svg class="rx-chart-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(spec.label || 'Chart')}">${g}</svg>`;
+}
+function rxShortDate(ds) {
+  return parseDate(ds).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function rxXLabels(dates) {
+  const n = dates.length;
+  if (!n) return [];
+  if (n <= 2) return dates.map((d, i) => [i, rxShortDate(d)]);
+  return [[0, rxShortDate(dates[0])], [Math.floor((n - 1) / 2), rxShortDate(dates[Math.floor((n - 1) / 2)])], [n - 1, rxShortDate(dates[n - 1])]];
+}
+var rxResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(rxResizeTimer);
+  rxResizeTimer = setTimeout(() => {
+    document.querySelectorAll('.rx-chart').forEach(el => { if (el.__rxSpec && el.offsetParent) rxChart(el, el.__rxSpec); });
+  }, 150);
+});
+/* Paint every chart a screen holds once it is in the page. */
+function rxPaintCharts(root, specs) {
+  Object.keys(specs).forEach(id => rxChart(root.querySelector('#' + id), specs[id]));
+}
+function rxReadinessSpec(ins, label) {
+  const s = ins.series || [];
+  const r = ins.readiness || {};
+  return {
+    type: 'line', yMin: 0, yMax: 100, yTicks: [0, 50, 100], height: 180,
+    values: s.map(d => d.readiness),
+    band: r.normalLow != null ? [r.normalLow, r.normalHigh] : null,
+    avg: r.normal,
+    dotClass: (i, v) => 'rx-' + rxBandOf(v),
+    titles: s.map(d => rxShortDate(d.date) + ': readiness ' + (d.readiness == null ? 'not taken' : d.readiness) + (d.pain ? ', pain flagged' : '')),
+    markers: s.map((d, i) => (d.pain ? i : -1)).filter(i => i >= 0),
+    markerTitle: (i) => rxShortDate(s[i].date) + ': ' + (rxPainLine({ hurts: true, painArea: s[i].pain.area, painSide: s[i].pain.side, painLevel: s[i].pain.level }) || 'pain flagged'),
+    xLabels: rxXLabels(s.map(d => d.date)),
+    label: label || ('Readiness by day. Your normal is ' + (r.normal == null ? 'not set yet' : r.normal) + '.'),
+  };
+}
+function rxLoadSpec(ins, label) {
+  const s = ins.series || [];
+  const usualDay = ins.load && ins.load.usualWeek ? ins.load.usualWeek / 7 : null;
+  return {
+    type: 'bars', yMin: 0, height: 170,
+    values: s.map(d => d.load),
+    tickFmt: (t) => (t >= 1000 ? (Math.round(t / 100) / 10) + 'k' : String(Math.round(t))),
+    yTicks: (() => { const mx = Math.max(1, ...s.map(d => d.load)); const top = Math.ceil(mx / 100) * 100 || 100; return [0, Math.round(top / 2), top]; })(),
+    yMax: (() => { const mx = Math.max(1, ...s.map(d => d.load)); return Math.ceil(mx / 100) * 100 || 100; })(),
+    barClass: (i, v) => (usualDay && v > usualDay * 2.2 ? 'is-high' : ''),
+    titles: s.map(d => rxShortDate(d.date) + ': load ' + d.load + (d.pain ? ', pain flagged' : '')),
+    markers: s.map((d, i) => (d.pain ? i : -1)).filter(i => i >= 0),
+    markerTitle: (i) => rxShortDate(s[i].date) + ': pain flagged',
+    xLabels: rxXLabels(s.map(d => d.date)),
+    label: label || 'Training load by day, with pain flags marked above the bars.',
+  };
+}
+function rxComplianceSpec(ins) {
+  const wk = (ins.weeks || []).filter(w => w.planned > 0 || !w.partial);
+  return {
+    type: 'bars', yMin: 0, yMax: 100, yTicks: [0, 50, 100], height: 150,
+    tickFmt: (t) => t + '%',
+    values: wk.map(w => (w.percent == null ? 0 : Math.max(4, w.percent))),
+    barClass: (i) => (wk[i].percent != null && wk[i].percent < 60 ? 'is-muted' : ''),
+    titles: wk.map(w => 'Week of ' + rxShortDate(w.weekOf) + ': ' + w.done + ' of ' + w.planned + ' planned sessions'),
+    xLabels: wk.length ? (wk.length <= 3 ? wk.map((w, i) => [i, rxShortDate(w.weekOf)]) : [[0, rxShortDate(wk[0].weekOf)], [wk.length - 1, rxShortDate(wk[wk.length - 1].weekOf)]]) : [],
+    label: 'Planned sessions done, week by week.',
+  };
+}
+function rxNotesHtml(notes) {
+  if (!notes || !notes.length) return '';
+  return `<div class="mx-card rx-notes">
+    <h3>What your numbers say</h3>
+    <ul>${notes.map(nt => `<li class="rx-note rx-tone-${esc(nt.tone)}">${esc(nt.text)}</li>`).join('')}</ul>
+  </div>`;
+}
+function rxPainListHtml(ins, forCoach) {
+  const p = ins.pain || { days: [], areas: {} };
+  const usual = ins.load ? ins.load.usualWeek : 0;
+  if (!p.days.length) {
+    return `<p class="mx-muted">${forCoach ? 'No pain flagged in this window.' : 'No pain flagged in this window. Keep it that way: warm up fully and tell Coach AJ early when something feels off.'}</p>`;
+  }
+  const areas = Object.entries(p.areas).sort((x, y) => y[1] - x[1]);
+  return `<div class="rx-area-chips">${areas.map(([k, nn]) => `<span class="rx-area-chip">${esc(RX_AREA_NAMES[k] || k)} <strong>${nn}</strong></span>`).join('')}</div>
+    <ul class="rx-pain-list">${p.days.slice().reverse().slice(0, 8).map(d => {
+      const lead = d.loadLeadIn || 0;
+      const vs = usual > 0 ? Math.round(((lead - usual) / usual) * 100) : null;
+      return `<li><span class="rx-pain-date">${esc(fmtDate(parseDate(d.date)))}</span>
+        <span>${esc(rxPainLine({ hurts: true, painArea: d.area, painSide: d.side, painLevel: d.level }))}${d.text ? `<span class="mx-muted"> · ${esc(d.text)}</span>` : ''}</span>
+        <span class="mx-muted mx-small">Training load that week: ${esc(String(lead))}${vs != null ? ` (${vs >= 0 ? vs + '% above' : Math.abs(vs) + '% under'} ${forCoach ? 'their' : 'your'} usual week)` : ''}</span></li>`;
+    }).join('')}</ul>`;
+}
+
 /* ---------- mode switch, nav and hooks ---------- */
 /* Slots the older renderers fill, moved into the member screens
    while member mode is on (and back again when it ends). */
-var MX_SLOT_MOVES = [['checkin-slot', 'mx-checkin-form'], ['intake-slot', 'mx-today-top']];
+/* v39: the Readiness screen draws its own check (rxFlow), so only the
+   intake card still moves. */
+var MX_SLOT_MOVES = [['intake-slot', 'mx-today-top']];
 function mxMoveSlots(on) {
   MX_SLOT_MOVES.forEach(([id, target]) => {
     const node = document.getElementById(id);
