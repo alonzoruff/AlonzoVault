@@ -452,8 +452,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v65 (Coach Today)',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v65"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v66 (TV board)',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v66"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -1568,8 +1568,9 @@ async function main() {
     tvCode.includes('prefersReducedMotion'));
   check('TV board re-fetches its data about every 5 minutes',
     tvCode.includes('TV_REFRESH_MS = 5 * 60 * 1000'));
-  check('TV board puts the warm-up inside each group page (live card, coach edits included)',
-    tvCode.includes('cloneNode') && tvCode.includes('tv-wu-slot') && tvCode.includes('tvCardIdForGroup'));
+  check('TV board puts the warm-up beside each group page, read from the live card (coach edits included)',
+    tvCode.includes('tvWarmupHtml') && tvCode.includes('document.getElementById(cardId)') &&
+    tvCode.includes('tvCardIdForGroup') && tvCode.includes('tv-col-side'));
   check('TV board renders the full session (spec grid and coaching cues)',
     tvCode.includes('tvSessionHtml') && tvCode.includes('Coaching cues') &&
     tvCode.includes('Total volume') && tvCode.includes('coaching_cues'));
@@ -2377,16 +2378,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v65'") &&
-    swJs.text.includes("sprinter-app-v65"));
+    appJs.text.includes("const APP_VERSION = 'v66'") &&
+    swJs.text.includes("sprinter-app-v66"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v65"') &&
-    pageHtml.text.includes('Sprinter Workout App · v65') &&
+    pageHtml.text.includes('data-app-version="v66"') &&
+    pageHtml.text.includes('Sprinter Workout App · v66') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v59) ----------------
@@ -2550,7 +2551,7 @@ async function main() {
     appJs.text.includes('digestLatest'));
   check('qa: TV board stamps freshness, flags a stale board, and rests groups on their own page',
     pageHtml.text.includes('id="tv-updated"') && appJs.text.includes('tvStale') &&
-    appJs.text.includes("label: g.group.name + ' · Rest day'"));
+    appJs.text.includes("rest: true, isOff: !!b.isOff") && appJs.text.includes("'No workout published yet'"));
   check('qa: runner confirms before discarding a run in progress and holds a wake lock',
     appJs.text.includes('requestCloseRunner') && appJs.text.includes('wakeLock'));
   check('qa: records board opens on the first event with marks until one is picked',
@@ -8452,6 +8453,122 @@ async function waitForServer(tries = 60) {
     check('v65: no two top-level functions in app.js share a name (a later one would silently replace the earlier)',
       fnNames.length > 100 && dupFns.length === 0, dupFns);
     void athleteAny;
+  }
+
+  /* ---------------- v66: the weight-room TV board, rebuilt ----------------
+     The board shows each group's workout from the server's board
+     payload. A weight room workout (blocks, sets, reps, % of a lift
+     test) rides with a Coach Today plan and reaches the TV only once
+     the plan is published, as the copy taken at publish time. The
+     payload carries no athlete names, emails, counts or computed
+     loads. Runs on its own group. */
+  {
+    const coach = ctx.coach;
+    const T = (await api(coach, 'GET', '/api/coach/today-board')).json.today;
+    let r = await api(coach, 'POST', '/api/groups', { name: 'V66 Lifters' });
+    const lg = r.json.group;
+    r = await api(coach, 'POST', '/api/profiles', { firstName: 'Tavi', lastName: 'Privatename', groupId: lg.id, events: ['sprinter'] });
+    check('v66: fixture athlete is on the group', r.status === 201, r.status);
+    r = await api(coach, 'POST', '/api/custom-workouts', {
+      title: 'V66 lower body',
+      blocks: [
+        { rounds: 1, restBetweenRounds: 0, restAfterBlock: 120, exercises: [
+          { name: 'Back squat', load: { testKey: 'back-squat', percent: 80, sets: 4, reps: 5 } },
+          { name: 'Box jump', reps: '3' }] },
+        { rounds: 3, restBetweenRounds: 60, restAfterBlock: 0, exercises: [
+          { name: 'Nordic curl', reps: '5' }] },
+      ],
+    });
+    check('v66: fixture weight room workout saves', r.status === 201, r.json);
+    const cw = r.json.workout;
+
+    r = await api(coach, 'POST', '/api/plans', { groupId: lg.id, date: T, workoutId: 'not-a-workout' });
+    check('v66: a plan naming a weight room workout that does not exist is refused', r.status === 400 && /weight room workout/.test(r.json.error), r.json);
+    r = await api(coach, 'POST', '/api/plans', { groupId: lg.id, date: T, workoutId: cw.id, startTime: '15:30', location: 'Weight room', objective: 'Fast out of the hole', athleteNotes: 'Collars on every bar' });
+    check('v66: a plan can be just a weight room workout, named after it', r.status === 201 && r.json.plan.shown.workoutId === cw.id &&
+      r.json.plan.shown.workoutTitle === 'V66 lower body' && r.json.plan.shown.title === 'V66 lower body', r.json);
+    let plan = r.json.plan;
+
+    const boardFor = async () => {
+      const rb = await api(coach, 'GET', '/api/coach/today?board=1');
+      return { res: rb, g: (rb.json.board || []).find(x => x.groupId === lg.id) };
+    };
+    let b = await boardFor();
+    check('v66: the board payload lists every group', b.res.status === 200 && Array.isArray(b.res.json.board) && !!b.g, b.res.json.board);
+    check('v66: a draft weight room workout never reaches the TV', b.g && b.g.source !== 'published' && b.g.workout === null &&
+      b.g.notes === '' && b.g.focus === '', b.g);
+    for (const to of ['review', 'approved']) {
+      r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to });
+      plan = r.json.plan;
+      b = await boardFor();
+      check('v66: a workout that is ' + to + ' but not published stays off the TV', b.g.source !== 'published' && b.g.workout === null, b.g);
+    }
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'published' });
+    plan = r.json.plan;
+    check('v66: the head coach publishes the weight room plan', r.status === 200 && plan.status === 'published', r.json);
+    b = await boardFor();
+    const w = b.g && b.g.workout;
+    check('v66: the published weight room workout reaches the TV with its blocks, sets, reps and %',
+      b.g.source === 'published' && b.g.title === 'V66 lower body' && w && w.blocks.length === 2 &&
+      w.blocks[0].exercises[0].name === 'Back squat' && w.blocks[0].exercises[0].load.lift === 'Back Squat' &&
+      w.blocks[0].exercises[0].load.percent === 80 && w.blocks[0].exercises[0].load.sets === 4 && w.blocks[0].exercises[0].load.reps === 5 &&
+      w.blocks[0].exercises[1].reps === '3' && w.blocks[0].exercises[1].load === null &&
+      w.blocks[1].rounds === 3 && w.blocks[1].restBetweenRounds === 60 && w.blocks[0].restAfterBlock === 120, b.g);
+    check('v66: the TV shows the plan\'s time, place, focus and notes for athletes',
+      b.g.startTime === '15:30' && b.g.location === 'Weight room' && b.g.focus === 'Fast out of the hole' && b.g.notes === 'Collars on every bar', b.g);
+    const boardText = JSON.stringify(b.res.json.board);
+    check('v66: the board payload carries no athlete names, emails, counts or computed loads',
+      !boardText.includes('Privatename') && !boardText.includes('Tavi') && !boardText.includes('@') &&
+      !/"(completed|total|profileId|loads|lbs|weight)"/.test(boardText) && !boardText.includes('testKey'), boardText.slice(0, 300));
+    check('v66: the board payload still carries no health data',
+      Array.isArray(b.res.json.healthFlags) && b.res.json.healthFlags.length === 0 && b.res.json.wellness === null &&
+      b.res.json.heldAthletes.length === 0, Object.keys(b.res.json));
+
+    r = await api(coach, 'PUT', '/api/custom-workouts/' + cw.id, { title: 'V66 edited later', blocks: [
+      { rounds: 1, restBetweenRounds: 0, restAfterBlock: 0, exercises: [{ name: 'Something else', reps: '10' }] }] });
+    check('v66: fixture workout edit saves', r.status === 200, r.json);
+    b = await boardFor();
+    check('v66: editing the custom workout later does not change what the published plan shows',
+      b.g.workout && b.g.workout.title === 'V66 lower body' && b.g.workout.blocks.length === 2, b.g.workout);
+
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/revise', { rev: plan.rev });
+    plan = r.json.plan;
+    r = await api(coach, 'DELETE', '/api/custom-workouts/' + cw.id);
+    check('v66: fixture workout delete', r.status === 200, r.status);
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'review', changeSummary: 'New lift' });
+    plan = r.json.plan;
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'approved' });
+    plan = r.json.plan;
+    r = await api(coach, 'POST', '/api/plans/' + plan.id + '/status', { rev: plan.rev, to: 'published' });
+    check('v66: a revision whose weight room workout was deleted cannot be published', r.status === 400 && /deleted/.test(r.json.error), r.json);
+    b = await boardFor();
+    check('v66: the TV keeps the last published copy meanwhile', b.g.workout && b.g.workout.title === 'V66 lower body', b.g.workout);
+
+    r = await api(null, 'GET', '/api/coach/today?board=1');
+    check('v66: the board payload is not readable signed out', r.status === 401, r.status);
+
+    const js66 = await apiText(null, '/app.js');
+    const page66 = await apiText(null, '/');
+    const css66 = await apiText(null, '/styles.css');
+    const s66 = js66.text.indexOf('TV BOARD');
+    const tv66 = js66.text.slice(s66, js66.text.indexOf('/* ---------------- boot', s66));
+    check('v66: the TV reads the server board payload, not raw assignments', tv66.includes('t.board') && !tv66.includes('g.assignment'));
+    check('v66: weight room blocks render sets x reps and the % of the named lift',
+      tv66.includes('function tvBlocksHtml') && tv66.includes("e.load.sets + ' × ' + e.load.reps") && tv66.includes("'% of ' + e.load.lift + ' max'"));
+    check('v66: with more than one group the board opens on an overview of every group',
+      tv66.includes('function tvOverviewHtml') && tv66.includes("labels.push('All groups')"));
+    check('v66: plain empty states', tv66.includes('No workout published yet') && tv66.includes('Rest day') && tv66.includes('No workout today'));
+    check('v66: arrow keys and a remote move pages; Space pauses; controls hide until someone wakes the screen',
+      tv66.includes("k === 'ArrowRight'") && tv66.includes("k === 'ArrowLeft'") && tv66.includes('tvWake') &&
+      /body\.tv-awake \.tv-bottom/.test(css66.text));
+    check('v66: the active tab is marked by more than color (underline and aria-current)',
+      tv66.includes('aria-current="page"') && /\.tv-dot\.active \{[^}]*border-bottom-color: var\(--red\)/.test(css66.text));
+    check('v66: a rotation bar shows when the page will move, and is off under reduced motion',
+      page66.text.includes('id="tv-progress"') && tv66.includes('function tvRestartProgress') && tv66.includes('!prefersReducedMotion && !state.tvPaused'));
+    check('v66: TV type tracks the screen size from one unit',
+      css66.text.includes('#view-tv { --u: max(9px, min(1vw, 1.78vh)); }') && css66.text.includes('--s: calc(var(--u) * var(--tv-scale, 1))'));
+    check('v66: Coach Today plans can carry a weight room workout',
+      js66.text.includes('id="pf-workout"') && js66.text.includes("workoutId: $('#pf-workout').value") && js66.text.includes('Weight room: '));
   }
 
   }

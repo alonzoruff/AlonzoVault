@@ -153,8 +153,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v65';
-const APP_BUILD_LABEL = 'Sprinter Workout App · v65';
+const APP_VERSION = 'v66';
+const APP_BUILD_LABEL = 'Sprinter Workout App · v66';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -8662,6 +8662,7 @@ function ctWorkoutHtml(g) {
     <div class="ct-w-top"><h2 id="ct-w-h" class="ct-w-group">${esc(g.name)} workout</h2>${ctPill(pl.status, pl.statusLabel)}</div>
     <p class="ct-w-title">${esc(s.title || 'Untitled workout')}</p>
     ${s.sessionId ? `<p class="ct-w-session"><a class="code-link" data-code="${esc(s.sessionId)}">${esc(s.sessionId)}</a> ${esc(s.sessionName)}</p>` : ''}
+    ${s.workoutId ? `<p class="ct-w-session">Weight room: ${esc(s.workoutTitle || 'A workout that was deleted')}</p>` : ''}
     <p class="ct-w-hint">${esc(CT_STATUS_HINT[pl.status] || '')}</p>
     <dl class="ct-facts">
       <div><dt>Where and when</dt><dd>${when.length ? esc(when.join(' · ')) : '<span class="muted">Not set</span>'}</dd></div>
@@ -8845,8 +8846,16 @@ async function ctPlanSheet(g, pl) {
   const b = state.ct.board;
   const staff = (await ctStaffList()).staff;
   const isNew = !pl;
-  const f = isNew ? { sessionId: g.seasonPlan.sessionId || '', title: '', objective: '', location: '', startTime: '', athleteNotes: '', leadCoachId: b.me.id }
+  const f = isNew ? { sessionId: g.seasonPlan.sessionId || '', workoutId: '', title: '', objective: '', location: '', startTime: '', athleteNotes: '', leadCoachId: b.me.id }
     : Object.assign({}, pl.latest.fields);
+  /* v66: the weight room workout list (coach-built custom workouts
+     with blocks, sets, reps and % loads). Published with the plan,
+     it is what the weight-room TV shows for this group. */
+  let cws = [];
+  try { cws = (await api('/api/custom-workouts')).workouts || []; } catch (_) { cws = []; }
+  const cwOpts = '<option value="">None</option>' + cws.map(w =>
+    `<option value="${esc(w.id)}"${w.id === f.workoutId ? ' selected' : ''}>${esc(w.title)}</option>`).join('')
+    + (f.workoutId && !cws.some(w => w.id === f.workoutId) ? `<option value="${esc(f.workoutId)}" selected>${esc(f.workoutTitle || 'A workout that was deleted')}</option>` : '');
   const isRevision = !!(pl && pl.live);
   const sessions = (state.content && state.content.sessions) || [];
   const opts = '<option value="">No library session</option>' + sessions.map(s =>
@@ -8857,6 +8866,8 @@ async function ctPlanSheet(g, pl) {
     <form id="ct-plan-form" class="ct-form">
       <p class="muted">${esc(fmtDate(parseDate(b.date)))}. ${isRevision ? 'Athletes keep the published version until this change is approved and published.' : 'This stays a draft. Athletes see nothing until it is published.'}</p>
       <label>Session from the workout library <select id="pf-session">${opts}</select></label>
+      <label>Weight room workout <select id="pf-workout">${cwOpts}</select></label>
+      <p class="muted ct-form-note">Shows on the weight room TV, with its sets, reps and percentages, once this plan is published.${cws.length ? '' : ' Build one in Custom Workouts first.'}</p>
       <label>Workout name <input type="text" id="pf-title" maxlength="80" value="${esc(f.title)}" placeholder="Leave blank to use the session name"></label>
       <label>Goal for the day <textarea id="pf-objective" maxlength="200" rows="2">${esc(f.objective)}</textarea></label>
       <div class="ct-form-row">
@@ -8875,7 +8886,7 @@ async function ctPlanSheet(g, pl) {
     body.querySelector('#ct-plan-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fields = {
-        sessionId: $('#pf-session').value, title: $('#pf-title').value, objective: $('#pf-objective').value,
+        sessionId: $('#pf-session').value, workoutId: $('#pf-workout').value, title: $('#pf-title').value, objective: $('#pf-objective').value,
         location: $('#pf-location').value, startTime: $('#pf-time').value, leadCoachId: $('#pf-lead').value,
         athleteNotes: $('#pf-notes').value,
       };
@@ -9628,29 +9639,36 @@ function wrWirePanel(panelEl, data, floorWorkout) {
 }
 
 /* ================================================================
-   TV BOARD — the weight-room display. Coach-only. The board is
-   the Workout of the Day and nothing else: one full-screen page
-   per group, each page carrying the group's warm-up (the app's
-   own warm-up card, coach edits included) and the complete
-   session — every part of it, exactly as the session detail
-   renders it. Pages rotate about every 20 seconds when there is
-   more than one group. The only data read here is today's
-   assignments from the coach today endpoint, plus the app's own
-   session and plan content: nothing about an athlete's health
-   is ever fetched or shown on this screen. A coach signs in on
-   the TV browser once and the session cookie keeps the board
-   live; the board re-fetches its data every few minutes while
-   it is open.
+   TV BOARD — the weight-room display. Coach-only, read-only. v66
+   rebuilt it around the workouts themselves: one page per group,
+   readable from across the room, with the session name up top,
+   the weight room workout as blocks (sets, reps and % of a lift
+   test), any track session as a few large numbers, and the group's
+   warm-up and notes in a side column. With more than one group the
+   board opens on an overview of every group, then rotates through
+   the groups about every 20 seconds; tabs, arrow keys and a TV
+   remote move it by hand.
+   What the room sees comes from the server's board payload
+   (/api/coach/today?board=1): the PUBLISHED version of a Coach
+   Today plan only (never a draft, a version in review, or an
+   approved one that is not published), a coach's pick, or the
+   season plan. That payload carries no athlete names, no counts,
+   no health or check-in data, and no computed loads: a % load is
+   shown as a % of the named lift test. A coach signs in on the TV
+   browser once and the session cookie keeps the board live; it
+   re-fetches every few minutes while it is open.
    ================================================================ */
 const TV_ROTATE_MS = 20000;            /* ~20 seconds per page */
 const TV_REFRESH_MS = 5 * 60 * 1000;   /* re-fetch every ~5 min */
 const TV_SCROLL_MS = 50;               /* auto-scroll tick */
-const TV_MIN_SCALE = 0.62;             /* smallest type scale before scrolling */
-const TV_SCALES = [1, 0.92, 0.84, 0.76, 0.68, TV_MIN_SCALE];
+const TV_AWAKE_MS = 4000;              /* controls stay up this long after a touch or key */
+const TV_MIN_SCALE = 0.7;              /* smallest type scale before scrolling */
+const TV_SCALES = [1, 0.93, 0.86, 0.79, TV_MIN_SCALE];
 let tvRotateTimer = null;
 let tvRefreshTimer = null;
 let tvClockTimer = null;
 let tvScrollTimer = null;
+let tvAwakeTimer = null;
 let tvScrollHold = 0;
 let tvWired = false;
 
@@ -9675,16 +9693,14 @@ function tvCardIdForToday() {
   if (info.warmup && WARMUP_CARD_FOR[info.warmup]) return WARMUP_CARD_FOR[info.warmup];
   return 'wu-card-1';
 }
-/* A group's own warm-up card: the card for the warm-up its
-   assignment names, falling back to the day's card (meet days,
-   where the warm-up has no printed card of its own). */
+/* A group's own warm-up card: the card for the warm-up its day
+   names, falling back to the day's card. */
 function tvCardIdForGroup(a) {
   if (a && a.warmup && WARMUP_CARD_FOR[a.warmup]) return WARMUP_CARD_FOR[a.warmup];
   return tvCardIdForToday();
 }
-/* The next day on the plan that actually trains, for the
-   rest-day page. Scans forward from tomorrow through the end
-   of the season. */
+/* The next day on the plan that actually trains, for the rest
+   pages. Scans forward from tomorrow through the end of the season. */
 function tvNextTrainingDay() {
   if (!state.content) return null;
   const start = todayLocal();
@@ -9696,196 +9712,252 @@ function tvNextTrainingDay() {
     if (!info.codes.length) continue;
     const names = info.codes.map(c => {
       const s = state.sessions.get(c);
-      return s ? c + ' ' + s.name : c;
-    }).join(' + ');
+      return s ? s.name : c;
+    }).join(' and ');
     return { date: info.date, names };
   }
   return null;
 }
+function tvNextLine() {
+  const next = tvNextTrainingDay();
+  return next
+    ? `Next up: ${next.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}, ${next.names}.`
+    : 'The next training day will show here once it is on the plan.';
+}
 
-/* One session, complete — the same fields the session detail
-   view renders (spec grid, cues, badges), in TV type. */
+/* Small formatters. Times arrive as 24-hour "15:30". */
+function tvTime(hhmm) {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm || '');
+  if (!m) return '';
+  const d = new Date(2000, 0, 1, Number(m[1]), Number(m[2]));
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+function tvSecs(n) {
+  const s = Number(n) || 0;
+  if (s < 60) return s + ' s';
+  const min = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem ? `${min} min ${rem} s` : `${min} min`;
+}
+const TV_DEMAND = { high: 'High intensity', medium: 'Medium intensity', low: 'Low intensity' };
+
+/* One track or library session as a card: the name, then the few
+   numbers the room needs as big tiles, then the cues. */
 function tvSessionHtml(s, fallbackId, fallbackName) {
   if (!s) {
-    return `<div class="tv-session">
-      <h3 class="tv-session-title"><span class="tv-code">${esc(fallbackId || '')}</span> ${esc(fallbackName || '')}</h3>
-    </div>`;
+    return `<section class="tv-session">
+      <div class="tv-session-head"><span class="tv-code">${esc(fallbackId || '')}</span><h3 class="tv-session-title">${esc(fallbackName || '')}</h3></div>
+    </section>`;
   }
-  const row = (k, v) => v ? `<div class="tv-spec"><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
-  return `<div class="tv-session">
-    <h3 class="tv-session-title"><span class="tv-code">${esc(s.id)}</span> ${esc(s.name)} ${badge(s.cns_demand)}</h3>
-    <div class="tv-session-tags">${esc(labelQuality(s.quality))} · ${esc(labelPhase(s.phase))}</div>
+  const tile = (k, v) => v ? `<div class="tv-spec"><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
+  const small = [s.surface, s.footwear, s.equipment].filter(v => v && v !== 'any' && v !== 'none');
+  const demand = TV_DEMAND[s.cns_demand] || '';
+  return `<section class="tv-session">
+    <div class="tv-session-head">
+      <span class="tv-code">${esc(s.id)}</span>
+      <h3 class="tv-session-title">${esc(s.name)}</h3>
+    </div>
+    <div class="tv-session-tags">${esc([labelQuality(s.quality), demand].filter(Boolean).join(' · '))}</div>
     <dl class="tv-spec-grid">
-      ${row('Reps', s.reps)}
-      ${row('Rep distance', s.rep_distance_m ? s.rep_distance_m + ' m' : '')}
-      ${row('Intensity', s.intensity_pct ? s.intensity_pct + '%' : '')}
-      ${row('Rest', s.rest)}
-      ${row('Total volume', s.total_volume_m ? s.total_volume_m + ' m' : '')}
-      ${row('Surface', s.surface)}
-      ${row('Footwear', s.footwear)}
-      ${row('Equipment', s.equipment)}
-      ${row('Level', s.level)}
-      ${row('Before next hard day', s.min_hours_before_next_high ? 'wait ' + s.min_hours_before_next_high + ' h' : '')}
+      ${tile('Reps', s.reps)}
+      ${tile('Distance', s.rep_distance_m ? s.rep_distance_m + ' m' : '')}
+      ${tile('Intensity', s.intensity_pct ? s.intensity_pct + '%' : '')}
+      ${tile('Rest', s.rest)}
+      ${tile('Total volume', s.total_volume_m ? s.total_volume_m + ' m' : '')}
     </dl>
+    ${small.length ? `<p class="tv-session-gear">${esc(small.join(' · '))}</p>` : ''}
     ${s.coaching_cues ? `<div class="tv-cues"><span class="tv-cues-label">Coaching cues</span><p>${esc(s.coaching_cues)}</p></div>` : ''}
-    ${s.source ? `<p class="tv-session-source">Source: ${esc(s.source)}</p>` : ''}
-  </div>`;
+  </section>`;
 }
 
-/* The warm-up block for a group page: a heading plus a slot the
-   live printed card is cloned into after the page is drawn, so
-   coach card edits show up here exactly as printed. */
-function tvWarmupHtml(unit) {
-  if (!unit.cardId) return '';
-  const code = unit.warmup ? ` <span class="tv-code">${esc(unit.warmup)}</span>` : '';
-  return `<div class="tv-wu-block">
-    <h3 class="tv-block-h">Warm-Up${code}</h3>
-    <div class="tv-wu-slot" data-card="${esc(unit.cardId)}"></div>
-  </div>`;
+/* A weight room workout: each block is a card with its rounds and
+   rest, and each exercise reads name on the left, prescription on
+   the right (sets x reps, then the % of the named lift). */
+function tvExerciseHtml(e) {
+  const rx = e.load
+    ? `<span class="tv-ex-sets">${esc(e.load.sets + ' × ' + e.load.reps)}</span><span class="tv-ex-pct">${esc(e.load.percent + '% of ' + e.load.lift + ' max')}</span>`
+    : `<span class="tv-ex-sets">${esc(e.reps)}</span>`;
+  return `<li class="tv-ex"><span class="tv-ex-name">${esc(e.name)}</span><span class="tv-ex-rx">${rx}</span></li>`;
 }
-function tvFillWarmupClones(root) {
-  (root || document).querySelectorAll('.tv-wu-slot').forEach(slot => {
-    if (slot.firstChild) return;
-    const src = document.getElementById(slot.dataset.card);
-    if (!src) { slot.innerHTML = '<p class="tv-wu-none">Warm-up card unavailable today.</p>'; return; }
-    const clone = src.cloneNode(true);
-    clone.removeAttribute('id');
-    clone.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
-    clone.querySelectorAll('.wu-edit-ui, [data-print-card]').forEach(n => n.remove());
-    clone.classList.add('tv-wu-clone');
-    slot.appendChild(clone);
-  });
+function tvBlocksHtml(w) {
+  const blocks = (w && w.blocks) || [];
+  if (!blocks.length) return '';
+  return `<div class="tv-blocks tv-blocks-${Math.min(blocks.length, 4)}">${blocks.map((b, i) => {
+    const sub = [b.rounds > 1 ? b.rounds + ' rounds' : '1 round',
+      b.rounds > 1 && b.restBetweenRounds ? tvSecs(b.restBetweenRounds) + ' rest between rounds' : ''].filter(Boolean).join(' · ');
+    return `<section class="tv-block">
+      <div class="tv-block-head"><span class="tv-block-tag">Block ${i + 1}</span><span class="tv-block-sub">${esc(sub)}</span></div>
+      <ol class="tv-ex-list">${b.exercises.map(tvExerciseHtml).join('')}</ol>
+      ${b.restAfterBlock && i < blocks.length - 1 ? `<p class="tv-block-foot">Then rest ${esc(tvSecs(b.restAfterBlock))}</p>` : ''}
+    </section>`;
+  }).join('')}</div>`;
 }
 
-/* The units the board is built from: one per group with an
-   assignment today. A plan assignment means the whole plan day
-   (most days carry two sessions — all of them show); a coach
-   override means the coach's chosen session. With no groups
-   yet, the plan day itself is the single unit. */
+/* The warm-up, read from the live printed card (coach edits
+   included) and boiled down to what fits a side column: the card
+   name and time, then each step with the drill names. */
+function tvWarmupHtml(cardId) {
+  if (!cardId) return '';
+  const card = document.getElementById(cardId);
+  if (!card) return `<section class="tv-side-box"><h3 class="tv-side-h">Warm-up</h3><p class="tv-side-text">Warm-up card unavailable today.</p></section>`;
+  const h2 = card.querySelector('h2');
+  /* The card title breaks lines with <br>, which textContent drops,
+     so read it as HTML and turn each break into a space. */
+  const name = h2 ? h2.innerHTML.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, '').replace(/&amp;/g, '&') : '';
+  const time = (card.querySelector('.wu-time strong') || {}).textContent || '';
+  const steps = Array.from(card.querySelectorAll('.wu-sec')).map(sec => {
+    const h = sec.querySelector('h3');
+    let label = '';
+    if (h) {
+      const copy = h.cloneNode(true);
+      copy.querySelectorAll('em, .wu-step').forEach(n => n.remove());
+      label = copy.textContent.trim();
+    }
+    const items = Array.from(sec.querySelectorAll('.wu-list li')).map(li => {
+      const strong = li.querySelector('strong');
+      return (strong ? strong.textContent : li.textContent.split(' — ')[0]).trim();
+    }).filter(Boolean);
+    return { label, items };
+  }).filter(st => st.items.length);
+  const title = name.replace(/\s+/g, ' ').trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
+  return `<section class="tv-side-box tv-warm">
+    <h3 class="tv-side-h">Warm-up${time ? ` <span class="tv-side-h-note">${esc(time)}</span>` : ''}</h3>
+    ${title ? `<p class="tv-warm-name">${esc(title)}</p>` : ''}
+    <ol class="tv-warm-steps">${steps.map(st => `<li><span class="tv-warm-label">${esc(st.label.charAt(0) + st.label.slice(1).toLowerCase())}</span> ${esc(st.items.join(', '))}</li>`).join('')}</ol>
+  </section>`;
+}
+
+/* The units the board is built from: one per group, straight from
+   the server's board payload. With no groups set up yet, the plan
+   day itself is the single unit. */
 function tvGroupUnits() {
   const t = state.tvData.today;
-  const info = tvTodayInfo();
-  const planSessions = info ? info.codes.map(c => state.sessions.get(c)).filter(Boolean) : [];
-  const units = [];
-  if (t.groups && t.groups.length) {
-    for (const g of t.groups) {
-      const a = g.assignment || {};
-      if (!a.sessionId) {
-        units.push({
-          name: g.group.name, label: g.group.name + ' · Rest day', rest: true,
-          source: a.source, sessionId: null, sessionName: '',
-          sessions: [], planText: a.planText || '', cardId: 'rest', warmup: null,
-        });
-        continue;
-      }
-      const own = state.sessions.get(a.sessionId);
-      const sessions = a.source === 'override'
-        ? (own ? [own] : [])
-        : (planSessions.length ? planSessions : (own ? [own] : []));
+  const board = Array.isArray(t.board) ? t.board : [];
+  const units = board.map(b => {
+    const sessions = (b.sessionCodes || []).map(c => state.sessions.get(c)).filter(Boolean);
+    const hasWork = sessions.length || b.workout || (b.source === 'published' && b.title);
+    if (!hasWork) {
+      return { name: b.groupName, label: b.groupName, rest: true, isOff: !!b.isOff };
+    }
+    const title = b.title || sessions.map(s => s.name).join(' and ');
+    return {
+      name: b.groupName, label: b.groupName, source: b.source, title,
+      sessions, workout: b.workout, focus: b.focus || '', notes: b.notes || '',
+      location: b.location || '', startTime: b.startTime || '', leadCoach: b.leadCoach || '',
+      changeSummary: b.changeSummary || '',
+      /* A workout published on a day the season plan rests still
+         gets a warm-up: the circuit card for weight room work,
+         the light card otherwise. */
+      cardId: tvCardIdForGroup(b) || (b.workout ? 'wu-card-3' : 'wu-card-1'),
+    };
+  });
+  if (!units.length) {
+    const info = tvTodayInfo();
+    const planSessions = info ? info.codes.map(c => state.sessions.get(c)).filter(Boolean) : [];
+    if (planSessions.length) {
       units.push({
-        name: g.group.name, label: g.group.name, source: a.source,
-        sessionId: a.sessionId, sessionName: a.sessionName || '',
-        sessions, planText: a.planText || '',
-        cardId: tvCardIdForGroup(a), warmup: a.warmup || (info ? info.warmup : null),
+        name: 'Everyone', label: 'Everyone', source: 'plan', everyone: true,
+        title: planSessions.map(s => s.name).join(' and '), sessions: planSessions, workout: null,
+        focus: '', notes: '', location: '', startTime: '', leadCoach: '', changeSummary: '',
+        cardId: tvCardIdForToday(),
       });
     }
-  }
-  if (!units.length && planSessions.length) {
-    units.push({
-      name: 'Today\u2019s Workout', label: 'Today\u2019s Workout', source: 'plan',
-      sessionId: planSessions[0].id, sessionName: planSessions[0].name,
-      sessions: planSessions, planText: t.planText || (info ? info.text : ''),
-      cardId: tvCardIdForToday(), warmup: info ? info.warmup : null, everyone: true,
-    });
   }
   return units;
 }
 
+/* The header strip at the top of the screen: what this is and
+   which day it is. Drawn once per refresh, not per page. */
 function tvWodHeaderHtml() {
   const t = state.tvData.today;
   const dateLine = parseDate(t.date).toLocaleDateString(undefined,
-    { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const weekLine = t.week ? `Week ${t.week} · ${esc(t.phase || '')}` : 'Outside the season plan';
-  return `<div class="tv-wod-head">
-    <div class="tv-wod-kicker">Workout of the Day</div>
-    <div class="tv-date">${esc(dateLine)}</div>
-    <div class="tv-weekline">${weekLine}</div>
+    { weekday: 'long', month: 'long', day: 'numeric' });
+  const weekLine = t.week ? `Week ${t.week}${t.phase ? ', ' + esc(t.phase) : ''}` : '';
+  return `<div class="tv-wod-kicker">Workout of the Day</div>
+    <div class="tv-date">${esc(dateLine)}${weekLine ? `<span class="tv-weekline">${weekLine}</span>` : ''}</div>`;
+}
+
+/* One group's page. */
+function tvPageHtml(unit) {
+  if (unit.rest) {
+    return `<div class="tv-fit">
+      <div class="tv-hero"><div class="tv-page-group">${esc(unit.name)}</div></div>
+      <div class="tv-empty">
+        <p class="tv-empty-big">${unit.isOff ? 'Rest day' : 'No workout published yet'}</p>
+        <p class="tv-empty-sub">${esc(unit.isOff ? tvNextLine() : 'Your coach will put it up here once it is ready. ' + tvNextLine())}</p>
+      </div>
+    </div>`;
+  }
+  const meta = [tvTime(unit.startTime), unit.location, unit.leadCoach].filter(Boolean);
+  const work = unit.workout ? tvBlocksHtml(unit.workout) : '';
+  const runs = unit.sessions.length
+    ? `<div class="tv-sessions">${unit.sessions.map(s => tvSessionHtml(s)).join('')}</div>` : '';
+  const main = work + runs || `<div class="tv-empty tv-empty-inline"><p class="tv-empty-sub">The details for this workout are in the notes.</p></div>`;
+  const side = [
+    unit.changeSummary ? `<section class="tv-side-box tv-changed"><h3 class="tv-side-h"><span class="tv-changed-mark" aria-hidden="true">!</span> Updated today</h3><p class="tv-side-text">${esc(unit.changeSummary)}</p></section>` : '',
+    unit.notes ? `<section class="tv-side-box"><h3 class="tv-side-h">Notes from your coach</h3><p class="tv-side-text">${esc(unit.notes)}</p></section>` : '',
+    tvWarmupHtml(unit.cardId),
+  ].filter(Boolean).join('');
+  return `<div class="tv-fit">
+    <div class="tv-hero">
+      <div class="tv-page-group">${esc(unit.name)}</div>
+      <h2 class="tv-title">${esc(unit.title)}</h2>
+      ${meta.length ? `<p class="tv-meta">${esc(meta.join('  ·  '))}</p>` : ''}
+      ${unit.focus ? `<p class="tv-focus"><span class="tv-focus-label">Focus</span> ${esc(unit.focus)}</p>` : ''}
+    </div>
+    <div class="tv-body${side ? ' tv-body-split' : ''}">
+      <div class="tv-col-main">${main}</div>
+      ${side ? `<aside class="tv-col-side">${side}</aside>` : ''}
+    </div>
   </div>`;
 }
 
-/* One group's page. mode 'full' carries the warm-up and the
-   workout; the fit pass can split a long page into 'warm' and
-   'sess' pages for the same group rather than shrink the type
-   past the readable floor. */
-function tvPageHtml(unit, mode) {
-  if (unit.rest) {
-    const next = tvNextTrainingDay();
-    const nextLine = next
-      ? `Next up: ${next.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} \u2014 ${esc(next.names)}`
-      : 'The next training day will appear here once it is on the plan.';
-    return `<div class="tv-fit">
-    ${tvWodHeaderHtml()}
-    <div class="tv-page-group">${esc(unit.name)}</div>
-    <div class="tv-empty">
-      <p class="tv-empty-big">Rest day</p>
-      <p class="tv-empty-sub">No workout for this group today. ${nextLine}</p>
-    </div>
-  </div>`;
-  }
-  const pick = unit.source === 'override' ? ' <span class="tv-pick">Coach\u2019s pick</span>' : '';
-  const planLine = unit.source !== 'override' && unit.planText
-    ? `<div class="tv-plan-line">On the plan: ${esc(unit.planText)}</div>` : '';
-  const everyone = unit.everyone
-    ? '<div class="tv-plan-line">One workout for everyone today — set up groups in Roster &amp; Groups to split this board by group.</div>' : '';
-  const warm = mode !== 'sess' ? tvWarmupHtml(unit) : '';
-  const sess = mode !== 'warm'
-    ? `<div class="tv-sessions">${unit.sessions.length
-        ? unit.sessions.map(s => tvSessionHtml(s)).join('')
-        : tvSessionHtml(null, unit.sessionId, unit.sessionName)}</div>`
-    : '';
+/* The overview page: every group at a glance, so anyone walking
+   in finds their group before the rotation reaches it. */
+function tvOverviewHtml(units) {
   return `<div class="tv-fit">
-    ${tvWodHeaderHtml()}
-    <div class="tv-page-group">${esc(unit.name)}${pick}</div>
-    ${planLine}${everyone}
-    ${warm}
-    ${sess}
+    <div class="tv-hero"><div class="tv-page-group">All groups</div><h2 class="tv-title">Today in the weight room</h2></div>
+    <div class="tv-over-grid tv-over-${Math.min(units.length, 4)}">${units.map(u => {
+      const meta = u.rest ? '' : [tvTime(u.startTime), u.location].filter(Boolean).join('  ·  ');
+      const what = u.rest ? (u.isOff ? 'Rest day' : 'No workout published yet') : u.title;
+      const lines = u.rest ? '' : [u.workout ? `${u.workout.blocks.length} ${u.workout.blocks.length === 1 ? 'block' : 'blocks'} in the weight room` : '',
+        u.sessions.length ? u.sessions.map(s => s.name).join(' and ') : ''].filter(Boolean)
+        .filter(x => x !== u.title).join('. ');
+      return `<section class="tv-over-card${u.rest ? ' is-rest' : ''}">
+        <div class="tv-over-group">${esc(u.name)}</div>
+        <div class="tv-over-title">${esc(what)}</div>
+        ${lines ? `<div class="tv-over-line">${esc(lines)}</div>` : ''}
+        ${meta ? `<div class="tv-over-meta">${esc(meta)}</div>` : ''}
+      </section>`;
+    }).join('')}</div>
   </div>`;
-}
-function tvPageEl(unit, mode, unitIdx) {
-  const wrap = document.createElement('div');
-  wrap.innerHTML = tvPageHtml(unit, mode);
-  const page = document.createElement('div');
-  page.className = 'tv-panel tv-page';
-  page.dataset.tvUnit = unitIdx;
-  page.dataset.tvMode = mode;
-  page.appendChild(wrap.firstElementChild);
-  return page;
 }
 
 function tvRestPageHtml() {
-  const next = tvNextTrainingDay();
-  const nextLine = next
-    ? `Next up: ${next.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} \u2014 ${next.names}`
-    : 'The next training day will appear here once it is on the plan.';
   return `<div class="tv-fit">
-    ${tvWodHeaderHtml()}
-    <div class="tv-empty">
+    <div class="tv-empty tv-empty-full">
       <p class="tv-empty-big">No workout today</p>
-      <p class="tv-empty-sub">${esc(nextLine)}</p>
+      <p class="tv-empty-sub">${esc(tvNextLine())}</p>
     </div>
   </div>`;
 }
+function tvMakePage(html, mode) {
+  const page = document.createElement('div');
+  page.className = 'tv-panel tv-page';
+  page.dataset.tvMode = mode;
+  page.innerHTML = html;
+  return page;
+}
 
-/* Fit pass: shrink each page's type (via --tv-scale) until the
-   content fits the screen; split a still-overflowing full page
-   into warm-up and workout pages for the same group; only when
-   a single block still cannot fit at the minimum scale does the
-   page get the slow auto-scroll. Nothing is ever clipped. */
+/* Fit pass: shrink a page's type (via --tv-scale) until it fits the
+   screen. Only when it still cannot fit at the minimum scale does
+   the page get the slow auto-scroll. Nothing is ever clipped. */
 function tvFitOne(page) {
   const fit = page.querySelector('.tv-fit');
   if (!fit) return true;
   page.classList.add('tv-measuring');
-  const budget = page.clientHeight - 56;
+  const cs = getComputedStyle(page);
+  const budget = page.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 4;
   let fits = false;
   for (const s of TV_SCALES) {
     fit.style.setProperty('--tv-scale', s);
@@ -9896,26 +9968,10 @@ function tvFitOne(page) {
   return fits;
 }
 function tvFitPages() {
-  const main = $('#tv-main');
-  if (!main) return;
-  const labels = state.tvPageLabels.slice();
-  let pages = Array.from(main.querySelectorAll('.tv-page'));
-  for (let i = 0; i < pages.length; i++) {
-    const page = pages[i];
-    if (tvFitOne(page)) continue;
-    const unit = state.tvUnits[Number(page.dataset.tvUnit)];
-    if (!unit || page.dataset.tvMode !== 'full') { page.classList.add('tv-autoscroll'); continue; }
-    const warm = tvPageEl(unit, 'warm', Number(page.dataset.tvUnit));
-    const sess = tvPageEl(unit, 'sess', Number(page.dataset.tvUnit));
-    page.replaceWith(warm, sess);
-    tvFillWarmupClones(warm);
-    if (!tvFitOne(warm)) warm.classList.add('tv-autoscroll');
-    if (!tvFitOne(sess)) sess.classList.add('tv-autoscroll');
-    labels.splice(i, 1, unit.label + ' \u00B7 Warm-Up', unit.label + ' \u00B7 Workout');
-    pages = Array.from(main.querySelectorAll('.tv-page'));
-    i += 1; /* the sess page was just fitted */
-  }
-  state.tvPageLabels = labels;
+  $$('#tv-main .tv-page').forEach(page => {
+    page.classList.remove('tv-autoscroll');
+    if (!tvFitOne(page)) page.classList.add('tv-autoscroll');
+  });
 }
 
 async function renderTvBoard() {
@@ -9928,12 +9984,12 @@ async function renderTvBoard() {
     state.tvLastOk = new Date();
     state.tvStale = false;
   } catch (_) {
-    /* A failed refresh keeps the last good board on screen — and says so. */
+    /* A failed refresh keeps the last good board on screen, and says so. */
     state.tvStale = true;
     if (!state.tvData) {
-      el.innerHTML = `<div class="tv-empty">
+      el.innerHTML = `<div class="tv-empty tv-empty-full">
         <p class="tv-empty-big">The board could not load.</p>
-        <p class="tv-empty-sub">Check the connection — it retries on its own every few minutes.</p>
+        <p class="tv-empty-sub">Check the connection. It tries again on its own every few minutes.</p>
       </div>`;
       return;
     }
@@ -9943,21 +9999,28 @@ async function renderTvBoard() {
 function drawTvBoard() {
   const el = $('#tv-main');
   if (!el || !state.tvData) return;
+  const head = $('#tv-head');
+  if (head) head.innerHTML = tvWodHeaderHtml();
   const units = tvGroupUnits();
   state.tvUnits = units;
   el.innerHTML = '';
-  if (!units.length) {
-    const page = document.createElement('div');
-    page.className = 'tv-panel tv-page';
-    page.dataset.tvMode = 'rest';
-    page.innerHTML = tvRestPageHtml();
-    el.appendChild(page);
-    state.tvPageLabels = ['Rest day'];
+  const labels = [];
+  if (!units.length || units.every(u => u.rest)) {
+    if (units.length === 1) {
+      el.appendChild(tvMakePage(tvPageHtml(units[0]), 'group'));
+      labels.push(units[0].label);
+    } else {
+      el.appendChild(tvMakePage(tvRestPageHtml(), 'rest'));
+      labels.push('Today');
+    }
   } else {
-    units.forEach((u, i) => el.appendChild(tvPageEl(u, 'full', i)));
-    state.tvPageLabels = units.map(u => u.label);
+    if (units.length > 1) {
+      el.appendChild(tvMakePage(tvOverviewHtml(units), 'overview'));
+      labels.push('All groups');
+    }
+    units.forEach(u => { el.appendChild(tvMakePage(tvPageHtml(u), 'group')); labels.push(u.label); });
   }
-  tvFillWarmupClones();
+  state.tvPageLabels = labels;
   tvFitPages();
   tvWireControls();
   drawTvPanels();
@@ -9965,7 +10028,7 @@ function drawTvBoard() {
   const upd = $('#tv-updated');
   if (upd) {
     if (state.tvStale) {
-      upd.textContent = `⚠ Connection lost — showing the board from ${state.tvLastOk ? state.tvLastOk.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'earlier'}`;
+      upd.textContent = `Connection lost. Showing the board from ${state.tvLastOk ? state.tvLastOk.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'earlier'}.`;
       upd.classList.add('stale');
     } else if (state.tvLastOk) {
       upd.textContent = 'Updated ' + state.tvLastOk.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -9979,16 +10042,33 @@ function drawTvPanels() {
   pages.forEach((p, i) => p.classList.toggle('active', i === state.tvPanel));
   const active = pages[state.tvPanel];
   if (active) active.scrollTop = 0;
-  tvScrollHold = 0;
-  const dots = $('#tv-dots');
-  if (dots) {
-    dots.innerHTML = state.tvPageLabels.map((n, i) =>
-      `<button type="button" class="tv-dot${i === state.tvPanel ? ' active' : ''}" data-tv-dot="${i}">${esc(n)}</button>`).join('');
-    dots.querySelectorAll('[data-tv-dot]').forEach(b => b.addEventListener('click', () => {
+  tvScrollHold = 40;
+  const tabs = $('#tv-dots');
+  if (tabs) {
+    const many = state.tvPageLabels.length > 1;
+    tabs.hidden = !many;
+    tabs.innerHTML = many ? state.tvPageLabels.map((n, i) =>
+      `<button type="button" class="tv-dot${i === state.tvPanel ? ' active' : ''}" data-tv-dot="${i}"${i === state.tvPanel ? ' aria-current="page"' : ''}>${esc(n)}</button>`).join('') : '';
+    tabs.querySelectorAll('[data-tv-dot]').forEach(b => b.addEventListener('click', () => {
       state.tvPanel = Number(b.dataset.tvDot);
       state.tvPaused = true; tvSyncPauseBtn(); drawTvPanels();
     }));
   }
+  tvRestartProgress();
+}
+/* The thin bar under the tabs fills over the ~20 seconds a page is
+   up, so the room can see the board is about to move. It is hidden
+   when the board is paused, has one page, or motion is reduced. */
+function tvRestartProgress() {
+  const bar = $('#tv-progress');
+  if (!bar) return;
+  const on = !prefersReducedMotion && !state.tvPaused && tvPageCount() > 1;
+  bar.classList.remove('run');
+  bar.hidden = !on;
+  if (!on) return;
+  bar.style.setProperty('--tv-rotate', (TV_ROTATE_MS / 1000) + 's');
+  void bar.offsetWidth; /* restart the fill */
+  bar.classList.add('run');
 }
 function tvPageCount() { return $$('#tv-main .tv-page').length; }
 function tvSetPage(i) {
@@ -10005,11 +10085,13 @@ function tvUpdateClock() {
 function tvSyncPauseBtn() {
   const b = $('#tv-pause');
   if (b) b.textContent = state.tvPaused ? 'Resume rotation' : 'Pause';
+  const flag = $('#tv-paused-flag');
+  if (flag) flag.hidden = !state.tvPaused || tvPageCount() < 2;
+  tvRestartProgress();
 }
-/* Slow auto-scroll for a page whose single block cannot fit
-   even at the minimum type scale: drift down, hold at the
-   bottom, return to the top. Pauses with the rotation, and
-   never runs under reduced motion. */
+/* Slow auto-scroll for a page that cannot fit even at the minimum
+   type scale: drift down, hold at the bottom, return to the top.
+   Pauses with the rotation, and never runs under reduced motion. */
 function tvScrollTick() {
   if (state.tvPaused) return;
   const page = document.querySelector('#tv-main .tv-page.active.tv-autoscroll');
@@ -10017,9 +10099,22 @@ function tvScrollTick() {
   const max = page.scrollHeight - page.clientHeight;
   if (max <= 4) return;
   if (tvScrollHold > 0) { tvScrollHold--; return; }
-  if (page.scrollTop >= max - 1) { page.scrollTop = 0; tvScrollHold = 30; return; }
+  if (page.scrollTop >= max - 1) { page.scrollTop = 0; tvScrollHold = 40; return; }
   page.scrollTop = Math.min(max, page.scrollTop + 1);
   if (page.scrollTop >= max - 1) tvScrollHold = 60;
+}
+/* The control tray stays out of the way until someone touches the
+   screen, moves a mouse, or presses a key on a remote. */
+function tvWake() {
+  document.body.classList.add('tv-awake');
+  if (tvAwakeTimer) clearTimeout(tvAwakeTimer);
+  tvAwakeTimer = setTimeout(() => document.body.classList.remove('tv-awake'), TV_AWAKE_MS);
+}
+function tvToggleFull() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  } catch (_) { /* full screen is a nicety, never an error */ }
 }
 function tvWireControls() {
   if (tvWired) return;
@@ -10033,43 +10128,57 @@ function tvWireControls() {
   const pause = $('#tv-pause');
   if (pause) pause.addEventListener('click', () => { state.tvPaused = !state.tvPaused; tvSyncPauseBtn(); });
   const full = $('#tv-full');
-  if (full) full.addEventListener('click', () => {
-    try {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else document.documentElement.requestFullscreen();
-    } catch (_) { /* full screen is a nicety, never an error */ }
-  });
-  /* A tap anywhere on the pages pauses the rotation, so a coach
-     can hold a page up while the room reads it. */
+  if (full) full.addEventListener('click', tvToggleFull);
   const view = $('#view-tv');
-  if (view) view.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.tv-bottom') || e.target.closest('.tv-top')) return;
-    if (!state.tvPaused) { state.tvPaused = true; tvSyncPauseBtn(); }
+  if (view) {
+    /* A tap on a page pauses the rotation, so a coach can hold a
+       page up while the room reads it. */
+    view.addEventListener('pointerdown', (e) => {
+      tvWake();
+      if (e.target.closest('.tv-bottom') || e.target.closest('.tv-top')) return;
+      if (!state.tvPaused) { state.tvPaused = true; tvSyncPauseBtn(); }
+    });
+    view.addEventListener('pointermove', tvWake);
+  }
+  /* Arrow keys and a TV remote's left and right move between pages;
+     Space pauses or resumes; F goes full screen. */
+  document.addEventListener('keydown', (e) => {
+    if (!document.body.classList.contains('tv-mode')) return;
+    if (e.target && e.target.closest && e.target.closest('input, textarea, select')) return;
+    const k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown') { state.tvPaused = true; tvSyncPauseBtn(); tvAdvance(1); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { state.tvPaused = true; tvSyncPauseBtn(); tvAdvance(-1); }
+    else if (k === ' ' && !(e.target && e.target.closest && e.target.closest('button'))) { e.preventDefault(); state.tvPaused = !state.tvPaused; tvSyncPauseBtn(); }
+    else if (k === 'f' || k === 'F') tvToggleFull();
+    else return;
+    tvWake();
+  });
+  window.addEventListener('resize', () => {
+    if (document.body.classList.contains('tv-mode') && state.tvData) { tvFitPages(); }
   });
 }
 function enterTvBoard() {
   state.tvPanel = 0;
   state.tvPaused = false;
   tvSyncPauseBtn();
+  tvWake();
   renderTvBoard();
   tvStartTimers();
 }
-function exitTvBoard() { tvStopTimers(); }
+function exitTvBoard() { tvStopTimers(); document.body.classList.remove('tv-awake'); }
 function tvStartTimers() {
   tvStopTimers();
-  /* Reduced motion: no auto-rotation and no auto-scroll at
-     all — pages move only when someone taps Prev / Next or a
-     group name. */
+  /* Reduced motion: no auto-rotation and no auto-scroll at all;
+     pages move only when someone taps a tab, Prev or Next. */
   if (!prefersReducedMotion) {
     tvRotateTimer = setInterval(() => {
       if (!state.tvPaused && tvPageCount() > 1) tvAdvance(1);
-      tvUpdateClock();
     }, TV_ROTATE_MS);
     tvScrollTimer = setInterval(tvScrollTick, TV_SCROLL_MS);
   }
   tvRefreshTimer = setInterval(() => { renderTvBoard(); }, TV_REFRESH_MS);
   /* The clock keeps time even when reduced motion stops the rotation. */
-  tvClockTimer = setInterval(tvUpdateClock, 30000);
+  tvClockTimer = setInterval(tvUpdateClock, 15000);
 }
 function tvStopTimers() {
   if (tvRotateTimer) { clearInterval(tvRotateTimer); tvRotateTimer = null; }
