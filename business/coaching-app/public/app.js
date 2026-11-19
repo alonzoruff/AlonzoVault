@@ -518,7 +518,7 @@ function syncViewLock(name) {
 }
 
 function renderSubnav(name, area) {
-  const items = GROUP_SUBNAV[area];
+  const items = mxOn() ? null : GROUP_SUBNAV[area];
   const activeSection = document.getElementById('view-' + name);
   $$('.subnav-slot').forEach(slot => {
     if (!items || slot.closest('.view') !== activeSection) { slot.innerHTML = ''; return; }
@@ -624,6 +624,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNavMenus(); });
 
 function showView(name) {
+  name = mxResolveView(name);
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const area = VIEW_AREA[name] || 'home';
   $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
@@ -694,6 +695,7 @@ function showView(name) {
   if (name === 'coverage') renderCoverage();
   if (name === 'exercises') renderExercises();
   syncBackHome(name);
+  mxAfterShow(name);
   if (name !== 'landing') rpSetLandingPage(null);
   document.body.classList.toggle('rp-public', !state.user && RP_PUBLIC_VIEWS.has(name));
   rpSyncUrl(name);
@@ -897,7 +899,7 @@ function sessionDetailHtml(s) {
     ${s.source_url ? `<p class="muted">From Instagram: <a href="${esc(s.source_url)}" target="_blank" rel="noopener">@${esc(s.source_username || '')}</a></p>` : ''}
   </div>`;
 }
-const DETAIL_FROM_LABELS = { home: 'Today', season: 'Season Plan', coach: "Today's Checklist", log: 'My Log' };
+const DETAIL_FROM_LABELS = { today: 'Today', training: 'Training', home: 'Today', season: 'Season Plan', coach: "Today's Checklist", log: 'My Log' };
 function openSession(id) {
   const s = state.sessions.get(id);
   if (!s) return;
@@ -1776,6 +1778,7 @@ async function refreshUserData() {
 function renderAccount() {
   const chip = $('#account-chip');
   const note = $('#menu-account-note');
+  if (state.user && mxOn()) { mxRenderAccount(); return; }
   if (state.user) {
     chip.innerHTML = `${esc(state.user.email)} · <button class="btn secondary" id="chip-logout" type="button" style="padding:2px 10px">Log out</button>`;
     note.textContent = 'Logged in as ' + state.user.email;
@@ -1861,6 +1864,7 @@ function renderAccount() {
 }
 function syncAuthUi() {
   document.body.classList.toggle('logged-out', !state.user);
+  mxSync();
   const isCoach = !!(state.user && state.user.role === 'coach');
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   $$('.learn-tab').forEach(t => { t.hidden = isCoach; });
@@ -1920,7 +1924,7 @@ async function renderCheckin() {
         `<button type="button" class="tap-btn ${n === val ? 'on' : ''}" data-ci="${name}" data-val="${n}">${n}</button>`).join('');
       slot.innerHTML = `<div class="card checkin-card">
         <h2>Daily Check-In ${c ? '<span class="badge low">DONE TODAY ✓</span>' : ''}</h2>
-        <p class="muted">${esc(today.athleteName || '')} · ${esc(fmtDate(parseDate(today.date)))}. Takes under 20 seconds. Your coaches see this before practice.</p>
+        <p class="muted">${esc(today.athleteName || '')} · ${esc(fmtDate(parseDate(today.date)))}. Takes under 20 seconds. ${mxOn() ? 'Coach AJ sees this before your next session.' : 'Your coaches see this before practice.'}</p>
         ${mine && mine.streak ? `<p class="checkin-streak">🔥 Checked in ${mine.streak} day${mine.streak === 1 ? '' : 's'} in a row</p>` : ''}
         <div class="ci-label">Sleep last night</div>
         <div class="ci-stepper">
@@ -8747,6 +8751,7 @@ const RP_VIEW_PATHS = {
 const RP_PATH_VIEWS = {};
 Object.keys(RP_VIEW_PATHS).forEach(k => { if (k !== 'home') RP_PATH_VIEWS[RP_VIEW_PATHS[k]] = k; });
 RP_PATH_VIEWS['/'] = 'landing';
+RP_PATH_VIEWS['/my-account'] = 'account';
 const RP_TITLES = {
   programs: 'Programs', plans: 'Plans', 'how-it-works': 'How It Works', faq: 'FAQ', about: 'About',
   contact: 'Contact',
@@ -8758,6 +8763,8 @@ let rpPendingPath = null;
 let rpSuppressPush = false;
 
 function rpPathFor(name) {
+  if (name === 'today') return '/';
+  if (name === 'account' && mxOn()) return '/my-account';
   if (RP_VIEW_PATHS[name]) return RP_VIEW_PATHS[name];
   return '/' + name;
 }
@@ -9913,3 +9920,602 @@ function syncBackHome(name) {
 
 /* RP-HOME-REDESIGN-END */
 syncBackHome('landing');
+
+/* =====================================================================
+   MEMBER AREA (v38): the signed-in member's own app.
+   A member gets five screens and nothing else in the nav: Today,
+   Check-in, Progress, Training and Account. Same red look as the
+   public homepage. Everything here reads the member's own endpoints
+   (/api/my/*, /api/checkin/*), so the server's tier rules still
+   decide what opens. The older views a member still uses (My Log,
+   videos, the workout library, the Lab Report, programs) open from
+   Training and Progress and wear the same look through the
+   body.member-mode styles. Team leftovers (Club Records, Leaderboard,
+   Season Plan, 400m Training, Coach Education) are not reachable in
+   member mode; their data is untouched.
+   Coaches keep their tools. "See the member side" turns on a preview
+   of the member screens for this browser tab only.
+   ===================================================================== */
+var MX_SCREENS = new Set(['today', 'checkin', 'progress', 'training', 'account']);
+var MX_ALLOWED = new Set([
+  'today', 'checkin', 'progress', 'training', 'account',
+  'log', 'library', 'labprograms', 'videos', 'definitions', 'exercises', 'nutrition',
+  'guide', 'speedreport', 'livesessions', 'drills', 'cards',
+  'landing', 'book', 'invite', 'privacy', 'terms',
+]);
+var MX_PARENT = { speedreport: 'progress' };
+var MX_PREVIEW_KEY = 'rp-member-preview';
+function mxPreviewOn() {
+  try { return sessionStorage.getItem(MX_PREVIEW_KEY) === '1'; } catch (_) { return false; }
+}
+function mxSetPreview(on) {
+  try { if (on) sessionStorage.setItem(MX_PREVIEW_KEY, '1'); else sessionStorage.removeItem(MX_PREVIEW_KEY); } catch (_) { /* private mode */ }
+}
+/* Member mode: every signed-in member, plus a coach previewing. */
+function mxOn() {
+  if (!state.user) return false;
+  if (isAthleteUser()) return true;
+  return isCoachUser() && mxPreviewOn();
+}
+/* Which screen a request really lands on in member mode. */
+function mxResolveView(name) {
+  if (!mxOn()) return (MX_SCREENS.has(name) && name !== 'account') ? (state.user ? 'home' : 'landing') : name;
+  if (name === 'home') return 'today';
+  /* A public section page (/plans, /programs...) still opens, so a
+     member whose plan lapsed can see the plans. The bare homepage
+     sends a signed-in member to Today. */
+  if (name === 'landing' && state.user) {
+    const lv = document.getElementById('view-landing');
+    return lv && lv.hasAttribute('data-page') ? 'landing' : 'today';
+  }
+  return MX_ALLOWED.has(name) ? name : 'today';
+}
+function mxLocked() {
+  return isAthleteUser() && !!state.membership && !memberHasTier('access');
+}
+function mxFirstName() {
+  const d = state.mxWeek;
+  if (d && d.firstName) return d.firstName;
+  return '';
+}
+function mxGreeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
+function mxDateLine() {
+  return todayLocal().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+function mxIcon(kind) {
+  const paths = {
+    bolt: '<path d="M13.5 3 6 13.5h5.5L10.5 21 18 10.5h-5.5z"/>',
+    check: '<circle cx="12" cy="12" r="8.5"/><path d="m8.2 12.3 2.6 2.6 5-5.4"/>',
+    chart: '<path d="M4 19.5h16"/><path d="m5 15 4.5-4.5 3.5 3 6-6.5"/>',
+    moon: '<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>',
+    play: '<path d="M8 5.5v13l10-6.5z"/>',
+    book: '<path d="M5 4.5h9.5a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3z"/><path d="M5 16.5a3 3 0 0 1 3-3h9.5"/>',
+    list: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="17.5" r="1"/>',
+    video: '<rect x="3.5" y="6" width="12" height="12" rx="2"/><path d="m15.5 10.5 5-3v9l-5-3z"/>',
+    pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+    food: '<path d="M7 3.5v17M4.5 3.5v5a2.5 2.5 0 0 0 5 0v-5"/><path d="M17 20.5v-17c-2 1-3.5 3.5-3.5 7h3.5"/>',
+    cam: '<path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+    live: '<circle cx="12" cy="12" r="2.5"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9"/>',
+    warm: '<path d="M12 21c-3.5 0-6-2.4-6-5.6 0-3.4 3-5 3-8.4 2.4 1.2 3.7 3.2 3.7 5.4 1-.6 1.6-1.6 1.8-2.9 1.7 1.3 3.5 3.4 3.5 5.9 0 3.2-2.5 5.6-6 5.6z"/>',
+    help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.8 9.5a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .8-1 1.5v.4"/><path d="M12 16.6v.1"/>',
+  };
+  return `<svg class="mx-ico" viewBox="0 0 24 24" aria-hidden="true">${paths[kind] || ''}</svg>`;
+}
+function mxEmpty(title, body, action) {
+  return `<div class="mx-card mx-empty">
+    <h3>${esc(title)}</h3>
+    <p class="mx-muted">${esc(body)}</p>
+    ${action ? `<button class="mx-btn mx-btn-ghost" type="button" data-view="${esc(action.view)}">${esc(action.label)}</button>` : ''}
+  </div>`;
+}
+function mxLockedCard() {
+  const cancelled = state.membership && state.membership.status === 'cancelled';
+  return `<div class="mx-card mx-locked">
+    <h2>${cancelled ? 'Your membership is cancelled' : 'Your membership is not active yet'}</h2>
+    <p>${cancelled
+      ? 'Your account, your log and your numbers are all still here. Rejoin any time and they pick right back up.'
+      : 'Your account is set up, but it does not carry a plan yet, so training stays locked for now.'}</p>
+    <div class="mx-actions">
+      <button class="mx-btn mx-btn-primary" type="button" data-view="account">See your membership</button>
+      <a class="mx-btn mx-btn-ghost" href="/plans" data-route="plans">See the plans</a>
+    </div>
+  </div>`;
+}
+function mxNotLinkedCard(what) {
+  return `<div class="mx-card mx-empty">
+    <h3>Almost ready</h3>
+    <p class="mx-muted">Coach AJ still has to connect your account to your training profile. Once that is done, you will see ${esc(what)} here.</p>
+  </div>`;
+}
+function mxPreviewNote() {
+  /* The preview bar at the top already says this. */
+  return '';
+}
+async function mxGet(path) {
+  try { return await api(path); } catch (err) { return { mxError: err.message || 'Could not load' }; }
+}
+
+/* ---------- Today ---------- */
+function mxGoalHtml(week, logs) {
+  const today = dateStrOf(todayLocal());
+  const logged = logs && logs.linked ? (logs.logs || []).find(l => l.date === today) : null;
+  const doneByCoach = (week.week || []).some(d => d.isToday && d.completed);
+  const a = week.todayAssignment;
+  if (!a && week.todayIsOff) {
+    return `<div class="mx-card mx-goal mx-goal-rest">
+      <p class="mx-eyebrow">Today's goal</p>
+      <h2>Rest and recover</h2>
+      <p class="mx-muted">Today is a planned rest day. Sleep well, eat well, and come back fresh.</p>
+    </div>`;
+  }
+  if (!a) {
+    return `<div class="mx-card mx-goal">
+      <p class="mx-eyebrow">Today's goal</p>
+      <h2>No session on your plan today</h2>
+      <p class="mx-muted">Trained anyway? Log it so Coach AJ sees it.</p>
+      <div class="mx-actions"><button class="mx-btn mx-btn-ghost" type="button" id="mx-goal-log">Log a workout</button></div>
+    </div>`;
+  }
+  const s = state.sessions.get(a.sessionId);
+  const done = !!logged || doneByCoach;
+  const name = a.sessionName || (s && s.name) || a.sessionId;
+  return `<div class="mx-card mx-goal${done ? ' is-done' : ''}">
+    <p class="mx-eyebrow">Today's goal</p>
+    <h2>${esc(name)}</h2>
+    ${a.note ? `<p class="mx-goal-note">${esc(a.note)}</p>` : ''}
+    <p class="mx-muted">${done ? 'Done and logged. Nice work.' : 'Run it, then log how it went.'}</p>
+    <div class="mx-actions">
+      ${s && !done ? `<button class="mx-btn mx-btn-primary" type="button" data-run-today="${esc(a.sessionId)}">${mxIcon('play')} Start the workout</button>` : ''}
+      ${done && logged
+        ? '<button class="mx-btn mx-btn-ghost" type="button" id="mx-goal-edit">See your log</button>'
+        : '<button class="mx-btn mx-btn-ghost" type="button" id="mx-goal-log">Log it</button>'}
+      ${s ? `<button class="mx-btn mx-btn-text" type="button" id="mx-goal-open">See the details</button>` : ''}
+    </div>
+  </div>`;
+}
+function mxCheckinTileHtml(week) {
+  const lc = week.latestCheckin;
+  const streak = week.checkinStreak || 0;
+  if (week.checkedInToday && lc) {
+    return `<div class="mx-card mx-tile mx-tile-ok">
+      <p class="mx-eyebrow">Check-in</p>
+      <h3>Done for today</h3>
+      <p class="mx-muted">Slept ${esc(String(lc.sleep))} hours, soreness ${esc(String(lc.soreness))} of 5, energy ${esc(String(lc.energy))} of 5.</p>
+      ${streak > 1 ? `<p class="mx-streak">${streak} days in a row</p>` : ''}
+      <button class="mx-btn mx-btn-text" type="button" data-view="checkin">Change it</button>
+    </div>`;
+  }
+  return `<div class="mx-card mx-tile mx-tile-todo">
+    <p class="mx-eyebrow">Check-in</p>
+    <h3>How are you feeling?</h3>
+    <p class="mx-muted">Sleep, soreness and energy. About 20 seconds.</p>
+    ${streak > 0 ? `<p class="mx-streak">Keep your ${streak} day streak going</p>` : ''}
+    <button class="mx-btn mx-btn-primary mx-btn-block" type="button" data-view="checkin">Check in now</button>
+  </div>`;
+}
+function mxStatsHtml(week) {
+  const t = week.speedTeaser;
+  let testLine = '<span class="mx-stat-num">-</span><span class="mx-stat-label">No tests yet</span>';
+  if (t && t.latest) {
+    const ch = t.changeSinceBaseline;
+    testLine = `<span class="mx-stat-num">${esc(String(t.best ? t.best.display : t.latest.display))}<small>${esc(t.unit || '')}</small></span>
+      <span class="mx-stat-label">${esc(t.name)} best${ch && ch.improved ? `, ${esc(String(Math.abs(ch.improvement)))} better than your start` : ''}</span>`;
+  }
+  return `<div class="mx-stats">
+    <div class="mx-stat"><span class="mx-stat-num">${esc(String(week.sessionsThisWeek || 0))}</span><span class="mx-stat-label">Sessions this week</span></div>
+    <div class="mx-stat"><span class="mx-stat-num">${esc(String(week.checkinsThisWeek || 0))}</span><span class="mx-stat-label">Check-ins this week</span></div>
+    <div class="mx-stat mx-stat-wide">${testLine}</div>
+  </div>`;
+}
+function mxNudgeHtml(week) {
+  const n = week.nudge;
+  /* The check-in tile on Today already shows the streak. */
+  if (!n || n.kind === 'streak') return '';
+  let title = '', body = '', btn = '';
+  if (n.kind === 'streak') { title = 'Keep your streak going'; body = `You have checked in ${n.streak} days in a row.`; btn = '<button class="mx-btn mx-btn-ghost" type="button" data-view="checkin">Check in</button>'; }
+  else if (n.kind === 'quiet') { title = 'It has been a few days'; body = `Your last logged session was ${n.daysSince} days ago. Pick up with today's session when you are ready.`; btn = '<button class="mx-btn mx-btn-ghost" type="button" data-view="log">Open my log</button>'; }
+  else if (n.kind === 'formcheck') { title = 'Keep your technique sharp'; body = 'Film a sprint or a lift and send it in. Coach AJ will take a look.'; btn = '<button class="mx-btn mx-btn-ghost" type="button" id="mx-nudge-fc">Send a form check</button>'; }
+  else return '';
+  return `<div class="mx-card mx-nudge">
+    <h3>${esc(title)}</h3>
+    <p class="mx-muted">${esc(body)}</p>
+    <div class="mx-actions">${btn}<button class="mx-btn mx-btn-text" type="button" id="mx-nudge-snooze" data-nudge-kind="${esc(n.kind)}">Remind me in 7 days</button></div>
+  </div>`;
+}
+function mxWeekStripHtml(week) {
+  return `<div class="mx-week" role="list">${(week.week || []).map(d => `
+    <div class="mx-day${d.isToday ? ' is-today' : ''}${d.completed ? ' is-done' : ''}" role="listitem">
+      <span class="mx-day-name">${esc((DAY_NAMES[d.dayKey] || d.dayKey).slice(0, 3))}</span>
+      <span class="mx-day-date">${esc(String(parseDate(d.date).getDate()))}</span>
+      <span class="mx-day-mark" aria-label="${d.completed ? 'Done' : d.isOff ? 'Rest day' : d.sessionId ? 'Session planned' : 'Nothing planned'}">${d.completed ? '✓' : d.isOff ? 'Rest' : d.sessionId ? '•' : ''}</span>
+    </div>`).join('')}</div>`;
+}
+async function mxRenderToday() {
+  const head = $('#mx-today-head');
+  const el = $('#mx-today');
+  if (!el) return;
+  if (mxLocked()) {
+    if (head) head.innerHTML = `<p class="mx-eyebrow">${esc(mxDateLine())}</p><h1>${esc(mxGreeting())}</h1>`;
+    el.removeAttribute('aria-busy');
+    el.innerHTML = mxLockedCard();
+    return;
+  }
+  const [week, logs, ann] = await Promise.all([
+    isAthleteUser() ? mxGet('/api/my/week') : Promise.resolve({ linked: false }),
+    isAthleteUser() ? mxGet('/api/my/logs') : Promise.resolve({ linked: false }),
+    mxGet('/api/announcements'),
+  ]);
+  state.mxWeek = week;
+  const first = mxFirstName();
+  if (head) head.innerHTML = `<p class="mx-eyebrow">${esc(mxDateLine())}</p><h1>${esc(mxGreeting())}${first ? ', ' + esc(first) : ''}</h1>`;
+  el.removeAttribute('aria-busy');
+  if (week.mxError) {
+    el.innerHTML = `<div class="mx-card"><p>Could not load your day: ${esc(week.mxError)}</p><button class="mx-btn mx-btn-ghost" type="button" id="mx-today-retry">Try again</button></div>`;
+    $('#mx-today-retry').addEventListener('click', mxRenderToday);
+    return;
+  }
+  const posts = (ann && ann.announcements) || [];
+  const note = posts[0];
+  const noteHtml = note ? `<div class="mx-card mx-coach-note">
+      <p class="mx-eyebrow">From Coach AJ</p>
+      ${note.title ? `<h3>${esc(note.title)}</h3>` : ''}
+      <p>${esc(note.body).replace(/\n/g, '<br>')}</p>
+      <p class="mx-muted mx-small">${esc(fmtDate(parseDate(String(note.createdAt).slice(0, 10))))}</p>
+    </div>` : '';
+  if (!week.linked) {
+    el.innerHTML = mxPreviewNote() + mxNotLinkedCard("today's goal, your check-in and your numbers") + noteHtml;
+    return;
+  }
+  const fc = week.formCheck;
+  const fcHtml = fc && fc.unreadReplyCount ? `<div class="mx-card mx-nudge">
+      <h3>Coach AJ replied to your form check</h3>
+      <div class="mx-actions"><button class="mx-btn mx-btn-ghost" type="button" id="mx-fc-open">Read the reply</button></div>
+    </div>` : '';
+  el.innerHTML = `
+    <div class="mx-today-grid">
+      <div class="mx-today-main">
+        ${mxGoalHtml(week, logs)}
+        ${fcHtml}
+        ${mxNudgeHtml(week)}
+        <div class="mx-card">
+          <div class="mx-card-head"><h3>This week</h3><button class="mx-btn mx-btn-text" type="button" data-view="training">Training</button></div>
+          ${mxWeekStripHtml(week)}
+        </div>
+      </div>
+      <div class="mx-today-side">
+        ${mxCheckinTileHtml(week)}
+        <div class="mx-card">
+          <div class="mx-card-head"><h3>Your numbers</h3><button class="mx-btn mx-btn-text" type="button" data-view="progress">Progress</button></div>
+          ${mxStatsHtml(week)}
+          ${week.nextTestDate ? `<p class="mx-muted mx-small">Next test day: ${esc(fmtDate(parseDate(week.nextTestDate.date)))}</p>` : ''}
+        </div>
+        ${noteHtml}
+      </div>
+    </div>`;
+  wireRunTodayButtons(el);
+  const today = dateStrOf(todayLocal());
+  const logBtn = $('#mx-goal-log');
+  if (logBtn) logBtn.addEventListener('click', () => {
+    const la = logs && logs.todayAssignment;
+    openMemberLogEditor(la ? memberLogPrefillForAssignment(la) : { date: today });
+  });
+  const editBtn = $('#mx-goal-edit');
+  if (editBtn) editBtn.addEventListener('click', () => {
+    const l = (logs.logs || []).find(x => x.date === today);
+    if (l) openMemberLogEditorFromLog(l);
+  });
+  const openBtn = $('#mx-goal-open');
+  if (openBtn && week.todayAssignment) openBtn.addEventListener('click', () => openSession(week.todayAssignment.sessionId));
+  const snooze = $('#mx-nudge-snooze');
+  if (snooze) snooze.addEventListener('click', async () => {
+    try { await apiPost('/api/my/nudge/snooze', { kind: snooze.dataset.nudgeKind }); } catch (_) { /* shown again next time */ }
+    mxRenderToday();
+  });
+  const fcBtns = [$('#mx-nudge-fc'), $('#mx-fc-open')].filter(Boolean);
+  fcBtns.forEach(b => b.addEventListener('click', () => mxOpenFormChecks()));
+}
+function mxOpenFormChecks() {
+  state.logSeg = 'formchecks';
+  showView('log');
+  const seg = document.querySelector('#log-seg [data-seg="formchecks"]');
+  if (seg) seg.click();
+}
+
+/* ---------- Check-in ---------- */
+function mxBarsHtml(entries, key, max, label, goodHigh) {
+  const days = [];
+  const t = todayLocal();
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(t); d.setDate(t.getDate() - i);
+    days.push(dateStrOf(d));
+  }
+  const byDate = {};
+  entries.forEach(e => { byDate[e.date] = e; });
+  const vals = days.map(d => (byDate[d] ? Number(byDate[d][key]) : null));
+  const have = vals.filter(v => v != null);
+  const avg = have.length ? Math.round(have.reduce((a, b) => a + b, 0) / have.length * 10) / 10 : null;
+  return `<div class="mx-bars-row">
+    <div class="mx-bars-label"><span>${esc(label)}</span><strong>${avg == null ? '-' : esc(String(avg))}</strong><span class="mx-muted mx-small">avg</span></div>
+    <div class="mx-bars" aria-hidden="true">${vals.map(v => {
+      if (v == null) return '<span class="mx-bar is-empty"></span>';
+      const pct = Math.max(8, Math.min(100, (v / max) * 100));
+      const level = goodHigh ? v / max : 1 - (v - 1) / (max - 1);
+      return `<span class="mx-bar${level < 0.45 ? ' is-low' : ''}" style="height:${pct}%"></span>`;
+    }).join('')}</div>
+  </div>`;
+}
+async function mxRenderCheckinHistory(target) {
+  const el = target || $('#mx-checkin-history');
+  if (!el) return;
+  if (!isAthleteUser() || mxLocked()) { el.innerHTML = ''; return; }
+  const data = await mxGet('/api/checkin/mine?days=14');
+  if (data.mxError || !data.linked) { el.innerHTML = ''; return; }
+  const entries = data.entries || [];
+  if (!entries.length) {
+    el.innerHTML = mxEmpty('Your last two weeks', 'Your check-ins show up here as you go, so you and Coach AJ can spot a pattern early.');
+    return;
+  }
+  el.innerHTML = `<div class="mx-card mx-history">
+    <h3>Your last two weeks</h3>
+    ${mxBarsHtml(entries, 'sleep', 10, 'Sleep (hours)', true)}
+    ${mxBarsHtml(entries, 'energy', 5, 'Energy (1 to 5)', true)}
+    ${mxBarsHtml(entries, 'soreness', 5, 'Soreness (1 to 5)', false)}
+    <ul class="mx-history-list">${entries.slice(0, 5).map(c => `<li>
+      <span>${esc(fmtDate(parseDate(c.date)))}</span>
+      <span class="mx-muted">${esc(String(c.sleep))}h sleep, soreness ${esc(String(c.soreness))}, energy ${esc(String(c.energy))}${c.hurts ? ', something hurt' : ''}</span>
+    </li>`).join('')}</ul>
+  </div>`;
+}
+function mxRenderCheckin() {
+  const form = $('#mx-checkin-form');
+  if (form && mxLocked()) { form.innerHTML = mxLockedCard(); $('#mx-checkin-history').innerHTML = ''; return; }
+  if (form && !isAthleteUser()) { form.innerHTML = mxPreviewNote() + mxNotLinkedCard('your daily check-in'); }
+  renderCheckin();
+  mxRenderCheckinHistory();
+}
+
+/* ---------- Progress ---------- */
+function mxSpark(series, better) {
+  const pts = (series || []).map(s => Number(s.value)).filter(v => !Number.isNaN(v));
+  if (pts.length < 2) return '';
+  const w = 120, h = 36, pad = 4;
+  let lo = Math.min(...pts), hi = Math.max(...pts);
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const xy = pts.map((v, i) => {
+    const x = pad + (i / (pts.length - 1)) * (w - pad * 2);
+    let y = (v - lo) / (hi - lo);
+    if (better === 'lower') y = 1 - y;
+    return [x, h - pad - y * (h - pad * 2)];
+  });
+  const last = xy[xy.length - 1];
+  return `<svg class="mx-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+    <polyline points="${xy.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}"/>
+    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3"/>
+  </svg>`;
+}
+function mxTestCardHtml(t) {
+  if (!t.best) {
+    return `<div class="mx-card mx-test is-empty"><p class="mx-test-name">${esc(t.name)}</p><p class="mx-muted">Not tested yet</p></div>`;
+  }
+  const ch = t.changeSinceBaseline;
+  const unit = t.unit || '';
+  const changeHtml = ch && t.series.length > 1
+    ? `<p class="mx-test-change${ch.improved ? ' is-up' : ''}">${ch.improved ? 'Better by ' : 'Change: '}${esc(String(Math.abs(ch.improvement)))} ${esc(unit)}${ch.improvementPercent != null ? ` (${esc(String(Math.abs(ch.improvementPercent)))}%)` : ''}</p>`
+    : '<p class="mx-muted mx-small">Your first mark. The next test shows the change.</p>';
+  return `<div class="mx-card mx-test">
+    <p class="mx-test-name">${esc(t.name)}</p>
+    <p class="mx-test-best">${esc(String(t.best.display))}<small>${esc(unit)}</small></p>
+    <p class="mx-muted mx-small">Best. Started at ${esc(String(t.baseline ? t.baseline.display : t.best.display))} ${esc(unit)}</p>
+    ${mxSpark(t.series, t.better)}
+    ${changeHtml}
+  </div>`;
+}
+async function mxRenderProgress() {
+  const el = $('#mx-progress');
+  if (!el) return;
+  const head = `<header class="mx-head"><p class="mx-eyebrow">My progress</p><h1>Your numbers</h1>
+    <p class="mx-lead">Every test is measured against where you started.</p></header>`;
+  if (mxLocked()) { el.removeAttribute('aria-busy'); el.innerHTML = head + mxLockedCard(); return; }
+  if (!isAthleteUser()) { el.removeAttribute('aria-busy'); el.innerHTML = head + mxPreviewNote() + mxNotLinkedCard('your test numbers and trends'); return; }
+  const [report, checkins, week, logs] = await Promise.all([
+    mxGet('/api/my/speed-report'), mxGet('/api/checkin/mine?days=14'), mxGet('/api/my/week'), mxGet('/api/my/logs'),
+  ]);
+  el.removeAttribute('aria-busy');
+  if (report.mxError && /link/i.test(report.mxError)) { el.innerHTML = head + mxNotLinkedCard('your test numbers and trends'); return; }
+  const tests = (report.tests || []);
+  const withData = tests.filter(t => t.best);
+  const next = report.nextTestDate || week.nextTestDate;
+  const testsHtml = withData.length
+    ? `<div class="mx-tests">${tests.filter(t => t.core || t.best).map(mxTestCardHtml).join('')}</div>
+       <div class="mx-actions"><button class="mx-btn mx-btn-ghost" type="button" data-view="speedreport">Open the full Lab Report</button></div>`
+    : mxEmpty('Your numbers start with your first test', 'Coach AJ records your sprint and jump marks on test day. They become your starting line, and every retest shows how far you have come.');
+  const entries = (checkins && checkins.entries) || [];
+  const trendHtml = entries.length ? `<div class="mx-card mx-history">
+      <h3>How you have felt, last two weeks</h3>
+      ${mxBarsHtml(entries, 'sleep', 10, 'Sleep (hours)', true)}
+      ${mxBarsHtml(entries, 'energy', 5, 'Energy (1 to 5)', true)}
+      ${mxBarsHtml(entries, 'soreness', 5, 'Soreness (1 to 5)', false)}
+    </div>` : mxEmpty('How you have felt', 'Check in each day and your sleep, energy and soreness trends show up here.', { view: 'checkin', label: 'Check in now' });
+  const logCount = logs && logs.linked ? (logs.logs || []).length : 0;
+  el.innerHTML = `${head}
+    ${next ? `<div class="mx-card mx-next"><p class="mx-eyebrow">Next test day</p><h3>${esc(fmtDate(parseDate(next.date)))}</h3>${next.testNames && next.testNames.length ? `<p class="mx-muted">${esc(next.testNames.join(', '))}</p>` : ''}</div>` : ''}
+    <h2 class="mx-section-title">Test results</h2>
+    ${testsHtml}
+    <div class="mx-progress-grid">
+      ${trendHtml}
+      <div class="mx-card">
+        <h3>Your training</h3>
+        <div class="mx-stats">
+          <div class="mx-stat"><span class="mx-stat-num">${esc(String(week.sessionsThisWeek || 0))}</span><span class="mx-stat-label">Sessions this week</span></div>
+          <div class="mx-stat"><span class="mx-stat-num">${esc(String(week.checkinStreak || 0))}</span><span class="mx-stat-label">Day check-in streak</span></div>
+          <div class="mx-stat"><span class="mx-stat-num">${esc(String(logCount))}</span><span class="mx-stat-label">Workouts logged</span></div>
+        </div>
+        <button class="mx-btn mx-btn-text" type="button" data-view="log">See your log</button>
+      </div>
+    </div>`;
+}
+
+/* ---------- Training ---------- */
+function mxToolHtml(view, icon, title, sub) {
+  return `<button type="button" class="mx-tool" data-view="${view}">${mxIcon(icon)}<span class="mx-tool-text"><strong>${esc(title)}</strong><span>${esc(sub)}</span></span></button>`;
+}
+async function mxRenderTraining() {
+  const el = $('#mx-training');
+  if (!el) return;
+  const head = `<header class="mx-head"><p class="mx-eyebrow">Training</p><h1>Your plan</h1>
+    <p class="mx-lead">Your week, your program, and everything you train with.</p></header>`;
+  if (mxLocked()) { el.removeAttribute('aria-busy'); el.innerHTML = head + mxLockedCard(); return; }
+  const week = isAthleteUser() ? await mxGet('/api/my/week') : { linked: false };
+  el.removeAttribute('aria-busy');
+  const programs = (state.content && state.content.labPrograms) || [];
+  const progHtml = programs.length ? `<h2 class="mx-section-title">Programs</h2>
+    <div class="mx-programs">${programs.map(p => `<button type="button" class="mx-card mx-program" data-mx-program="${esc(p.id)}">
+      <span class="mx-kind">${esc(String(p.durationWeeks || ''))} weeks</span>
+      <strong>${esc(String(p.name || '').split(' — ')[0])}</strong>
+      <span class="mx-muted">${esc(p.subtitle || String(p.name || '').split(' — ')[1] || '')}</span>
+    </button>`).join('')}</div>` : '';
+  let weekHtml = '';
+  if (week.linked) {
+    const a = week.todayAssignment;
+    weekHtml = `<div class="mx-card">
+      <div class="mx-card-head"><h3>This week</h3></div>
+      ${mxWeekStripHtml(week)}
+      <ul class="mx-week-list">${(week.week || []).map(d => `<li class="${d.isToday ? 'is-today' : ''}">
+        <span class="mx-week-day">${esc(DAY_NAMES[d.dayKey] || d.dayKey)}</span>
+        ${d.sessionId && state.sessions.get(d.sessionId)
+          ? `<button type="button" class="mx-link" data-mx-session="${esc(d.sessionId)}">${esc(d.sessionName || state.sessions.get(d.sessionId).name)}</button>`
+          : `<span class="${d.sessionId || d.isOff ? '' : 'mx-muted'}">${d.isOff ? 'Rest' : esc(d.sessionName || d.sessionId || 'Nothing planned yet')}</span>`}
+        ${d.completed ? '<span class="mx-done">Done</span>' : ''}
+      </li>`).join('')}</ul>
+      ${a && state.sessions.get(a.sessionId) ? `<div class="mx-actions"><button class="mx-btn mx-btn-primary" type="button" data-run-today="${esc(a.sessionId)}">${mxIcon('play')} Start today's workout</button></div>` : ''}
+    </div>`;
+  } else if (isAthleteUser()) {
+    weekHtml = mxNotLinkedCard('your week');
+  } else {
+    weekHtml = mxPreviewNote();
+  }
+  el.innerHTML = `${head}
+    ${weekHtml}
+    ${progHtml}
+    <h2 class="mx-section-title">Train and learn</h2>
+    <div class="mx-tools">
+      ${mxToolHtml('log', 'pen', 'My log', 'Your workouts, form checks and check-ins')}
+      ${mxToolHtml('library', 'list', 'Workout library', 'Every session, by type and distance')}
+      ${mxToolHtml('videos', 'video', 'Demo videos', 'Watch how each drill and lift is done')}
+      ${mxToolHtml('exercises', 'book', 'Exercise library', 'Movements with cues and sources')}
+      ${mxToolHtml('drills', 'warm', 'Warm-up drills', 'The standard drills, parts A and B')}
+      ${mxToolHtml('nutrition', 'food', 'Nutrition', 'What to eat and when')}
+      ${mxToolHtml('livesessions', 'live', 'Live sessions', 'Live web sessions with Coach AJ')}
+      ${mxToolHtml('definitions', 'help', 'Definitions', 'Every term in plain words')}
+      ${mxToolHtml('guide', 'help', 'How the app works', 'The whole system in plain words')}
+    </div>`;
+  wireRunTodayButtons(el);
+  el.querySelectorAll('[data-mx-session]').forEach(b => b.addEventListener('click', () => openSession(b.dataset.mxSession)));
+  el.querySelectorAll('[data-mx-program]').forEach(b => b.addEventListener('click', () => {
+    state.labProgramId = b.dataset.mxProgram;
+    renderLabPrograms();
+    showView('labprograms');
+  }));
+  applyMembershipNav();
+}
+
+/* ---------- Account ---------- */
+function mxRenderAccount() {
+  const chip = $('#account-chip');
+  if (chip) chip.innerHTML = '';
+  const note = $('#menu-account-note');
+  if (note) note.textContent = '';
+  $('#account-main').innerHTML = `
+    <header class="mx-head"><p class="mx-eyebrow">Account</p><h1>Plan and billing</h1>
+      <p class="mx-lead">Signed in as ${esc(state.user.email)}</p></header>
+    ${mxPreviewNote()}
+    <div id="member-membership"></div>
+    <div class="mx-card">
+      <h3>Sign out</h3>
+      <p class="mx-muted">Your log, check-ins and numbers stay saved to your account.</p>
+      <button class="mx-btn mx-btn-ghost" id="acct-logout" type="button">Sign out</button>
+      ${appVersionHtml()}
+    </div>`;
+  renderMembershipCard();
+  $('#acct-logout').addEventListener('click', async () => {
+    try { await apiPost('/api/logout'); }
+    catch (err) { alert('Sign out failed: ' + err.message); return; }
+    mxSetPreview(false);
+    state.user = null; await refreshUserData(); syncAuthUi(); showView('landing');
+  });
+}
+
+/* ---------- mode switch, nav and hooks ---------- */
+/* Slots the older renderers fill, moved into the member screens
+   while member mode is on (and back again when it ends). */
+var MX_SLOT_MOVES = [['checkin-slot', 'mx-checkin-form'], ['intake-slot', 'mx-today-top']];
+function mxMoveSlots(on) {
+  MX_SLOT_MOVES.forEach(([id, target]) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    if (!node.dataset.mxHome) {
+      node.dataset.mxHome = node.parentElement ? node.parentElement.id || '' : '';
+      if (!node.dataset.mxHome && node.parentElement) {
+        node.parentElement.id = 'mx-home-' + id; node.dataset.mxHome = node.parentElement.id;
+      }
+      node.dataset.mxNext = node.nextElementSibling ? node.nextElementSibling.id || '' : '';
+    }
+    const dest = on ? document.getElementById(target) : document.getElementById(node.dataset.mxHome);
+    if (!dest || node.parentElement === dest) return;
+    if (on) dest.appendChild(node);
+    else {
+      const next = node.dataset.mxNext ? document.getElementById(node.dataset.mxNext) : null;
+      if (next && next.parentElement === dest) dest.insertBefore(node, next); else dest.appendChild(node);
+    }
+  });
+}
+function mxSync() {
+  const on = mxOn();
+  document.body.classList.toggle('member-mode', on);
+  document.body.classList.toggle('member-preview', on && isCoachUser());
+  const nav = $('#mx-nav'); if (nav) nav.hidden = !on;
+  const bar = $('#mx-preview-bar'); if (bar) bar.hidden = !(on && isCoachUser());
+  mxMoveSlots(on);
+  /* Coaches get one way in to the preview, at the top of Coach. */
+  const hub = $('#view-coachhub');
+  let entry = $('#mx-preview-entry');
+  if (hub && isCoachUser() && !entry) {
+    entry = document.createElement('div');
+    entry.id = 'mx-preview-entry';
+    entry.className = 'card';
+    entry.innerHTML = '<p><strong>Member side</strong></p><p class="muted">See the app the way your members see it.</p><button class="btn secondary" type="button" id="mx-preview-open">See the member side</button>';
+    const h1 = hub.querySelector('h1');
+    hub.insertBefore(entry, h1 && h1.nextElementSibling ? h1.nextElementSibling.nextElementSibling : hub.firstChild);
+    $('#mx-preview-open').addEventListener('click', () => { mxSetPreview(true); syncAuthUi(); showView('today'); });
+  }
+  if (entry) entry.hidden = !isCoachUser();
+}
+const mxExit = $('#mx-preview-exit');
+if (mxExit) mxExit.addEventListener('click', () => { mxSetPreview(false); syncAuthUi(); showView('coachhub'); });
+function mxAfterShow(name) {
+  $$('#mx-nav .mx-nav-item').forEach(a => {
+    const active = a.dataset.mx === name || (MX_PARENT[name] || (MX_SCREENS.has(name) ? name : 'training')) === a.dataset.mx;
+    a.classList.toggle('active', mxOn() && active);
+    if (active) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  if (!mxOn()) return;
+  const bar = document.getElementById('rp-backbar');
+  if (bar) {
+    const parent = MX_PARENT[name] || 'training';
+    const isPublic = RP_PUBLIC_VIEWS.has(name) && name !== 'account';
+    bar.hidden = MX_SCREENS.has(name);
+    const btn = bar.firstElementChild;
+    if (btn && !bar.hidden) {
+      const target = isPublic ? 'today' : parent;
+      btn.setAttribute('data-view', target);
+      btn.innerHTML = `<span aria-hidden="true">←</span> Back to ${target === 'today' ? 'Today' : target === 'progress' ? 'Progress' : 'Training'}`;
+    }
+  }
+  if (name === 'today') { mxRenderToday(); renderMemberIntake(); }
+  if (name === 'checkin') mxRenderCheckin();
+  if (name === 'progress') mxRenderProgress();
+  if (name === 'training') mxRenderTraining();
+}

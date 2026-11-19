@@ -109,8 +109,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v37',
-  cache: 'ruffin-performance-v37',
+  version: 'v38',
+  cache: 'ruffin-performance-v38',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute
@@ -4785,7 +4785,10 @@ async function handleApi(req, res, url) {
     if (!prof) return sendJson(res, 200, { linked: false, entries: [], streak: 0 });
     const entries = Object.values(db.checkins[prof.id] || {})
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-      .slice(0, 7)
+      /* Member area v38: ?days=N (1 to 28) lets the Check-in and
+         Progress screens show the last two weeks; the default
+         stays 7 so older screens read exactly what they always did. */
+      .slice(0, Math.min(28, Math.max(1, parseInt(q.get('days'), 10) || 7)))
       .map(publicCheckin);
     return sendJson(res, 200, { linked: true, entries, streak: checkinStreak(prof.id) });
   }
