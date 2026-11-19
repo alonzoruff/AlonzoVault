@@ -403,14 +403,14 @@ const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', labprograms: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub', inviterequests: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub', inviterequests: 'coachhub', scoreboard: 'coachhub',
   livesessions: 'train',
   book: 'landing', invite: 'landing',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['scoreboard', 'Scoreboard'], ['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
 };
 /* ---------------- membership tiers (v14) ----------------
    The nav mirror of the server's entitlement rules. The server is
@@ -518,7 +518,7 @@ function syncViewLock(name) {
 }
 
 function renderSubnav(name, area) {
-  const items = mxOn() ? null : GROUP_SUBNAV[area];
+  const items = mxOn() ? null : subnavItems(area);
   const activeSection = document.getElementById('view-' + name);
   $$('.subnav-slot').forEach(slot => {
     if (!items || slot.closest('.view') !== activeSection) { slot.innerHTML = ''; return; }
@@ -543,9 +543,16 @@ function renderSubnav(name, area) {
    with every group expanded. Menus close on selection, on an
    outside click, and on Escape. */
 const NAV_GROUP_LABELS = { train: 'Train', learn: 'Learn', coachhub: 'Coach' };
+/* v40: the Scoreboard is the owner's alone. Assistant coaches never
+   see it in a menu (and the server answers 403 if they try). */
+const OWNER_ONLY_VIEWS = new Set(['scoreboard']);
+function isOwnerUser() { return !!(state.user && state.user.role === 'coach' && state.user.isOwner); }
+function subnavItems(area) {
+  return (GROUP_SUBNAV[area] || []).filter(([v]) => !OWNER_ONLY_VIEWS.has(v) || isOwnerUser());
+}
 function navMenuItemsHtml(area) {
   return `<button type="button" class="nav-item nav-overview" data-view="${area}">${NAV_GROUP_LABELS[area]} overview</button>` +
-    GROUP_SUBNAV[area].map(([v, label]) =>
+    subnavItems(area).map(([v, label]) =>
       `<button type="button" class="nav-item" data-view="${v}">${label}</button>`).join('');
 }
 function buildMainNav() {
@@ -677,6 +684,7 @@ function showView(name) {
   if (name === 'bookings') renderBookings();
   if (name === 'invite') renderInvite();
   if (name === 'inviterequests') renderInviteRequests();
+  if (name === 'scoreboard') renderScoreboard();
   if (name === 'livesessions') renderLiveSessions();
   if (name === 'reports') renderReports();
   if (name === 'goals') renderGoals();
@@ -697,6 +705,7 @@ function showView(name) {
   syncBackHome(name);
   mxAfterShow(name);
   if (name !== 'landing') rpSetLandingPage(null);
+  else rpTrackLandingView();
   document.body.classList.toggle('rp-public', !state.user && RP_PUBLIC_VIEWS.has(name));
   rpSyncUrl(name);
   window.scrollTo(0, 0);
@@ -1865,8 +1874,10 @@ function renderAccount() {
 function syncAuthUi() {
   document.body.classList.toggle('logged-out', !state.user);
   mxSync();
+  buildMainNav();
   const isCoach = !!(state.user && state.user.role === 'coach');
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
+  $$('.owner-only').forEach(t => { t.hidden = !isOwnerUser(); });
   $$('.learn-tab').forEach(t => { t.hidden = isCoach; });
   renderAccount(); renderLog(); renderSeason(); renderHome();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderHealth(); renderInventory();
@@ -8772,6 +8783,73 @@ const RP_CONTACT_EMAIL = (e => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : ''))(
 const RP_RESPONSE_WINDOW = '2 business days';
 
 const RP_PUBLIC_VIEWS = new Set(['landing', 'book', 'invite', 'account', 'privacy', 'terms']);
+
+/* Funnel steps on the public pages (v40). Counted by the app itself
+   at /api/events: no outside trackers, no cookies, nothing about who
+   the visitor is. Nothing is sent for anyone signed in, and the
+   server ignores signed-in calls too. A failed call is dropped. */
+function rpTrack(name, fields) {
+  if (state.user) return;
+  try {
+    fetch('/api/events', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ name }, fields || {})), keepalive: true,
+    }).catch(() => {});
+  } catch (e) { /* counting is never worth an error */ }
+}
+/* Once per page per browser session, so a reload is not a new visit. */
+function rpTrackLandingView() {
+  if (state.user) return;
+  const v = document.getElementById('view-landing');
+  const section = v && v.getAttribute('data-page');
+  const page = section ? '/' + section : '/';
+  const key = 'rp-lv:' + page;
+  try {
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+  } catch (e) { /* private mode: count it */ }
+  rpTrack('landing_view', { page });
+}
+/* The answers the invitation form offers for "How did you hear
+   about us?" The server holds the same keys and sorts referrals
+   apart from paid sources. */
+const RP_HEARD_FROM = [
+  ['friend', 'A friend or family member'], ['member', 'A Ruffin Performance member'],
+  ['coach', 'A coach or trainer'], ['instagram', 'Instagram'], ['facebook', 'Facebook'],
+  ['search', 'A Google or web search'], ['event', 'A clinic or event'], ['ad', 'An online ad'],
+  ['other', 'Somewhere else'],
+];
+/* The homepage's portal preview: three real member screens as tabs.
+   Opening one counts portal_preview_open for that screen. */
+function rpWirePreview() {
+  const tabs = $$('[data-preview-screen]');
+  if (!tabs.length) return;
+  const pick = (btn, focus) => {
+    tabs.forEach(t => {
+      const on = t === btn;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      const panel = document.getElementById(t.getAttribute('aria-controls'));
+      if (panel) panel.hidden = !on;
+    });
+    if (focus) btn.focus();
+  };
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => {
+      pick(t, false);
+      rpTrack('portal_preview_open', { screen: t.dataset.previewScreen, page: '/' });
+    });
+    t.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      const step = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
+      const next = tabs[(i + step + tabs.length) % tabs.length];
+      pick(next, true);
+      rpTrack('portal_preview_open', { screen: next.dataset.previewScreen, page: '/' });
+    });
+  });
+}
 /* Landing sections that have their own address. They show the
    landing page and scroll to the section. */
 const RP_SECTION_PATHS = {
@@ -8907,6 +8985,7 @@ function rpFillPublicBits() {
   if (pc && RP_CONTACT_EMAIL) pc.innerHTML = `Email me at <a href="mailto:${esc(RP_CONTACT_EMAIL)}">${esc(RP_CONTACT_EMAIL)}</a> and I will answer.`;
 }
 rpFillPublicBits();
+rpWirePreview();
 
 (async function boot() {
   try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
@@ -8979,6 +9058,12 @@ function membershipEndNotice(m) {
   }).format(d);
   return 'Your membership will end on ' + when + '. You keep full access until then.';
 }
+/* v40: the optional reason a member can give when they cancel. */
+const MEMBER_CANCEL_REASONS = [
+  ['cost', 'The cost'], ['time', 'Not enough time to train'], ['schedule', 'Season or schedule change'],
+  ['fit', 'The training was not the right fit'], ['elsewhere', 'Training somewhere else'],
+  ['break', 'Taking a break'], ['other', 'Something else'],
+];
 async function renderMembershipCard() {
   const el = $('#member-membership');
   if (!el) return;
@@ -9064,6 +9149,12 @@ async function renderMembershipCard() {
       <div class="flag">
         <p><strong>Cancel your membership?</strong></p>
         <p>If you pay by subscription, your membership stops at the end of the period you have paid for, and you keep full access until then. If your coach gave you access directly, it ends right away, and the library, videos, Lab Report, log, and check-in lock until you rejoin. Either way your account stays, and so do your log and your numbers.</p>
+        <label class="cancel-reason">Mind telling Coach AJ why? (optional)
+          <select id="membership-cancel-reason">
+            <option value="">Rather not say</option>
+            ${MEMBER_CANCEL_REASONS.map(([v, label]) => `<option value="${v}">${esc(label)}</option>`).join('')}
+          </select>
+        </label>
         <p>
           <button class="btn danger" id="membership-cancel-yes" type="button">Yes, cancel my membership</button>
           <button class="btn secondary" id="membership-cancel-no" type="button">Keep my membership</button>
@@ -9075,7 +9166,9 @@ async function renderMembershipCard() {
       const yes = $('#membership-cancel-yes');
       if (yes) { yes.disabled = true; yes.textContent = 'Cancelling'; }
       try {
-        const r = await apiPost('/api/my/membership/cancel', {});
+        const reasonEl = $('#membership-cancel-reason');
+        const cancelReason = reasonEl && reasonEl.value ? reasonEl.value : undefined;
+        const r = await apiPost('/api/my/membership/cancel', cancelReason ? { cancelReason } : {});
         state.membership = r.membership || null;
         if (state.membershipData) state.membershipData.membership = state.membership;
         state.membershipNotice = r.notice || '';
@@ -9663,6 +9756,12 @@ function renderInvite() {
       </select>
     </label>
     <label>What are you working toward? ${R} <textarea id="invite-goal" rows="3" maxlength="1000" placeholder="Your goals, and anything you want me to know" required></textarea></label>
+    <label>How did you hear about us?
+      <select id="invite-heard">
+        <option value="">Choose one (optional)</option>
+        ${RP_HEARD_FROM.map(([v, label]) => `<option value="${v}">${esc(label)}</option>`).join('')}
+      </select>
+    </label>
     <label class="invite-consent"><input type="checkbox" id="invite-consent"> <span id="invite-consent-text">I am 18 or older.</span> ${R}</label>
     <div class="visually-hidden" aria-hidden="true">
       <label>Website <input type="text" id="invite-website" name="website" tabindex="-1" autocomplete="off"></label>
@@ -9684,6 +9783,15 @@ function renderInvite() {
       : 'I am 18 or older.';
   };
   $$('input[name="invite-for"]').forEach(r => r.addEventListener('change', syncFor));
+  /* The first time someone starts filling the form in, count it once. */
+  const formEl = $('#invite-form');
+  const started = () => {
+    formEl.removeEventListener('input', started);
+    formEl.removeEventListener('change', started);
+    rpTrack('invitation_request_started', { page: '/request-invitation' });
+  };
+  formEl.addEventListener('input', started);
+  formEl.addEventListener('change', started);
   $('#invite-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errEl = $('#invite-err');
@@ -9712,6 +9820,7 @@ function renderInvite() {
         grade: v('#invite-grade'), sport: v('#invite-sport'), location: v('#invite-location'),
         tierInterest: $('#invite-tier').value,
         goal: v('#invite-goal'),
+        heardFrom: $('#invite-heard').value || undefined,
         consent: true,
         website: $('#invite-website').value,
       });
@@ -9748,6 +9857,7 @@ async function renderInviteRequests() {
       <p class="muted">For: ${r.forWhom === 'child' ? 'My child' : 'Myself'}${r.athleteName ? ' · Athlete: ' + esc(r.athleteName) : ''}</p>
       <p class="muted">Membership interest: ${esc(INVITE_TIER_LABELS[r.tierInterest] || r.tierInterest || 'Not sure yet')}</p>
       ${r.goal ? `<p>Working toward: ${esc(r.goal)}</p>` : ''}
+      ${r.heardFromLabel ? `<p class="muted">Heard about us: ${esc(r.heardFromLabel)}</p>` : ''}
       <p class="muted">${esc(r.createdAt ? fmtDate(parseDate(String(r.createdAt).slice(0, 10))) : '')} · Status: ${esc(r.status)}</p>
       ${actionsHtml ? `<p>${actionsHtml}</p>` : ''}
     </div>`;
@@ -11133,4 +11243,196 @@ function mxAfterShow(name) {
   if (name === 'checkin') mxRenderCheckin();
   if (name === 'progress') mxRenderProgress();
   if (name === 'training') mxRenderTraining();
+}
+
+/* ---------------- owner scoreboard (v40) ----------------
+   The business at a glance for the owner account only: this week
+   next to last week, every number read from records the app keeps.
+   Anything the app does not record says "Not tracked yet" and is
+   never estimated. The server enforces the owner-only rule; this
+   view only draws what it is given. */
+const SB_NOT_TRACKED = 'Not tracked yet';
+const sbState = { week: 'this' };
+function sbMoney(n) {
+  if (n == null) return SB_NOT_TRACKED;
+  return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function sbNum(n) { return n == null ? SB_NOT_TRACKED : Number(n).toLocaleString(); }
+function sbShortDate(ds) {
+  const d = parseDate(ds);
+  return d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ds;
+}
+function sbWeekLabel(w) { return sbShortDate(w.start) + ' to ' + sbShortDate(w.end); }
+function sbChange(nowVal, lastVal, money) {
+  if (nowVal == null || lastVal == null) return '';
+  const diff = Math.round((nowVal - lastVal) * 100) / 100;
+  if (!diff) return '<span class="sb-delta">Same as last week</span>';
+  const amt = money ? sbMoney(Math.abs(diff)) : Math.abs(diff).toLocaleString();
+  return `<span class="sb-delta ${diff > 0 ? 'up' : 'down'}">${diff > 0 ? 'Up' : 'Down'} ${amt} from last week</span>`;
+}
+function sbTile(label, nowVal, lastVal, opts = {}) {
+  const fmt = opts.money ? sbMoney : sbNum;
+  const lastText = opts.lastText != null ? opts.lastText : `Last week: ${fmt(lastVal)}`;
+  return `<div class="sb-tile">
+      <p class="sb-tile-label">${esc(label)}</p>
+      <p class="sb-tile-value${nowVal == null ? ' sb-nt' : ''}">${esc(fmt(nowVal))}</p>
+      <p class="sb-tile-sub">${esc(lastText)}</p>
+      ${opts.noDelta ? '' : sbChange(nowVal, lastVal, opts.money)}
+    </div>`;
+}
+function sbFunnelBars(c) {
+  const steps = [['Qualified requests', c.requests], ['Invited', c.approvals], ['Paid starts', c.paidStarts]];
+  const max = Math.max(1, ...steps.map(s => s[1] || 0));
+  return `<div class="sb-funnel">${steps.map(([label, n]) => `
+      <div class="sb-funnel-row">
+        <span class="sb-funnel-label">${esc(label)}</span>
+        <span class="sb-funnel-track"><span class="sb-funnel-fill" style="width:${Math.round(((n || 0) / max) * 100)}%"></span></span>
+        <span class="sb-funnel-n">${sbNum(n)}</span>
+      </div>`).join('')}</div>`;
+}
+function sbSourceList(group, labels) {
+  const rows = Object.entries(group).sort((a, b) => b[1] - a[1]);
+  if (!rows.length) return '<p class="muted">None this week.</p>';
+  return '<ul class="sb-list">' + rows.map(([k, n]) =>
+    `<li><span>${esc(labels[k] || k)}</span><span class="sb-n">${n}</span></li>`).join('') + '</ul>';
+}
+async function renderScoreboard() {
+  const el = $('#scoreboard-main');
+  if (!el) return;
+  if (!isOwnerUser()) {
+    el.innerHTML = '<div class="sb-card"><h2>Scoreboard</h2><p class="muted">This page is for the owner account only.</p></div>';
+    return;
+  }
+  if (!el.dataset.loaded) el.innerHTML = '<div class="sb-card"><p class="muted">Loading the scoreboard.</p></div>';
+  let d;
+  try { d = await api('/api/owner/scoreboard'); }
+  catch (err) {
+    el.innerHTML = `<div class="sb-card"><h2>Scoreboard</h2><p class="error">${esc(err.message)}</p></div>`;
+    return;
+  }
+  el.dataset.loaded = '1';
+  const w = sbState.week;
+  const asOf = new Date(d.asOf);
+  const asOfText = asOf.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const tiers = ['access', 'training', 'pass'];
+  const fw = d.firstWeek[w];
+  const ref = d.referrals[w];
+  const cancels = d.cancellations[w];
+  const weekName = w === 'this' ? 'This week' : 'Last week';
+  const fwValue = fw.pct == null ? SB_NOT_TRACKED : fw.pct + '%';
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  let fwNote;
+  if (fw.newMembers === 0) fwNote = 'No new members started in this week.';
+  else if (fw.measured === 0) fwNote = `${plural(fw.newMembers, 'new member', 'new members')} started, but no account is linked to a training profile yet, so there is nothing to measure.`;
+  else if (fw.pct == null) fwNote = `${plural(fw.measured, 'new member', 'new members')} had no workouts on the schedule in their first days yet.${fw.notLinked ? ` ${plural(fw.notLinked, 'more is', 'more are')} not linked to a training profile.` : ''}`;
+  else fwNote = `${fw.done} of ${plural(fw.scheduled, 'scheduled workout', 'scheduled workouts')} done by ${plural(fw.measured, 'new member', 'new members')} in their first seven days.${fw.notLinked ? ` ${plural(fw.notLinked, 'more is', 'more are')} not linked to a training profile yet, so not counted.` : ''}`;
+  const handSet = d.handSetPlans || { total: 0 };
+  el.innerHTML = `
+    <div class="sb-head">
+      <div>
+        <p class="sb-eyebrow">Only you can see this page</p>
+        <p class="sb-asof">Numbers as of ${esc(asOfText)}. Weeks run Monday to Sunday.</p>
+      </div>
+      <button type="button" class="btn secondary sb-refresh" data-sb-refresh>Refresh</button>
+    </div>
+    ${d.paymentsOn ? '' : `<div class="sb-note">Card payments are not switched on in the app yet, so paying members, new paid members and monthly revenue stay at zero until they are.${handSet.total ? ` You have ${handSet.total} ${handSet.total === 1 ? 'member' : 'members'} on a plan you set by hand. Those are shown below and not counted as paid.` : ''}</div>`}
+    <div class="sb-tiles">
+      ${sbTile('Monthly recurring revenue', d.mrr.this, d.mrr.last, { money: true, lastText: `End of last week: ${sbMoney(d.mrr.last)}` })}
+      ${sbTile('Paying members', d.activePaid.this.total, d.activePaid.last.total, { lastText: `End of last week: ${sbNum(d.activePaid.last.total)}` })}
+      ${sbTile('New paid members', d.newPaid.this.total, d.newPaid.last.total)}
+      ${sbTile('Qualified invitation requests', d.requests.this.qualified, d.requests.last.qualified)}
+      ${sbTile('Members who trained', d.weeklyActive.this, d.weeklyActive.last)}
+      ${sbTile('Cancellations', d.cancellations.this.length, d.cancellations.last.length)}
+    </div>
+
+    <section class="sb-card">
+      <div class="sb-card-head"><h2>Members by plan</h2></div>
+      <div class="sb-table-wrap"><table class="sb-table">
+        <thead><tr><th>Plan</th><th>Price</th><th>Paying now</th><th>New this week</th><th>New last week</th><th>Monthly</th></tr></thead>
+        <tbody>${tiers.map(t => `<tr>
+          <td>${esc(d.tierNames[t])}</td>
+          <td>${sbMoney(d.prices[t])}/mo</td>
+          <td>${d.activePaid.this[t]}</td>
+          <td>${d.newPaid.this[t]}</td>
+          <td>${d.newPaid.last[t]}</td>
+          <td>${sbMoney(d.activePaid.this[t] * d.prices[t])}</td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr><td>Total</td><td></td><td>${d.activePaid.this.total}</td><td>${d.newPaid.this.total}</td><td>${d.newPaid.last.total}</td><td>${sbMoney(d.mrr.this)}</td></tr></tfoot>
+      </table></div>
+      ${handSet.total ? `<p class="muted sb-foot">Plans you set by hand, with no payment on record: ${tiers.filter(t => handSet[t]).map(t => `${handSet[t]} ${esc(d.tierNames[t])}`).join(', ')}. These are left out of paying members and monthly revenue.</p>` : ''}
+    </section>
+
+    <div class="sb-week-switch" role="tablist" aria-label="Which week">
+      <button type="button" role="tab" class="sb-week-btn${w === 'this' ? ' active' : ''}" aria-selected="${w === 'this'}" data-sb-week="this">This week <span>${esc(sbWeekLabel(d.weeks.this))}</span></button>
+      <button type="button" role="tab" class="sb-week-btn${w === 'last' ? ' active' : ''}" aria-selected="${w === 'last'}" data-sb-week="last">Last week <span>${esc(sbWeekLabel(d.weeks.last))}</span></button>
+    </div>
+
+    <div class="sb-grid">
+      <section class="sb-card">
+        <div class="sb-card-head"><h2>From request to paid</h2><span class="sb-tag">${weekName}</span></div>
+        ${sbFunnelBars(d.conversion[w])}
+        <p class="muted sb-foot">Since launch: ${plural(d.conversion.sinceLaunch.requests, 'qualified request', 'qualified requests')}, ${d.conversion.sinceLaunch.approvals} invited, ${d.conversion.sinceLaunch.paidStarts} went on to pay${d.conversion.sinceLaunch.rate == null ? '' : ` (${d.conversion.sinceLaunch.rate}% of requests)`}.</p>
+      </section>
+
+      <section class="sb-card">
+        <div class="sb-card-head"><h2>First week of training</h2><span class="sb-tag">${weekName}</span></div>
+        <p class="sb-big${fw.pct == null ? ' sb-nt' : ''}">${esc(fwValue)}</p>
+        <p class="muted">${esc(fwNote)}</p>
+      </section>
+
+      <section class="sb-card">
+        <div class="sb-card-head"><h2>Cancellations</h2><span class="sb-tag">${weekName}</span></div>
+        ${cancels.length ? '<ul class="sb-list sb-cancel-list">' + cancels.map(c => `<li>
+            <span>${esc(sbShortDate(c.date))}, ${esc(c.tierName || 'Plan')}${c.paid ? '' : ' (set by hand)'}${c.by === 'coach' ? ', cancelled by you' : c.by === 'payment' ? ', ended by payment' : ''}</span>
+            <span class="sb-n">${esc(c.reasonLabel || 'No reason given')}</span>
+          </li>`).join('') + '</ul>' : '<p class="muted">No cancellations this week.</p>'}
+      </section>
+
+      <section class="sb-card">
+        <div class="sb-card-head"><h2>How people heard about us</h2><span class="sb-tag">${weekName}</span></div>
+        <h3 class="sb-sub">Referrals <span>${ref.referralTotal}</span></h3>
+        ${sbSourceList(ref.referral, d.referralLabels)}
+        <h3 class="sb-sub">Paid sources <span>${ref.paidTotal}</span></h3>
+        ${sbSourceList(ref.paid, d.referralLabels)}
+        <h3 class="sb-sub">Everything else <span>${ref.organicTotal}</span></h3>
+        ${sbSourceList(ref.organic, d.referralLabels)}
+        ${ref.noAnswer || ref.notAsked ? `<p class="muted sb-foot">${ref.noAnswer ? `${ref.noAnswer} skipped the question.` : ''}${ref.noAnswer && ref.notAsked ? ' ' : ''}${ref.notAsked ? `${ref.notAsked} came in before the form asked.` : ''}</p>` : ''}
+      </section>
+    </div>
+
+    <section class="sb-card">
+      <div class="sb-card-head"><h2>What people did in the app</h2></div>
+      <p class="muted">Counted inside the app only. No outside trackers, and nothing is counted for anyone signed in on the public pages.</p>
+      <div class="sb-table-wrap"><table class="sb-table sb-events">
+        <thead><tr><th>Step</th><th>This week</th><th>Last week</th></tr></thead>
+        <tbody>${d.funnel.map(r => `<tr>
+          <td>${esc(r.label)}</td>
+          <td class="${r.this == null ? 'sb-nt' : ''}">${esc(sbNum(r.this))}</td>
+          <td class="${r.last == null ? 'sb-nt' : ''}">${esc(sbNum(r.last))}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </section>
+
+    <section class="sb-card">
+      <div class="sb-card-head"><h2>${SB_NOT_TRACKED}</h2></div>
+      <ul class="sb-list">${d.notInApp.map(n => `<li><span>${esc(n.label)}</span><span class="muted">${esc(n.why)}</span></li>`).join('')}</ul>
+    </section>
+
+    <details class="sb-card sb-how">
+      <summary>How each number is counted</summary>
+      <ul>
+        <li>Qualified requests are invitation requests that passed the form's checks and that you have not declined.</li>
+        <li>Paying members have a plan the card payment system started or confirmed. Plans you set by hand are shown apart.</li>
+        <li>Monthly recurring revenue is paying members on each plan times that plan's price.</li>
+        <li>Members who trained logged a workout, had one checked off, or did a check-in that week.</li>
+        <li>First week of training counts the workouts on a new member's schedule in their first seven days, and how many they finished.</li>
+        <li>The steps table started counting on ${esc(sbShortDate(String(d.eventsStartedAt || '').slice(0, 10)))}. Weeks before that say ${SB_NOT_TRACKED}.</li>
+      </ul>
+    </details>`;
+  el.querySelectorAll('[data-sb-week]').forEach(b => b.addEventListener('click', () => {
+    sbState.week = b.dataset.sbWeek;
+    renderScoreboard();
+  }));
+  const rf = el.querySelector('[data-sb-refresh]');
+  if (rf) rf.addEventListener('click', () => renderScoreboard());
 }
