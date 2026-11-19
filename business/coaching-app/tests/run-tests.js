@@ -9252,6 +9252,12 @@ async function waitForServer(tries = 60) {
           ivSw.text.includes("url.pathname === '/styles.css' || url.pathname === '/app.js'") &&
           ivJs.text.includes("reg && reg.update()"),
           '');
+        check('about: the bio AJ approved is on the homepage',
+          lp0.includes('AJ Ruffin coaches sprinters and teaches sports medicine in the Washington, DC area.') &&
+          lp0.includes('starts with a test and ends with the same test.') &&
+          lp0.includes('show you the numbers that prove it.') &&
+          !lp0.includes('__BRAND_NAME__'),
+          '');
         check('redesign: red accent is scoped to the public pages',
           ivCss.text.includes('#view-landing.lp {') && ivCss.text.includes('--lp-accent: #e3242b') &&
           ivCss.text.includes('body.logged-out .footer-member-note { display: none; }'),
