@@ -11436,3 +11436,83 @@ async function renderScoreboard() {
   const rf = el.querySelector('[data-sb-refresh]');
   if (rf) rf.addEventListener('click', () => renderScoreboard());
 }
+
+/* ------------------------------------------------------------------ */
+/* Exercise of the Day rotation (draft for AJ review)                   */
+/* The homepage card ships with the Nordic hamstring curl so the page   */
+/* reads fine without scripts. Here it changes by calendar day, in the  */
+/* visitor's own time zone, through a fixed list. Text only. Every      */
+/* entry is a draft until Coach AJ approves the wording.                */
+/* ------------------------------------------------------------------ */
+const RP_EXERCISES_OF_THE_DAY = [
+  { name: 'Nordic hamstring curl', targets: ['Hamstrings', 'Glutes', 'Trunk control'], why: null, how: null, dose: null },
+  {
+    name: 'Single leg Romanian deadlift',
+    targets: ['Hamstrings', 'Glutes', 'Balance'],
+    why: 'Sprinting happens one leg at a time. This lift builds strength and balance on one leg, with the hamstring working through a long range.',
+    how: ['Stand on one leg with a soft knee.', 'Push your hips back and lower your chest, keeping your back flat.', 'Squeeze the glute to stand tall again.'],
+    dose: '2 sets of 6 reps each leg, light weight. Stop if you feel sharp pain.'
+  },
+  {
+    name: 'Copenhagen plank',
+    targets: ['Inner thigh', 'Hip', 'Core'],
+    why: 'The groin muscles help hold your hips steady when you cut and sprint. This plank builds them with low impact.',
+    how: ['Lie on your side with your top foot on a bench or box.', 'Lift your hips so your body is one straight line.', 'Hold, then lower with control.'],
+    dose: '2 holds of 15 to 20 seconds each side. Stop if you feel sharp pain.'
+  },
+  {
+    name: 'Split squat with a slow lower',
+    targets: ['Quads', 'Glutes', 'Knee control'],
+    why: 'A slow lower teaches the thigh and hip to control the knee, which is the job they do on every landing.',
+    how: ['Step one foot forward and keep your torso tall.', 'Lower for a count of three.', 'Drive up through the front foot.'],
+    dose: '2 sets of 6 reps each leg. Keep the front knee tracking over the toes.'
+  },
+  {
+    name: 'Calf raise with a pause',
+    targets: ['Calves', 'Achilles tendon', 'Ankle'],
+    why: 'Your calf and Achilles store and release energy with every stride. A pause at the top builds the strength to do it again and again.',
+    how: ['Stand on the edge of a step, holding a rail.', 'Rise up on both feet, pause for two seconds.', 'Lower slowly for three seconds.'],
+    dose: '3 sets of 10 slow reps. Skip it the day before a meet.'
+  },
+  {
+    name: 'Dead bug',
+    targets: ['Deep core', 'Hip flexors', 'Trunk control'],
+    why: 'A steady trunk lets your legs move fast without your back swaying. The dead bug trains that control lying down.',
+    how: ['Lie on your back with arms up and knees over hips.', 'Lower one arm and the opposite leg while your back stays flat on the floor.', 'Return and switch sides.'],
+    dose: '2 sets of 8 slow reps each side.'
+  },
+  {
+    name: 'Glute bridge march',
+    targets: ['Glutes', 'Hamstrings', 'Hip control'],
+    why: 'Strong glutes push you forward in the first steps of a sprint. The march adds a balance challenge so the hips stay level.',
+    how: ['Lie on your back with knees bent and lift your hips.', 'Hold the hips high and level.', 'Lift one foot, set it down, then the other.'],
+    dose: '2 sets of 10 marches (5 each side).'
+  }
+];
+
+function rpExerciseOfTheDayIndex(date) {
+  const d = date || new Date();
+  const dayNumber = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  return dayNumber % RP_EXERCISES_OF_THE_DAY.length;
+}
+
+function rpApplyExerciseOfTheDay(date) {
+  const card = document.querySelector('#exercise-of-the-day .lp-eotd-body');
+  if (!card) return;
+  const ex = RP_EXERCISES_OF_THE_DAY[rpExerciseOfTheDayIndex(date)];
+  if (!ex.why) return; // the first entry is already in the page
+  const h3 = card.querySelector('h3');
+  const chips = card.querySelector('.lp-chips');
+  const cols = card.querySelectorAll('.lp-eotd-cols > div');
+  const dose = card.querySelector('.lp-dose span:last-child');
+  if (!h3 || !chips || cols.length < 2 || !dose) return;
+  h3.textContent = ex.name;
+  chips.replaceChildren(...ex.targets.map(t => { const li = document.createElement('li'); li.textContent = t; return li; }));
+  cols[0].querySelector('p').textContent = ex.why;
+  cols[1].querySelector('ol').replaceChildren(...ex.how.map(s => { const li = document.createElement('li'); li.textContent = s; return li; }));
+  dose.textContent = ex.dose;
+  const more = card.querySelector('.lp-more');
+  if (more) more.hidden = true; // the link names the Nordic's protocol only
+}
+document.addEventListener('DOMContentLoaded', () => rpApplyExerciseOfTheDay());
+if (document.readyState !== 'loading') rpApplyExerciseOfTheDay();
