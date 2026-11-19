@@ -940,23 +940,30 @@
   </section>
 
   <!-- TV BOARD (coach-only weight-room display) -->
-  <section id="view-tv" class="view">
+  <section id="view-tv" class="view" aria-label="Weight room TV board">
     <div class="tv-shell">
       <div class="tv-top">
-        <div class="tv-brand">SPRINTER WORKOUT APP <span>WEIGHT ROOM</span></div>
+        <div class="tv-head-wrap">
+          <div class="tv-brand">Sprinter Workout App <span>Weight room</span></div>
+          <div class="tv-head" id="tv-head"></div>
+        </div>
         <div class="tv-top-right">
           <div class="tv-clock" id="tv-clock"></div>
-          <div class="tv-updated" id="tv-updated"></div>
-          <button class="btn tv-exit" id="tv-exit" type="button">Exit TV board</button>
+          <div class="tv-updated" id="tv-updated" aria-live="polite"></div>
         </div>
       </div>
+      <div class="tv-tabs-row">
+        <div class="tv-dots" id="tv-dots" role="tablist" aria-label="Groups" hidden></div>
+        <span class="tv-paused-flag" id="tv-paused-flag" hidden>Paused</span>
+      </div>
+      <div class="tv-progress" id="tv-progress" hidden><span></span></div>
       <div id="tv-main" class="tv-main"><p class="tv-loading">Loading the board…</p></div>
       <div class="tv-bottom">
-        <button class="btn tv-ctl" id="tv-prev" type="button">← Prev</button>
-        <div class="tv-dots" id="tv-dots"></div>
+        <button class="btn tv-ctl" id="tv-prev" type="button">Previous</button>
         <button class="btn tv-ctl" id="tv-pause" type="button">Pause</button>
-        <button class="btn tv-ctl" id="tv-next" type="button">Next →</button>
+        <button class="btn tv-ctl" id="tv-next" type="button">Next</button>
         <button class="btn tv-ctl" id="tv-full" type="button">Full screen</button>
+        <button class="btn tv-exit" id="tv-exit" type="button">Exit TV board</button>
       </div>
     </div>
   </section>
@@ -1061,7 +1068,7 @@
 <footer class="footer muted">
   <div>Sprinter Workout App · By Alonzo</div>
   <div>Your log entries and swaps are private to your account.</div>
-  <div class="app-version" data-app-version="v65">Sprinter Workout App · v65</div>
+  <div class="app-version" data-app-version="v66">Sprinter Workout App · v66</div>
 </footer>
 
 <script src="/app.js"></script>

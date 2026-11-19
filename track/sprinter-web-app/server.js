@@ -2082,6 +2082,62 @@ function coachGroupsFor(date) {
     };
   });
 }
+/* v66: what the weight-room TV shows for each group today. Built
+   here so the room sees only what athletes may see: the published
+   version of a Coach Today plan (never a draft, a version in review
+   or an approved one that is not published), a coach's pick, or the
+   season plan. No athlete names, counts, notes, health data, or
+   computed loads: a % load stays a % of the named lift test. The
+   lead coach is shown by display name only, never by email. */
+function tvBoardFor(date) {
+  const tests = new Map(allTests().map(t => [t.key, t.name]));
+  const plan = planDayFor(date);
+  return db.groups.map(g => {
+    const a = resolveAssignment(g.id, date);
+    const out = {
+      groupId: g.id, groupName: g.name, source: a.source,
+      title: '', sessionCodes: [], focus: '', location: '', startTime: '',
+      notes: '', leadCoach: '', changeSummary: '', workout: null,
+      warmup: a.warmup || null, planText: a.planText || '',
+      isOff: !!(plan && plan.isOff && a.source === 'plan'),
+    };
+    if (a.source === 'published') {
+      const pl = planFor(g.id, date);
+      const live = planLiveVersion(pl);
+      if (live) {
+        const f = versionFieldsOut(live);
+        out.title = f.title;
+        out.sessionCodes = f.sessionId ? [f.sessionId] : [];
+        out.focus = f.objective; out.location = f.location; out.startTime = f.startTime;
+        out.notes = f.athleteNotes;
+        out.leadCoach = f.leadCoachId ? coachPublicName(f.leadCoachId) : '';
+        if (planStatusKey(pl) === 'updated') out.changeSummary = live.changeSummary || '';
+        const w = planWorkoutFor(live);
+        if (w) {
+          out.workout = {
+            title: w.title,
+            blocks: w.blocks.map(b => ({
+              rounds: b.rounds, restBetweenRounds: b.restBetweenRounds, restAfterBlock: b.restAfterBlock,
+              exercises: b.exercises.map(e => ({
+                name: e.name, reps: e.reps,
+                load: e.load ? { lift: tests.get(e.load.testKey) || e.load.testKey, percent: e.load.percent, sets: e.load.sets, reps: e.load.reps } : null,
+              })),
+            })),
+          };
+        }
+      }
+    } else if (a.sessionId && a.source === 'override') {
+      /* A coach's pick for the group counts as put up by a coach.
+         The season plan's own default does not: with nothing
+         published, the TV says "No workout published yet" (AJ,
+         Nov 19). */
+      const s = SESSION_BY_ID.get(a.sessionId);
+      out.title = s ? s.name : a.sessionId;
+      out.sessionCodes = (a.codes && a.codes.length ? a.codes : [a.sessionId]).filter(c => SESSION_BY_ID.has(c));
+    }
+    return out;
+  });
+}
 /* True when the date falls inside the 29-week plan (planDayFor
    itself clamps outside dates to the first or last week). */
 function inSeasonDate(dateString) {
@@ -2270,11 +2326,37 @@ function planLastEvent(pl) {
   if (pl.archivedAt && pl.archivedAt > last.at) last = { by: pl.archivedBy, at: pl.archivedAt };
   return last;
 }
+/* v66: the weight-room workout a plan version carries. A published
+   version keeps the copy taken when it was published, so a later
+   edit to the custom workout never changes what the room already
+   sees; a version not yet published reads the current workout. */
+function planWorkoutFor(v) {
+  if (!v) return null;
+  if (v.workoutSnapshot) return v.workoutSnapshot;
+  const id = v.fields && v.fields.workoutId;
+  const w = id ? db.customWorkouts.find(x => x.id === id) : null;
+  return w ? workoutCopy(w) : null;
+}
+function workoutCopy(w) {
+  return {
+    id: w.id, title: w.title,
+    blocks: (w.blocks || []).map(b => ({
+      rounds: b.rounds, restBetweenRounds: b.restBetweenRounds, restAfterBlock: b.restAfterBlock,
+      exercises: (b.exercises || []).map(e => {
+        const ex = { name: e.name, reps: e.reps };
+        if (e.load) ex.load = { testKey: e.load.testKey, percent: e.load.percent, sets: e.load.sets, reps: e.load.reps };
+        return ex;
+      }),
+    })),
+  };
+}
 function versionFieldsOut(v) {
   const f = v.fields || {};
   const s = f.sessionId ? SESSION_BY_ID.get(f.sessionId) : null;
+  const w = planWorkoutFor(v);
   return {
-    title: f.title || (s ? s.name : ''), sessionId: f.sessionId || '',
+    title: f.title || (s ? s.name : '') || (w ? w.title : ''), sessionId: f.sessionId || '',
+    workoutId: f.workoutId || '', workoutTitle: w ? w.title : '',
     sessionName: s ? s.name : '', objective: f.objective || '',
     location: f.location || '', startTime: f.startTime || '',
     athleteNotes: f.athleteNotes || '', leadCoachId: f.leadCoachId || '',
@@ -2376,8 +2458,13 @@ function validatePlanFields(body, base) {
   next.startTime = take('startTime', 5);
   next.athleteNotes = take('athleteNotes', 600);
   next.leadCoachId = take('leadCoachId', 80);
+  /* v66: an optional weight-room workout (a coach-built custom
+     workout with blocks, sets, reps and % loads) rides with the
+     plan, so the TV board can show it once the plan is published. */
+  next.workoutId = take('workoutId', 80);
   if (next.sessionId && !SESSION_IDS.has(next.sessionId)) return { error: 'That session code is not in the workout library.' };
-  if (!next.title && !next.sessionId) return { error: 'Give the workout a name, or pick a session from the library.' };
+  if (next.workoutId && !db.customWorkouts.some(w => w.id === next.workoutId)) return { error: 'That weight room workout was not found. Pick another, or choose none.' };
+  if (!next.title && !next.sessionId && !next.workoutId) return { error: 'Give the workout a name, or pick a session from the library.' };
   if (next.startTime && !TIME_RE.test(next.startTime)) return { error: 'Start time should look like 15:30.' };
   if (next.leadCoachId) {
     const c = db.users.find(u => u.id === next.leadCoachId);
@@ -4881,6 +4968,7 @@ async function handleApi(req, res, url) {
       dayKey: plan ? plan.dayKey : null,
       planText: plan ? plan.planText : '',
       groups,
+      board: boardOnly ? tvBoardFor(date) : undefined,
       healthFlags: boardOnly ? [] : healthFlags,
       heldAthletes: boardOnly ? [] : heldAthletes,
       wellness: boardOnly ? null : wellnessTodaySummary(),
@@ -5276,6 +5364,12 @@ async function handleApi(req, res, url) {
       return sendJson(res, 400, { error: 'Say what changed in this revision. Athletes see that note when it is published.' });
     }
     if (to === 'published') {
+      const wid = latest.fields && latest.fields.workoutId;
+      if (wid) {
+        const w = db.customWorkouts.find(x => x.id === wid);
+        if (!w) return sendJson(res, 400, { error: 'The weight room workout on this plan was deleted. Pick another one, or choose none, then publish.' });
+        latest.workoutSnapshot = workoutCopy(w);
+      }
       if (isRevision) {
         const prev = planVersion(pl, pl.publishedN);
         if (prev) { prev.status = 'superseded'; planLog(prev, 'superseded', user); }
