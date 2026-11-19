@@ -1307,6 +1307,7 @@ function wotdHtml() {
     ${e.cues ? `<p class="wotd-cue"><strong>Cue:</strong> ${esc(e.cues)}</p>` : ''}
     <div class="filter-row">
       <button class="btn secondary" id="wotd-open" type="button">Full definition</button>
+      <button class="btn secondary" id="wotd-prev" type="button">Previous word</button>
       <button class="btn secondary" id="wotd-next" type="button">Another word</button>
     </div>
   </div>`;
@@ -1317,15 +1318,18 @@ function wireWotd() {
     const e = wotdEntry();
     if (e) openLibraryItem(libItemKey('definition', e.term));
   });
-  const next = $('#wotd-next');
-  if (next) next.addEventListener('click', () => {
-    state.wotdSkip = (state.wotdSkip || 0) + 1;
+  const step = (delta) => {
+    state.wotdSkip = (state.wotdSkip || 0) + delta;
     const block = $('#wotd-block');
     if (!block) return;
     const fresh = document.createElement('div');
     fresh.innerHTML = wotdHtml();
     if (fresh.firstElementChild) { block.replaceWith(fresh.firstElementChild); wireWotd(); }
-  });
+  };
+  const next = $('#wotd-next');
+  if (next) next.addEventListener('click', () => step(1));
+  const prev = $('#wotd-prev');
+  if (prev) prev.addEventListener('click', () => step(-1));
 }
 function homeLearnHtml(info, inSeason) {
   const hard = !!(inSeason && info && info.isHigh);
