@@ -159,6 +159,16 @@ const { test } = R;
     assert.ok(s.reportCmpAFrom <= s.reportCmpATo && s.reportCmpATo < s.reportCmpBFrom && s.reportCmpBFrom <= s.reportCmpBTo, JSON.stringify(s));
   });
 
+  /* -- 30m sprint ------------------------------------------------------ */
+  await test('the sample report and the baseline kit use the 30m sprint', async () => {
+    const SERVER = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+    assert.ok(APP.includes("['30m sprint', '4.42 s', '4.29 s', '−0.13 s']"));
+    assert.ok(!/40-yard dash/i.test(between(APP, 'const RP_SAMPLE_REPORT = [', '];')));
+    assert.ok(APP.includes("const CORE_KEYS = ['30m-sprint', 'vertical-jump', 'broad-jump'];"));
+    assert.ok(SERVER.includes("const CORE_TEST_KEYS = ['30m-sprint', 'vertical-jump', 'broad-jump'];"));
+    assert.ok(SERVER.includes("{ key: 'forty-yard-dash', name: '40-Yard Dash'"), 'the 40 stays in the catalog');
+  });
+
   /* -- back button label ------------------------------------------------ */
   await test('the back button gets its own label back after the member view', async () => {
     const fn = between(APP, 'function syncBackHome(name) {', '/* RP-HOME-REDESIGN-END */');

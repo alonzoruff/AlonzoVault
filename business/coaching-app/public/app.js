@@ -3004,7 +3004,7 @@ async function renderSpeedReport() {
   if (!anyResults) {
     el.innerHTML = `${nextHtml}<div class="card">
       <h2>Your Lab Report starts with baseline testing</h2>
-      <p>Baseline testing happens in week 1: your coach times your 40-Yard Dash and measures your Vertical Jump and Broad Jump. Those first marks become your baseline. Every test after that is measured against them, so you (and your family) can see exactly how far you have come.</p>
+      <p>Baseline testing happens in week 1: your coach times your 30m Sprint and measures your Vertical Jump and Broad Jump. Those first marks become your baseline. Every test after that is measured against them, so you (and your family) can see exactly how far you have come.</p>
       <p class="muted">No results on file yet. Once your baseline is recorded, your personal bests and your progress will show up here.</p>
     </div>
     <div class="sr-grid">${core.map(srCardHtml).join('')}</div>`;
@@ -4540,7 +4540,7 @@ async function renderTesting() {
     </form>
     <form class="card" id="baseline-form">
       <h2>Baseline Testing Kit</h2>
-      <p class="muted">One click creates a test day titled “Baseline” with exactly the three core tests: 40-Yard Dash, Vertical Jump, Broad Jump, and lands you in the rapid-entry flow for it. A member's baseline is their earliest result, so this is the day every Lab Report measures from. Pick a group to land on that group's grid; if a Baseline day already exists for the date, you are taken to it instead of a duplicate.</p>
+      <p class="muted">One click creates a test day titled “Baseline” with exactly the three core tests: 30m Sprint, Vertical Jump, Broad Jump, and lands you in the rapid-entry flow for it. A member's baseline is their earliest result, so this is the day every Lab Report measures from. Pick a group to land on that group's grid; if a Baseline day already exists for the date, you are taken to it instead of a duplicate.</p>
       <div class="filter-row">
         <label>Date <input type="date" id="bl-date" value="${todayStr()}" required></label>
         <label>Group <select id="bl-group">
@@ -4625,7 +4625,7 @@ async function renderTesting() {
     e.preventDefault();
     const date = $('#bl-date').value;
     const groupId = $('#bl-group').value;
-    const CORE_KEYS = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+    const CORE_KEYS = ['30m-sprint', 'vertical-jump', 'broad-jump'];
     try {
       const existing = days.find(d => d.date === date && d.title === 'Baseline' &&
         Array.isArray(d.testKeys) && d.testKeys.length === CORE_KEYS.length &&
@@ -8972,7 +8972,7 @@ document.addEventListener('click', (e) => {
 
 /* One sample Lab Report, shown wherever the page shows one. */
 const RP_SAMPLE_REPORT = [
-  ['40-yard dash', '4.91 s', '4.78 s', '−0.13 s'],
+  ['30m sprint', '4.42 s', '4.29 s', '−0.13 s'],
   ['Vertical jump', '24.5″', '27.0″', '+2.5″'],
   ['Broad jump', '7′6″', '8′1″', '+7″'],
 ];

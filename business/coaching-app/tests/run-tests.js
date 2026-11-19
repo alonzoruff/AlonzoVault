@@ -5258,7 +5258,7 @@ async function main() {
   check('baseline kit wiring is in the Testing view JS',
     appJs.text.includes('Baseline Testing Kit') && appJs.text.includes('id="baseline-form"') &&
     appJs.text.includes("title: 'Baseline'") &&
-    appJs.text.includes("'forty-yard-dash', 'vertical-jump', 'broad-jump'"));
+    appJs.text.includes("'30m-sprint', 'vertical-jump', 'broad-jump'"));
   {
     const srTvStart = appJs.text.indexOf('TV BOARD');
     const srTvEnd = appJs.text.indexOf('/* ---------------- boot', srTvStart);
@@ -8287,6 +8287,9 @@ async function waitForServer(tries = 60) {
       const D1 = addD(today, -14), D2 = addD(today, -7), D3 = addD(today, -1);
       const FUT = addD(today, 10);
       const CORE = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+      /* v41: the report's core trio leads with the 30m sprint; these test
+         days still record the 40, which stays in the catalog. */
+      const REPORT_CORE = ['30m-sprint', 'vertical-jump', 'broad-jump'];
 
       let sr = await srApi(null, 'POST', '/api/register', { email: 'srcoach@test.com', password: 'testpass123' });
       const srCoach = cookieOf(sr);
@@ -8349,7 +8352,7 @@ async function waitForServer(tries = 60) {
       const emptyTests = sr.json.tests || [];
       check('a member with no results gets an empty-but-valid report (core tests first, baselines null)',
         sr.status === 200 && sr.json.linked === true &&
-        emptyTests.length === 3 && emptyTests.map(t => t.testKey).join(',') === CORE.join(',') &&
+        emptyTests.length === 3 && emptyTests.map(t => t.testKey).join(',') === REPORT_CORE.join(',') &&
         emptyTests.every(t => t.baseline === null && t.best === null && t.latest === null &&
           t.changeSinceBaseline === null && Array.isArray(t.series) && t.series.length === 0),
         sr.json);
@@ -8407,7 +8410,7 @@ async function waitForServer(tries = 60) {
       const sVert = sTests.find(t => t.testKey === 'vertical-jump') || {};
       const sBroad = sTests.find(t => t.testKey === 'broad-jump') || {};
       check('speed report: core tests are featured first, in core order',
-        sTests.slice(0, 3).map(t => t.testKey).join(',') === CORE.join(','), sTests.map(t => t.testKey));
+        sTests.slice(0, 3).map(t => t.testKey).join(',') === REPORT_CORE.join(','), sTests.map(t => t.testKey));
       check('speed report (40): baseline is the EARLIEST result, best respects lower-is-better, latest is the last day',
         !!sForty.baseline && sForty.baseline.value === 5 && sForty.baseline.date === D1 &&
         !!sForty.best && sForty.best.value === 4.88 && sForty.best.date === D2 &&
@@ -8575,8 +8578,12 @@ async function waitForServer(tries = 60) {
         labTests['knee-to-wall-left']);
       sr = await srApi(ben, 'GET', '/api/my/speed-report');
       check('lab checks: isolation \u2014 Ben\u2019s report carries none of Sara\u2019s lab results',
-        sr.status === 200 && !(sr.json.tests || []).some(t => LAB_KEYS.includes(t.testKey)),
-        (sr.json.tests || []).map(t => t.testKey));
+        sr.status === 200 && !(sr.json.tests || []).some(t => LAB_KEYS.includes(t.testKey) && (t.series || []).length),
+        (sr.json.tests || []).map(t => t.testKey + ':' + (t.series || []).length));
+      /* v41: the 30m sprint is a core test now, so it always appears, empty for Ben. */
+      check('lab checks: isolation \u2014 Ben\u2019s core 30m sprint is present but empty',
+        ((sr.json.tests || []).find(t => t.testKey === '30m-sprint') || {}).baseline === null,
+        (sr.json.tests || []).find(t => t.testKey === '30m-sprint'));
 
       /* ---- TV slice safety, from the served bundle ---- */
       const srJs = await srText(null, '/app.js');
