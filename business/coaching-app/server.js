@@ -109,8 +109,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v38',
-  cache: 'ruffin-performance-v38',
+  version: 'v39',
+  cache: 'ruffin-performance-v39',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute
@@ -1995,10 +1995,58 @@ function checkinFlags(c) {
   return flags;
 }
 function publicCheckin(c) {
+  const r = readinessOf(c);
   return {
     date: c.date, sleep: c.sleep, soreness: c.soreness, energy: c.energy,
-    hurts: !!c.hurts, painText: c.painText || '', note: c.note || '',
+    sleepQuality: c.sleepQuality != null ? c.sleepQuality : null,
+    mood: c.mood != null ? c.mood : null,
+    stress: c.stress != null ? c.stress : null,
+    hurts: !!c.hurts, painText: c.painText || '',
+    painArea: c.hurts && c.painArea ? c.painArea : null,
+    painSide: c.hurts && c.painSide ? c.painSide : null,
+    painLevel: c.hurts && c.painLevel != null ? c.painLevel : null,
+    note: c.note || '',
+    readiness: r.score, readinessBand: r.band, readinessFull: r.full,
     flags: checkinFlags(c), updatedAt: c.updatedAt,
+  };
+}
+/* Readiness (v39), modelled on the five-question wellness check
+   strength apps use: sleep quality, energy, mood, stress and
+   soreness, each 1 to 5. Stress and soreness count backwards (5 is
+   bad). The average maps onto 0 to 100. Check-ins saved before v39
+   only carry sleep hours, soreness and energy, so sleep quality is
+   read off the hours and the score uses what is there; `full`
+   says whether all five answers were given. */
+const READINESS_BANDS = [
+  { min: 80, band: 'high' }, { min: 60, band: 'good' },
+  { min: 40, band: 'moderate' }, { min: 0, band: 'low' },
+];
+function sleepHoursToScale(h) {
+  if (h == null) return null;
+  if (h >= 8) return 5;
+  if (h >= 7) return 4;
+  if (h >= 6) return 3;
+  if (h >= 5) return 2;
+  return 1;
+}
+function readinessOf(c) {
+  if (!c) return { score: null, band: null, full: false, parts: null };
+  const sleepQ = c.sleepQuality != null ? c.sleepQuality : sleepHoursToScale(c.sleep);
+  const parts = {
+    sleep: sleepQ,
+    energy: c.energy != null ? c.energy : null,
+    mood: c.mood != null ? c.mood : null,
+    stress: c.stress != null ? 6 - c.stress : null,
+    soreness: c.soreness != null ? 6 - c.soreness : null,
+  };
+  const vals = Object.values(parts).filter(v => v != null);
+  if (vals.length < 2) return { score: null, band: null, full: false, parts };
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const score = Math.round(((mean - 1) / 4) * 100);
+  const band = READINESS_BANDS.find(b => score >= b.min).band;
+  return {
+    score, band, parts,
+    full: c.sleepQuality != null && c.mood != null && c.stress != null,
   };
 }
 /* The roster profile this account is bound to, if a coach linked it. */
@@ -2015,6 +2063,187 @@ function checkinStreak(profileId) {
   let n = 0;
   while (cursor && byDate[cursor]) { n++; cursor = addDaysStr(cursor, -1); }
   return n;
+}
+/* ------------------------------------------------------------------ */
+/* Member insights (v39): readiness, compliance, load, pain            */
+/* ------------------------------------------------------------------ */
+/* One read of a member's own record over a window, used by the member
+   Progress and Readiness screens and by the coach's athlete page, so
+   both sides see the same numbers.
+   - Compliance: a planned day is one with a session that is not an off
+     day. It counts as done when the coach marked it complete or the
+     member logged a workout that day. Today only counts once done.
+   - Load: session RPE times minutes (the usual "session load"), summed
+     per day from the member's own logs. Logs without both numbers add
+     no load but still count as training.
+   - Load change: the last 7 days against the average week of the 28
+     days before them. Only reported once there are 3 weeks of logs.
+   - Readiness: each day's score (readinessOf), the member's normal
+     (average of the window) and the last-7-day average.
+   - Pain: every check-in day that said something hurts, with the load
+     of the 7 days leading into it next to the member's usual week. */
+function insightsFor(prof, days) {
+  const today = todayStr();
+  const span = Math.min(90, Math.max(7, parseInt(days, 10) || 28));
+  const start = addDaysStr(today, -(span - 1));
+  const byDate = db.checkins[prof.id] || {};
+  const logs = memberLogsFor(prof.id);
+  const loadByDate = {}, logDates = new Set();
+  for (const l of logs) {
+    logDates.add(l.date);
+    if (l.rpe != null && l.durationMin != null) loadByDate[l.date] = (loadByDate[l.date] || 0) + l.rpe * l.durationMin;
+  }
+  const sumLoad = (from, to) => {
+    let t = 0;
+    for (let d = from; d && d <= to; d = addDaysStr(d, 1)) t += loadByDate[d] || 0;
+    return t;
+  };
+  const series = [];
+  for (let d = start; d && d <= today; d = addDaysStr(d, 1)) {
+    const a = resolveAssignment(prof.groupId, d);
+    const planned = !!(a.sessionId && !a.isOff);
+    const done = !!completionFor(prof.id, d) || logDates.has(d);
+    const c = byDate[d] || null;
+    const r = readinessOf(c);
+    series.push({
+      date: d, planned, isOff: !!a.isOff, sessionName: a.sessionName || '',
+      done, load: loadByDate[d] || 0,
+      checkedIn: !!c, readiness: r.score, readinessBand: r.band,
+      sleep: c ? c.sleep : null, soreness: c ? c.soreness : null, energy: c ? c.energy : null,
+      mood: c && c.mood != null ? c.mood : null, stress: c && c.stress != null ? c.stress : null,
+      sleepQuality: c && c.sleepQuality != null ? c.sleepQuality : null,
+      pain: c && c.hurts ? { area: c.painArea || null, side: c.painSide || null, level: c.painLevel != null ? c.painLevel : null, text: c.painText || '' } : null,
+    });
+  }
+  /* compliance over the window, the last 7 and 28 days, and by week */
+  const countWin = (fromDate) => {
+    let planned = 0, done = 0, extra = 0;
+    for (const s of series) {
+      if (s.date < fromDate) continue;
+      if (s.planned) {
+        if (s.date === today && !s.done) continue;
+        planned++; if (s.done) done++;
+      } else if (s.done) extra++;
+    }
+    return { planned, done, extra, percent: planned ? Math.round((done / planned) * 100) : null };
+  };
+  const weeks = [];
+  for (let wk = mondayOf(start); wk && wk <= today; wk = addDaysStr(wk, 7)) {
+    const end = addDaysStr(wk, 6);
+    let planned = 0, done = 0, load = 0, checkins = 0;
+    const scores = [];
+    for (const s of series) {
+      if (s.date < wk || s.date > end) continue;
+      if (s.planned && !(s.date === today && !s.done)) { planned++; if (s.done) done++; }
+      load += s.load;
+      if (s.checkedIn) checkins++;
+      if (s.readiness != null) scores.push(s.readiness);
+    }
+    weeks.push({
+      weekOf: wk, planned, done, load, checkins,
+      percent: planned ? Math.round((done / planned) * 100) : null,
+      readinessAvg: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+      partial: end > today || wk < start,
+    });
+  }
+  /* streaks: planned sessions done in a row (rest and unplanned days
+     do not break it; today does not break it until the day is over),
+     the current check-in streak and the best one in the window. */
+  let trainingStreak = 0;
+  for (let d = today, guard = 0; d && guard < 366; d = addDaysStr(d, -1), guard++) {
+    const a = resolveAssignment(prof.groupId, d);
+    if (!(a.sessionId && !a.isOff)) {
+      if (!planDayFor(d) && !db.overrides[prof.groupId + '|' + d]) { if (guard > 14) break; }
+      continue;
+    }
+    const done = !!completionFor(prof.id, d) || logDates.has(d);
+    if (done) trainingStreak++;
+    else if (d === today) continue;
+    else break;
+  }
+  let bestCheckinStreak = 0, run = 0;
+  for (const s of series) { run = s.checkedIn ? run + 1 : 0; if (run > bestCheckinStreak) bestCheckinStreak = run; }
+  /* readiness */
+  const scored = series.filter(s => s.readiness != null);
+  const avg = (arr) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null);
+  const last7Start = addDaysStr(today, -6);
+  const todayEntry = series[series.length - 1];
+  const readiness = {
+    today: todayEntry && todayEntry.readiness != null ? todayEntry.readiness : null,
+    todayBand: todayEntry ? todayEntry.readinessBand : null,
+    normal: avg(scored.map(s => s.readiness)),
+    last7: avg(scored.filter(s => s.date >= last7Start).map(s => s.readiness)),
+    days: scored.length,
+  };
+  if (scored.length >= 5) {
+    const vals = scored.map(s => s.readiness);
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) * (b - mean), 0) / vals.length);
+    const half = Math.max(5, Math.round(sd));
+    readiness.normalLow = Math.max(0, Math.round(mean) - half);
+    readiness.normalHigh = Math.min(100, Math.round(mean) + half);
+  } else {
+    readiness.normalLow = null; readiness.normalHigh = null;
+  }
+  /* load: always over the fixed 7 and 28 days before, whatever the window */
+  const acute = sumLoad(last7Start, today);
+  const chronicWeek = sumLoad(addDaysStr(today, -34), addDaysStr(today, -7)) / 4;
+  const firstLog = logs.length ? logs[logs.length - 1].date : null;
+  const historyDays = firstLog ? Math.round((parseDateStr(today) - parseDateStr(firstLog)) / 86400000) + 1 : 0;
+  const load = {
+    last7: acute,
+    usualWeek: Math.round(chronicWeek),
+    changePercent: historyDays >= 21 && chronicWeek > 0 ? Math.round(((acute - chronicWeek) / chronicWeek) * 100) : null,
+    historyDays,
+  };
+  /* pain */
+  const painDays = series.filter(s => s.pain).map(s => {
+    const lead = sumLoad(addDaysStr(s.date, -6), s.date);
+    return Object.assign({ date: s.date, loadLeadIn: lead }, s.pain);
+  });
+  const areaCounts = {};
+  for (const pd of painDays) { const k = pd.area || 'other'; areaCounts[k] = (areaCounts[k] || 0) + 1; }
+  const openConcerns = (db.concerns[prof.id] || []).filter(c => c.status !== 'cleared').length;
+  /* plain-language notes, most useful first, three at most */
+  const notes = [];
+  const last14 = addDaysStr(today, -13);
+  const recentPain = painDays.filter(pd => pd.date >= last14);
+  const recentAreas = {};
+  for (const pd of recentPain) { const k = pd.area || 'other'; recentAreas[k] = (recentAreas[k] || 0) + 1; }
+  const repeat = Object.entries(recentAreas).filter(([k, n]) => k !== 'other' && n >= 2).sort((a, b) => b[1] - a[1])[0];
+  if (repeat) {
+    notes.push({ kind: 'pain', tone: 'warn', text: `You have flagged your ${PAIN_AREA_LABELS[repeat[0]] || repeat[0]} ${repeat[1]} times in the last two weeks. Coach AJ can see it. Bring it up before your next hard session.`,
+      coachText: `Flagged their ${PAIN_AREA_LABELS[repeat[0]] || repeat[0]} ${repeat[1]} times in the last two weeks.` });
+  }
+  if (load.changePercent != null && load.changePercent >= 50) {
+    notes.push({ kind: 'load', tone: 'warn', text: `Your training load this week is ${load.changePercent}% above your usual week. Big jumps are when tweaks tend to happen, so build into it.`,
+      coachText: `Training load this week is ${load.changePercent}% above their usual week.` });
+  } else if (load.changePercent != null && load.changePercent <= -40) {
+    notes.push({ kind: 'load', tone: 'info', text: `Your training load this week is ${Math.abs(load.changePercent)}% under your usual week. Fine for a rest week. If it was not planned, pick back up with today's session.` });
+  }
+  if (readiness.today != null && readiness.normal != null && readiness.days >= 5 && readiness.today <= readiness.normal - 15) {
+    notes.push({ kind: 'readiness', tone: 'warn', text: `Today's readiness is ${readiness.normal - readiness.today} points under your normal. Take a longer warm-up and tell Coach AJ if something feels off.`,
+      coachText: `Readiness today is ${readiness.normal - readiness.today} points under their normal.` });
+  } else if (readiness.last7 != null && readiness.normal != null && readiness.days >= 10 && readiness.last7 >= readiness.normal + 8) {
+    notes.push({ kind: 'readiness', tone: 'good', text: 'Your readiness this week is running above your normal. Good week to push.' });
+  }
+  const c28 = countWin(addDaysStr(today, -27));
+  if (c28.planned >= 4) {
+    notes.push({ kind: 'compliance', tone: c28.percent >= 80 ? 'good' : 'info', text: c28.percent >= 80
+      ? `You finished ${c28.done} of ${c28.planned} planned sessions in the last 4 weeks. That consistency is what moves your numbers.`
+      : `You finished ${c28.done} of ${c28.planned} planned sessions in the last 4 weeks. Logging every session helps Coach AJ adjust your plan.` });
+  }
+  return {
+    linked: true, profileId: prof.id, today, days: span, start,
+    series, weeks,
+    compliance: {
+      window: countWin(start), last7: countWin(last7Start), last28: c28,
+      trainingStreak, checkinStreak: checkinStreak(prof.id), bestCheckinStreak,
+    },
+    readiness, load,
+    pain: { days: painDays, areas: areaCounts, openConcerns },
+    notes: notes.slice(0, 3),
+  };
 }
 /* ------------------------------------------------------------------ */
 /* Member workout logs (member-entered training record)                */
@@ -2369,11 +2598,13 @@ function validateMemberLog(body) {
    "other", no pain score (null — the coach sets one when they pick
    it up), and source 'athlete' marks it as self-reported wherever
    concerns are shown. Returns the new concern's id. */
-function createAthleteConcern(prof, date, painText, userId) {
+function createAthleteConcern(prof, date, painText, userId, detail) {
   const now = new Date().toISOString();
+  const d = detail || {};
   const concern = {
     id: crypto.randomUUID(), profileId: prof.id,
-    area: 'other', side: 'na', feeling: 'other', pain: null,
+    area: d.painArea || 'other', side: d.painSide || 'na', feeling: 'other',
+    pain: d.painLevel != null ? d.painLevel : null,
     started: date, impact: 'none',
     note: painText, status: 'new', coachNote: '',
     source: 'athlete', reportedBy: userId || null, checkinDate: date,
@@ -2412,14 +2643,66 @@ function validateCheckin(body) {
   if (typeof body.note === 'string' && body.note.length > 500) {
     return { error: 'Keep the note to 500 characters or less.' };
   }
+  /* v39 readiness answers: optional so older screens keep working,
+     but each one given must be a whole number 1 to 5. */
+  const extra = {};
+  for (const [key, label] of [['sleepQuality', 'Sleep quality'], ['mood', 'Mood'], ['stress', 'Stress']]) {
+    if (body[key] === undefined || body[key] === null || body[key] === '') { extra[key] = null; continue; }
+    const v = num(body[key]);
+    if (v === null || !Number.isInteger(v) || v < 1 || v > 5) {
+      return { error: label + ' must be a whole number from 1 to 5.' };
+    }
+    extra[key] = v;
+  }
+  /* v39 pain detail: where (the same body areas the coach's health
+     log uses), which side, and how bad (0 to 10). Only kept when
+     "something hurts" is on. */
+  let painArea = null, painSide = null, painLevel = null;
+  if (body.hurts) {
+    if (body.painArea !== undefined && body.painArea !== null && body.painArea !== '') {
+      if (!CONCERN_AREAS.includes(body.painArea)) return { error: 'Pick where it hurts from the list.' };
+      painArea = body.painArea;
+    }
+    if (body.painSide !== undefined && body.painSide !== null && body.painSide !== '') {
+      if (!PAIN_SIDES.includes(body.painSide)) return { error: 'Pick left, right, both or not sure.' };
+      painSide = body.painSide;
+    }
+    if (body.painLevel !== undefined && body.painLevel !== null && body.painLevel !== '') {
+      const lv = num(body.painLevel);
+      if (lv === null || !Number.isInteger(lv) || lv < 0 || lv > 10) {
+        return { error: 'Pain level must be a whole number from 0 to 10.' };
+      }
+      painLevel = lv;
+    }
+  }
   return {
     fields: {
       sleep, soreness, energy,
+      sleepQuality: extra.sleepQuality, mood: extra.mood, stress: extra.stress,
       hurts: !!body.hurts,
       painText: clean(body.painText, 240),
+      painArea, painSide, painLevel,
       note: clean(body.note, 500),
     },
   };
+}
+const PAIN_SIDES = ['left', 'right', 'both', 'na'];
+const PAIN_AREA_LABELS = {
+  ankle: 'ankle', achilles: 'Achilles', calf: 'calf', shin: 'shin', knee: 'knee',
+  hamstring: 'hamstring', quad: 'quad', 'hip-flexor': 'hip flexor', hip: 'hip',
+  groin: 'groin', glute: 'glute', 'lower-back': 'lower back', foot: 'foot',
+  shoulder: 'shoulder', other: 'something',
+};
+/* The words a coach reads on the health log when a member flags pain
+   with the v39 picker but writes nothing themselves. */
+function painSummaryText(f) {
+  const area = f.painArea ? PAIN_AREA_LABELS[f.painArea] || f.painArea : 'something';
+  let line;
+  if (f.painSide === 'left' || f.painSide === 'right') line = (f.painSide === 'left' ? 'Left ' : 'Right ') + area + ' hurts';
+  else if (f.painSide === 'both') line = area.charAt(0).toUpperCase() + area.slice(1) + ' hurts on both sides';
+  else line = area.charAt(0).toUpperCase() + area.slice(1) + ' hurts';
+  if (f.painLevel != null) line += ', ' + f.painLevel + ' out of 10';
+  return line + '.';
 }
 /* Today's check-in headline for the Coach Today summary. */
 function wellnessTodaySummary() {
@@ -4826,9 +5109,16 @@ async function handleApi(req, res, url) {
     };
     Object.assign(entry, {
       sleep: f.sleep, soreness: f.soreness, energy: f.energy,
+      sleepQuality: f.sleepQuality, mood: f.mood, stress: f.stress,
       hurts: f.hurts, painText: f.hurts ? f.painText : '',
+      painArea: f.hurts ? f.painArea : null,
+      painSide: f.hurts ? f.painSide : null,
+      painLevel: f.hurts ? f.painLevel : null,
       note: f.note, updatedAt: now,
     });
+    /* The health-log note: the member's own words, else a plain line
+       built from the v39 pain picker so the coach never reads a blank. */
+    const concernText = f.painText || (f.painArea || f.painLevel != null ? painSummaryText(f) : '');
     /* Pain integration: "something hurts" + words files ONE
        athlete-reported concern per check-in day. Re-submitting the
        same day updates that same concern's text instead of filing a
@@ -4842,10 +5132,13 @@ async function handleApi(req, res, url) {
         : null;
       if (concern && concern.status === 'cleared') concern = null;
       if (concern) {
-        concern.note = f.painText;
+        concern.note = concernText;
+        if (f.painArea) concern.area = f.painArea;
+        if (f.painSide) concern.side = f.painSide;
+        if (f.painLevel != null) concern.pain = f.painLevel;
         concern.updatedAt = now;
       } else {
-        entry.concernId = createAthleteConcern(prof, date, f.painText, user.id);
+        entry.concernId = createAthleteConcern(prof, date, concernText, user.id, f);
       }
     } else if (entry.concernId) {
       const list = db.concerns[prof.id] || [];
@@ -5197,6 +5490,16 @@ async function handleApi(req, res, url) {
      leaderboard, or any public surface. Unlinked accounts read the
      clear not-linked state (the member-logs pattern) so the home
      card can prompt instead of erroring. */
+  /* v39: the member's own readiness, compliance, load and pain over a
+     window (?days 7 to 90, default 28). Bound to the caller's linked
+     profile, never to a profile named in the request. */
+  if (p === '/api/my/insights' && req.method === 'GET') {
+    if (!tierGate(res, user, 'access')) return;
+    const prof = linkedProfileFor(user);
+    if (!prof) return sendJson(res, 200, { linked: false });
+    return sendJson(res, 200, insightsFor(prof, q.get('days')));
+  }
+
   if (p === '/api/my/week' && req.method === 'GET') {
     if (!tierGate(res, user, 'access')) return;
     const prof = linkedProfileFor(user);
@@ -5205,6 +5508,9 @@ async function handleApi(req, res, url) {
     const a = resolveAssignment(prof.groupId, today);
     const mon = mondayOf(today);
     const week = [];
+    /* v39: a workout the member logged counts as done, the same rule
+       the Progress screen uses, so Today and Progress never disagree. */
+    const loggedDates = new Set(memberLogsFor(prof.id).map(l => l.date));
     for (let i = 0; i < 7; i++) {
       const ds = addDaysStr(mon, i);
       const wa = resolveAssignment(prof.groupId, ds);
@@ -5212,7 +5518,7 @@ async function handleApi(req, res, url) {
         date: ds, dayKey: DAY_KEYS[i],
         sessionId: wa.sessionId, sessionName: wa.sessionName || '',
         isOff: !!wa.isOff, isToday: ds === today,
-        completed: !!completionFor(prof.id, ds),
+        completed: !!completionFor(prof.id, ds) || loggedDates.has(ds),
       });
     }
     const byDate = db.checkins[prof.id] || {};
@@ -6382,6 +6688,15 @@ async function handleApi(req, res, url) {
         };
       });
     return sendJson(res, 200, { today, athletes });
+  }
+
+  /* v39: the coach's read of one member's readiness, compliance, load
+     and pain, the same numbers the member sees on their Progress. */
+  const amsInsightsMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)\/insights$/);
+  if (amsInsightsMatch && req.method === 'GET') {
+    const prof = profileById(decodeURIComponent(amsInsightsMatch[1]));
+    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    return sendJson(res, 200, insightsFor(prof, q.get('days')));
   }
 
   const amsAthleteMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)$/);
