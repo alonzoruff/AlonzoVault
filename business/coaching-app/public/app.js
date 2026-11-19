@@ -3004,7 +3004,7 @@ async function renderSpeedReport() {
   if (!anyResults) {
     el.innerHTML = `${nextHtml}<div class="card">
       <h2>Your Lab Report starts with baseline testing</h2>
-      <p>Baseline testing happens in week 1: your coach times your 40-Yard Dash and measures your Vertical Jump and Broad Jump. Those first marks become your baseline. Every test after that is measured against them, so you (and your family) can see exactly how far you have come.</p>
+      <p>Baseline testing happens in week 1: your coach times your 30m Sprint and measures your Vertical Jump and Broad Jump. Those first marks become your baseline. Every test after that is measured against them, so you (and your family) can see exactly how far you have come.</p>
       <p class="muted">No results on file yet. Once your baseline is recorded, your personal bests and your progress will show up here.</p>
     </div>
     <div class="sr-grid">${core.map(srCardHtml).join('')}</div>`;
@@ -3693,6 +3693,18 @@ function closeMedia() {
   $('#media-player').innerHTML = '';
   mediaTarget = null;
 }
+/* v41: the demo window's Close button was never wired, so the window
+   could only be left by reloading. Close, Escape and a tap outside
+   the box all close it now. */
+(function wireMediaModal() {
+  const modal = document.getElementById('media-modal');
+  const close = document.getElementById('media-close');
+  if (close) close.addEventListener('click', closeMedia);
+  if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeMedia(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal && !modal.hidden) closeMedia();
+  });
+})();
 document.addEventListener('click', (e) => {
   const d = e.target.closest('[data-demo]');
   if (d) { openMedia(d.dataset.demo, d.dataset.demoTitle, false); return; }
@@ -4528,7 +4540,7 @@ async function renderTesting() {
     </form>
     <form class="card" id="baseline-form">
       <h2>Baseline Testing Kit</h2>
-      <p class="muted">One click creates a test day titled “Baseline” with exactly the three core tests: 40-Yard Dash, Vertical Jump, Broad Jump, and lands you in the rapid-entry flow for it. A member's baseline is their earliest result, so this is the day every Lab Report measures from. Pick a group to land on that group's grid; if a Baseline day already exists for the date, you are taken to it instead of a duplicate.</p>
+      <p class="muted">One click creates a test day titled “Baseline” with exactly the three core tests: 30m Sprint, Vertical Jump, Broad Jump, and lands you in the rapid-entry flow for it. A member's baseline is their earliest result, so this is the day every Lab Report measures from. Pick a group to land on that group's grid; if a Baseline day already exists for the date, you are taken to it instead of a duplicate.</p>
       <div class="filter-row">
         <label>Date <input type="date" id="bl-date" value="${todayStr()}" required></label>
         <label>Group <select id="bl-group">
@@ -4613,7 +4625,7 @@ async function renderTesting() {
     e.preventDefault();
     const date = $('#bl-date').value;
     const groupId = $('#bl-group').value;
-    const CORE_KEYS = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+    const CORE_KEYS = ['30m-sprint', 'vertical-jump', 'broad-jump'];
     try {
       const existing = days.find(d => d.date === date && d.title === 'Baseline' &&
         Array.isArray(d.testKeys) && d.testKeys.length === CORE_KEYS.length &&
@@ -6556,11 +6568,20 @@ async function renderReports() {
      first half vs second half through today — all editable. */
   const dstr = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   if (load.weeks.length) {
-    const midWeek = load.weeks[Math.floor(load.weeks.length / 2)];
+    /* v41: split only the part of the season that has happened, so
+       Period B never ends before it starts early in the season. */
+    const todayS = dstr(new Date());
+    const elapsed = load.weeks.filter(w => w.start <= todayS);
+    const pool = elapsed.length >= 2 ? elapsed : load.weeks;
+    const midWeek = pool[Math.floor(pool.length / 2)];
+    const lastWeek = load.weeks[load.weeks.length - 1];
     if (!state.reportCmpAFrom) state.reportCmpAFrom = load.weeks[0].start;
     if (!state.reportCmpATo) { const d = parseDate(midWeek.start); d.setDate(d.getDate() - 1); state.reportCmpATo = dstr(d); }
     if (!state.reportCmpBFrom) state.reportCmpBFrom = midWeek.start;
-    if (!state.reportCmpBTo) state.reportCmpBTo = dstr(new Date());
+    if (!state.reportCmpBTo) {
+      if (elapsed.length >= 2) state.reportCmpBTo = todayS;
+      else { const d = parseDate(lastWeek.start); d.setDate(d.getDate() + 6); state.reportCmpBTo = dstr(d); }
+    }
   }
   if (!state.reportCmpTest || !trend.tests.some(t => t.testKey === state.reportCmpTest)) {
     state.reportCmpTest = ((testsWithData[0] || trend.tests[0] || {}).testKey) || null;
@@ -8951,7 +8972,7 @@ document.addEventListener('click', (e) => {
 
 /* One sample Lab Report, shown wherever the page shows one. */
 const RP_SAMPLE_REPORT = [
-  ['40-yard dash', '4.91 s', '4.78 s', '−0.13 s'],
+  ['30m sprint', '4.42 s', '4.29 s', '−0.13 s'],
   ['Vertical jump', '24.5″', '27.0″', '+2.5″'],
   ['Broad jump', '7′6″', '8′1″', '+7″'],
 ];
@@ -8986,6 +9007,16 @@ function rpFillPublicBits() {
 }
 rpFillPublicBits();
 rpWirePreview();
+/* v41: full-width homepage bands use 100vw, which counts the scrollbar
+   on desktop browsers that show one, so the page was about 8px wider
+   than the window and could slide sideways. Measure the scrollbar and
+   let the CSS take it back out. */
+function rpSetScrollbarVar() {
+  const sbw = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+  document.documentElement.style.setProperty('--rp-sbw', sbw + 'px');
+}
+rpSetScrollbarVar();
+window.addEventListener('resize', rpSetScrollbarVar);
 
 (async function boot() {
   try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
@@ -9026,6 +9057,9 @@ rpWirePreview();
   if (state.bookToken) showView('book');
   else if (location.pathname !== '/') rpRoute(location.pathname);
   else if (state.user) showView('home');
+  /* v41: a signed-out visit to "/" never goes through showView, so it
+     was never counted. Count it here, once per session like the rest. */
+  else rpTrackLandingView();
   showAppUpdatedToast();
   renderLibrary();
 })();
@@ -10059,6 +10093,9 @@ function syncBackHome(name) {
   }
   const btn = bar.firstElementChild;
   btn.setAttribute('data-view', homeName);
+  /* v41: reset the label too; the member view renames this button
+     ("Back to Training") and the name used to stick after leaving it. */
+  btn.innerHTML = `<span aria-hidden="true">←</span> ${esc(RP_COPY.back)}`;
   bar.hidden = name === homeName;
 }
 
@@ -11290,9 +11327,9 @@ function sbFunnelBars(c) {
         <span class="sb-funnel-n">${sbNum(n)}</span>
       </div>`).join('')}</div>`;
 }
-function sbSourceList(group, labels) {
+function sbSourceList(group, labels, week) {
   const rows = Object.entries(group).sort((a, b) => b[1] - a[1]);
-  if (!rows.length) return '<p class="muted">None this week.</p>';
+  if (!rows.length) return `<p class="muted">None ${week === 'last' ? 'last' : 'this'} week.</p>`;
   return '<ul class="sb-list">' + rows.map(([k, n]) =>
     `<li><span>${esc(labels[k] || k)}</span><span class="sb-n">${n}</span></li>`).join('') + '</ul>';
 }
@@ -11391,11 +11428,11 @@ async function renderScoreboard() {
       <section class="sb-card">
         <div class="sb-card-head"><h2>How people heard about us</h2><span class="sb-tag">${weekName}</span></div>
         <h3 class="sb-sub">Referrals <span>${ref.referralTotal}</span></h3>
-        ${sbSourceList(ref.referral, d.referralLabels)}
+        ${sbSourceList(ref.referral, d.referralLabels, w)}
         <h3 class="sb-sub">Paid sources <span>${ref.paidTotal}</span></h3>
-        ${sbSourceList(ref.paid, d.referralLabels)}
+        ${sbSourceList(ref.paid, d.referralLabels, w)}
         <h3 class="sb-sub">Everything else <span>${ref.organicTotal}</span></h3>
-        ${sbSourceList(ref.organic, d.referralLabels)}
+        ${sbSourceList(ref.organic, d.referralLabels, w)}
         ${ref.noAnswer || ref.notAsked ? `<p class="muted sb-foot">${ref.noAnswer ? `${ref.noAnswer} skipped the question.` : ''}${ref.noAnswer && ref.notAsked ? ' ' : ''}${ref.notAsked ? `${ref.notAsked} came in before the form asked.` : ''}</p>` : ''}
       </section>
     </div>

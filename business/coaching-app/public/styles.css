@@ -2997,7 +2997,7 @@ body.rp-public { overflow-x: clip; }
 #view-landing.lp h3 { font-size: 1.2rem; font-weight: 700; letter-spacing: -.01em; }
 #view-landing.lp :focus-visible { outline: 3px solid var(--lp-accent); outline-offset: 3px; }
 
-.lp-band { margin-inline: calc(50% - 50vw); padding: 84px 0; background: var(--lp-bg); scroll-margin-top: 84px; }
+.lp-band { margin-inline: calc(50% - 50vw + var(--rp-sbw, 0px) / 2); padding: 84px 0; background: var(--lp-bg); scroll-margin-top: 84px; }
 .lp-alt { background: var(--lp-bg2); }
 .lp-wrap { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
 .lp-eyebrow { display: inline-block; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--lp-accent-text); font-weight: 700; margin-bottom: .9rem; }

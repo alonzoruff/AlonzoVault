@@ -109,8 +109,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v40',
-  cache: 'ruffin-performance-v40',
+  version: 'v41',
+  cache: 'ruffin-performance-v41',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute
@@ -3158,7 +3158,10 @@ function testingHistoryFor(profileId) {
    order. The Baseline Testing Kit is the coach flow that creates a
    test day carrying exactly these three; a member's baseline for a
    test is their EARLIEST recorded result for it. */
-const CORE_TEST_KEYS = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+/* v41: the 30m sprint replaced the 40-yard dash as the core sprint
+   test, so the baseline matches what the Lab programs test. The 40
+   stays in the catalog for anyone who still records it. */
+const CORE_TEST_KEYS = ['30m-sprint', 'vertical-jump', 'broad-jump'];
 const BASELINE_TEST_KEYS = CORE_TEST_KEYS.slice();
 function speedReportPoint(point) {
   return point ? { value: point.display, display: point.display, date: point.date } : null;
@@ -3169,7 +3172,7 @@ function speedReportPoint(point) {
    earliest): absolute and percent are the signed raw change
    (latest - baseline), while improvement / improvementPercent are
    the same movement read in the test's own better-direction —
-   positive always means better, so for the 40 a drop in time is a
+   positive always means better, so for a sprint a drop in time is a
    positive improvement and a slower latest reads improved:false.
    The client never has to guess at direction. */
 function speedReportTestEntry(test, hist) {
