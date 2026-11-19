@@ -109,8 +109,8 @@ const BRAND = {
   name: 'Ruffin Performance',
   short: 'RP Training',
   tagline: 'Speed & strength coaching',
-  version: 'v39',
-  cache: 'ruffin-performance-v39',
+  version: 'v40',
+  cache: 'ruffin-performance-v40',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute
@@ -189,6 +189,8 @@ let db = {
   bookingSettings: null,
   inviteRequests: [],
   stripeEvents: [],
+  events: [],
+  eventsStartedAt: null,
 };
 
 /* Coach-set athlete status (the AMS layer): every profile carries
@@ -295,8 +297,9 @@ function cancelNotice(iso) {
 /* One membership change, recorded: every set-tier, cancel, and
    reactivate lands in the account's history with when, who did it
    ('coach' or 'member'), and the resulting tier + status. */
-function applyMembershipChange(u, fields, actor, action) {
+function applyMembershipChange(u, fields, actor, action, extra) {
   const now = new Date().toISOString();
+  const before = Array.isArray(u.membershipHistory) ? membershipReplay(u.membershipHistory) : membershipReplay([]);
   if ('tier' in fields) u.tier = fields.tier;
   if ('status' in fields) u.membershipStatus = fields.status;
   /* tierUpdatedAt is when the tier or status last changed (it is the
@@ -305,10 +308,23 @@ function applyMembershipChange(u, fields, actor, action) {
      the period, is recorded without moving it. */
   if ('tier' in fields || 'status' in fields) u.tierUpdatedAt = now;
   if (!Array.isArray(u.membershipHistory)) u.membershipHistory = [];
-  u.membershipHistory.push({
+  const entry = {
     at: now, by: actor.by, byEmail: actor.email, action,
     tier: u.tier || null, status: u.membershipStatus,
-  });
+  };
+  /* v40: the reason a member gave when they cancelled, if any. */
+  if (extra && extra.reason && CANCEL_REASONS[extra.reason]) entry.reason = extra.reason;
+  u.membershipHistory.push(entry);
+  /* v40 funnel events, read off the same history the scoreboard
+     replays, so the event log and the scoreboard always agree. */
+  const after = membershipReplay(u.membershipHistory);
+  if (after.starts.length > before.starts.length) {
+    recordEvent('paid_membership_started', { memberId: u.id, tier: u.tier || null });
+  }
+  if (after.cancels.length > before.cancels.length) {
+    const c = after.cancels[after.cancels.length - 1];
+    recordEvent('cancellation', { memberId: u.id, tier: c.tier, reason: c.reason || null, by: actor.by });
+  }
 }
 /* The gate every member-facing endpoint runs through. Answers
    true when the request may proceed; otherwise it has already
@@ -320,6 +336,361 @@ function tierGate(res, user, need) {
     needsTier: need,
   });
   return false;
+}
+
+/* ------------------------------------------------------------------ */
+/* Funnel events and the owner scoreboard (v40)                        */
+/* ------------------------------------------------------------------ */
+/* The ten funnel events, by the exact names in the growth playbook.
+   They live in db.events inside this app only: no ad pixels, no
+   outside analytics, no IP addresses. The first three come from the
+   public site (POST /api/events, signed-out visitors only); the rest
+   are recorded by the server where the thing actually happens. */
+const FUNNEL_EVENTS = [
+  'landing_view', 'portal_preview_open', 'invitation_request_started',
+  'invitation_request_submitted', 'invite_approved', 'paid_membership_started',
+  'first_workout_completed', 'weekly_active_member', 'cancellation', 'referral_source',
+];
+const PUBLIC_FUNNEL_EVENTS = ['landing_view', 'portal_preview_open', 'invitation_request_started'];
+const FUNNEL_EVENT_LABELS = {
+  landing_view: 'Homepage visits',
+  portal_preview_open: 'Portal previews opened',
+  invitation_request_started: 'Invitation forms started',
+  invitation_request_submitted: 'Invitation requests sent',
+  invite_approved: 'Requests you invited',
+  paid_membership_started: 'Paid memberships started',
+  first_workout_completed: 'First workouts done',
+  weekly_active_member: 'Active members',
+  cancellation: 'Cancellations',
+  referral_source: 'Requests that said how they heard',
+};
+const FUNNEL_EVENT_CAP = 50000;
+const PREVIEW_SCREENS = ['today', 'training', 'progress'];
+/* "How did you hear about us?" on the invitation form. kind keeps
+   referrals apart from paid sources, as the playbook asks. */
+/* Null-prototype maps, so a posted key like "constructor" is never a match. */
+const REFERRAL_SOURCES = Object.assign(Object.create(null), {
+  friend: { label: 'A friend or family member', kind: 'referral' },
+  member: { label: 'A Ruffin Performance member', kind: 'referral' },
+  coach: { label: 'A coach or trainer', kind: 'referral' },
+  instagram: { label: 'Instagram', kind: 'organic' },
+  facebook: { label: 'Facebook', kind: 'organic' },
+  search: { label: 'A Google or web search', kind: 'organic' },
+  event: { label: 'A clinic or event', kind: 'organic' },
+  ad: { label: 'An online ad', kind: 'paid' },
+  other: { label: 'Somewhere else', kind: 'organic' },
+});
+/* The optional reason a member can give when they cancel. */
+const CANCEL_REASONS = Object.assign(Object.create(null), {
+  cost: 'The cost',
+  time: 'Not enough time to train',
+  schedule: 'Season or schedule change',
+  fit: 'The training was not the right fit',
+  elsewhere: 'Training somewhere else',
+  break: 'Taking a break',
+  other: 'Something else',
+});
+const EVENT_FIELDS = ['memberId', 'requestId', 'tier', 'source', 'reason', 'by', 'week', 'page', 'screen'];
+function recordEvent(name, fields) {
+  if (!FUNNEL_EVENTS.includes(name)) return null;
+  const ev = { id: crypto.randomUUID(), name, at: new Date().toISOString() };
+  const f = fields || {};
+  for (const k of EVENT_FIELDS) {
+    if (f[k] !== undefined && f[k] !== null && f[k] !== '') ev[k] = String(f[k]).slice(0, 80);
+  }
+  db.events.push(ev);
+  if (db.events.length > FUNNEL_EVENT_CAP) db.events.splice(0, db.events.length - FUNNEL_EVENT_CAP);
+  return ev;
+}
+/* Replay one account's membership history into what the scoreboard
+   needs: when it became a paid membership, when it was cancelled,
+   and its state at any moment. "Paid" means the payment provider
+   (Stripe) set or confirmed the plan: a plan the coach sets by hand
+   has no payment on record, so it never counts as paid. A member
+   asking to stop at the end of the period is the cancellation; the
+   later "subscription ended" from Stripe is the same cancellation,
+   not a second one. Pass `untilDate` (a New York YYYY-MM-DD) for
+   the state at the end of that day. */
+function membershipReplay(history, untilDate) {
+  const st = { paid: false, tier: null, active: false, pendingCancel: false, starts: [], cancels: [], firstActiveAt: null };
+  for (const e of history || []) {
+    if (!e || typeof e.at !== 'string') continue;
+    if (untilDate && nyDateOf(e.at) > untilDate) break;
+    if (e.action === 'second-subscription-ignored') continue;
+    if (e.action === 'cancel-requested') {
+      if (st.active && !st.pendingCancel) {
+        st.pendingCancel = true;
+        st.cancels.push({ at: e.at, tier: st.tier, reason: e.reason || null, by: e.by, paid: st.paid });
+      }
+      continue;
+    }
+    if (e.status === 'cancelled') {
+      if (st.active && !st.pendingCancel) {
+        st.cancels.push({ at: e.at, tier: st.tier, reason: e.reason || null, by: e.by, paid: st.paid });
+      }
+      st.active = false; st.paid = false; st.pendingCancel = false;
+      continue;
+    }
+    if (!e.tier) {
+      st.active = false; st.paid = false; st.pendingCancel = false; st.tier = null;
+      continue;
+    }
+    if (e.by === 'stripe' && !st.paid) {
+      st.starts.push({ at: e.at, tier: e.tier });
+      st.paid = true;
+      st.pendingCancel = false;
+    }
+    st.tier = e.tier;
+    st.active = true;
+    if (!st.firstActiveAt) st.firstActiveAt = e.at;
+  }
+  return st;
+}
+function nyDateOf(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : NY_TODAY_FMT.format(d);
+}
+
+/* The owner scoreboard: this week (Monday to today) and last week
+   (Monday to Sunday), New York time, built only from records in this
+   app. Anything the app does not record comes back as null, and the
+   page says "Not tracked yet" for it. Nothing is estimated. */
+function ownerScoreboard() {
+  const asOf = new Date().toISOString();
+  const today = todayStr();
+  const thisMon = mondayOf(today);
+  const W = {
+    this: { start: thisMon, end: today },
+    last: { start: addDaysStr(thisMon, -7), end: addDaysStr(thisMon, -1) },
+  };
+  const keys = ['this', 'last'];
+  const inWeek = (w, iso) => {
+    const d = iso ? nyDateOf(iso) : null;
+    return !!d && d >= W[w].start && d <= W[w].end;
+  };
+  const dateIn = (w, d) => !!d && d >= W[w].start && d <= W[w].end;
+  const tierZero = () => ({ access: 0, training: 0, pass: 0, total: 0 });
+  const money = (n) => Math.round(n * 100) / 100;
+  const members = db.users.filter(u => u.role === 'athlete');
+  const replays = new Map(members.map(u => [u.id, membershipReplay(u.membershipHistory)]));
+  const eventsStart = nyDateOf(db.eventsStartedAt) || today;
+
+  const out = {
+    asOf, today, eventsStartedAt: db.eventsStartedAt,
+    weeks: { this: Object.assign({ partial: true }, W.this), last: Object.assign({ partial: false }, W.last) },
+    prices: Object.fromEntries(MEMBERSHIP_TIERS.map(t => [t, TIER_INFO[t].price])),
+    tierNames: Object.fromEntries(MEMBERSHIP_TIERS.map(t => [t, TIER_INFO[t].name])),
+    paymentsOn: !!process.env.STRIPE_SECRET_KEY,
+    requests: {}, newPaid: {}, activePaid: {}, mrr: {}, conversion: {},
+    firstWeek: {}, cancellations: {}, referrals: {}, weeklyActive: {}, funnel: [],
+  };
+
+  /* Invitation requests. A request is stored only after it passes
+     the form's checks (the spam trap never stores one). Qualified
+     means stored and not declined by Coach AJ. */
+  for (const w of keys) {
+    const got = db.inviteRequests.filter(r => inWeek(w, r.createdAt));
+    const declined = got.filter(r => r.status === 'declined').length;
+    out.requests[w] = { received: got.length, declined, qualified: got.length - declined };
+  }
+
+  /* Paid starts, paying members and MRR. Paying = a plan the payment
+     provider set or confirmed. Plans set by hand are counted apart. */
+  for (const w of keys) {
+    const n = tierZero();
+    for (const u of members) {
+      for (const st of replays.get(u.id).starts) {
+        if (inWeek(w, st.at) && n[st.tier] !== undefined) { n[st.tier]++; n.total++; }
+      }
+    }
+    out.newPaid[w] = n;
+  }
+  for (const w of keys) {
+    const n = tierZero();
+    for (const u of members) {
+      const st = w === 'this' ? replays.get(u.id) : membershipReplay(u.membershipHistory, W.last.end);
+      const live = w === 'this' ? effectiveTier(u) !== null : st.active;
+      if (live && st.paid && n[st.tier] !== undefined) { n[st.tier]++; n.total++; }
+    }
+    out.activePaid[w] = n;
+    out.mrr[w] = money(MEMBERSHIP_TIERS.reduce((sum, t) => sum + n[t] * TIER_INFO[t].price, 0));
+  }
+  const handSet = tierZero();
+  for (const u of members) {
+    const t = effectiveTier(u);
+    if (t && !replays.get(u.id).paid) { handSet[t]++; handSet.total++; }
+  }
+  out.handSetPlans = handSet;
+
+  /* Requests, then invitations, then paid starts. */
+  for (const w of keys) {
+    out.conversion[w] = {
+      requests: out.requests[w].qualified,
+      approvals: db.inviteRequests.filter(r => r.status === 'invited' && inWeek(w, r.invitedAt || r.updatedAt)).length,
+      paidStarts: out.newPaid[w].total,
+    };
+  }
+  {
+    const qualified = db.inviteRequests.filter(r => r.status !== 'declined');
+    const invited = db.inviteRequests.filter(r => r.status === 'invited');
+    const paidEmails = new Set(members.filter(u => replays.get(u.id).starts.length).map(u => u.email));
+    const paid = invited.filter(r => paidEmails.has(r.email)).length;
+    out.conversion.sinceLaunch = {
+      requests: qualified.length, approvals: invited.length, paidStarts: paid,
+      rate: qualified.length ? Math.round((paid / qualified.length) * 1000) / 10 : null,
+    };
+  }
+
+  /* First-week workouts. A new member is one whose first plan started
+     that week. For each, the scheduled workouts in their first seven
+     days (through today), and how many they finished (logged by them
+     or checked off by the coach). */
+  const loggedByProfile = new Map();
+  for (const l of db.memberLogs) {
+    if (!loggedByProfile.has(l.athleteId)) loggedByProfile.set(l.athleteId, new Set());
+    loggedByProfile.get(l.athleteId).add(l.date);
+  }
+  for (const w of keys) {
+    const fw = { newMembers: 0, measured: 0, notLinked: 0, scheduled: 0, done: 0, membersWithWorkout: 0, pct: null };
+    for (const u of members) {
+      const st = replays.get(u.id);
+      if (!st.firstActiveAt || !inWeek(w, st.firstActiveAt)) continue;
+      fw.newMembers++;
+      const prof = linkedProfileFor(u);
+      if (!prof) { fw.notLinked++; continue; }
+      fw.measured++;
+      const startDate = nyDateOf(st.firstActiveAt);
+      const logged = loggedByProfile.get(prof.id) || new Set();
+      let any = false;
+      for (let i = 0; i < 7; i++) {
+        const ds = addDaysStr(startDate, i);
+        if (!ds || ds > today) break;
+        const did = !!completionFor(prof.id, ds) || logged.has(ds);
+        if (did) any = true;
+        const a = resolveAssignment(prof.groupId, ds);
+        if (a.sessionId && !a.isOff) { fw.scheduled++; if (did) fw.done++; }
+      }
+      if (any) fw.membersWithWorkout++;
+    }
+    if (fw.scheduled) fw.pct = Math.round((fw.done / fw.scheduled) * 100);
+    out.firstWeek[w] = fw;
+  }
+
+  /* Cancellations, with the reason when the member gave one. */
+  for (const w of keys) {
+    const list = [];
+    for (const u of members) {
+      for (const c of replays.get(u.id).cancels) {
+        if (!inWeek(w, c.at)) continue;
+        list.push({
+          date: nyDateOf(c.at), tier: c.tier, tierName: c.tier ? TIER_INFO[c.tier].name : null,
+          paid: !!c.paid, by: c.by === 'coach' ? 'coach' : c.by === 'stripe' ? 'payment' : 'member',
+          reason: c.reason || null, reasonLabel: c.reason && CANCEL_REASONS[c.reason] ? CANCEL_REASONS[c.reason] : null,
+        });
+      }
+    }
+    list.sort((a, b) => (a.date < b.date ? 1 : -1));
+    out.cancellations[w] = list;
+  }
+
+  /* Where requests heard about the Lab. Referrals are kept apart
+     from paid sources. Requests sent before the question was on the
+     form count as "not asked". */
+  for (const w of keys) {
+    const r = { referral: {}, paid: {}, organic: {}, referralTotal: 0, paidTotal: 0, organicTotal: 0, noAnswer: 0, notAsked: 0 };
+    for (const req2 of db.inviteRequests.filter(x => inWeek(w, x.createdAt))) {
+      const src = req2.heardFrom && REFERRAL_SOURCES[req2.heardFrom];
+      if (!src) {
+        if (req2.createdAt < db.eventsStartedAt) r.notAsked++; else r.noAnswer++;
+        continue;
+      }
+      r[src.kind][req2.heardFrom] = (r[src.kind][req2.heardFrom] || 0) + 1;
+      r[src.kind + 'Total']++;
+    }
+    out.referrals[w] = r;
+  }
+  out.referralLabels = Object.fromEntries(Object.entries(REFERRAL_SOURCES).map(([k, v]) => [k, v.label]));
+
+  /* Members who logged, finished or checked in during the week. */
+  const memberByProfile = new Map(members.filter(u => u.profileId).map(u => [u.profileId, u.id]));
+  for (const w of keys) {
+    const seen = new Set();
+    for (const l of db.memberLogs) if (dateIn(w, l.date) && memberByProfile.has(l.athleteId)) seen.add(memberByProfile.get(l.athleteId));
+    for (const k of Object.keys(db.completions)) {
+      const [pid, d] = k.split('|');
+      if (dateIn(w, d) && memberByProfile.has(pid)) seen.add(memberByProfile.get(pid));
+    }
+    for (const pid of Object.keys(db.checkins)) {
+      if (!memberByProfile.has(pid)) continue;
+      if (Object.keys(db.checkins[pid] || {}).some(d => dateIn(w, d))) seen.add(memberByProfile.get(pid));
+    }
+    out.weeklyActive[w] = seen.size;
+  }
+
+  /* The funnel event log. A week that ended before events started
+     recording is null ("Not tracked yet"). */
+  for (const name of FUNNEL_EVENTS) {
+    const row = { name, label: FUNNEL_EVENT_LABELS[name] };
+    for (const w of keys) {
+      if (W[w].end < eventsStart) { row[w] = null; continue; }
+      const evs = db.events.filter(e => e.name === name && inWeek(w, e.at));
+      row[w] = name === 'weekly_active_member' ? new Set(evs.map(e => e.memberId)).size : evs.length;
+    }
+    out.funnel.push(row);
+  }
+  out.notInApp = [
+    { label: 'Marketing spend and cost per new member', why: 'The app has no record of ad or marketing spending.' },
+    { label: 'Coach and admin hours', why: 'The app does not log your time.' },
+  ];
+  return out;
+}
+/* A member did something this week: record weekly_active_member
+   once per member per Monday-to-Sunday week, and first_workout_
+   completed when this is the first workout on their record at all
+   (the caller checks the record before it adds the new workout). */
+function workoutCountFor(profileId) {
+  if (!profileId) return 0;
+  const prefix = profileId + '|';
+  return db.memberLogs.filter(l => l.athleteId === profileId).length
+    + Object.keys(db.completions).filter(k => k.startsWith(prefix)).length;
+}
+function noteMemberActivity(member, firstWorkout) {
+  if (!member || member.role !== 'athlete') return;
+  const week = mondayOf(todayStr());
+  if (!db.events.some(e => e.name === 'weekly_active_member' && e.memberId === member.id && e.week === week)) {
+    recordEvent('weekly_active_member', { memberId: member.id, week });
+  }
+  if (firstWorkout && !db.events.some(e => e.name === 'first_workout_completed' && e.memberId === member.id)) {
+    recordEvent('first_workout_completed', { memberId: member.id });
+  }
+}
+/* In-memory only: a few public events a minute per address. The
+   address is never written anywhere. */
+const PUBLIC_EVENT_LIMIT = 30;
+const publicEventHits = new Map();
+function publicEventAllowed(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const key = fwd || (req.socket && req.socket.remoteAddress) || 'unknown';
+  const minute = Math.floor(Date.now() / 60000);
+  const hit = publicEventHits.get(key);
+  if (!hit || hit.minute !== minute) {
+    if (publicEventHits.size > 5000) publicEventHits.clear();
+    publicEventHits.set(key, { minute, count: 1 });
+    return true;
+  }
+  hit.count += 1;
+  return hit.count <= PUBLIC_EVENT_LIMIT;
+}
+/* Public events arrive often and matter little one by one, so they
+   are written to disk a moment later, several at once. */
+let saveSoonTimer = null;
+function saveDbSoon() {
+  if (saveSoonTimer) return;
+  saveSoonTimer = setTimeout(() => {
+    saveSoonTimer = null;
+    try { saveDb(); } catch (err) { console.error('[events] save failed: ' + (err && err.message)); }
+  }, 1500);
+  if (saveSoonTimer.unref) saveSoonTimer.unref();
 }
 
 function migrate() {
@@ -477,6 +848,16 @@ function migrate() {
   // goal, status, createdAt, updatedAt }. Like bookings, invite
   // requests deliberately do NOT ride along in backups.
   db.inviteRequests = Array.isArray(db.inviteRequests) ? db.inviteRequests : [];
+  // Funnel events (v40): what happened and when, for the owner
+  // scoreboard. Each is { id, name, at } plus, where the app already
+  // has one, a member or request id and a short detail (tier,
+  // source, reason, week, page, screen). No IP address, browser
+  // details or third-party ids are ever stored. eventsStartedAt is
+  // when this store first recorded events, so the scoreboard can say
+  // "Not tracked yet" for any week before that. Not in backups.
+  db.events = Array.isArray(db.events)
+    ? db.events.filter(e => e && FUNNEL_EVENTS.includes(e.name) && typeof e.at === 'string') : [];
+  if (typeof db.eventsStartedAt !== 'string' || !db.eventsStartedAt) db.eventsStartedAt = new Date().toISOString();
   db.users.forEach((u, i) => {
     if (u.role !== 'coach' && u.role !== 'athlete') u.role = i === 0 ? 'coach' : 'athlete';
     // Membership (v14): every account carries the tier fields; a
@@ -4054,7 +4435,7 @@ function applyStripeFacts(user, f) {
       if (f.status !== 'active') return 'ignored-other-subscription';
       const events = db.stripeEvents.slice();
       const histLen = user.membershipHistory.length;
-      const snap = { at: user.tierUpdatedAt };
+      const snap = { at: user.tierUpdatedAt, evLen: db.events.length };
       try {
         applyMembershipChange(user, {}, STRIPE_ACTOR, 'second-subscription-ignored');
         stripeRememberEvent(f.eventId);
@@ -4063,6 +4444,7 @@ function applyStripeFacts(user, f) {
         user.membershipHistory.length = histLen;
         user.tierUpdatedAt = snap.at;
         db.stripeEvents = events;
+        db.events.length = Math.min(db.events.length, snap.evLen);
         throw err;
       }
       return 'second-subscription-ignored';
@@ -4079,6 +4461,7 @@ function applyStripeFacts(user, f) {
     cust: user.stripeCustomerId, sub: user.stripeSubscriptionId,
     last: user.stripeLastEventAt, cancelAt: user.stripeCancelAt,
     histLen: user.membershipHistory.length, events: db.stripeEvents.slice(),
+    funnelLen: db.events.length,
   };
   try {
     const newBinding = user.stripeSubscriptionId !== f.subscriptionId;
@@ -4108,6 +4491,7 @@ function applyStripeFacts(user, f) {
     user.stripeLastEventAt = snap.last; user.stripeCancelAt = snap.cancelAt;
     user.membershipHistory.length = snap.histLen;
     db.stripeEvents = snap.events;
+    db.events.length = Math.min(db.events.length, snap.funnelLen);
     throw err;
   }
   return 'applied';
@@ -4326,6 +4710,8 @@ function coachInviteRequestView(r) {
     id: r.id, name: r.name, email: r.email, forWhom: r.forWhom,
     athleteName: r.athleteName || '', tierInterest: r.tierInterest,
     goal: r.goal || '', status: r.status,
+    heardFrom: r.heardFrom || null,
+    heardFromLabel: r.heardFrom && REFERRAL_SOURCES[r.heardFrom] ? REFERRAL_SOURCES[r.heardFrom].label : null,
     createdAt: r.createdAt, updatedAt: r.updatedAt,
   };
 }
@@ -4748,23 +5134,60 @@ async function handleApi(req, res, url) {
         error: 'You already have ' + INVITE_REQUEST_PENDING_CAP + ' requests waiting on Coach AJ. He reviews those first.',
       });
     }
+    /* v40: the optional "How did you hear about us?" answer. */
+    let heardFrom = null;
+    if (body.heardFrom !== undefined && body.heardFrom !== null && body.heardFrom !== '') {
+      heardFrom = clean(body.heardFrom, 20);
+      if (!REFERRAL_SOURCES[heardFrom]) {
+        return sendJson(res, 400, { error: 'Please pick how you heard about us from the list, or leave it blank.' });
+      }
+    }
     const now = new Date().toISOString();
     const rec = {
       id: crypto.randomUUID(),
       name, email, forWhom, athleteName, tierInterest, goal, grade, sport, location,
-      consent: true, status: 'pending', createdAt: now, updatedAt: now,
+      heardFrom, consent: true, status: 'pending', createdAt: now, updatedAt: now,
     };
     db.inviteRequests.push(rec);
+    recordEvent('invitation_request_submitted', { requestId: rec.id, tier: tierInterest });
+    if (heardFrom) recordEvent('referral_source', { requestId: rec.id, source: heardFrom });
     saveDb();
     notifyCoach({
       subject: 'New invitation request from ' + name,
       intro: name + ' asked to join ' + BRAND.name + '. Review it under Coach Hub > Invitation Requests. Reply to this email to answer them directly.',
       fields: [['Name', name], ['Email', email], ['For', forWhom === 'child' ? 'their child' : 'themselves'],
         ['Athlete', athleteName], ['Age or grade', grade], ['Sport', sport], ['Location', location],
-        ['Interested in', tierInterest], ['Goal', goal]],
+        ['Interested in', tierInterest], ['Heard about us', heardFrom ? REFERRAL_SOURCES[heardFrom].label : ''], ['Goal', goal]],
       link: appLink('/'), replyTo: email,
     });
     return sendJson(res, 201, { ok: true });
+  }
+
+  /* ---------- funnel events from the public site (v40) ----------
+     Signed-out visitors only: the homepage view, opening a portal
+     preview, and starting the invitation form. Nothing about the
+     visitor is stored, only the event name, the time, the public
+     page it happened on and (for a preview) which screen. Anyone
+     signed in (Coach AJ checking his own site, or a member) is not
+     counted. A per-address limit, held in memory only and never
+     saved, keeps a script from flooding the count. */
+  if (p === '/api/events' && req.method === 'POST') {
+    let body;
+    try { body = await readBody(req); } catch (_) { return sendJson(res, 400, { error: 'Bad request body.' }); }
+    const name = clean(body.name, 40);
+    if (!PUBLIC_FUNNEL_EVENTS.includes(name)) return sendJson(res, 400, { error: 'Unknown event.' });
+    if (readSession(req)) return sendJson(res, 200, { ok: true, counted: false });
+    if (!publicEventAllowed(req)) return sendJson(res, 429, { error: 'Too many events. Try again in a minute.' });
+    const pagePath = clean(body.page, 60);
+    const fields = { page: /^\/[a-z0-9\-/]*$/.test(pagePath) ? pagePath : '/' };
+    if (name === 'portal_preview_open') {
+      const screen = clean(body.screen, 20);
+      if (!PREVIEW_SCREENS.includes(screen)) return sendJson(res, 400, { error: 'Unknown preview screen.' });
+      fields.screen = screen;
+    }
+    recordEvent(name, fields);
+    saveDbSoon();
+    return sendJson(res, 201, { ok: true, counted: true });
   }
 
   const bookStatusMatch = p.match(/^\/api\/book\/status\/([^/]+)(\/ics)?$/);
@@ -4884,6 +5307,16 @@ async function handleApi(req, res, url) {
   const user = readSession(req);
   if (!user) return sendJson(res, 401, { error: 'Please log in first.' });
 
+  /* ---------- owner scoreboard (v40) ----------
+     The head coach's account only. Assistant coaches and members get
+     a plain 403, and the page itself never appears in their menus. */
+  if (p === '/api/owner/scoreboard' && req.method === 'GET') {
+    if (user.role !== 'coach' || !user.isOwner) {
+      return sendJson(res, 403, { error: 'The scoreboard is for the owner account only.' });
+    }
+    return sendJson(res, 200, ownerScoreboard());
+  }
+
   /* ---------- my membership (the Account tab's source) ----------
      The member reads their own account details and membership
      here, and cancels from here. Cancelling is the member's own
@@ -4914,6 +5347,9 @@ async function handleApi(req, res, url) {
     if (user.role === 'coach') {
       return sendJson(res, 400, { error: 'Coach accounts do not carry a membership to cancel.' });
     }
+    /* v40: an optional reason, from the fixed list only. */
+    const cancelBody = await readBody(req).catch(() => ({}));
+    const cancelReason = (() => { const k = String(cancelBody.cancelReason || cancelBody.reason || ''); return Object.prototype.hasOwnProperty.call(CANCEL_REASONS, k) ? k : null; })();
     /* A member with a live Stripe subscription cancels it at Stripe
        too, at the end of the period they have paid for: they keep
        their access until then, so the status here stays active and
@@ -4951,21 +5387,23 @@ async function handleApi(req, res, url) {
         const prevCancelAt = user.stripeCancelAt;
         const histLen = user.membershipHistory.length;
         const prevAt = user.tierUpdatedAt;
+        const evLen = db.events.length;
         try {
           user.stripeCancelAt = facts.cancelAt;
-          applyMembershipChange(user, {}, { by: 'member', email: user.email }, 'cancel-requested');
+          applyMembershipChange(user, {}, { by: 'member', email: user.email }, 'cancel-requested', { reason: cancelReason });
           saveDb();
         } catch (err) {
           user.stripeCancelAt = prevCancelAt;
           user.membershipHistory.length = histLen;
           user.tierUpdatedAt = prevAt;
+          db.events.length = Math.min(db.events.length, evLen);
           return sendJson(res, 500, { error: 'Something went wrong on our side, so please try again.' });
         }
         return sendJson(res, 200, { ok: true, membership: publicMembership(user), notice: cancelNotice(user.stripeCancelAt) });
       }
     }
     if (user.membershipStatus !== 'cancelled') {
-      applyMembershipChange(user, { status: 'cancelled' }, { by: 'member', email: user.email }, 'cancel');
+      applyMembershipChange(user, { status: 'cancelled' }, { by: 'member', email: user.email }, 'cancel', { reason: cancelReason });
       saveDb();
     }
     return sendJson(res, 200, { ok: true, membership: publicMembership(user) });
@@ -5153,6 +5591,7 @@ async function handleApi(req, res, url) {
          re-flagging later updates it instead of filing a duplicate. */
     }
     db.checkins[prof.id][date] = entry;
+    noteMemberActivity(user, false);
     saveDb();
     return sendJson(res, existing ? 200 : 201, {
       ok: true, created: !existing, checkin: publicCheckin(entry),
@@ -5210,7 +5649,9 @@ async function handleApi(req, res, url) {
       { id: crypto.randomUUID(), athleteId: prof.id, createdAt: now, updatedAt: now },
       v.fields
     );
+    const firstWorkout = workoutCountFor(prof.id) === 0;
     db.memberLogs.push(log);
+    noteMemberActivity(user, firstWorkout);
     saveDb();
     return sendJson(res, 201, { ok: true, log: publicMemberLog(log) });
   }
@@ -5946,6 +6387,10 @@ async function handleApi(req, res, url) {
     if (next === 'invited' && !db.clientInvites.includes(r.email)) {
       db.clientInvites.push(r.email);
     }
+    if (next === 'invited') {
+      r.invitedAt = r.updatedAt;
+      recordEvent('invite_approved', { requestId: r.id });
+    }
     saveDb();
     return sendJson(res, 200, { ok: true, request: coachInviteRequestView(r) });
   }
@@ -6433,7 +6878,12 @@ async function handleApi(req, res, url) {
       notes: clean(body.notes, 1000),
       by: user.id, at: new Date().toISOString(),
     };
+    const firstWorkout = !db.completions[key] && workoutCountFor(prof.id) === 0;
     db.completions[key] = rec;
+    /* A completion marked for a member's own roster profile is that
+       member's workout too. */
+    const doneBy = db.users.find(u => u.role === 'athlete' && u.profileId === prof.id);
+    if (doneBy) noteMemberActivity(doneBy, firstWorkout);
     saveDb();
     return sendJson(res, 200, { ok: true, completion: rec });
   }
