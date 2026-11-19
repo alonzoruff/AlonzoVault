@@ -9884,7 +9884,7 @@ function tvPageHtml(unit) {
       <div class="tv-hero"><div class="tv-page-group">${esc(unit.name)}</div></div>
       <div class="tv-empty">
         <p class="tv-empty-big">${unit.isOff ? 'Rest day' : 'No workout published yet'}</p>
-        <p class="tv-empty-sub">${esc(unit.isOff ? tvNextLine() : 'Your coach will put it up here once it is ready. ' + tvNextLine())}</p>
+        <p class="tv-empty-sub">${esc(unit.isOff ? tvNextLine() : 'Your coach will put it up here once it is ready.')}</p>
       </div>
     </div>`;
   }

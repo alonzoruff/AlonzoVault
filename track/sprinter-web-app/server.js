@@ -2126,7 +2126,11 @@ function tvBoardFor(date) {
           };
         }
       }
-    } else if (a.sessionId) {
+    } else if (a.sessionId && a.source === 'override') {
+      /* A coach's pick for the group counts as put up by a coach.
+         The season plan's own default does not: with nothing
+         published, the TV says "No workout published yet" (AJ,
+         Nov 19). */
       const s = SESSION_BY_ID.get(a.sessionId);
       out.title = s ? s.name : a.sessionId;
       out.sessionCodes = (a.codes && a.codes.length ? a.codes : [a.sessionId]).filter(c => SESSION_BY_ID.has(c));

@@ -8494,6 +8494,15 @@ async function waitForServer(tries = 60) {
       return { res: rb, g: (rb.json.board || []).find(x => x.groupId === lg.id) };
     };
     let b = await boardFor();
+    check('v66: with nothing published, the season plan session stays off the TV',
+      b.g && b.g.source === 'plan' && b.g.title === '' && b.g.sessionCodes.length === 0 && b.g.workout === null, b.g);
+    r = await api(coach, 'POST', '/api/assignments/override', { groupId: lg.id, date: T, sessionId: 'TEM-01' });
+    check('v66: fixture coach pick saves', r.status === 200, r.json);
+    b = await boardFor();
+    check('v66: a coach pick for the group still shows on the TV',
+      b.g && b.g.source === 'override' && b.g.sessionCodes.includes('TEM-01'), b.g);
+    r = await api(coach, 'POST', '/api/assignments/override', { groupId: lg.id, date: T, sessionId: null });
+    b = await boardFor();
     check('v66: the board payload lists every group', b.res.status === 200 && Array.isArray(b.res.json.board) && !!b.g, b.res.json.board);
     check('v66: a draft weight room workout never reaches the TV', b.g && b.g.source !== 'published' && b.g.workout === null &&
       b.g.notes === '' && b.g.focus === '', b.g);
@@ -8557,6 +8566,7 @@ async function waitForServer(tries = 60) {
       tv66.includes('function tvBlocksHtml') && tv66.includes("e.load.sets + ' × ' + e.load.reps") && tv66.includes("'% of ' + e.load.lift + ' max'"));
     check('v66: with more than one group the board opens on an overview of every group',
       tv66.includes('function tvOverviewHtml') && tv66.includes("labels.push('All groups')"));
+    check('v66: an unpublished day says only that the coach will put it up', tv66.includes("'Your coach will put it up here once it is ready.'"));
     check('v66: plain empty states', tv66.includes('No workout published yet') && tv66.includes('Rest day') && tv66.includes('No workout today'));
     check('v66: arrow keys and a remote move pages; Space pauses; controls hide until someone wakes the screen',
       tv66.includes("k === 'ArrowRight'") && tv66.includes("k === 'ArrowLeft'") && tv66.includes('tvWake') &&
