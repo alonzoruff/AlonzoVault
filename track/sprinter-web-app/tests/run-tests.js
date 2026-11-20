@@ -449,11 +449,14 @@ async function main() {
   check('app JS has the dismissible Start here strip (localStorage)',
     appJs.text.includes('start-strip') && appJs.text.includes('swa-start-here') &&
     appJs.text.includes('start-dismiss'));
+  check('home has a What to do today card with warm-up, run and log steps',
+    appJs.text.includes('todo-today') && appJs.text.includes('todo-warmup') &&
+    appJs.text.includes('todo-log') && appJs.text.includes('What to do today'));
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v66 (TV board)',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v66"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v67 (What to do today card)',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v67"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2379,7 +2382,7 @@ async function main() {
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
     appJs.text.includes("const APP_VERSION = 'v66'") &&
-    swJs.text.includes("sprinter-app-v66"));
+    swJs.text.includes("sprinter-app-v67"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
