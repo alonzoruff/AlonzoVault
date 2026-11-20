@@ -2881,6 +2881,10 @@ async function main() {
     !/__BRAND_|__APP_VERSION__/.test(appJs.text) &&
     !/__BRAND_|__APP_VERSION__/.test(swJs.text) &&
     !/__BRAND_|__APP_VERSION__/.test(manifestTxt.text));
+  const logoRes = await apiText(null, '/assets/ayg-lab-logo.jpg');
+  check('AYG Lab logo route serves the JPEG logo',
+    logoRes.status === 200 && logoRes.type.includes('image/jpeg') && logoRes.text.length > 40000,
+    logoRes.status + ' ' + logoRes.type + ' ' + logoRes.text.length);
   check('manifest carries the AYG Lab brand + dark theme colors',
     manifestTxt.text.includes('AYG Lab') && manifestTxt.text.includes('#04070c'),
     manifestTxt.text.slice(0, 120));

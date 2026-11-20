@@ -81,6 +81,7 @@ const path = require('path');
 const crypto = require('crypto');
 const stripeLib = require('./lib/stripe');
 const { notifyCoach } = require('./lib/notify');
+const LOGO_JPEG = Buffer.from(require('./lib/logo-data'), 'base64');
 /* Absolute link into the app for a notification email. */
 function appLink(viewPath) {
   const base = (process.env.DOMAIN || '').replace(/\/+$/, '');
@@ -9714,6 +9715,10 @@ function applyBrand(text) {
     .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL);
 }
 function serveStatic(req, res, url) {
+  if (url.pathname === '/assets/ayg-lab-logo.jpg') {
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(LOGO_JPEG);
+  }
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
   const shellHeaders = SHELL_NO_CACHE_PATHS.has(url.pathname)
