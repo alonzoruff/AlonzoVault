@@ -1,4 +1,4 @@
-/* Ruffin Performance — front end (vanilla JS, no build step). */
+/* AYG Lab (formerly Ruffin Performance) — front end (vanilla JS, no build step). */
 'use strict';
 
 /* ---------------- state ---------------- */
@@ -1822,6 +1822,7 @@ function renderAccount() {
       : 'Forgot your password? Ask Coach AJ directly and he will help you get back in.';
     $('#account-main').innerHTML = `
       <div class="card acct-card">
+        <img class="acct-logo" src="/assets/ayg-lab-logo-256.webp" width="256" height="256" alt="AYG Lab">
         <div class="acct-tabs" role="tablist" aria-label="Account">
           <button type="button" role="tab" id="acct-tab-login" class="acct-tab active" aria-selected="true" aria-controls="login-form">Log in</button>
           <button type="button" role="tab" id="acct-tab-register" class="acct-tab" aria-selected="false" aria-controls="register-form" tabindex="-1">Create account</button>
@@ -2769,7 +2770,7 @@ function equipmentLabel(v) {
   return hit ? hit[1] : v;
 }
 const WAIVER_LINES = [
-  'Training with Ruffin Performance involves speed and strength training. Like any physical training, it carries an inherent risk of injury, including strains, sprains, and other injuries.',
+  'Training with AYG Lab involves speed and strength training. Like any physical training, it carries an inherent risk of injury, including strains, sprains, and other injuries.',
   'This is coaching. It is not medical care, physical therapy, or medical advice.',
   'If you are injured, in pain, or have a medical concern, stop and tell your coach. Your coach will refer you to a medical professional. Coaches do not diagnose or treat injuries.',
   'By signing, you say you understand these risks, you will follow your coach\u2019s instructions, and you will report pain or an injury promptly.',
@@ -3030,7 +3031,7 @@ async function renderSpeedReport() {
     <p class="muted">Measured speed, not promised speed. Your personal bests against your own baseline, from the tests your coach has recorded for you.</p>
     <div class="sr-grid">${core.map(srCardHtml).join('')}</div>
     ${others.length ? `<h2>More tests</h2><div class="sr-grid">${others.map(srCardHtml).join('')}</div>` : ''}
-    <p class="sr-print-footer">Ruffin Performance. Measured speed, not promised speed.<br>Generated on ${esc(generatedOn)}</p>`;
+    <p class="sr-print-footer">AYG Lab. Measured speed, not promised speed.<br>Generated on ${esc(generatedOn)}</p>`;
   const pb = el.querySelector('#sr-print');
   if (pb) pb.addEventListener('click', () => {
     document.body.classList.add('printing-lab-report');
@@ -7747,7 +7748,7 @@ async function renderData() {
     }
     if (!parsed || parsed.app !== 'ruffin-performance-app' || parsed.kind !== 'backup'
       || !parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) {
-      box.innerHTML = '<p class="error">That is not a Ruffin Performance backup file.</p>';
+      box.innerHTML = '<p class="error">That is not an AYG Lab backup file.</p>';
       return;
     }
     pendingBackup = parsed;
@@ -8814,7 +8815,7 @@ function rpTrackLandingView() {
    about us?" The server holds the same keys and sorts referrals
    apart from paid sources. */
 const RP_HEARD_FROM = [
-  ['friend', 'A friend or family member'], ['member', 'A Ruffin Performance member'],
+  ['friend', 'A friend or family member'], ['member', 'An AYG Lab member'],
   ['coach', 'A coach or trainer'], ['instagram', 'Instagram'], ['facebook', 'Facebook'],
   ['search', 'A Google or web search'], ['event', 'A clinic or event'], ['ad', 'An online ad'],
   ['other', 'Somewhere else'],

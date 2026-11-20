@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Ruffin Performance — server test suite.
+ * AYG Lab (formerly Ruffin Performance) — server test suite.
  *
  * Zero dependencies: starts server.js on a throwaway port with a
  * temporary DATA_DIR, exercises the API end to end, then kills the
@@ -2554,7 +2554,7 @@ async function main() {
   const srSeg = seg('async function renderSpeedReport()', 'function checkinReportHtml');
   check('printable report: the results branch carries the print header with brand, athlete and latest date',
     srSeg.includes('sr-print-header') &&
-    srSeg.includes('Ruffin Performance · Speed & strength coaching') &&
+    srSeg.includes('AYG Lab · Speed & strength coaching') &&
     srSeg.includes('data.athleteName') && srSeg.includes('latestTestDate'),
     srSeg.slice(0, 120));
   check('printable report: Print / Save as PDF button is wired to window.print()',
@@ -2565,7 +2565,7 @@ async function main() {
     srSeg.slice(0, 120));
   check('printable report: print-only footer carries the brand line and a generated-on date',
     srSeg.includes('sr-print-footer') &&
-    srSeg.includes('Ruffin Performance. Measured speed, not promised speed.') &&
+    srSeg.includes('AYG Lab. Measured speed, not promised speed.') &&
     srSeg.includes('Generated on') && !srSeg.includes('CSCS'),
     srSeg.slice(0, 120));
   check('printable report: print CSS scopes the report, hides chrome and other views, shows the footer',
@@ -2619,8 +2619,9 @@ async function main() {
   const seoGraph = seoLd && Array.isArray(seoLd['@graph']) ? seoLd['@graph'] : [];
   const seoOrg = seoGraph.find(n => n && n['@type'] === 'Organization') || null;
   const seoSite = seoGraph.find(n => n && n['@type'] === 'WebSite') || null;
-  check('SEO (v22): JSON-LD parses with an Organization named Ruffin Performance and a WebSite node, no price and no CSCS',
-    !!seoLd && !!seoOrg && seoOrg.name === 'Ruffin Performance' && !!seoSite &&
+  check('SEO (v22): JSON-LD parses with an Organization named AYG Lab and a WebSite node, no price and no CSCS',
+    !!seoLd && !!seoOrg && seoOrg.name === 'AYG Lab' && !!seoSite &&
+    seoOrg.logo === 'https://ruffin-performance.onrender.com/assets/ayg-lab-logo-512.png' &&
     !seoLdRaw.includes('$') && !seoLdRaw.includes('CSCS'),
     seoLdRaw.slice(0, 120));
   const robotsTxt = await apiText(null, '/robots.txt');
@@ -2644,9 +2645,9 @@ async function main() {
      & (not &amp;); the check normalizes &amp; to & so it asserts the
      exact served wording either way. */
   const v23PageNormalized = pageHtml.text.replaceAll('&amp;', '&');
-  check('v23: all three warm-up card brand lines carry the Ruffin Performance brand',
+  check('v23: all three warm-up card brand lines carry the AYG Lab brand',
     (pageHtml.text.match(/class="wu-brand"/g) || []).length === 3 &&
-    (v23PageNormalized.split('Ruffin Performance <span>// Speed & strength coaching</span>').length - 1) === 3,
+    (v23PageNormalized.split('AYG Lab <span>// Speed & strength coaching</span>').length - 1) === 3,
     (pageHtml.text.match(/class="wu-brand"/g) || []).length);
   check('v23: served page and app JS contain no school strings (case-insensitive)',
     !pageHtml.text.toLowerCase().includes('st. john') &&
@@ -2660,9 +2661,9 @@ async function main() {
     !pageHtml.text.includes('before school') &&
     !pageHtml.text.includes('high school athletes') &&
     !pageHtml.text.includes('school rules govern'));
-  check('v23: app JS carries the Club records export label and the Ruffin Performance backup wording',
+  check('v23: app JS carries the Club records export label and the AYG Lab backup wording',
     appJs.text.includes('Club records') &&
-    appJs.text.includes('Ruffin Performance backup file') &&
+    appJs.text.includes('not an AYG Lab backup file') &&
     !appJs.text.includes('assistant@school.edu'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -2881,13 +2882,56 @@ async function main() {
     !/__BRAND_|__APP_VERSION__/.test(appJs.text) &&
     !/__BRAND_|__APP_VERSION__/.test(swJs.text) &&
     !/__BRAND_|__APP_VERSION__/.test(manifestTxt.text));
-  check('manifest carries the RP brand + dark theme colors',
-    manifestTxt.text.includes('Ruffin Performance') && manifestTxt.text.includes('#0d0d0f'),
+  check('manifest carries the AYG Lab brand + dark theme colors',
+    manifestTxt.text.includes('AYG Lab') && !manifestTxt.text.includes('Ruffin') && manifestTxt.text.includes('#0d0d0f'),
     manifestTxt.text.slice(0, 120));
   check('content payload carries the brand from the one config block',
-    !!contentJson.brand && contentJson.brand.name === 'Ruffin Performance' &&
+    !!contentJson.brand && contentJson.brand.name === 'AYG Lab' && contentJson.brand.short === 'AYG Lab' &&
     contentJson.brand.tagline === 'Speed & strength coaching',
     contentJson.brand);
+  /* ---------------- AYG Lab rebrand (Nov 2026) ----------------
+     Ruffin Performance is now AYG Lab. Every user-facing surface
+     reads the new name, AJ's logo file ships unchanged (plus plain
+     resizes for icons), the old bolt mark is gone, and the brand
+     orange sampled from the logo carries near-black text, never
+     white (white on #e6660c is only 3.4:1). Routes and URLs are
+     unchanged on purpose. */
+  {
+    const servedShell = [pageHtml.text, appJs.text, manifestTxt.text, swJs.text].join('\n');
+    check('rebrand: no served page, script or manifest says Ruffin Performance or Ruffin Speed Lab',
+      !/Ruffin Performance|Ruffin Speed Lab|RP Training/.test(servedShell.replace(/\/\*[\s\S]*?\*\//g, '')),
+      (servedShell.match(/.{40}(Ruffin Performance|Ruffin Speed Lab|RP Training).{20}/) || [''])[0]);
+    check('rebrand: page title, app name and header read AYG Lab',
+      pageHtml.text.includes('<title>AYG Lab | Speed & strength coaching</title>') &&
+      pageHtml.text.includes('<div class="identity">AYG Lab</div>') &&
+      pageHtml.text.includes('<meta name="apple-mobile-web-app-title" content="AYG Lab">') &&
+      /"short_name":\s*"AYG Lab"/.test(manifestTxt.text));
+    check('rebrand: header and footer use the AYG Lab logo, and the old mark is gone',
+      pageHtml.text.includes('<img class="site-logo" src="/assets/ayg-lab-logo-256.webp"') &&
+      pageHtml.text.includes('<img class="site-logo footer-logo" src="/assets/ayg-lab-logo-256.webp"') &&
+      pageHtml.text.includes('<link rel="apple-touch-icon" href="/assets/ayg-lab-logo-180.png">') &&
+      !pageHtml.text.includes('rp-logo.svg') && !swJs.text.includes('rp-logo.svg') &&
+      !manifestTxt.text.includes('rp-logo.svg'));
+    check('rebrand: the login card shows the AYG Lab logo',
+      appJs.text.includes('<img class="acct-logo" src="/assets/ayg-lab-logo-256.webp"'));
+    const logoFiles = ['ayg-lab-logo.webp', 'ayg-lab-logo-256.webp', 'ayg-lab-logo-512.png', 'ayg-lab-logo-192.png', 'ayg-lab-logo-180.png', 'ayg-lab-logo-48.png'];
+    const logoStatus = [];
+    for (const f of logoFiles) logoStatus.push((await apiText(null, '/assets/' + f)).status);
+    const oldMark = await apiText(null, '/assets/rp-logo.svg');
+    check('rebrand: every AYG Lab logo file is served and the old mark is not',
+      logoStatus.every(st => st === 200) && !oldMark.type.includes('svg'),
+      [logoStatus, oldMark.status, oldMark.type]);
+    const mf = JSON.parse(manifestTxt.text);
+    check('rebrand: the PWA icons are the AYG Lab logo at 192 and 512',
+      Array.isArray(mf.icons) && mf.icons.some(i => i.src === '/assets/ayg-lab-logo-192.png' && i.sizes === '192x192') &&
+      mf.icons.some(i => i.src === '/assets/ayg-lab-logo-512.png' && i.sizes === '512x512'), mf.icons);
+    check('rebrand: the old red accent is gone and the orange carries dark text in the member area',
+      !/#e3242b|#f23a40|227, 36, 43/i.test(stylesCss.text) &&
+      stylesCss.text.includes('--red: #e6660c; --red-dark: #f78a23; --accent-ink: #0b0b0c;') &&
+      !/background: var\(--red[^)]*\)[^}]*color: #fff/.test(stylesCss.text));
+    check('rebrand: routes and the canonical address are unchanged',
+      pageHtml.text.includes('<link rel="canonical" href="https://ruffin-performance.onrender.com/">'));
+  }
   check('dark theme palette is the shipped one (black/grey + silver)',
     stylesCss.text.includes('--bg: #0d0d0f') && stylesCss.text.includes('--card: #17181c') &&
     stylesCss.text.includes('--red: #c9ccd4') && !stylesCss.text.includes('#CC0033'),
@@ -2911,7 +2955,12 @@ async function main() {
   for (const dir of ['content', 'public']) {
     const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(e =>
       e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
-    for (const f of walk(path.join(APP_DIR, dir))) scanFiles.push(path.relative(APP_DIR, f));
+    /* Text files only: a compressed image (the AYG Lab logo .webp/.png)
+       is pixel data, and its bytes can spell three letters by chance. */
+    for (const f of walk(path.join(APP_DIR, dir))) {
+      if (/\.(png|jpe?g|webp|gif|ico)$/i.test(f)) continue;
+      scanFiles.push(path.relative(APP_DIR, f));
+    }
   }
   const dirty = [];
   for (const rel of scanFiles) {
@@ -4457,7 +4506,7 @@ async function main() {
   const bk = await apiText(coach, '/api/export/backup');
   check('backup export downloads as JSON with a dated filename',
     bk.status === 200 && bk.type.includes('application/json') &&
-    bk.disp.includes('ruffin-performance-backup-') && bk.disp.includes('.json'), bk.disp);
+    bk.disp.includes('ayg-lab-backup-') && bk.disp.includes('.json'), bk.disp);
   const bkEnv = JSON.parse(bk.text);
   check('backup envelope markers are right',
     bkEnv.app === 'ruffin-performance-app' && bkEnv.kind === 'backup' && bkEnv.version === 1 &&
@@ -9350,8 +9399,8 @@ async function waitForServer(tries = 60) {
           lp0.includes('show you the numbers that prove it.') &&
           !lp0.includes('__BRAND_NAME__'),
           '');
-        check('redesign: red accent is scoped to the public pages',
-          ivCss.text.includes('#view-landing.lp {') && ivCss.text.includes('--lp-accent: #e3242b') &&
+        check('redesign: the AYG Lab orange accent is scoped to the public pages',
+          ivCss.text.includes('#view-landing.lp {') && ivCss.text.includes('--lp-accent: #e6660c') &&
           ivCss.text.includes('body.logged-out .footer-member-note { display: none; }'),
           '');
         check('v35: landing makes no school or CSCS claims and keeps exactly one AYG link',

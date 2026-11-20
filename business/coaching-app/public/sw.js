@@ -7,7 +7,7 @@ const CACHE = '__BRAND_CACHE__';
    URLs index.html asks for, so a release never pairs new markup with
    an older cached stylesheet or script. */
 const SHELL_ASSETS = ['/styles.css?v=__APP_VERSION__', '/app.js?v=__APP_VERSION__'];
-const SHELL = ['/', '/index.html', ...SHELL_ASSETS, '/manifest.json', '/assets/rp-logo.svg'];
+const SHELL = ['/', '/index.html', ...SHELL_ASSETS, '/manifest.json', '/assets/ayg-lab-logo-256.webp'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

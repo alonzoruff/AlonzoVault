@@ -1,6 +1,8 @@
-# Ruffin Performance — coaching membership app
+# AYG Lab — coaching membership app
 
-The online membership app for **Ruffin Performance**, AJ Ruffin's own
+The online membership app for **AYG Lab** (renamed from Ruffin Performance
+in Nov 2026; the Render service, URLs and some code identifiers keep the
+old name on purpose), AJ Ruffin's own
 speed & strength coaching business (brand name and tagline live in one
 place: the `BRAND` block at the top of `server.js` — rename there and
 every surface follows).
@@ -27,7 +29,7 @@ Zero dependencies (Node >= 18 built-ins only). Environment:
   coach email notifications (invitation requests, uninvited sign-up
   attempts, new accounts, form checks, in-person requests). Unset = off.
 - `NOTIFY_EMAIL` — where notifications go (comma-separated for several)
-- `RESEND_FROM` — sender; default `Ruffin Performance <onboarding@resend.dev>`,
+- `RESEND_FROM` — sender; default `AYG Lab <onboarding@resend.dev>`,
   which only delivers to the address the Resend account was made with.
   Verify a domain in Resend to send from it.
 - `CALENDLY_URL` — the Calendly event the public booking page embeds
