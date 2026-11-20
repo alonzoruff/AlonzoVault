@@ -2217,6 +2217,56 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
    root this changes nothing (same values as :root) — it exists
    so a Silverline subtree (the picker's preview) resets its
    tokens even inside another theme's page. ---- */
+
+/* ---- AYG Lab: the brand theme, matched to the logo. Deep
+   black-blue rooms, neon orange carrying the accent work, and
+   cyan reserved for focus and key highlights. This is the
+   default theme from v41 on. ---- */
+[data-theme="ayglab"] {
+  --bg: #04070c;
+  --card: #0a0f16;
+  --ink: #eef6fb;
+  --muted: #93a5b5;
+  --line: #1b2836;
+  --red: #ff7a1a;
+  --red-dark: #ff8f3d;
+  --red-on-dark: #ffa25e;
+  --red-soft-on-dark: #ffc79b;
+  --hud-bg: #030509;
+  --hud-line: #1b2836;
+  --hud-text-dim: #c9d8e4;
+  --accent-ink: #1a0d02;
+  --surface-2: #0e1620;
+  --surface-hover: #132130;
+  --field-bg: #060b11;
+  --panel: #060b11;
+  --panel-2: #0c141f;
+  --header-bg: #05090f;
+  --chip-bg: #15222f;
+  --chip-ink: #cfe3f2;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 1px 3px rgba(0, 0, 0, .4);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .4);
+  --shadow-btn: 0 1px 2px rgba(0, 0, 0, .35);
+  --focus-ring: rgba(255, 122, 26, .28);
+  color-scheme: dark;
+  --accent: var(--red);
+  --accent-strong: var(--red-dark);
+  --r-card: var(--radius);
+  --r-control: var(--radius-sm);
+  --r-inner: 8px;
+  --r-pill: 999px;
+  --surface-pop: #101a26;
+  --line-strong: #46617c;
+  --focus: #6fe3f7;
+  --accent-tint: rgba(255, 122, 26, .13);
+  --danger: var(--high);
+  --ok: var(--low);
+  --warn: #e3c766; --warn-bg: #2a2113; --warn-line: #57451c;
+  --shadow-bar: 0 -1px 0 var(--line), 0 -8px 24px -12px rgba(0, 0, 0, .6);
+}
+
 [data-theme="silverline"] {
   --bg: #0d0d0f;
   --card: #17181c;

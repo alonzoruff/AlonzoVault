@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
- * Ruffin Performance — standalone web app server.
+ * AYG Lab — standalone web app server.
  *
- * The online membership app for Ruffin Performance, AJ Ruffin's own
+ * The online membership app for AYG Lab, AJ Ruffin's own
  * speed & strength coaching business. Forked from his school-program sprinter
  * app engine; from the fork on, the two apps evolve separately and
  * no school data, branding, or accounts exist in this codebase.
@@ -106,11 +106,11 @@ const SESSION_DAYS = 30;
 /* a single line of copy on the landing page, nothing more.            */
 /* ------------------------------------------------------------------ */
 const BRAND = {
-  name: 'Ruffin Performance',
-  short: 'RP Training',
+  name: 'AYG Lab',
+  short: 'AYG Lab',
   tagline: 'Speed & strength coaching',
-  version: 'v40',
-  cache: 'ruffin-performance-v40',
+  version: 'v41',
+  cache: 'ayg-lab-v41',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute
@@ -371,7 +371,7 @@ const PREVIEW_SCREENS = ['today', 'training', 'progress'];
 /* Null-prototype maps, so a posted key like "constructor" is never a match. */
 const REFERRAL_SOURCES = Object.assign(Object.create(null), {
   friend: { label: 'A friend or family member', kind: 'referral' },
-  member: { label: 'A Ruffin Performance member', kind: 'referral' },
+  member: { label: 'An AYG Lab member', kind: 'referral' },
   coach: { label: 'A coach or trainer', kind: 'referral' },
   instagram: { label: 'Instagram', kind: 'organic' },
   facebook: { label: 'Facebook', kind: 'organic' },
@@ -1135,7 +1135,7 @@ function loadCoachEducation() {
   return [];
 }
 /* The three Lab programs (content/lab_programs.json). This is
-   Ruffin Performance content, so it lives with this app rather than
+   AYG Lab content, so it lives with this app rather than
    in the shared workout database. Loaded tolerantly like the other
    optional libraries: a missing or malformed file serves an empty
    list, and an entry is kept only when every part the Programs view
@@ -4783,7 +4783,7 @@ function bookingIcs(b) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Ruffin Performance//Lab Talk Booking//EN',
+    'PRODID:-//AYG Lab//Lab Talk Booking//EN',
     'BEGIN:VEVENT',
     'UID:' + b.id + '@ruffin-performance',
     'DTSTAMP:' + icsUtc(Date.now()),
@@ -7509,7 +7509,7 @@ async function handleApi(req, res, url) {
     }
     if (!isPlainObj(body) || body.app !== 'ruffin-performance-app' || body.kind !== 'backup'
       || !isPlainObj(body.data)) {
-      return sendJson(res, 400, { error: 'That is not a Ruffin Performance backup file.' });
+      return sendJson(res, 400, { error: 'That is not an AYG Lab backup file.' });
     }
     /* Everything is validated before anything is merged: a bad
        collection refuses the whole import with the store untouched. */

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="silverline">
+<html lang="en" data-theme="ayglab">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -27,7 +27,7 @@
       "@id": "https://ruffin-performance.onrender.com/#organization",
       "name": "__BRAND_NAME__",
       "url": "https://ruffin-performance.onrender.com/",
-      "logo": "https://ruffin-performance.onrender.com/assets/rp-logo.svg",
+      "logo": "https://ruffin-performance.onrender.com/assets/ayg-lab-logo.jpg",
       "slogan": "Measured speed, not promised speed."
     },
     {
@@ -40,9 +40,9 @@
   ]
 }
 </script>
-<meta name="theme-color" content="#0d0d0f">
+<meta name="theme-color" content="#04070c">
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" href="/assets/rp-logo.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/ayg-lab-logo.jpg" type="image/jpeg">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -53,13 +53,13 @@
    Default is Silverline. The picker lives in Account (app.js);
    this script only restores what the picker saved. */
 (function () {
-  var t = 'silverline';
+  var t = 'ayglab';
   try {
     var saved = window.localStorage.getItem('rp-theme');
-    if (saved === 'carbon' || saved === 'studio') t = saved;
+    if (saved === 'ayglab' || saved === 'silverline' || saved === 'carbon' || saved === 'studio') t = saved;
   } catch (e) { /* storage unavailable: the default theme applies */ }
   document.documentElement.setAttribute('data-theme', t);
-  var colors = { silverline: '#0d0d0f', carbon: '#08090a', studio: '#f4f2ee' };
+  var colors = { ayglab: '#04070c', silverline: '#0d0d0f', carbon: '#08090a', studio: '#f4f2ee' };
   var meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', colors[t]);
 })();
@@ -70,7 +70,7 @@
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand-block" href="/" data-route="home" aria-label="__BRAND_NAME__ home">
-      <img class="site-logo" src="/assets/rp-logo.svg" alt="">
+      <img class="site-logo" src="/assets/ayg-lab-logo.jpg" alt="">
       <div class="brand-text">
         <div class="identity">__BRAND_NAME__</div>
         <div class="app-name">__BRAND_TAGLINE__</div>
@@ -152,7 +152,7 @@
              more). Until then the brand mark shows. No stock or generated images. -->
         <figure class="lp-photo lp-photo-hero" data-photo-slot="hero">
           <img src="/assets/coach-aj-hero.jpg" alt="Coach AJ coaching on the track" onerror="this.remove()">
-          <img class="lp-photo-mark" src="/assets/rp-logo.svg" alt="" aria-hidden="true">
+          <img class="lp-photo-mark" src="/assets/ayg-lab-logo.jpg" alt="" aria-hidden="true">
         </figure>
       </div>
     </div>
@@ -181,7 +181,7 @@
         </div>
         <article class="lp-eotd">
           <div class="lp-eotd-side" aria-hidden="true">
-            <img src="/assets/rp-logo.svg" alt="">
+            <img src="/assets/ayg-lab-logo.jpg" alt="">
             <span>Demo video in the Lab library</span>
           </div>
           <div class="lp-eotd-body">
@@ -406,7 +406,7 @@
              public/assets/coach-aj-about.jpg (square, 1000px or more). -->
         <figure class="lp-photo lp-photo-about" data-photo-slot="about">
           <img src="/assets/coach-aj-about.jpg" alt="Coach AJ" onerror="this.remove()">
-          <img class="lp-photo-mark" src="/assets/rp-logo.svg" alt="" aria-hidden="true">
+          <img class="lp-photo-mark" src="/assets/ayg-lab-logo.jpg" alt="" aria-hidden="true">
         </figure>
         <div>
           <span class="lp-eyebrow">About Coach AJ</span>
@@ -1535,7 +1535,7 @@
 </div>
 
 <footer class="footer muted">
-  <img class="site-logo footer-logo" src="/assets/rp-logo.svg" alt="">
+  <img class="site-logo footer-logo" src="/assets/ayg-lab-logo.jpg" alt="">
   <div>__BRAND_NAME__ · Maryland/DC area and online</div>
   <div class="footer-links" id="footer-links">
     <a href="/privacy" data-route="privacy">Privacy</a>
