@@ -3821,3 +3821,4 @@ html, body, input, button, select, textarea { font-variant-numeric: tabular-nums
 @media (prefers-reduced-motion: reduce) {
   .update-toast, .flash-ok, .saved-note, [data-saved], .btn[aria-busy="true"]::after { animation: none; }
 }
+#view-landing.lp .lp-btn-primary, #view-landing.lp .lp-btn-primary:hover { color: var(--lp-accent-ink); }
