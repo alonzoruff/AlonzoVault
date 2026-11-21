@@ -452,11 +452,15 @@ async function main() {
   check('home has a What to do today card with warm-up, run and log steps',
     appJs.text.includes('todo-today') && appJs.text.includes('todo-warmup') &&
     appJs.text.includes('todo-log') && appJs.text.includes('What to do today'));
+  const idxHtml = await apiText(null, '/');
+  check('What to do today card sits above practice plan, check-in and announcements',
+    idxHtml.text.indexOf('id="todo-slot"') > 0 && idxHtml.text.indexOf('id="todo-slot"') < idxHtml.text.indexOf('id="my-plan-slot"') &&
+    idxHtml.text.indexOf('id="my-plan-slot"') < idxHtml.text.indexOf('id="announce-slot"') && appJs.text.includes('todo-coach'));
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v67 (What to do today card)',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v67"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v68 (What to do today card)',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v68"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2382,7 +2386,7 @@ async function main() {
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
     appJs.text.includes("const APP_VERSION = 'v66'") &&
-    swJs.text.includes("sprinter-app-v67"));
+    swJs.text.includes("sprinter-app-v68"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&

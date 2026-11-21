@@ -1408,7 +1408,7 @@ function renderHome() {
       <h2>What to do today</h2>
       <ol class="todo-steps">
         <li><strong>Warm up.</strong> ${warm ? `Do ${esc(warm.name)}. <button class="btn secondary" id="todo-warmup" type="button">Open warm-up card</button>` : 'Jog easy and loosen up for 10 minutes.'}</li>
-        <li><strong>Run today's workout.</strong> ${sid ? `<button class="btn primary" data-run-today="${esc(sid)}" type="button">Start ${esc(sid)}</button>` : 'Your coach will give you the workout.'}</li>
+        <li><strong>Run today's workout.</strong> ${sid ? `<button class="btn primary" data-run-today="${esc(sid)}" type="button">Start ${esc(sid)}</button>` : (isCoachUser() ? `Open each group's workout and start it from Coach Today. <button class="btn primary" id="todo-coach" type="button">Open Coach Today</button>` : 'Your coach will give you the workout.')}</li>
         <li><strong>Log it.</strong> Write down what you ran. <button class="btn secondary" id="todo-log" type="button">Open my log</button></li>
       </ol>
     </div>`;
@@ -1433,7 +1433,6 @@ function renderHome() {
     ${LANE_DIVIDER}
     <p>${statusLine}</p>
     ${isCoachUser() ? '<div id="coach-today"></div>' : ''}
-    ${todayCardHtml}
     ${todayHtml}
     ${startStrip}
     ${homeLearnHtml(todayInfo, inSeason)}
@@ -1466,8 +1465,12 @@ function renderHome() {
   $('#home-search-btn').addEventListener('click', runHomeSearch);
   $('#home-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runHomeSearch(); } });
   $('#home-open-season').addEventListener('click', () => { state.week = wkNum; renderSeason(); showView('season'); });
+  const todoSlot = $('#todo-slot');
+  if (todoSlot) { todoSlot.innerHTML = todayCardHtml; wireRunTodayButtons(todoSlot); }
   const todoWarm = $('#todo-warmup');
   if (todoWarm) todoWarm.addEventListener('click', openWarmupCard);
+  const todoCoach = $('#todo-coach');
+  if (todoCoach) todoCoach.addEventListener('click', () => showView('coachtoday'));
   const todoLog = $('#todo-log');
   if (todoLog) todoLog.addEventListener('click', () => showView('log'));
   const warmBtn = $('#home-warmup-card');
