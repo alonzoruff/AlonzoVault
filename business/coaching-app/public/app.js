@@ -130,12 +130,26 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* Loading state for buttons: the button the person just pressed shows
+   the spinner (.btn[aria-busy]) while its request is in flight, so
+   sign-in, saves, plan generation and checkout never look frozen. */
+let lastPressed = null;
+['click', 'submit'].forEach(ev => document.addEventListener(ev, (e) => {
+  const t = ev === 'submit' ? (e.submitter || e.target.querySelector('button[type="submit"], .btn.primary')) : e.target.closest && e.target.closest('button');
+  lastPressed = t ? { el: t, at: Date.now() } : null;
+}, true));
 async function api(path, opts) {
-  const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
-  let data = {};
-  try { data = await res.json(); } catch (_) { /* empty */ }
-  if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
-  return data;
+  const btn = lastPressed && Date.now() - lastPressed.at < 800 && lastPressed.el.getAttribute('aria-busy') !== 'true' ? lastPressed.el : null;
+  if (btn) btn.setAttribute('aria-busy', 'true');
+  try {
+    const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+    let data = {};
+    try { data = await res.json(); } catch (_) { /* empty */ }
+    if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
+    return data;
+  } finally {
+    if (btn) btn.removeAttribute('aria-busy');
+  }
 }
 const apiPost = (path, body) => api(path, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
@@ -732,7 +746,8 @@ async function rpJoinTier(b) {
   const note = (scope && scope.querySelector('[data-join-message]')) || $('[data-join-message]');
   const showNote = (msg) => { if (note) note.textContent = msg; };
   b.disabled = true;
-  showNote('One moment…');
+  b.setAttribute('aria-busy', 'true');
+  showNote('Opening secure checkout…');
   try {
     const res = await fetch('/api/checkout/session', {
       method: 'POST',
@@ -749,6 +764,7 @@ async function rpJoinTier(b) {
     showNote('Something went wrong. Please try again.');
   }
   b.disabled = false;
+  b.removeAttribute('aria-busy');
 }
 $$('[data-join-tier]').forEach(b => b.addEventListener('click', () => rpJoinTier(b)));
 
