@@ -3560,6 +3560,118 @@ function buildBackupEnvelope() {
     data,
   };
 }
+/* ---------- Full move: the team backup plus the logins ----------
+   For moving the whole app to a new server. On top of the team
+   dataset it carries every login (email, role, head-coach flag and
+   the stored password HASH, never a password), each login's own
+   practice log and swaps, and the per-coach staff settings, so
+   everyone signs in on the new server with the password they
+   already use. It never carries the cookie-signing secret or any
+   session: old sign-ins simply end and people sign in again.
+   Head coach only, and it restores only into a brand-new app. */
+const LOGIN_FIELDS = ['id', 'email', 'passHash', 'role', 'isOwner', 'createdAt', 'ageAttestedAt'];
+const PASS_HASH_RE = /^[0-9a-f]{32}:[0-9a-f]{128}$/;
+const FULL_MOVE_PRIVATE = 'KEEP THIS FILE PRIVATE. It holds every login for the app (stored password '
+  + 'hashes, not passwords) plus athlete health information. Do not share it, email it, or leave it in a '
+  + 'shared or public folder. Use it only to move the app to a new server, then delete extra copies.';
+function loginRecord(u) {
+  const out = {};
+  for (const k of LOGIN_FIELDS) if (u[k] !== undefined) out[k] = u[k];
+  out.isOwner = !!u.isOwner;
+  return out;
+}
+function buildFullMoveEnvelope() {
+  const env = buildBackupEnvelope();
+  const users = db.users.map(loginRecord);
+  const logs = {}, swaps = {}, staff = {};
+  for (const u of users) {
+    logs[u.id] = Array.isArray(db.logs[u.id]) ? db.logs[u.id] : [];
+    swaps[u.id] = isPlainObj(db.swaps[u.id]) ? db.swaps[u.id] : {};
+    if (isPlainObj(db.staff[u.id])) staff[u.id] = db.staff[u.id];
+  }
+  return {
+    app: env.app, kind: 'full-move', version: 1, exportedAt: env.exportedAt,
+    keepPrivate: FULL_MOVE_PRIVATE,
+    summary: {
+      logins: users.length,
+      coaches: users.filter(u => u.role === 'coach').length,
+      athletes: env.summary.athletes,
+      groups: env.summary.groups,
+      contents: env.summary.contents,
+      notIncluded: [
+        'Sign-in sessions and the server\'s cookie-signing secret. Everyone signs in once more on the new server.',
+        'The data audit log (who exported or imported what).',
+      ],
+    },
+    logins: { users, logs, swaps, staff },
+    data: env.data,
+  };
+}
+/* Check a full move's logins block without touching the store.
+   Returns an error string, or null when it is safe to restore. */
+function validateLogins(logins) {
+  if (!isPlainObj(logins) || !Array.isArray(logins.users)) return 'The file\'s logins are missing or damaged.';
+  const ids = new Set(), emails = new Set();
+  let owners = 0;
+  for (const u of logins.users) {
+    if (!isPlainObj(u) || typeof u.id !== 'string' || !u.id) return 'A login in the file is missing its id.';
+    if (typeof u.email !== 'string' || u.email !== u.email.trim().toLowerCase() || !EMAIL_RE.test(u.email)) {
+      return 'A login in the file has a damaged email.';
+    }
+    if (typeof u.passHash !== 'string' || !PASS_HASH_RE.test(u.passHash)) {
+      return 'A login in the file has a damaged password hash.';
+    }
+    if (u.role !== 'coach' && u.role !== 'athlete') return 'A login in the file has an unknown role.';
+    if (ids.has(u.id) || emails.has(u.email)) return 'The file lists the same login twice.';
+    ids.add(u.id); emails.add(u.email);
+    if (u.isOwner === true) {
+      owners++;
+      if (u.role !== 'coach') return 'The file\'s head coach is not a coach account.';
+    }
+  }
+  if (owners !== 1) return 'The file must have exactly one head coach login.';
+  for (const [k, kind] of [['logs', 'list'], ['swaps', 'object'], ['staff', 'object']]) {
+    const col = logins[k] === undefined ? {} : logins[k];
+    if (!isPlainObj(col)) return 'The file\'s "' + k + '" should be an object.';
+    for (const [uid, v] of Object.entries(col)) {
+      if (!ids.has(uid)) return 'The file\'s "' + k + '" names a login that is not in the file.';
+      if (kind === 'list' ? !Array.isArray(v) : !isPlainObj(v)) return 'The file\'s "' + k + '" looks damaged.';
+    }
+  }
+  return null;
+}
+/* A brand-new app: the head coach who just signed up is the only
+   login, and nothing team-related has been saved yet (the startup
+   workout seed and default settings don't count). A full move
+   replaces every login, so it only ever lands here. */
+function isBrandNewStore(caller) {
+  if (db.users.length !== 1 || db.users[0].id !== caller.id) return false;
+  if ((db.logs[caller.id] || []).length || Object.keys(db.swaps[caller.id] || {}).length) return false;
+  for (const k of Object.keys(BACKUP_ARRAY_KEYS)) {
+    const list = db[k] || [];
+    if (k === 'customWorkouts' ? list.some(w => !isUntouchedWorkoutSeed(w)) : list.length) return false;
+  }
+  for (const k of BACKUP_OBJECT_KEYS) {
+    if (k !== 'settings' && Object.keys(db[k] || {}).length) return false;
+  }
+  return true;
+}
+/* Restore a validated full move: team data merges in (into an empty
+   store, so it lands exactly), then the file's logins, practice logs,
+   swaps and staff settings replace the brand-new app's one login. */
+function applyFullMove(file) {
+  const merged = mergeBackupData(file.data);
+  const users = file.logins.users.map(u => Object.assign(loginRecord(u), { profileId: null }));
+  db.users = users;
+  db.logs = {}; db.swaps = {}; db.staff = {};
+  for (const u of users) {
+    db.logs[u.id] = (file.logins.logs || {})[u.id] || [];
+    db.swaps[u.id] = (file.logins.swaps || {})[u.id] || {};
+    if ((file.logins.staff || {})[u.id]) db.staff[u.id] = file.logins.staff[u.id];
+  }
+  migrate();
+  return merged;
+}
 /* Validate an import payload's data object WITHOUT touching the
    store: every collection present must match the shape migrate()
    expects (list vs object), and every record in a list must carry
@@ -6073,6 +6185,29 @@ async function handleApi(req, res, url) {
     saveDb();
     return sendBackupDownload(res, envelope, 'sprinter-backup-' + todayStr() + '.encrypted.json');
   }
+  /* Full move (logins included): head coach only. Plain or sealed
+     with a passphrase, the same way as a backup. */
+  if (p === '/api/export/full-move' && (req.method === 'GET' || req.method === 'POST')) {
+    if (!user.isOwner) {
+      return sendJson(res, 403, { error: 'Only the head coach can download the full move file, because it holds every login.' });
+    }
+    if (req.method === 'GET') {
+      logDataEvent(user, 'full-move', 'Full move with logins (plain JSON)');
+      saveDb();
+      return sendBackupDownload(res, buildFullMoveEnvelope(),
+        'sprinter-full-move-PRIVATE-' + todayStr() + '.json');
+    }
+    const body = await readBody(req);
+    const passphrase = typeof body.passphrase === 'string' ? body.passphrase : '';
+    if (passphrase.length < 8) {
+      return sendJson(res, 400, { error: 'A passphrase of at least 8 characters is required to encrypt the file.' });
+    }
+    const envelope = encryptBackupEnvelope(JSON.stringify(buildFullMoveEnvelope()), passphrase);
+    logDataEvent(user, 'full-move', 'Full move with logins (passphrase-encrypted)');
+    saveDb();
+    return sendBackupDownload(res, envelope,
+      'sprinter-full-move-PRIVATE-' + todayStr() + '.encrypted.json');
+  }
 
   if (p === '/api/import/backup' && req.method === 'POST') {
     let body;
@@ -6104,6 +6239,31 @@ async function handleApi(req, res, url) {
       } catch (_) {
         return sendJson(res, 400, { error: 'That backup file looks damaged.' });
       }
+    }
+    if (isPlainObj(body) && body.app === 'sprinter-workout-app' && body.kind === 'full-move'
+      && isPlainObj(body.data)) {
+      if (!user.isOwner) {
+        return sendJson(res, 403, { error: 'Only the head coach can restore a full move file.' });
+      }
+      if (!isBrandNewStore(user)) {
+        return sendJson(res, 409, {
+          error: 'A full move file restores only into a brand-new app (just your new head coach sign-up, nothing else saved yet). '
+            + 'To add team data to this app instead, restore a regular backup.',
+        });
+      }
+      const bad = validateBackupData(body.data) || validateLogins(body.logins);
+      if (bad) return sendJson(res, 400, { error: bad });
+      const merged = applyFullMove(body);
+      logDataEvent(user, 'full-move-import',
+        'Full move restored: ' + db.users.length + ' logins, ' + merged.totalAdded + ' records');
+      saveDb();
+      /* The brand-new sign-up is gone (the file's logins replaced
+         it), so its cookie is cleared: sign in with the old email
+         and password. */
+      return sendJson(res, 200, {
+        ok: true, fullMove: true, logins: db.users.length, counts: merged.counts,
+        totalAdded: merged.totalAdded, totalUpdated: merged.totalUpdated,
+      }, { 'Set-Cookie': sessionCookie(req, '', 0) });
     }
     if (!isPlainObj(body) || body.app !== 'sprinter-workout-app' || body.kind !== 'backup'
       || !isPlainObj(body.data)) {

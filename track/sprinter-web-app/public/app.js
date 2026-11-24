@@ -7570,10 +7570,21 @@ async function renderData() {
     </div>
     <div class="card">
       <h3>Restore from a backup</h3>
-      <p class="muted">Restoring merges into what's already here: records in the file are added or updated, and nothing is ever deleted. Accounts are not part of a backup — athlete sign-ins keep working because account links are stored by email and re-attach on their own.</p>
+      <p class="muted">Restoring merges into what's already here: records in the file are added or updated, and nothing is ever deleted. Accounts are not part of a backup — athlete sign-ins keep working because account links are stored by email and re-attach on their own. A full move file (logins included) also restores here, but only into a brand-new app.</p>
       <p><input type="file" id="data-file" accept=".json,application/json"></p>
       <div id="data-import-box"></div>
     </div>
+    ${state.user && state.user.isOwner ? `<div class="card">
+      <h3>Move to a new server (logins included)</h3>
+      <p class="muted">For moving the whole app to a new host. It holds everything in the full backup plus every login (email, role, and the stored password hash, never the password itself), each login's own practice log and swaps, and coach staff settings. Everyone signs in on the new server with the password they already use.</p>
+      <p><strong>Keep this file private.</strong> It holds every login and athlete health information. Do not share it, email it, or leave it in a shared folder. Encrypt it if it will sit anywhere but your own computer, and delete extra copies once the move is done.</p>
+      <p><a class="btn secondary" href="/api/export/full-move">Download full move file</a></p>
+      <div class="filter-row">
+        <label>Passphrase (8+ characters) <input type="password" id="move-pass" autocomplete="new-password"></label>
+        <button class="btn" id="move-enc-download" type="button">Download encrypted full move file</button>
+      </div>
+      <p class="muted" id="move-enc-msg">To restore it: open the new app, sign up as head coach, then choose the file under Restore from a backup.</p>
+    </div>` : ''}
     <div class="card">
       <h3>Spreadsheets (CSV)</h3>
       <p>
@@ -7605,24 +7616,43 @@ async function renderData() {
       </div>
       <div id="ret-list"><p class="muted">Loading…</p></div>
     </div>`;
-  $('#data-enc-download').addEventListener('click', async () => {
-    const msg = $('#data-enc-msg');
-    const pass = $('#data-pass').value;
-    if (!pass || pass.length < 8) { msg.textContent = 'Set a passphrase of at least 8 characters first.'; return; }
-    msg.textContent = 'Encrypting…';
-    try {
-      const env = await apiPost('/api/export/backup', { passphrase: pass });
-      const blob = new Blob([JSON.stringify(env, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'sprinter-backup-encrypted.json';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-      msg.textContent = 'Encrypted backup downloaded. Keep the passphrase somewhere safe — without it the file cannot be restored.';
-    } catch (err) { msg.textContent = err.message; }
-  });
+  const encryptedDownload = (btnSel, passSel, msgSel, url, filename, doneText) => {
+    const btn = $(btnSel);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const msg = $(msgSel);
+      const pass = $(passSel).value;
+      if (!pass || pass.length < 8) { msg.textContent = 'Set a passphrase of at least 8 characters first.'; return; }
+      msg.textContent = 'Encrypting…';
+      try {
+        const env = await apiPost(url, { passphrase: pass });
+        const blob = new Blob([JSON.stringify(env, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        msg.textContent = doneText;
+      } catch (err) { msg.textContent = err.message; }
+    });
+  };
+  encryptedDownload('#data-enc-download', '#data-pass', '#data-enc-msg', '/api/export/backup',
+    'sprinter-backup-encrypted.json',
+    'Encrypted backup downloaded. Keep the passphrase somewhere safe — without it the file cannot be restored.');
+  encryptedDownload('#move-enc-download', '#move-pass', '#move-enc-msg', '/api/export/full-move',
+    'sprinter-full-move-PRIVATE-encrypted.json',
+    'Encrypted full move file downloaded. Keep it private, and keep the passphrase somewhere safe: without it the file cannot be restored.');
+  /* After a full move lands, the brand-new sign-up no longer exists
+     (the file's logins replaced it): sign out here too and say how
+     to get back in. */
+  const fullMoveDone = async (out, r) => {
+    out.innerHTML = '<p><strong>Move complete:</strong> ' + esc(r.logins) + ' logins and ' + esc(r.totalAdded)
+      + ' team records restored.</p><p>You are signed out now. Sign in with your old email and password from before the move.</p>';
+    pendingBackup = null;
+    state.user = null; await refreshUserData(); syncAuthUi();
+  };
   (async () => {
     try {
       const log = await api('/api/export/log');
@@ -7699,8 +7729,37 @@ async function renderData() {
         out.innerHTML = '<p class="muted">Decrypting and importing…</p>';
         try {
           const r = await apiPost('/api/import/backup', { ...pendingBackup, passphrase: $('#data-import-pass').value });
+          if (r.fullMove) { await fullMoveDone(out, r); return; }
           out.innerHTML = '<p><strong>Import complete:</strong> ' + r.totalAdded + ' added, ' + r.totalUpdated + ' updated.</p>';
           pendingBackup = null;
+        } catch (err) {
+          out.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
+        }
+      });
+      return;
+    }
+    if (parsed && parsed.app === 'sprinter-workout-app' && parsed.kind === 'full-move'
+      && parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)) {
+      pendingBackup = parsed;
+      const when = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString() : 'an unknown date';
+      const sum = parsed.summary || {};
+      box.innerHTML =
+        '<p>Full move file from <strong>' + esc(when) + '</strong>: ' + esc(sum.logins ?? '?') + ' logins and '
+        + esc(sum.athletes ?? '?') + ' athletes.</p>'
+        + '<p>It restores only into a brand-new app. Your new sign-up is replaced by the logins in the file, so when it finishes you sign in with your old email and password.</p>'
+        + '<p><button type="button" class="btn" id="data-import-go">Restore everything</button> '
+        + '<button type="button" class="btn secondary" id="data-import-cancel">Cancel</button></p>'
+        + '<div id="data-import-result"></div>';
+      $('#data-import-cancel').addEventListener('click', () => {
+        pendingBackup = null;
+        box.innerHTML = '';
+        fileInput.value = '';
+      });
+      $('#data-import-go').addEventListener('click', async () => {
+        const out = $('#data-import-result');
+        out.innerHTML = '<p class="muted">Restoring…</p>';
+        try {
+          await fullMoveDone(out, await apiPost('/api/import/backup', pendingBackup));
         } catch (err) {
           out.innerHTML = '<p class="error">' + esc(err.message) + '</p>';
         }

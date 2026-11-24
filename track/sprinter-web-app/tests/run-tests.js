@@ -5300,6 +5300,211 @@ async function waitForServer(tries = 60) {
       }
     }
 
+    /* Full move (logins included): a made-up team with three made-up
+       logins moves from one app to a brand-new one. Passwords travel
+       only as their stored hashes; after the restore every made-up
+       login signs in with the same password, and the team data,
+       practice logs, swaps and staff settings all match. Runs its own
+       two servers, ports and data dirs. */
+    {
+      const FM_SRC_PORT = 3231, FM_DST_PORT = 3232;
+      const fmApi = (port) => async (cookie, method, p, body) => {
+        const headers = {};
+        if (cookie) headers.cookie = cookie;
+        let data;
+        if (body !== undefined) { data = JSON.stringify(body); headers['content-type'] = 'application/json'; }
+        const res = await fetch('http://127.0.0.1:' + port + p, { method, headers, body: data });
+        const text = await res.text();
+        let json = null;
+        try { json = JSON.parse(text); } catch (_) { /* not json */ }
+        let setCookie = [];
+        try { setCookie = res.headers.getSetCookie(); } catch (_) {
+          const sc = res.headers.get('set-cookie'); if (sc) setCookie = [sc];
+        }
+        return { status: res.status, json, text, setCookie, disp: res.headers.get('content-disposition') || '' };
+      };
+      const srcApi = fmApi(FM_SRC_PORT), dstApi = fmApi(FM_DST_PORT);
+      const SRC_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-move-src-'));
+      const DST_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-move-dst-'));
+      let fmLog = '';
+      const startFm = (port, dir, secret) => {
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, process.env, { PORT: String(port), DATA_DIR: dir, SESSION_SECRET: secret }),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', d => { fmLog += d; });
+        c.stderr.on('data', d => { fmLog += d; });
+        return c;
+      };
+      const waitFm = async (port) => {
+        for (let i = 0; i < 60; i++) {
+          try { if ((await fetch('http://127.0.0.1:' + port + '/api/content')).status === 200) return true; } catch (_) { /* not up */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      const same = (a, b) => {
+        if (Array.isArray(a) || Array.isArray(b)) {
+          return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => same(v, b[i]));
+        }
+        if (a && b && typeof a === 'object' && typeof b === 'object') {
+          const ka = Object.keys(a), kb = Object.keys(b);
+          return ka.length === kb.length && ka.every(k => Object.prototype.hasOwnProperty.call(b, k) && same(a[k], b[k]));
+        }
+        return a === b;
+      };
+      const differing = (a, b) => [...new Set(Object.keys(a).concat(Object.keys(b)))].filter(k => !same(a[k], b[k]));
+      const PW = { owner: 'MadeUpOwner-123', coach: 'MadeUpCoach-456', athlete: 'MadeUpAthlete-789' };
+      let srcChild = startFm(FM_SRC_PORT, SRC_DIR, 'move-src-secret-value');
+      let dstChild = startFm(FM_DST_PORT, DST_DIR, 'move-dst-secret-value');
+      try {
+        check('full move: both servers start', (await waitFm(FM_SRC_PORT)) && (await waitFm(FM_DST_PORT)), fmLog);
+        /* The made-up source team. */
+        let r = await srcApi(null, 'POST', '/api/register', { email: 'move-owner@test.com', password: PW.owner, ageAttested: true });
+        const sOwner = cookieOf(r);
+        await srcApi(sOwner, 'POST', '/api/coach-invites', { email: 'move-coach@test.com' });
+        r = await srcApi(sOwner, 'POST', '/api/groups', { name: 'Made-Up Sprints' });
+        r = await srcApi(sOwner, 'POST', '/api/profiles', { firstName: 'Testy', lastName: 'McSprint', events: ['sprinter'] });
+        const mProfileId = r.json.profile.id;
+        await srcApi(sOwner, 'PUT', '/api/profiles/' + mProfileId + '/link', { email: 'move-athlete@test.com' });
+        r = await srcApi(null, 'POST', '/api/register', { email: 'move-coach@test.com', password: PW.coach, ageAttested: true });
+        const sCoach = cookieOf(r);
+        const sCoachId = r.json.id;
+        r = await srcApi(null, 'POST', '/api/register', { email: 'move-athlete@test.com', password: PW.athlete, ageAttested: true });
+        const sAthlete = cookieOf(r);
+        check('full move source: the made-up athlete is linked to the roster', r.status === 201 && r.json.profileId === mProfileId, r.json);
+        await srcApi(sAthlete, 'POST', '/api/logs', { date: '2026-10-26', sessionId: 'ACC-01', group: '100/200', happened: 'Made-up practice', marks: '11.1', feel: 4, notes: 'pretend' });
+        await srcApi(sAthlete, 'PUT', '/api/swaps', { week: 1, day: 'tue', xt: 'XT-01' });
+        await srcApi(sCoach, 'PUT', '/api/staff/' + sCoachId, { displayName: 'Coach Pretend' });
+        await srcApi(sOwner, 'PUT', '/api/retention/settings', { months: 9 });
+
+        /* Who may download it. */
+        r = await srcApi(null, 'GET', '/api/export/full-move');
+        check('full move export signed out is 401', r.status === 401, r.status);
+        r = await srcApi(sAthlete, 'GET', '/api/export/full-move');
+        check('full move export for an athlete is 403', r.status === 403, r.status);
+        r = await srcApi(sCoach, 'GET', '/api/export/full-move');
+        check('full move export for an assistant coach is 403 (head coach only)', r.status === 403, r.status);
+
+        const fm = await srcApi(sOwner, 'GET', '/api/export/full-move');
+        const file = fm.json;
+        check('full move downloads with PRIVATE in the file name',
+          fm.status === 200 && fm.disp.includes('sprinter-full-move-PRIVATE-'), fm.disp);
+        check('full move file opens with a keep-private notice and a summary',
+          file.kind === 'full-move' && /KEEP THIS FILE PRIVATE/.test(file.keepPrivate) &&
+          fm.text.indexOf('"keepPrivate"') < fm.text.indexOf('"logins"') &&
+          file.summary.logins === 3 && file.summary.coaches === 2 && file.summary.athletes === 1, file.summary);
+        check('full move carries passwords only as stored hashes, never in plain text',
+          file.logins.users.every(u => /^[0-9a-f]{32}:[0-9a-f]{128}$/.test(u.passHash)) &&
+          !Object.values(PW).some(pw => fm.text.includes(pw)), file.logins.users.map(u => u.email));
+        check('full move carries no session or cookie-signing secret',
+          !fm.text.includes('move-src-secret-value') && !fm.text.includes(sOwner.split('=')[1]) &&
+          file.logins.users.every(u => Object.keys(u).every(k => ['id', 'email', 'passHash', 'role', 'isOwner', 'createdAt', 'ageAttestedAt'].includes(k))),
+          Object.keys(file.logins.users[0]));
+        check('full move carries practice logs, swaps and staff settings',
+          Object.values(file.logins.logs).some(l => l.some(e => e.happened === 'Made-up practice')) &&
+          Object.values(file.logins.swaps).some(sw => Object.keys(sw).length > 0) &&
+          file.logins.staff[sCoachId] && file.logins.staff[sCoachId].displayName === 'Coach Pretend',
+          file.logins.staff);
+        const srcBackup = (await srcApi(sOwner, 'GET', '/api/export/backup')).json;
+        r = await srcApi(sOwner, 'POST', '/api/export/full-move', { passphrase: 'made-up-passphrase' });
+        const fmEnc = r.json;
+        check('full move downloads encrypted with a passphrase',
+          r.status === 200 && fmEnc.kind === 'backup-encrypted' && !r.text.includes('move-owner@test.com'), r.status);
+
+        /* The brand-new destination app. */
+        r = await dstApi(null, 'POST', '/api/register', { email: 'brand-new-owner@test.com', password: 'TempOwner-000', ageAttested: true });
+        let dTemp = cookieOf(r);
+        const broken = JSON.parse(JSON.stringify(file));
+        broken.logins.users[0].passHash = 'not-a-hash';
+        r = await dstApi(dTemp, 'POST', '/api/import/backup', broken);
+        check('a full move with a damaged password hash is refused', r.status === 400, r.json);
+        const twoOwners = JSON.parse(JSON.stringify(file));
+        twoOwners.logins.users.forEach(u => { if (u.role === 'coach') u.isOwner = true; });
+        r = await dstApi(dTemp, 'POST', '/api/import/backup', twoOwners);
+        check('a full move with two head coaches is refused', r.status === 400, r.json);
+        r = await dstApi(dTemp, 'GET', '/api/export/backup');
+        check('refused full moves left the new app untouched', r.status === 200 && r.json.data.profiles.length === 0, r.json && r.json.summary);
+
+        r = await dstApi(dTemp, 'POST', '/api/import/backup', file);
+        check('full move restores into the brand-new app',
+          r.status === 200 && r.json.fullMove === true && r.json.logins === 3, r.json);
+        check('full move clears the brand-new sign-up\'s cookie', (r.setCookie[0] || '').includes('Max-Age=0'), r.setCookie);
+        r = await dstApi(dTemp, 'GET', '/api/me');
+        check('the brand-new sign-up is replaced by the file\'s logins', r.status === 401, r.status);
+
+        r = await dstApi(null, 'POST', '/api/login', { email: 'move-owner@test.com', password: PW.owner });
+        check('after the move the made-up head coach signs in with the same password',
+          r.status === 200 && r.json.isOwner === true && r.json.role === 'coach', r.json);
+        const dOwner = cookieOf(r);
+        r = await dstApi(null, 'POST', '/api/login', { email: 'move-owner@test.com', password: 'wrong-password' });
+        check('after the move a wrong password is still refused', r.status === 401, r.status);
+        r = await dstApi(null, 'POST', '/api/login', { email: 'move-coach@test.com', password: PW.coach });
+        const dCoach = cookieOf(r);
+        check('after the move the made-up assistant coach signs in as a coach', r.status === 200 && r.json.role === 'coach' && !r.json.isOwner, r.json);
+        r = await dstApi(null, 'POST', '/api/login', { email: 'move-athlete@test.com', password: PW.athlete });
+        const dAthlete = cookieOf(r);
+        check('after the move the made-up athlete signs in, still linked to their roster profile',
+          r.status === 200 && r.json.role === 'athlete' && r.json.profileId === mProfileId, r.json);
+        r = await dstApi(dAthlete, 'GET', '/api/logs');
+        check('after the move the athlete\'s own practice log is there',
+          r.status === 200 && r.json.entries.length === 1 && r.json.entries[0].happened === 'Made-up practice', r.json);
+        r = await dstApi(dCoach, 'GET', '/api/staff');
+        check('after the move the coach\'s staff display name is there',
+          r.status === 200 && r.json.staff.some(c => c.email === 'move-coach@test.com' && c.displayName === 'Coach Pretend'), r.json);
+        r = await dstApi(dOwner, 'GET', '/api/export/backup');
+        check('after the move every team collection matches the source record for record',
+          r.status === 200 && differing(srcBackup.data, r.json.data).length === 0, r.json && differing(srcBackup.data, r.json.data));
+        r = await dstApi(dOwner, 'GET', '/api/export/full-move');
+        check('after the move the logins, logs, swaps and staff match the source exactly',
+          r.status === 200 && same(file.logins, r.json.logins), r.json && differing(file.logins, r.json.logins));
+        r = await dstApi(dCoach, 'POST', '/api/import/backup', file);
+        check('an assistant coach cannot restore a full move', r.status === 403, r.status);
+        r = await dstApi(dOwner, 'POST', '/api/import/backup', file);
+        check('a full move never lands on an app that already has data', r.status === 409, r.json);
+
+        /* Wipe the destination outright and restore the encrypted file. */
+        dstChild.kill('SIGKILL');
+        await new Promise(res => setTimeout(res, 300));
+        for (const f of fs.readdirSync(DST_DIR)) fs.rmSync(path.join(DST_DIR, f), { recursive: true, force: true });
+        dstChild = startFm(FM_DST_PORT, DST_DIR, 'move-dst-secret-value-2');
+        check('wiped destination boots', await waitFm(FM_DST_PORT), fmLog);
+        r = await dstApi(null, 'POST', '/api/login', { email: 'move-owner@test.com', password: PW.owner });
+        check('wiped destination has no logins', r.status === 401, r.status);
+        r = await dstApi(null, 'POST', '/api/register', { email: 'brand-new-owner@test.com', password: 'TempOwner-000', ageAttested: true });
+        dTemp = cookieOf(r);
+        r = await dstApi(dTemp, 'POST', '/api/import/backup', Object.assign({}, fmEnc, { passphrase: 'wrong-passphrase' }));
+        check('encrypted full move with the wrong passphrase is refused', r.status === 400, r.json);
+        r = await dstApi(dTemp, 'POST', '/api/import/backup', Object.assign({}, fmEnc, { passphrase: 'made-up-passphrase' }));
+        check('encrypted full move restores after a wipe', r.status === 200 && r.json.fullMove === true, r.json);
+        r = await dstApi(null, 'POST', '/api/login', { email: 'move-athlete@test.com', password: PW.athlete });
+        const dAthlete2 = cookieOf(r);
+        check('after the encrypted restore the made-up athlete signs in with the same password', r.status === 200, r.status);
+        r = await dstApi(dAthlete2, 'GET', '/api/logs');
+        check('after the encrypted restore the practice log is there', r.status === 200 && r.json.entries.length === 1, r.json);
+        r = await dstApi(null, 'POST', '/api/login', { email: 'move-owner@test.com', password: PW.owner });
+        const dOwner2 = cookieOf(r);
+        r = await dstApi(dOwner2, 'GET', '/api/export/full-move');
+        check('after the encrypted restore everything matches the source again',
+          r.status === 200 && same(file.logins, r.json.logins) && differing(file.data, r.json.data).length === 0,
+          r.json && differing(file.data, r.json.data));
+
+        const fmJs = await apiText(null, '/app.js');
+        check('Data page: the full move card is head-coach only and says to keep the file private',
+          fmJs.text.includes('state.user && state.user.isOwner ? `<div class="card">') &&
+          fmJs.text.includes('Move to a new server (logins included)') &&
+          fmJs.text.includes('Keep this file private.') && fmJs.text.includes('/api/export/full-move'));
+        check('Data page: restoring a full move signs out and says to use the old email and password',
+          fmJs.text.includes("parsed.kind === 'full-move'") && fmJs.text.includes('if (r.fullMove)') &&
+          fmJs.text.includes('Sign in with your old email and password'));
+      } finally {
+        srcChild.kill('SIGKILL');
+        dstChild.kill('SIGKILL');
+        fs.rmSync(SRC_DIR, { recursive: true, force: true });
+        fs.rmSync(DST_DIR, { recursive: true, force: true });
+      }
+    }
+
     /* Env-seeded invites (COACH_INVITE_EMAILS): a fresh store gets the
        invites, a seeded email registers as coach, and a seeded invite
        the owner removes does NOT come back after a restart with the

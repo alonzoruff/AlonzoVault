@@ -244,6 +244,15 @@ data back exactly. It leaves out logins and each login's own practice
 log, so people sign up again on a new app; athletes whose email is
 linked to the roster reconnect on their own.
 
+For moving the whole app to a new server, the head coach also has a
+**full move file** on the Data page. It adds every login (stored
+password hashes, never passwords), each login's practice log and
+swaps, and coach staff settings, so everyone signs in on the new
+server with the password they already use. Keep that file private.
+It restores only into a brand-new app: sign up there as head coach,
+restore the file on the Data page, then sign in with your old email
+and password.
+
 ## The files, in plain words
 
 - `server.js` — the whole engine: serves the pages, runs the accounts,
