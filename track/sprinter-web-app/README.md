@@ -214,6 +214,44 @@ backed up.
 | `DATA_DIR` | Folder where accounts, logs, and swaps are stored. | `./data` (inside the app folder) |
 | `SESSION_SECRET` | Secret that signs login cookies. Set a long random one when you deploy. If you skip it, the app makes one up and keeps it in the data folder. | auto-generated |
 | `COACH_INVITE_EMAILS` | Comma-separated emails to seed as assistant-coach invites at startup, so a friend is invited even before the head coach has registered. Seeding happens once per email: if the head coach later removes an invite in the app, restarts never bring it back. | _(empty)_ |
+| `READ_ONLY_MODE` | Set to `1` for a short pause during a move: sign-in and reading work, every change is refused and nothing is saved. | _(off)_ |
+
+## Running on Vercel (hosted data store)
+
+Render keeps working exactly as above. Vercel has no lasting disk, so on
+Vercel the data lives in a hosted Upstash Redis store instead of
+`db.json`. That mode turns on only when both store settings are present:
+
+- `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL`
+  + `KV_REST_API_TOKEN`, the names Vercel's Upstash integration uses)
+- `SESSION_SECRET` is then required (the API answers 503 without it). Use
+  the same value as Render so nobody is signed out by the move.
+- `OWNER_SETUP_EMAIL`: on an empty store, only this email may create the
+  first (head coach) account. Leave it unset once real data is copied in.
+- `STORE_PREFIX`: optional key prefix (default `sprinter`)
+
+In this mode every API request loads the store fresh (or reuses it when
+nothing changed), runs, and saves with a version check, so two saves at
+the same moment can never erase each other: the later one is re-run on
+top of the earlier. See `lib/store.js`. This also ends the free-tier disk
+risk described below, because nothing is kept on the server's disk.
+
+Vercel project settings: Root Directory `track/sprinter-web-app`, Framework
+"Other", no build command. `vercel.json` sends every path to
+`api/index.js` (the same handler Render runs). On Vercel, imports are
+capped at 4 MB (Vercel's request limit is about 4.5 MB) and big downloads
+are gzipped.
+
+One-time move of the real data (with Render paused by `READ_ONLY_MODE=1`):
+
+```sh
+UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=... node scripts/copy-to-store.js db.json
+```
+
+It copies `db.json` exactly (logins included), refuses to overwrite a
+store that already has data (add `--replace` on purpose), and prints a
+count check for every collection. The Data page's full move file (logins
+included) also works on the Vercel copy, as long as it is under 4 MB.
 
 ## Data & backups
 
