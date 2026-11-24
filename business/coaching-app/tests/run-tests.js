@@ -5810,7 +5810,7 @@ async function main() {
      leads to the plans; every way in is the invitation request. */
   /* v40: the playbook's hero line, "Measured speed, not promised speed." */
   check('landing leads with the redesign headline, the plans CTA and the Lab Talk',
-    pageHtml.text.includes('Measured speed, <em>not promised speed.</em>') &&
+    pageHtml.text.includes('<h1>Measured speed, not promised speed.</h1>') &&
     pageHtml.text.includes('>Pick a plan<') && pageHtml.text.includes('Book a free Lab Talk') &&
     !pageHtml.text.includes('SPEED · POWER · DATA') &&
     pageHtml.text.includes('data-invite-tier='));
@@ -9354,8 +9354,8 @@ async function waitForServer(tries = 60) {
           lp0.includes('show you the numbers that prove it.') &&
           !lp0.includes('__BRAND_NAME__'),
           '');
-        check('redesign: red accent is scoped to the public pages',
-          ivCss.text.includes('#view-landing.lp {') && ivCss.text.includes('--lp-accent: #e3242b') &&
+        check('redesign: the public accent (AYG Lab orange) is scoped to the public pages',
+          ivCss.text.includes('#view-landing.lp {') && ivCss.text.includes('--lp-accent: #ff7a1a') &&
           ivCss.text.includes('body.logged-out .footer-member-note { display: none; }'),
           '');
         check('v35: landing makes no school or CSCS claims and keeps exactly one AYG link',
