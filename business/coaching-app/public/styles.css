@@ -2129,7 +2129,10 @@ html.ind-on .tabbar .tab.active::before { opacity: 0; }
 .mc-tier { font-size: var(--fs-lg); font-weight: 800; }
 .mc-price { font-size: var(--fs-md); color: var(--muted); }
 .mc-details { margin: 10px 0; }
-.mc-details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+.mc-details summary { cursor: pointer; font-weight: 600; min-height: 32px; padding: 10px 0; }
+/* A long email (a parent's school address) used to push the Account
+   page sideways on a phone. Let it break instead. */
+.mx-lead, #member-membership strong, #account-main p { overflow-wrap: anywhere; }
 .btn.quiet.danger { color: var(--danger); }
 #membership-cancel-zone { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
 .menu-group-label {
