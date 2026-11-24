@@ -9680,7 +9680,7 @@ async function handleApi(req, res, url) {
   }
 
   void coachOnly;
-  return sendJson(res, 404, { error: 'not found' });
+  return sendJson(res, 404, { error: 'That part of the app has changed. Refresh the page to get the latest version.' });
 }
 
 /* ------------------------------------------------------------------ */
@@ -9753,7 +9753,7 @@ const server = http.createServer((req, res) => {
     handleApi(req, res, url).catch(() => {
       // The socket may already be gone (e.g., an oversized body was
       // destroyed mid-read) — never let the error reply itself throw.
-      try { if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' }); } catch (_) { /* gone */ }
+      try { if (!res.headersSent) sendJson(res, 400, { error: 'Something went wrong with that request. Please try again.' }); } catch (_) { /* gone */ }
     });
   } else {
     serveStatic(req, res, url);
