@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * Tests for the v41 fixes found in the live click-through on Nov 19:
+ * Tests for the v42 fixes found in the live click-through on Nov 19:
  * the demo window that would not close, homepage visits at "/" that
  * were never counted, the sideways page shift, the scoreboard's
  * "None this week" on the Last week tab, the Reports comparison
  * dates, and the back button label that stuck after the member view.
  *
- *   node tests/fixes-v41-tests.js
+ *   node tests/fixes-v42-tests.js
  *
  * Runs pieces of public/app.js in a small fake page. Placeholders
  * only: no real accounts or data.
@@ -42,7 +42,7 @@ const R = H.makeRunner();
 const { test } = R;
 
 (async () => {
-  console.log('v41 fixes from the live click-through');
+  console.log('v42 fixes from the live click-through');
 
   /* -- demo window ----------------------------------------------------- */
   const mediaCode = between(APP, 'let mediaTarget = null;', 'function openMedia(')

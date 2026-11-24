@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Ruffin Performance — server test suite.
+ * AYG Lab — server test suite.
  *
  * Zero dependencies: starts server.js on a throwaway port with a
  * temporary DATA_DIR, exercises the API end to end, then kills the
@@ -519,7 +519,7 @@ async function main() {
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
   check('service worker cache is the RP v29 cache',
-    swJs.status === 200 && swJs.text.includes("ruffin-performance-v41"), swJs.text.slice(0, 80));
+    swJs.status === 200 && swJs.text.includes("ayg-lab-v42"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2532,15 +2532,15 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v41'") &&
-    swJs.text.includes("ruffin-performance-v41"));
+    appJs.text.includes("const APP_VERSION = 'v42'") &&
+    swJs.text.includes("ayg-lab-v42"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v41"') &&
+    pageHtml.text.includes('data-app-version="v42"') &&
     pageHtml.text.includes('<span id="footer-year">') &&
     appJs.text.includes('appVersionHtml'));
 
@@ -2554,7 +2554,7 @@ async function main() {
   const srSeg = seg('async function renderSpeedReport()', 'function checkinReportHtml');
   check('printable report: the results branch carries the print header with brand, athlete and latest date',
     srSeg.includes('sr-print-header') &&
-    srSeg.includes('Ruffin Performance · Speed & strength coaching') &&
+    srSeg.includes('AYG Lab · Speed & strength coaching') &&
     srSeg.includes('data.athleteName') && srSeg.includes('latestTestDate'),
     srSeg.slice(0, 120));
   check('printable report: Print / Save as PDF button is wired to window.print()',
@@ -2565,7 +2565,7 @@ async function main() {
     srSeg.slice(0, 120));
   check('printable report: print-only footer carries the brand line and a generated-on date',
     srSeg.includes('sr-print-footer') &&
-    srSeg.includes('Ruffin Performance. Measured speed, not promised speed.') &&
+    srSeg.includes('AYG Lab. Measured speed, not promised speed.') &&
     srSeg.includes('Generated on') && !srSeg.includes('CSCS'),
     srSeg.slice(0, 120));
   check('printable report: print CSS scopes the report, hides chrome and other views, shows the footer',
@@ -2581,8 +2581,8 @@ async function main() {
     stylesCss.text.slice(0, 120));
   const v23Content = (await api(null, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
-    !!v23Content.brand && v23Content.brand.version === 'v41' &&
-    v23Content.brand.cache === 'ruffin-performance-v41', v23Content.brand);
+    !!v23Content.brand && v23Content.brand.version === 'v42' &&
+    v23Content.brand.cache === 'ayg-lab-v42', v23Content.brand);
   const serverSrc21 = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
   check('printable report: no new public or shared report route exists (own-numbers endpoint only)',
     (serverSrc21.split('/api/my/speed-report').length - 1) === 1 &&
@@ -2619,8 +2619,8 @@ async function main() {
   const seoGraph = seoLd && Array.isArray(seoLd['@graph']) ? seoLd['@graph'] : [];
   const seoOrg = seoGraph.find(n => n && n['@type'] === 'Organization') || null;
   const seoSite = seoGraph.find(n => n && n['@type'] === 'WebSite') || null;
-  check('SEO (v22): JSON-LD parses with an Organization named Ruffin Performance and a WebSite node, no price and no CSCS',
-    !!seoLd && !!seoOrg && seoOrg.name === 'Ruffin Performance' && !!seoSite &&
+  check('SEO (v22): JSON-LD parses with an Organization named AYG Lab and a WebSite node, no price and no CSCS',
+    !!seoLd && !!seoOrg && seoOrg.name === 'AYG Lab' && !!seoSite &&
     !seoLdRaw.includes('$') && !seoLdRaw.includes('CSCS'),
     seoLdRaw.slice(0, 120));
   const robotsTxt = await apiText(null, '/robots.txt');
@@ -2635,7 +2635,7 @@ async function main() {
     { status: sitemapXml.status, text: sitemapXml.text.slice(0, 120) });
 
   /* ---------------- Member App Brand Cleanup (v23) ----------------
-     The warm-up cards carry the Ruffin Performance brand through the
+     The warm-up cards carry the AYG Lab brand through the
      BRAND substitution tokens, member-facing copy uses club and
      training language instead of school language, and the export and
      backup strings match the brand. The served brand line was
@@ -2644,9 +2644,9 @@ async function main() {
      & (not &amp;); the check normalizes &amp; to & so it asserts the
      exact served wording either way. */
   const v23PageNormalized = pageHtml.text.replaceAll('&amp;', '&');
-  check('v23: all three warm-up card brand lines carry the Ruffin Performance brand',
+  check('v23: all three warm-up card brand lines carry the AYG Lab brand',
     (pageHtml.text.match(/class="wu-brand"/g) || []).length === 3 &&
-    (v23PageNormalized.split('Ruffin Performance <span>// Speed & strength coaching</span>').length - 1) === 3,
+    (v23PageNormalized.split('AYG Lab <span>// Speed & strength coaching</span>').length - 1) === 3,
     (pageHtml.text.match(/class="wu-brand"/g) || []).length);
   check('v23: served page and app JS contain no school strings (case-insensitive)',
     !pageHtml.text.toLowerCase().includes('st. john') &&
@@ -2660,9 +2660,9 @@ async function main() {
     !pageHtml.text.includes('before school') &&
     !pageHtml.text.includes('high school athletes') &&
     !pageHtml.text.includes('school rules govern'));
-  check('v23: app JS carries the Club records export label and the Ruffin Performance backup wording',
+  check('v23: app JS carries the Club records export label and the AYG Lab backup wording',
     appJs.text.includes('Club records') &&
-    appJs.text.includes('Ruffin Performance backup file') &&
+    appJs.text.includes('AYG Lab backup file') &&
     !appJs.text.includes('assistant@school.edu'));
 
   /* ---------------- Themes (v12): three looks, one token system ---
@@ -2672,7 +2672,7 @@ async function main() {
      Account picker applies it live, and the TV board pins the
      baseline tokens so a device theme never reaches the board. */
   check('shell boots the saved theme before the stylesheet paints',
-    pageHtml.text.includes('<html lang="en" data-theme="silverline">') &&
+    pageHtml.text.includes('<html lang="en" data-theme="ayglab">') &&
     pageHtml.text.includes("localStorage.getItem('rp-theme')") &&
     pageHtml.text.includes("document.documentElement.setAttribute('data-theme'") &&
     pageHtml.text.indexOf("getItem('rp-theme')") < pageHtml.text.indexOf('/styles.css'));
@@ -2769,7 +2769,7 @@ async function main() {
     pageHtml.text.includes('id="view-weightroom"') && pageHtml.text.includes('data-view="weightroom"') &&
     appJs.text.includes("['weightroom', 'Weight Room']") && appJs.text.includes('/api/weight-room') &&
     stylesCss.text.includes('.wr-grid'));
-  /* ---------------- Ruffin Performance: landing + brand + theme ----
+  /* ---------------- AYG Lab: landing + brand + theme ----
      The logged-out home is the landing page for AJ's own membership.
      The brand lives in ONE config block server-side (BRAND) and is
      substituted into the shell at serve time — these checks read the
@@ -2802,9 +2802,9 @@ async function main() {
 
 
   check('v34: BRAND version and cache stamps are v34',
-    pageHtml.text.includes('data-app-version="v41"') &&
-    appJs.text.includes("const APP_VERSION = 'v41'") &&
-    swJs.text.includes('ruffin-performance-v41'),
+    pageHtml.text.includes('data-app-version="v42"') &&
+    appJs.text.includes("const APP_VERSION = 'v42'") &&
+    swJs.text.includes('ayg-lab-v42'),
     compareSlice.slice(0, 120));
   /* Portal preview tabs (v33): interactive preview of what is
      inside the portal in section 02, replacing the static list.
@@ -2835,9 +2835,9 @@ async function main() {
     stylesCss.text.includes('.portal-preview-panel'),
     portalSlice.slice(0, 120));
   check('v34: BRAND version and cache stamps are v34 in the portal preview checks',
-    pageHtml.text.includes('data-app-version="v41"') &&
-    appJs.text.includes("const APP_VERSION = 'v41'") &&
-    swJs.text.includes('ruffin-performance-v41'),
+    pageHtml.text.includes('data-app-version="v42"') &&
+    appJs.text.includes("const APP_VERSION = 'v42'") &&
+    swJs.text.includes('ayg-lab-v42'),
     portalSlice.slice(0, 120));
   /* Training Session Completion Summary (v34): after a member
      saves a workout log, a summary card at the top of My Log
@@ -2861,9 +2861,9 @@ async function main() {
     appJs.text.includes('state.mlSummary = { log:') &&
     appJs.text.includes('state.mlSummary = null'), appJs.text.slice(0, 120));
   check('v34: BRAND version and cache stamps are v34',
-    pageHtml.text.includes('data-app-version="v41"') &&
-    appJs.text.includes("const APP_VERSION = 'v41'") &&
-    swJs.text.includes('ruffin-performance-v41'),
+    pageHtml.text.includes('data-app-version="v42"') &&
+    appJs.text.includes("const APP_VERSION = 'v42'") &&
+    swJs.text.includes('ayg-lab-v42'),
     appJs.text.slice(0, 120));
   /* Landing FAQ accordion (v19): one card between the tiers and
      the parents card, eight plain answers, trial and prices
@@ -2881,11 +2881,15 @@ async function main() {
     !/__BRAND_|__APP_VERSION__/.test(appJs.text) &&
     !/__BRAND_|__APP_VERSION__/.test(swJs.text) &&
     !/__BRAND_|__APP_VERSION__/.test(manifestTxt.text));
-  check('manifest carries the RP brand + dark theme colors',
-    manifestTxt.text.includes('Ruffin Performance') && manifestTxt.text.includes('#0d0d0f'),
+  const logoRes = await apiText(null, '/assets/ayg-lab-logo.jpg');
+  check('AYG Lab logo route serves the JPEG logo',
+    logoRes.status === 200 && logoRes.type.includes('image/jpeg') && logoRes.text.length > 40000,
+    logoRes.status + ' ' + logoRes.type + ' ' + logoRes.text.length);
+  check('manifest carries the AYG Lab brand + dark theme colors',
+    manifestTxt.text.includes('AYG Lab') && manifestTxt.text.includes('#04070c'),
     manifestTxt.text.slice(0, 120));
   check('content payload carries the brand from the one config block',
-    !!contentJson.brand && contentJson.brand.name === 'Ruffin Performance' &&
+    !!contentJson.brand && contentJson.brand.name === 'AYG Lab' &&
     contentJson.brand.tagline === 'Speed & strength coaching',
     contentJson.brand);
   check('dark theme palette is the shipped one (black/grey + silver)',
@@ -5663,9 +5667,9 @@ async function main() {
     appJs.text.includes('Coach feedback ready') && appJs.text.includes('/seen') &&
     appJs.text.includes('View reply') && appJs.text.includes('tw-fc-unread'), appJs.text.slice(0, 80));
   check('v24: served page and JS version stamps are v24',
-    pageHtml.text.includes('data-app-version="v41"') &&
-    appJs.text.includes("const APP_VERSION = 'v41'") &&
-    swJs.text.includes('ruffin-performance-v41'));
+    pageHtml.text.includes('data-app-version="v42"') &&
+    appJs.text.includes("const APP_VERSION = 'v42'") &&
+    swJs.text.includes('ayg-lab-v42'));
   r = await api(fern, 'GET', '/api/my/form-checks');
   check('v24: a fresh reply is unread on the member list',
     r.status === 200 && !!r.json.formChecks.find(fc => fc.id === fcFirstId) &&
@@ -5806,7 +5810,7 @@ async function main() {
      leads to the plans; every way in is the invitation request. */
   /* v40: the playbook's hero line, "Measured speed, not promised speed." */
   check('landing leads with the redesign headline, the plans CTA and the Lab Talk',
-    pageHtml.text.includes('Measured speed, <em>not promised speed.</em>') &&
+    pageHtml.text.includes('<h1>Measured speed, not promised speed.</h1>') &&
     pageHtml.text.includes('>Pick a plan<') && pageHtml.text.includes('Book a free Lab Talk') &&
     !pageHtml.text.includes('SPEED · POWER · DATA') &&
     pageHtml.text.includes('data-invite-tier='));
@@ -8287,7 +8291,7 @@ async function waitForServer(tries = 60) {
       const D1 = addD(today, -14), D2 = addD(today, -7), D3 = addD(today, -1);
       const FUT = addD(today, 10);
       const CORE = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
-      /* v41: the report's core trio leads with the 30m sprint; these test
+      /* v42: the report's core trio leads with the 30m sprint; these test
          days still record the 40, which stays in the catalog. */
       const REPORT_CORE = ['30m-sprint', 'vertical-jump', 'broad-jump'];
 
@@ -8580,7 +8584,7 @@ async function waitForServer(tries = 60) {
       check('lab checks: isolation \u2014 Ben\u2019s report carries none of Sara\u2019s lab results',
         sr.status === 200 && !(sr.json.tests || []).some(t => LAB_KEYS.includes(t.testKey) && (t.series || []).length),
         (sr.json.tests || []).map(t => t.testKey + ':' + (t.series || []).length));
-      /* v41: the 30m sprint is a core test now, so it always appears, empty for Ben. */
+      /* v42: the 30m sprint is a core test now, so it always appears, empty for Ben. */
       check('lab checks: isolation \u2014 Ben\u2019s core 30m sprint is present but empty',
         ((sr.json.tests || []).find(t => t.testKey === '30m-sprint') || {}).baseline === null,
         (sr.json.tests || []).find(t => t.testKey === '30m-sprint'));
@@ -9042,7 +9046,7 @@ async function waitForServer(tries = 60) {
            still withheld signed out. */
         br = await bkApi(null, 'GET', '/api/content');
         check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v41' &&
+          br.status === 200 && br.json.brand.version === 'v42' &&
           Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
           br.json && br.json.brand);
       } finally {
@@ -9161,7 +9165,7 @@ async function waitForServer(tries = 60) {
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
         lr = await lrApi(null, 'GET', '/api/content');
-        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v41',
+        check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v42',
           lr.json && lr.json.brand);
       } finally {
         lrChild.kill('SIGKILL');
@@ -9346,8 +9350,8 @@ async function waitForServer(tries = 60) {
         const ivSw = await apiText(null, '/sw.js');
         const lp0 = programsShell.text;
         check('mobile parity: the page loads the stylesheet and script of its own release',
-          lp0.includes('href="/styles.css?v=v41"') && lp0.includes('src="/app.js?v=v41"') &&
-          ivSw.text.includes("'/styles.css?v=v41'") && ivSw.text.includes("'/app.js?v=v41'") &&
+          lp0.includes('href="/styles.css?v=v42"') && lp0.includes('src="/app.js?v=v42"') &&
+          ivSw.text.includes("'/styles.css?v=v42'") && ivSw.text.includes("'/app.js?v=v42'") &&
           ivSw.text.includes("url.pathname === '/styles.css' || url.pathname === '/app.js'") &&
           ivJs.text.includes("reg && reg.update()"),
           '');
@@ -9357,8 +9361,8 @@ async function waitForServer(tries = 60) {
           lp0.includes('show you the numbers that prove it.') &&
           !lp0.includes('__BRAND_NAME__'),
           '');
-        check('redesign: red accent is scoped to the public pages',
-          ivCss.text.includes('#view-landing.lp {') && ivCss.text.includes('--lp-accent: #e3242b') &&
+        check('redesign: the public accent (AYG Lab orange) is scoped to the public pages',
+          ivCss.text.includes('#view-landing.lp {') && ivCss.text.includes('--lp-accent: #ff7a1a') &&
           ivCss.text.includes('body.logged-out .footer-member-note { display: none; }'),
           '');
         check('v35: landing makes no school or CSCS claims and keeps exactly one AYG link',

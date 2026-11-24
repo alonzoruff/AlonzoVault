@@ -13,7 +13,7 @@
  *                   off: notifyCoach() logs one line and returns.
  *   NOTIFY_EMAIL    Where notifications go (comma-separated for more
  *                   than one). Unset = off, same as a missing key.
- *   RESEND_FROM     The sender. Default "Ruffin Performance
+ *   RESEND_FROM     The sender. Default "AYG Lab
  *                   <onboarding@resend.dev>", Resend's shared test
  *                   sender, which only delivers to the email address
  *                   the Resend account was created with. To send from
@@ -25,7 +25,7 @@
  * outcome (never the key) so a failure shows in the host's logs.
  */
 
-const DEFAULT_FROM = 'Ruffin Performance <onboarding@resend.dev>';
+const DEFAULT_FROM = 'AYG Lab <onboarding@resend.dev>';
 
 function config() {
   const key = (process.env.RESEND_API_KEY || '').trim();
@@ -72,7 +72,7 @@ async function notifyCoach({ subject, intro, fields, link, replyTo }) {
   const payload = {
     from: c.from,
     to: c.to,
-    subject: String(subject || 'Ruffin Performance notification').slice(0, 200),
+    subject: String(subject || 'AYG Lab notification').slice(0, 200),
     text: formatBody(intro || subject || '', fields, link),
   };
   if (replyTo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) payload.reply_to = replyTo;

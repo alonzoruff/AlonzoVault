@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
- * Ruffin Performance — standalone web app server.
+ * AYG Lab — standalone web app server.
  *
- * The online membership app for Ruffin Performance, AJ Ruffin's own
+ * The online membership app for AYG Lab, AJ Ruffin's own
  * speed & strength coaching business. Forked from his school-program sprinter
  * app engine; from the fork on, the two apps evolve separately and
  * no school data, branding, or accounts exist in this codebase.
@@ -81,6 +81,7 @@ const path = require('path');
 const crypto = require('crypto');
 const stripeLib = require('./lib/stripe');
 const { notifyCoach } = require('./lib/notify');
+const LOGO_JPEG = Buffer.from(require('./lib/logo-data'), 'base64');
 /* Absolute link into the app for a notification email. */
 function appLink(viewPath) {
   const base = (process.env.DOMAIN || '').replace(/\/+$/, '');
@@ -106,11 +107,11 @@ const SESSION_DAYS = 30;
 /* a single line of copy on the landing page, nothing more.            */
 /* ------------------------------------------------------------------ */
 const BRAND = {
-  name: 'Ruffin Performance',
-  short: 'RP Training',
+  name: 'AYG Lab',
+  short: 'AYG Lab',
   tagline: 'Speed & strength coaching',
-  version: 'v41',
-  cache: 'ruffin-performance-v41',
+  version: 'v42',
+  cache: 'ayg-lab-v42',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute
@@ -371,7 +372,7 @@ const PREVIEW_SCREENS = ['today', 'training', 'progress'];
 /* Null-prototype maps, so a posted key like "constructor" is never a match. */
 const REFERRAL_SOURCES = Object.assign(Object.create(null), {
   friend: { label: 'A friend or family member', kind: 'referral' },
-  member: { label: 'A Ruffin Performance member', kind: 'referral' },
+  member: { label: 'An AYG Lab member', kind: 'referral' },
   coach: { label: 'A coach or trainer', kind: 'referral' },
   instagram: { label: 'Instagram', kind: 'organic' },
   facebook: { label: 'Facebook', kind: 'organic' },
@@ -1135,7 +1136,7 @@ function loadCoachEducation() {
   return [];
 }
 /* The three Lab programs (content/lab_programs.json). This is
-   Ruffin Performance content, so it lives with this app rather than
+   AYG Lab content, so it lives with this app rather than
    in the shared workout database. Loaded tolerantly like the other
    optional libraries: a missing or malformed file serves an empty
    list, and an entry is kept only when every part the Programs view
@@ -3158,7 +3159,7 @@ function testingHistoryFor(profileId) {
    order. The Baseline Testing Kit is the coach flow that creates a
    test day carrying exactly these three; a member's baseline for a
    test is their EARLIEST recorded result for it. */
-/* v41: the 30m sprint replaced the 40-yard dash as the core sprint
+/* v42: the 30m sprint replaced the 40-yard dash as the core sprint
    test, so the baseline matches what the Lab programs test. The 40
    stays in the catalog for anyone who still records it. */
 const CORE_TEST_KEYS = ['30m-sprint', 'vertical-jump', 'broad-jump'];
@@ -4786,7 +4787,7 @@ function bookingIcs(b) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Ruffin Performance//Lab Talk Booking//EN',
+    'PRODID:-//AYG Lab//Lab Talk Booking//EN',
     'BEGIN:VEVENT',
     'UID:' + b.id + '@ruffin-performance',
     'DTSTAMP:' + icsUtc(Date.now()),
@@ -7512,7 +7513,7 @@ async function handleApi(req, res, url) {
     }
     if (!isPlainObj(body) || body.app !== 'ruffin-performance-app' || body.kind !== 'backup'
       || !isPlainObj(body.data)) {
-      return sendJson(res, 400, { error: 'That is not a Ruffin Performance backup file.' });
+      return sendJson(res, 400, { error: 'That is not an AYG Lab backup file.' });
     }
     /* Everything is validated before anything is merged: a bad
        collection refuses the whole import with the store untouched. */
@@ -9717,6 +9718,10 @@ function applyBrand(text) {
     .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL);
 }
 function serveStatic(req, res, url) {
+  if (url.pathname === '/assets/ayg-lab-logo.jpg') {
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(LOGO_JPEG);
+  }
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
   const shellHeaders = SHELL_NO_CACHE_PATHS.has(url.pathname)

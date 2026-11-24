@@ -1,4 +1,4 @@
-/* Ruffin Performance — front end (vanilla JS, no build step). */
+/* AYG Lab — front end (vanilla JS, no build step). */
 'use strict';
 
 /* ---------------- state ---------------- */
@@ -130,12 +130,26 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* Loading state for buttons: the button the person just pressed shows
+   the spinner (.btn[aria-busy]) while its request is in flight, so
+   sign-in, saves, plan generation and checkout never look frozen. */
+let lastPressed = null;
+['click', 'submit'].forEach(ev => document.addEventListener(ev, (e) => {
+  const t = ev === 'submit' ? (e.submitter || e.target.querySelector('button[type="submit"], .btn.primary')) : e.target.closest && e.target.closest('button');
+  lastPressed = t ? { el: t, at: Date.now() } : null;
+}, true));
 async function api(path, opts) {
-  const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
-  let data = {};
-  try { data = await res.json(); } catch (_) { /* empty */ }
-  if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
-  return data;
+  const btn = lastPressed && Date.now() - lastPressed.at < 800 && lastPressed.el.getAttribute('aria-busy') !== 'true' ? lastPressed.el : null;
+  if (btn) btn.setAttribute('aria-busy', 'true');
+  try {
+    const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+    let data = {};
+    try { data = await res.json(); } catch (_) { /* empty */ }
+    if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
+    return data;
+  } finally {
+    if (btn) btn.removeAttribute('aria-busy');
+  }
 }
 const apiPost = (path, body) => api(path, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
@@ -153,14 +167,15 @@ const apiDel = (path) => api(path, { method: 'DELETE' });
    a theme follows the phone, not the account). Switching is
    instant and never reloads: the stylesheet reads the tokens. */
 const THEMES = [
+  { id: 'ayglab', name: 'AYG Lab', blurb: 'The brand look. Deep black-blue rooms, neon orange accent and cyan highlights, matched to the AYG Lab logo.' },
   { id: 'silverline', name: 'Silverline', blurb: 'The standard look. Black and grey, silver accent, the way the app shipped.' },
   { id: 'carbon', name: 'Carbon', blurb: 'The lab look. Darker rooms, sharper edges, and bright white carrying the buttons, tabs and key numbers.' },
   { id: 'studio', name: 'Studio', blurb: 'The daylight look. Clean white and soft edges, made for bright rooms and showing parents.' },
 ];
-const THEME_BAR_COLORS = { silverline: '#0d0d0f', carbon: '#08090a', studio: '#f3f4f5' };
+const THEME_BAR_COLORS = { ayglab: '#04070c', silverline: '#0d0d0f', carbon: '#08090a', studio: '#f3f4f5' };
 function currentTheme() {
   const t = document.documentElement.getAttribute('data-theme');
-  return THEMES.some(x => x.id === t) ? t : 'silverline';
+  return THEMES.some(x => x.id === t) ? t : 'ayglab';
 }
 function applyTheme(id) {
   if (!THEMES.some(x => x.id === id)) return;
@@ -731,7 +746,8 @@ async function rpJoinTier(b) {
   const note = (scope && scope.querySelector('[data-join-message]')) || $('[data-join-message]');
   const showNote = (msg) => { if (note) note.textContent = msg; };
   b.disabled = true;
-  showNote('One moment…');
+  b.setAttribute('aria-busy', 'true');
+  showNote('Opening secure checkout…');
   try {
     const res = await fetch('/api/checkout/session', {
       method: 'POST',
@@ -748,6 +764,7 @@ async function rpJoinTier(b) {
     showNote('Something went wrong. Please try again.');
   }
   b.disabled = false;
+  b.removeAttribute('aria-busy');
 }
 $$('[data-join-tier]').forEach(b => b.addEventListener('click', () => rpJoinTier(b)));
 
@@ -2769,7 +2786,7 @@ function equipmentLabel(v) {
   return hit ? hit[1] : v;
 }
 const WAIVER_LINES = [
-  'Training with Ruffin Performance involves speed and strength training. Like any physical training, it carries an inherent risk of injury, including strains, sprains, and other injuries.',
+  'Training with AYG Lab involves speed and strength training. Like any physical training, it carries an inherent risk of injury, including strains, sprains, and other injuries.',
   'This is coaching. It is not medical care, physical therapy, or medical advice.',
   'If you are injured, in pain, or have a medical concern, stop and tell your coach. Your coach will refer you to a medical professional. Coaches do not diagnose or treat injuries.',
   'By signing, you say you understand these risks, you will follow your coach\u2019s instructions, and you will report pain or an injury promptly.',
@@ -3030,7 +3047,7 @@ async function renderSpeedReport() {
     <p class="muted">Measured speed, not promised speed. Your personal bests against your own baseline, from the tests your coach has recorded for you.</p>
     <div class="sr-grid">${core.map(srCardHtml).join('')}</div>
     ${others.length ? `<h2>More tests</h2><div class="sr-grid">${others.map(srCardHtml).join('')}</div>` : ''}
-    <p class="sr-print-footer">Ruffin Performance. Measured speed, not promised speed.<br>Generated on ${esc(generatedOn)}</p>`;
+    <p class="sr-print-footer">AYG Lab. Measured speed, not promised speed.<br>Generated on ${esc(generatedOn)}</p>`;
   const pb = el.querySelector('#sr-print');
   if (pb) pb.addEventListener('click', () => {
     document.body.classList.add('printing-lab-report');
@@ -3693,7 +3710,7 @@ function closeMedia() {
   $('#media-player').innerHTML = '';
   mediaTarget = null;
 }
-/* v41: the demo window's Close button was never wired, so the window
+/* v42: the demo window's Close button was never wired, so the window
    could only be left by reloading. Close, Escape and a tap outside
    the box all close it now. */
 (function wireMediaModal() {
@@ -6568,7 +6585,7 @@ async function renderReports() {
      first half vs second half through today — all editable. */
   const dstr = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   if (load.weeks.length) {
-    /* v41: split only the part of the season that has happened, so
+    /* v42: split only the part of the season that has happened, so
        Period B never ends before it starts early in the season. */
     const todayS = dstr(new Date());
     const elapsed = load.weeks.filter(w => w.start <= todayS);
@@ -7768,7 +7785,7 @@ async function renderData() {
     }
     if (!parsed || parsed.app !== 'ruffin-performance-app' || parsed.kind !== 'backup'
       || !parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) {
-      box.innerHTML = '<p class="error">That is not a Ruffin Performance backup file.</p>';
+      box.innerHTML = '<p class="error">That is not an AYG Lab backup file.</p>';
       return;
     }
     pendingBackup = parsed;
@@ -8835,7 +8852,7 @@ function rpTrackLandingView() {
    about us?" The server holds the same keys and sorts referrals
    apart from paid sources. */
 const RP_HEARD_FROM = [
-  ['friend', 'A friend or family member'], ['member', 'A Ruffin Performance member'],
+  ['friend', 'A friend or family member'], ['member', 'An AYG Lab member'],
   ['coach', 'A coach or trainer'], ['instagram', 'Instagram'], ['facebook', 'Facebook'],
   ['search', 'A Google or web search'], ['event', 'A clinic or event'], ['ad', 'An online ad'],
   ['other', 'Somewhere else'],
@@ -9007,7 +9024,7 @@ function rpFillPublicBits() {
 }
 rpFillPublicBits();
 rpWirePreview();
-/* v41: full-width homepage bands use 100vw, which counts the scrollbar
+/* v42: full-width homepage bands use 100vw, which counts the scrollbar
    on desktop browsers that show one, so the page was about 8px wider
    than the window and could slide sideways. Measure the scrollbar and
    let the CSS take it back out. */
@@ -9057,7 +9074,7 @@ window.addEventListener('resize', rpSetScrollbarVar);
   if (state.bookToken) showView('book');
   else if (location.pathname !== '/') rpRoute(location.pathname);
   else if (state.user) showView('home');
-  /* v41: a signed-out visit to "/" never goes through showView, so it
+  /* v42: a signed-out visit to "/" never goes through showView, so it
      was never counted. Count it here, once per session like the rest. */
   else rpTrackLandingView();
   showAppUpdatedToast();
@@ -10093,7 +10110,7 @@ function syncBackHome(name) {
   }
   const btn = bar.firstElementChild;
   btn.setAttribute('data-view', homeName);
-  /* v41: reset the label too; the member view renames this button
+  /* v42: reset the label too; the member view renames this button
      ("Back to Training") and the name used to stick after leaving it. */
   btn.innerHTML = `<span aria-hidden="true">←</span> ${esc(RP_COPY.back)}`;
   bar.hidden = name === homeName;
