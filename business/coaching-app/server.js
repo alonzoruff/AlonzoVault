@@ -717,10 +717,18 @@ function noteMemberActivity(member, firstWorkout) {
    address is never written anywhere. */
 const PUBLIC_EVENT_LIMIT = 30;
 const publicEventHits = new Map();
-function publicEventAllowed(req) {
+async function publicEventAllowed(req) {
   const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   const key = fwd || (req.socket && req.socket.remoteAddress) || 'unknown';
   const minute = Math.floor(Date.now() / 60000);
+  if (STORE) {
+    /* Many short-lived copies of the app: the count has to be shared.
+       Only a keyed one-way hash of the address is used, and the
+       counter deletes itself after two minutes. */
+    const tag = crypto.createHmac('sha256', SECRET || 'events').update(key).digest('hex').slice(0, 24);
+    try { return (await STORE.hit('ev:' + minute + ':' + tag, 120)) <= PUBLIC_EVENT_LIMIT; }
+    catch (_) { return true; }
+  }
   const hit = publicEventHits.get(key);
   if (!hit || hit.minute !== minute) {
     if (publicEventHits.size > 5000) publicEventHits.clear();
@@ -5247,7 +5255,7 @@ async function handleApi(req, res, url) {
     const name = clean(body.name, 40);
     if (!PUBLIC_FUNNEL_EVENTS.includes(name)) return sendJson(res, 400, { error: 'Unknown event.' });
     if (readSession(req)) return sendJson(res, 200, { ok: true, counted: false });
-    if (!publicEventAllowed(req)) return sendJson(res, 429, { error: 'Too many events. Try again in a minute.' });
+    if (!(await publicEventAllowed(req))) return sendJson(res, 429, { error: 'Too many events. Try again in a minute.' });
     const pagePath = clean(body.page, 60);
     const fields = { page: /^\/[a-z0-9\-/]*$/.test(pagePath) ? pagePath : '/' };
     if (name === 'portal_preview_open') {
