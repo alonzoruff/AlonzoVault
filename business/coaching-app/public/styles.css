@@ -1310,7 +1310,7 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 }
 .tv-dots { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .tv-dot {
-  border: 1px solid #3a3f47; background: #1d2026; color: #c9ccd1;
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--hud-text-dim);
   border-radius: var(--r-pill); padding: 10px 18px; font-size: 16px; font-weight: 700;
   cursor: pointer; min-height: 48px;
 }
@@ -1520,7 +1520,7 @@ body.runner-mode { overflow: hidden; }
 .runner-top {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
 }
-.runner-workout { font-size: 17px; font-weight: 700; letter-spacing: .02em; color: #b9bec7; }
+.runner-workout { font-size: 17px; font-weight: 700; letter-spacing: .02em; color: var(--red-soft-on-dark); }
 .btn.runner-exit {
   width: auto; min-height: 48px; padding: 8px 22px;
   background: transparent; color: #f5f5f7; border: 2px solid var(--red); font-weight: 700;
@@ -1535,7 +1535,7 @@ body.runner-mode { overflow: hidden; }
 }
 .runner-progress-bar { height: 100%; background: var(--red); transition: width .3s ease; }
 .runner-step-count { color: var(--hud-text-dim); font-size: 16px; margin: 0; }
-.runner-where { color: #b9bec7; font-size: clamp(17px, 3.4vw, 24px); font-weight: 600; margin: 6px 0 0; }
+.runner-where { color: var(--red-soft-on-dark); font-size: clamp(17px, 3.4vw, 24px); font-weight: 600; margin: 6px 0 0; }
 .runner-ex-name {
   font-size: clamp(44px, 10vw, 96px); line-height: 1.05; margin: 4px 0 0; font-weight: 800;
 }
@@ -1554,7 +1554,7 @@ body.runner-mode { overflow: hidden; }
   font-size: clamp(84px, 22vw, 190px); line-height: 1; font-weight: 800; margin: 0;
   font-variant-numeric: tabular-nums;
 }
-.runner-next { color: #c9ccd1; font-size: clamp(16px, 3.2vw, 23px); margin: 2px 0 0; }
+.runner-next { color: var(--hud-text-dim); font-size: clamp(16px, 3.2vw, 23px); margin: 2px 0 0; }
 .runner-controls {
   display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 18px;
   width: min(760px, 100%);
@@ -1567,7 +1567,7 @@ body.runner-mode { overflow: hidden; }
 .btn.runner-btn[disabled] { opacity: .35; }
 .runner-done { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .runner-done-title { font-size: clamp(40px, 9vw, 76px); margin: 0; font-weight: 800; }
-.runner-done-stats { font-size: clamp(19px, 4vw, 28px); color: #c9ccd1; margin: 0; }
+.runner-done-stats { font-size: clamp(19px, 4vw, 28px); color: var(--hud-text-dim); margin: 0; }
 .runner-done .btn.runner-btn { flex: none; padding: 0 44px; margin-top: 14px; }
 
 @media print {
@@ -1655,7 +1655,7 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
    carries its own Member sign in button, and the Account view holds
    the forms. ================================================================ */
 body.logged-out .primary-nav { display: none !important; }
-#view-landing { --landing-accent: #e4e6eb; --landing-accent-ink: #101216; --landing-accent-hover: #f4f5f7; }
+#view-landing { --landing-accent: var(--red); --landing-accent-ink: var(--accent-ink); --landing-accent-hover: var(--red-on-dark); }
 .landing-hero {
   position: relative; overflow: hidden; text-align: left;
   min-height: 620px; margin: -16px -16px 0; padding: 52px 48px;
@@ -1700,7 +1700,7 @@ body.logged-out .primary-nav { display: none !important; }
 .landing-hero .landing-signin {
   background: rgba(9, 9, 11, .72); border-color: rgba(255, 255, 255, .55); color: #fff;
 }
-.landing-pilot-note { margin: 18px 0 0; color: #c9ccd1; font-size: 13.5px; }
+.landing-pilot-note { margin: 18px 0 0; color: var(--hud-text-dim); font-size: 13.5px; }
 .landing-measures {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
   margin: 0 -16px 18px; background: var(--line); border-bottom: 1px solid var(--line);
@@ -2458,8 +2458,8 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
    it keeps the Silverline treatment in every theme by pinning the
    tokens its rules read back to the baseline values. ---- */
 body.tv-mode {
-  --red: #c9ccd4; --red-dark: #a6abb5; --gray: #868d96;
-  --ink: #edeef1; --muted: #9aa1ab; --line: #26282e;
+  --red: #ff7a1a; --red-dark: #ff8f3d; --gray: #868d96;
+  --ink: #eef6fb; --muted: #93a5b5; --line: #1b2836;
   --bg: #0d0d0f; --card: #17181c;
   --accent-ink: #101216;
   --surface-2: #1e1f24; --surface-hover: #23242a;
@@ -2617,13 +2617,13 @@ body.tv-mode .rp-backbar { display: none; }
   padding: 3px 10px; border-radius: var(--r-pill); background: var(--low-bg); color: var(--low);
   font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
 }
-.rp-session-note { margin: 0 0 14px; max-width: 46ch; color: #c9ccd1; font-size: var(--fs-sm); }
+.rp-session-note { margin: 0 0 14px; max-width: 46ch; color: var(--hud-text-dim); font-size: var(--fs-sm); }
 .rp-start {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   min-height: 56px; width: 100%; max-width: 380px; margin-top: 8px; padding: 14px 26px;
   border: 0; border-radius: var(--r-control); cursor: pointer; font: inherit;
   font-size: var(--fs-md); font-weight: 800; letter-spacing: .01em;
-  background: linear-gradient(180deg, #f1f2f5, #c9ccd4); color: #101216;
+  background: linear-gradient(180deg, var(--red-on-dark), var(--red)); color: var(--accent-ink);
   box-shadow: 0 10px 26px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .5) inset;
   transition: transform var(--dur-ui) var(--ease-std), box-shadow var(--dur-ui) var(--ease-std);
 }

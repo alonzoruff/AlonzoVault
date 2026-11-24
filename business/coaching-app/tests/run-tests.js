@@ -2695,8 +2695,8 @@ async function main() {
     !/\[data-theme="silverline"\] \{[^}]*--high:/.test(themeBlocks) &&
     !/\[data-theme="carbon"\] \{[^}]*--high:/.test(themeBlocks) &&
     themeBlocks.includes('--high: #b23b2e') && themeBlocks.includes('--low: #2a7340'));
-  check('TV board pins the Silverline tokens regardless of device theme',
-    /body\.tv-mode \{[^}]*--red: #c9ccd4/.test(stylesCss.text) &&
+  check('TV board pins the AYG Lab orange tokens regardless of device theme',
+    /body\.tv-mode \{[^}]*--red: #ff7a1a/.test(stylesCss.text) &&
     /body\.tv-mode \{[^}]*--radius: 14px/.test(stylesCss.text));
   check('app JS owns the theme list with all three looks',
     appJs.text.includes('const THEMES = [') &&
@@ -5815,9 +5815,9 @@ async function main() {
     !pageHtml.text.includes('SPEED · POWER · DATA') &&
     pageHtml.text.includes('data-invite-tier='));
 
-  check('landing photo hero and silver accent stay scoped to the landing',
+  check('landing photo hero and orange accent stay scoped to the landing',
     stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
-    stylesCss.text.includes('--landing-accent: #e4e6eb') &&
+    stylesCss.text.includes('--landing-accent: var(--red)') &&
     stylesCss.text.includes('.landing-hero .landing-cta'));
 
 
