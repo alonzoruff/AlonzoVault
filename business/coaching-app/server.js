@@ -1432,7 +1432,7 @@ function validateMeetResultInput(input) {
   const prof = profileById(clean(input.profileId, 80));
   if (!prof) return { status: 404, error: 'Profile not found.' };
   const date = clean(input.date, 10);
-  if (!parseDateStr(date)) return { status: 400, error: 'Date must be YYYY-MM-DD.' };
+  if (!parseDateStr(date)) return { status: 400, error: 'Pick a date.' };
   const meet = clean(input.meet, 80);
   if (!meet) return { status: 400, error: 'Name the meet.' };
   const ev = findMeetEvent(clean(input.event, 30));
@@ -2920,41 +2920,41 @@ function validateMemberLog(body) {
   const today = todayStr();
   const date = body.date !== undefined && body.date !== null && body.date !== ''
     ? clean(body.date, 10) : today;
-  if (!parseDateStr(date)) return { error: 'Date must be YYYY-MM-DD.' };
+  if (!parseDateStr(date)) return { error: 'Pick a date.' };
   if (date > today) return { error: 'You cannot log a workout for a day that has not happened yet.' };
-  if (date < addDaysStr(today, -30)) return { error: 'Logs can only reach back 30 days — ask your coach about anything older.' };
+  if (date < addDaysStr(today, -30)) return { error: 'Logs can only reach back 30 days. Ask your coach about anything older.' };
   const sessionCode = clean(body.sessionCode, 40);
   let title = clean(body.title, 120);
   if (!title && sessionCode) {
     const s = SESSION_BY_ID.get(sessionCode);
     title = s ? s.id + ' · ' + s.name : sessionCode;
   }
-  if (!title) return { error: 'Name the workout — pick the session you ran or write a short title.' };
+  if (!title) return { error: 'Name the workout. Pick the session you ran or write a short title.' };
   if (typeof body.title === 'string' && body.title.length > 120) {
     return { error: 'Keep the title to 120 characters or less.' };
   }
   const status = body.status === undefined || body.status === null || body.status === ''
     ? 'done' : body.status;
   if (status !== 'done' && status !== 'partial') {
-    return { error: 'Status must be done or partial.' };
+    return { error: 'Pick Done or Partial for how much of it you finished.' };
   }
   let rpe = null;
   if (body.rpe !== undefined && body.rpe !== null && body.rpe !== '') {
     rpe = num(body.rpe);
     if (rpe === null || !Number.isInteger(rpe) || rpe < 1 || rpe > 10) {
-      return { error: 'RPE must be a whole number from 1 to 10.' };
+      return { error: 'Pick how hard it was, from 1 to 10.' };
     }
   }
   let durationMin = null;
   if (body.durationMin !== undefined && body.durationMin !== null && body.durationMin !== '') {
     durationMin = num(body.durationMin);
     if (durationMin === null || !Number.isInteger(durationMin) || durationMin < 1 || durationMin > 600) {
-      return { error: 'Duration must be a whole number of minutes, 1 to 600.' };
+      return { error: 'Enter the minutes as a whole number, from 1 to 600.' };
     }
   }
   const entries = [];
   if (body.entries !== undefined && body.entries !== null) {
-    if (!Array.isArray(body.entries)) return { error: 'Exercise rows must be a list.' };
+    if (!Array.isArray(body.entries)) return { error: 'The exercise list did not come through. Please try again.' };
     if (body.entries.length > 40) return { error: 'A log holds at most 40 exercise rows.' };
     for (const e of body.entries) {
       if (!isPlainObj(e)) return { error: 'Each exercise row needs a name.' };
@@ -5421,11 +5421,11 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const date = clean(body.date, 10);
     if (!parseDateStr(date)) {
-      return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      return sendJson(res, 400, { error: 'Pick a date.' });
     }
     const sessionId = clean(body.sessionId, 20);
     if (sessionId && !SESSION_IDS.has(sessionId)) {
-      return sendJson(res, 400, { error: 'Unknown session code.' });
+      return sendJson(res, 400, { error: "That session code isn't in the plan. Check it, or leave it blank." });
     }
     let feel = parseInt(body.feel, 10);
     if (Number.isNaN(feel) || feel < 1 || feel > 5) feel = null;
@@ -5450,7 +5450,7 @@ async function handleApi(req, res, url) {
     const id = decodeURIComponent(p.slice('/api/logs/'.length));
     const list = db.logs[user.id] || [];
     const next = list.filter(e => e.id !== id);
-    if (next.length === list.length) return sendJson(res, 404, { error: 'Entry not found.' });
+    if (next.length === list.length) return sendJson(res, 404, { error: 'That entry is gone. It may already be deleted.' });
     db.logs[user.id] = next;
     saveDb();
     return sendJson(res, 200, { ok: true });
@@ -5532,7 +5532,7 @@ async function handleApi(req, res, url) {
     }
     const body = await readBody(req);
     const date = body.date !== undefined ? clean(body.date, 10) : todayStr();
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (date > todayStr()) return sendJson(res, 400, { error: 'You cannot check in for a day that has not happened yet.' });
     const v = validateCheckin(body);
     if (v.error) return sendJson(res, 400, { error: v.error });
@@ -5669,7 +5669,7 @@ async function handleApi(req, res, url) {
     }
     const logId = decodeURIComponent(myLogMatch[1]);
     const idx = db.memberLogs.findIndex(l => l.id === logId && l.athleteId === prof.id);
-    if (idx < 0) return sendJson(res, 404, { error: 'Log not found.' });
+    if (idx < 0) return sendJson(res, 404, { error: 'That workout log is gone. It may already be deleted.' });
     if (req.method === 'DELETE') {
       db.memberLogs.splice(idx, 1);
       saveDb();
@@ -6838,7 +6838,7 @@ async function handleApi(req, res, url) {
     const groupId = clean(body.groupId, 80);
     const date = clean(body.date, 10);
     if (!groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const key = groupId + '|' + date;
     if (body.sessionId === null || body.sessionId === '') {
       delete db.overrides[key];
@@ -6846,7 +6846,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, { ok: true, cleared: true, assignment: resolveAssignment(groupId, date) });
     }
     const sessionId = clean(body.sessionId, 20);
-    if (!SESSION_IDS.has(sessionId)) return sendJson(res, 400, { error: 'Unknown session code.' });
+    if (!SESSION_IDS.has(sessionId)) return sendJson(res, 400, { error: "That session code isn't in the plan. Check it, or leave it blank." });
     db.overrides[key] = { sessionId, note: clean(body.note, 300), by: user.id, at: new Date().toISOString() };
     saveDb();
     return sendJson(res, 200, { ok: true, assignment: resolveAssignment(groupId, date) });
@@ -6857,7 +6857,7 @@ async function handleApi(req, res, url) {
     const prof = profileById(clean(body.profileId, 80));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const date = clean(body.date || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const key = prof.id + '|' + date;
     if (body.completed === false) {
       delete db.completions[key];
@@ -7021,7 +7021,7 @@ async function handleApi(req, res, url) {
   }
   if (p === '/api/attendance' && req.method === 'GET') {
     const date = clean(q.get('date') || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const marks = db.attendance[date] || {};
     const blockFor = (g) => {
       const members = db.profiles.filter(pr => !pr.archived && (g ? pr.groupId === g.id : !pr.groupId));
@@ -7047,7 +7047,7 @@ async function handleApi(req, res, url) {
   const attRoute = p.match(/^\/api\/attendance\/([^/]+)\/([^/]+)$/);
   if (attRoute && req.method === 'POST' && attRoute[2] === 'mark-all-present') {
     const date = attRoute[1];
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     db.attendance[date] = db.attendance[date] || {};
     let marked = 0, skipped = 0;
     for (const pr of db.profiles) {
@@ -7061,7 +7061,7 @@ async function handleApi(req, res, url) {
   }
   if (attRoute && req.method === 'PUT') {
     const date = attRoute[1];
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const prof = profileById(decodeURIComponent(attRoute[2]));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const body = await readBody(req);
@@ -7284,7 +7284,7 @@ async function handleApi(req, res, url) {
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const logId = decodeURIComponent(amsLogMatch[2]);
     const idx = db.memberLogs.findIndex(l => l.id === logId && l.athleteId === prof.id);
-    if (idx < 0) return sendJson(res, 404, { error: 'Log not found.' });
+    if (idx < 0) return sendJson(res, 404, { error: 'That workout log is gone. It may already be deleted.' });
     db.memberLogs.splice(idx, 1);
     saveDb();
     return sendJson(res, 200, { ok: true });
@@ -7430,7 +7430,7 @@ async function handleApi(req, res, url) {
     const prof = profileById(clean(body.profileId, 80));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const date = clean(body.date, 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const metrics = {};
     for (const m of TAPEX_METRICS) {
       const raw = body[m.field];
@@ -7716,7 +7716,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const date = clean(body.date, 10);
     const title = clean(body.title, 80);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (!title) return sendJson(res, 400, { error: 'Give the test day a title.' });
     const keys = Array.isArray(body.testKeys) ? body.testKeys.map(k => clean(k, 40)).filter(Boolean) : [];
     if (!keys.length) return sendJson(res, 400, { error: 'Pick at least one test.' });
@@ -8141,7 +8141,7 @@ async function handleApi(req, res, url) {
     }
     if (body.date !== undefined) {
       const d = clean(body.date, 10);
-      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Pick a date.' });
       next.date = d;
     }
     if (body.meet !== undefined) {
@@ -8398,7 +8398,7 @@ async function handleApi(req, res, url) {
         next.date = '';
       } else {
         const d = clean(body.date, 10);
-        if (!parseDateStr(d)) return { error: 'Date must be YYYY-MM-DD.', status: 400 };
+        if (!parseDateStr(d)) return { error: 'Pick a date.', status: 400 };
         next.date = d;
       }
     }
@@ -8480,7 +8480,7 @@ async function handleApi(req, res, url) {
     const name = clean(body.name, 80);
     if (!name) return sendJson(res, 400, { error: 'Name the meet.' });
     const date = clean(body.date, 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (db.meets.some(x => x.name === name && x.date === date)) {
       return sendJson(res, 409, { error: 'A meet with that name and date already exists.' });
     }
@@ -8519,7 +8519,7 @@ async function handleApi(req, res, url) {
     }
     if (body.date !== undefined) {
       const d = clean(body.date, 10);
-      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Pick a date.' });
       next.date = d;
     }
     if (body.location !== undefined) next.location = clean(body.location, 80);
@@ -8571,7 +8571,7 @@ async function handleApi(req, res, url) {
     const entryId = decodeURIComponent(meetEntryMatch[2]);
     if (!meetById(meetId)) return sendJson(res, 404, { error: 'Meet not found.' });
     if (!db.meetEntries.some(e => e.id === entryId && e.meetId === meetId)) {
-      return sendJson(res, 404, { error: 'Entry not found.' });
+      return sendJson(res, 404, { error: 'That entry is gone. It may already be deleted.' });
     }
     db.meetEntries = db.meetEntries.filter(e => e.id !== entryId);
     saveDb();
@@ -9403,7 +9403,7 @@ async function handleApi(req, res, url) {
      complete stays with POST /api/completions, unchanged. */
   if (p === '/api/weight-room' && req.method === 'GET') {
     const date = clean(q.get('date') || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     let groupId = null;
     const gRaw = q.get('groupId');
     if (gRaw) {
@@ -9457,7 +9457,7 @@ async function handleApi(req, res, url) {
     const prof = profileById(clean(body.profileId, 80));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const date = clean(body.date || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const workoutKey = clean(body.workoutKey, 120);
     const sep = workoutKey.indexOf(':');
     const kind = sep > 0 ? workoutKey.slice(0, sep) : '';
@@ -9467,7 +9467,7 @@ async function handleApi(req, res, url) {
         return sendJson(res, 404, { error: 'Custom workout not found.' });
       }
     } else if (kind === 'session') {
-      if (!SESSION_IDS.has(ref)) return sendJson(res, 400, { error: 'Unknown session code.' });
+      if (!SESSION_IDS.has(ref)) return sendJson(res, 400, { error: "That session code isn't in the plan. Check it, or leave it blank." });
     } else {
       return sendJson(res, 400, { error: 'workoutKey must name a session code or a custom workout.' });
     }

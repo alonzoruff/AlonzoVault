@@ -2081,7 +2081,7 @@ function memberLogStatusBadge(l) {
 }
 function memberLogMetaLine(l) {
   const bits = [];
-  if (l.rpe != null) bits.push('RPE ' + l.rpe);
+  if (l.rpe != null) bits.push('Effort ' + l.rpe + '/10');
   if (l.durationMin != null) bits.push(l.durationMin + ' min');
   return bits.join(' · ');
 }
@@ -2309,7 +2309,7 @@ function paintMemberLogEditor() {
         <option value="done" ${ed.status === 'done' ? 'selected' : ''}>Done</option>
         <option value="partial" ${ed.status === 'partial' ? 'selected' : ''}>Partial. Didn't finish it all</option>
       </select></label>
-      <label>RPE (optional) <select id="ml-rpe">
+      <label>How hard was it? (optional) <select id="ml-rpe">
         <option value="">-</option>
         ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<option value="${n}" ${String(ed.rpe) === String(n) ? 'selected' : ''}>${n}${n === 1 ? ' (easy)' : ''}${n === 10 ? ' (max effort)' : ''}</option>`).join('')}
       </select></label>
