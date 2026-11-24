@@ -7680,7 +7680,7 @@ async function renderData() {
       box.innerHTML = '<p class="error">That file is not valid JSON.</p>';
       return;
     }
-    if (parsed && parsed.app === 'sprinter-workout-app' && parsed.kind === 'backup-encrypted' && parsed.encrypted) {
+    if (parsed && parsed.app === 'sprinter-workout-app' && parsed.kind === 'backup-encrypted') {
       pendingBackup = parsed;
       const when = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString() : 'an unknown date';
       box.innerHTML =

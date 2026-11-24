@@ -3908,6 +3908,8 @@ async function main() {
     Array.isArray(bkEnv.summary.notIncluded) &&
     bkEnv.summary.notIncluded.some(t => t.startsWith('Logins')) &&
     bk.text.indexOf('"summary"') < bk.text.indexOf('"data"'), bkEnv.summary);
+  check('the Data page recognizes an encrypted backup file by its kind (the envelope has no "encrypted" flag)',
+    appJs.text.includes("parsed.kind === 'backup-encrypted') {") && !appJs.text.includes('parsed.encrypted'));
   check('backup contains no accounts or secrets',
     !('users' in bkEnv.data) && !bk.text.includes('passHash') && !bk.text.includes('"users"') &&
     !bk.text.includes('test-secret') && !bk.text.includes('"logs"'),
