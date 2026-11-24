@@ -34,6 +34,46 @@ Zero dependencies (Node >= 18 built-ins only). Environment:
   (default `https://calendly.com/alonzo-ruffinjr/30min`)
 - `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_UPLOAD_PRESET` — demo-video upload
   identifiers (defaults are the coach's existing account values)
+- `SITE_URL` — the public address written into the page tags, sitemap and
+  robots file (default `https://ruffin-performance.onrender.com`)
+- `READ_ONLY_MODE` — set to `1` for a short pause during a move: sign-in and
+  reading work, every change is refused and nothing is saved
+
+## Running on Vercel (hosted data store)
+
+Render keeps working exactly as above. Vercel has no lasting disk, so on
+Vercel the data lives in a hosted Upstash Redis store instead of `db.json`.
+That mode turns on only when both store settings are present:
+
+- `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL`
+  + `KV_REST_API_TOKEN`, the names Vercel's Upstash integration uses)
+- `SESSION_SECRET` — required in this mode (the API answers 503 without it).
+  Use the same value as Render so nobody is signed out by the move.
+- `OWNER_SETUP_EMAIL` — on an empty store, only this email may create the
+  first (head coach) account. Leave it unset once real data is copied in.
+- `STORE_PREFIX` — optional key prefix (default `ayg-lab`)
+
+In this mode every API request loads the store fresh (or reuses it when
+nothing changed), runs, and saves with a version check, so two saves at
+the same moment can never erase each other: the later one is re-run on
+top of the earlier. Coach emails go out after the save and before the
+reply. See `lib/store.js`.
+
+Vercel project settings: Root Directory `business/coaching-app`, Framework
+"Other", no build command. `vercel.json` sends every path to
+`api/index.js` (the same handler Render runs) and keeps `vercel-static/`
+empty on purpose, so pages still get the brand and address filled in.
+On Vercel, imports are capped at 4 MB (Vercel's request limit is about
+4.5 MB) and big downloads are gzipped.
+
+One-time move of the real data (with Render paused by `READ_ONLY_MODE=1`):
+
+```sh
+UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=... node scripts/copy-to-store.js db.json
+```
+
+It refuses to overwrite a store that already has data (add `--replace` on
+purpose) and prints a count check for every collection.
 
 ## Model
 
@@ -50,7 +90,10 @@ Zero dependencies (Node >= 18 built-ins only). Environment:
 ## Tests
 
 ```sh
-node tests/run-tests.js
+node tests/run-tests.js            # the main suite (Render file mode)
+node tests/store-tests.js          # hosted-store mode and the Vercel entry
+node tests/run-tests-store-mode.js # the main suite again, in hosted-store mode
+npm test                           # all three
 ```
 
 Starts the server on a throwaway port with a temporary `DATA_DIR`,
