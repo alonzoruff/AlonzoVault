@@ -5934,7 +5934,7 @@ async function handleApi(req, res, url) {
     if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
     let body;
     try {
-      body = await readJsonBody(req, 5 * 1024 * 1024);
+      body = await readJsonBody(req, MID_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That file is too large — device exports over 5 MB are not accepted.' });
@@ -5957,7 +5957,7 @@ async function handleApi(req, res, url) {
     if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
     let body;
     try {
-      body = await readJsonBody(req, 5 * 1024 * 1024);
+      body = await readJsonBody(req, MID_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That import is too large.' });
@@ -6265,7 +6265,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/import/backup' && req.method === 'POST') {
     let body;
     try {
-      body = await readJsonBody(req, 10 * 1024 * 1024);
+      body = await readJsonBody(req, BIG_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That file is too large — backups over 10 MB are not accepted.' });
