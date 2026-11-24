@@ -3886,7 +3886,8 @@ async function main() {
     'inventory', 'meetResults', 'meets', 'meetEntries', 'schoolRecords', 'goals', 'coachInvites',
     'customWorkouts', 'programs', 'programApplications', 'announcements'];
   const BK_OBJECTS = ['overrides', 'completions', 'testResults', 'weekly', 'concerns',
-    'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins', 'attendance', 'coachNotes'];
+    'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins', 'attendance', 'coachNotes',
+    'settings'];
   check('backup carries every team-data collection with the right shape',
     BK_ARRAYS.every(k => Array.isArray(bkEnv.data[k])) &&
     BK_OBJECTS.every(k => !!bkEnv.data[k] && typeof bkEnv.data[k] === 'object' && !Array.isArray(bkEnv.data[k])) &&
@@ -3897,6 +3898,16 @@ async function main() {
     bkEnv.data.profiles.some(p => p.id === dataP.id) &&
     bkEnv.data.attendance['2027-01-04'] && bkEnv.data.attendance['2027-01-04'][dataP.id].status === 'present',
     bkEnv.data.announcements.length);
+  check('backup carries the saved settings (retention window, weight room display)',
+    Number.isInteger(bkEnv.data.settings.retentionMonths) &&
+    typeof bkEnv.data.settings.weightRoomSharedDisplay === 'boolean', bkEnv.data.settings);
+  check('backup opens with a readable summary: athlete count, per-collection counts, what is left out',
+    !!bkEnv.summary && bkEnv.summary.athletes === bkEnv.data.profiles.length &&
+    bkEnv.summary.contents.profiles === bkEnv.data.profiles.length &&
+    bkEnv.summary.contents.announcements === bkEnv.data.announcements.length &&
+    Array.isArray(bkEnv.summary.notIncluded) &&
+    bkEnv.summary.notIncluded.some(t => t.startsWith('Logins')) &&
+    bk.text.indexOf('"summary"') < bk.text.indexOf('"data"'), bkEnv.summary);
   check('backup contains no accounts or secrets',
     !('users' in bkEnv.data) && !bk.text.includes('passHash') && !bk.text.includes('"users"') &&
     !bk.text.includes('test-secret') && !bk.text.includes('"logs"'),
@@ -4002,6 +4013,10 @@ async function main() {
   check('an envelope missing the app marker is 400', r.status === 400, r.status);
   r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: [] });
   check('a backup whose data is a list is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: { settings: { retentionMonths: 0 } } });
+  check('a backup with an out-of-range retention setting is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: { settings: { weightRoomSharedDisplay: 'no' } } });
+  check('a backup with a non-boolean weight room setting is 400', r.status === 400, r.status);
   r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: { profiles: [{ firstName: 'No', lastName: 'Id' }] } });
   check('a record missing its id is 400', r.status === 400, r.status);
   r = await api(coach, 'POST', '/api/import/backup', undefined, { raw: 'this is not json', contentType: 'application/json' });
@@ -5182,37 +5197,101 @@ async function waitForServer(tries = 60) {
         }
         return false;
       };
+      /* The source: the main suite's made-up team, with both saved
+         settings moved off their defaults so the round trip has to
+         carry them. A fresh export is the file under test; the main
+         store's settings go back to defaults right after. */
+      await api(ctx.coach, 'PUT', '/api/retention/settings', { months: 18 });
+      await api(ctx.coach, 'POST', '/api/weight-room/display', { shared: false });
+      const src = (await api(ctx.coach, 'GET', '/api/export/backup')).json;
+      await api(ctx.coach, 'PUT', '/api/retention/settings', { months: 12 });
+      await api(ctx.coach, 'POST', '/api/weight-room/display', { shared: true });
+      check('round-trip source carries non-default settings',
+        src && src.data && src.data.settings.retentionMonths === 18 &&
+        src.data.settings.weightRoomSharedDisplay === false, src && src.data && src.data.settings);
+      /* Order-insensitive for object keys, exact for list order. */
+      const sameValue = (a, b) => {
+        if (Array.isArray(a) || Array.isArray(b)) {
+          return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => sameValue(v, b[i]));
+        }
+        if (a && b && typeof a === 'object' && typeof b === 'object') {
+          const ka = Object.keys(a), kb = Object.keys(b);
+          return ka.length === kb.length && ka.every(k => Object.prototype.hasOwnProperty.call(b, k) && sameValue(a[k], b[k]));
+        }
+        return a === b;
+      };
+      /* Every collection of the restored export, compared to the
+         source record for record. Returns the names that differ. */
+      const diffKeys = (a, b) => {
+        const keys = new Set(Object.keys(a).concat(Object.keys(b)));
+        return [...keys].filter(k => !sameValue(a[k], b[k]));
+      };
+      const nonEmpty = Object.keys(src.data).filter(k => {
+        const v = src.data[k];
+        return Array.isArray(v) ? v.length > 0 : (v && typeof v === 'object' ? Object.keys(v).length > 0 : !!v);
+      });
+      check('round-trip source exercises most collections (not an empty file)',
+        nonEmpty.length >= 25, nonEmpty);
       let rtChild = startRt();
       try {
         check('round-trip server starts on an empty store', await waitRt(), rtLog);
         let sr = await rtApi(null, 'POST', '/api/register', { email: 'rt-coach@test.com', password: 'testpass123', ageAttested: true });
         check('round-trip store: first account is the coach', sr.status === 201 && sr.json.role === 'coach', sr.json);
-        const rtCoach = cookieOf(sr);
-        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', ctx.backup);
+        let rtCoach = cookieOf(sr);
+        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', src);
         check('round-trip import lands in the empty store',
           sr.status === 200 && sr.json.ok === true &&
-          sr.json.counts.profiles.added === ctx.backup.data.profiles.length &&
-          sr.json.counts.announcements.added === ctx.backup.data.announcements.length &&
+          sr.json.counts.profiles.added === src.data.profiles.length &&
+          sr.json.counts.announcements.added === src.data.announcements.length &&
           sr.json.totalAdded > 0, sr.json && sr.json.counts && sr.json.counts.profiles);
         sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
         check('round-trip store reproduces the source dataset',
           sr.status === 200 &&
-          sr.json.data.profiles.length === ctx.backup.data.profiles.length &&
-          sr.json.data.announcements.length === ctx.backup.data.announcements.length &&
-          sr.json.data.schoolRecords.length === ctx.backup.data.schoolRecords.length &&
-          Object.keys(sr.json.data.attendance).length === Object.keys(ctx.backup.data.attendance).length &&
+          sr.json.data.profiles.length === src.data.profiles.length &&
           sr.json.data.profiles.some(p => p.id === ctx.dataProfileId),
           sr.json && sr.json.data && sr.json.data.profiles && sr.json.data.profiles.length);
+        check('round trip: every collection matches the source record for record',
+          sr.status === 200 && diffKeys(src.data, sr.json.data).length === 0,
+          sr.json && diffKeys(src.data, sr.json.data));
+        check('round trip: the summary counts match too',
+          sr.status === 200 && sameValue(src.summary, sr.json.summary), sr.json && sr.json.summary);
+        check('round trip: the new app\'s own runner-test seed is not left as a duplicate',
+          sr.json.data.customWorkouts.filter(w => w.title === 'Strength Circuit — Runner Test').length ===
+          src.data.customWorkouts.filter(w => w.title === 'Strength Circuit — Runner Test').length,
+          sr.json.data.customWorkouts.map(w => w.title));
+        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', src);
+        check('importing the same file twice changes nothing',
+          sr.status === 200 && sr.json.totalAdded === 0 && sr.json.totalUpdated === 0, sr.json);
         rtChild.kill('SIGKILL');
         await new Promise(r => setTimeout(r, 300));
         rtChild = startRt();
         check('round-trip server restarts', await waitRt(), rtLog);
         sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
         check('the imported dataset survives a restart of the new store',
-          sr.status === 200 &&
-          sr.json.data.profiles.length === ctx.backup.data.profiles.length &&
-          sr.json.data.announcements.length === ctx.backup.data.announcements.length,
-          sr.json && sr.json.data && sr.json.data.profiles && sr.json.data.profiles.length);
+          sr.status === 200 && diffKeys(src.data, sr.json.data).length === 0,
+          sr.json && diffKeys(src.data, sr.json.data));
+
+        /* Wipe the test copy outright (delete its data folder), boot
+           it empty, and restore the same file again. */
+        rtChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        for (const f of fs.readdirSync(RT_DIR)) fs.rmSync(path.join(RT_DIR, f), { recursive: true, force: true });
+        rtChild = startRt();
+        check('wiped test copy boots', await waitRt(), rtLog);
+        sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
+        check('wiped test copy: the old login is gone with the data', sr.status === 401, sr.status);
+        sr = await rtApi(null, 'POST', '/api/register', { email: 'rt-coach2@test.com', password: 'testpass123', ageAttested: true });
+        rtCoach = cookieOf(sr);
+        sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
+        check('wiped test copy is empty before the restore',
+          sr.status === 200 && sr.json.data.profiles.length === 0 && sr.json.data.groups.length === 0 &&
+          Object.keys(sr.json.data.checkins).length === 0, sr.json && sr.json.summary);
+        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', src);
+        check('wiped test copy takes the restore', sr.status === 200 && sr.json.ok === true, sr.json);
+        sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
+        check('after wipe and restore, every collection matches the source again',
+          sr.status === 200 && diffKeys(src.data, sr.json.data).length === 0,
+          sr.json && diffKeys(src.data, sr.json.data));
       } finally {
         rtChild.kill('SIGKILL');
         fs.rmSync(RT_DIR, { recursive: true, force: true });
