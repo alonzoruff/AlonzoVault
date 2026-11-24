@@ -1034,6 +1034,10 @@ details.card summary { cursor: pointer; }
   gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px solid var(--line);
 }
 .roster-row:last-child { border-bottom: none; }
+/* Long school emails and pasted links do not break at '.' or '@', so
+   they ran past the card and made the whole page scroll sideways. */
+main p { overflow-wrap: break-word; }
+.roster-row > span, .contact-link { overflow-wrap: anywhere; min-width: 0; }
 .roster-actions { display: inline-flex; gap: 6px; }
 .roster-card details { margin-top: 8px; }
 .check-line { display: flex; align-items: center; gap: 8px; font-weight: 500; min-height: 44px; padding: 6px 0; }
@@ -2505,7 +2509,7 @@ body.on-welcome #app { max-width: none; padding: 0; margin: 0; }
 }
 .icon-link:hover { background: var(--surface-2); }
 .roster-meta { margin: 4px 0; font-size: 13.5px; }
-.contact-link { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; margin-right: 10px; }
+.contact-link { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; margin-right: 10px; display: inline-block; padding: 10px 0; }
 @media (max-width: 420px) {
   .ch-roster-row .lvl { min-width: 0; padding: 2px 7px; }
 }
