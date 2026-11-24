@@ -4928,7 +4928,12 @@ async function renderTop() {
   const tm = $('#top-metric');
   if (tm) tm.addEventListener('change', () => { state.topMetric = tm.value; renderTop(); });
   const tw = $('#top-week');
-  if (tw) tw.addEventListener('change', () => { state.topWeek = tw.value; renderTop(); });
+  if (tw) tw.addEventListener('change', () => {
+    /* Any day picked moves to its Monday, so saving never hits a
+       "pick the Monday" error. */
+    if (tw.value) { const d = parseDate(tw.value); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); tw.value = dateStrOf(d); }
+    state.topWeek = tw.value; renderTop();
+  });
   const tem = $('#top-entry-metric');
   if (tem) tem.addEventListener('change', () => { state.entryMetric = tem.value; renderTop(); });
   /* Weekly saves update just the athlete's row in place (plus
