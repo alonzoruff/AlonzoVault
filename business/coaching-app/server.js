@@ -9697,6 +9697,10 @@ const MIME = {
   '.webmanifest': 'application/manifest+json',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
 };
 const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/sw.js']);
 /* Brand tokens in the shell files (index.html, app.js, manifest,
@@ -9747,8 +9751,47 @@ function serveStatic(req, res, url) {
 seedCoachInvitesFromEnv();
 seedCustomWorkouts();
 
+/* ------------------------------------------------------------------ */
+/* Security headers (sent on every response)                           */
+/* ------------------------------------------------------------------ */
+/* None of these changes what a member sees or how sign-in works. They
+   tell the browser: never guess a file's type (nosniff); never let
+   another website show this app inside a frame, which is how
+   "clickjacking" tricks work (X-Frame-Options + frame-ancestors);
+   keep using HTTPS for this site (HSTS, only sent over HTTPS); share
+   only the site name, never the page path or a booking link, with
+   other sites (Referrer-Policy); and nothing here may use the camera,
+   microphone, or location. API answers hold member data, so the
+   browser and any shared cache must not store them (no-store); a
+   handler that sets its own Cache-Control still wins, because its
+   writeHead headers replace these defaults. */
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Content-Security-Policy': "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+function setSecurityHeaders(req, res, isApi) {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
+  const isHttps = req.headers['x-forwarded-proto'] === 'https' || !!(req.socket && req.socket.encrypted);
+  if (isHttps) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+  if (isApi) res.setHeader('Cache-Control', 'no-store');
+}
+
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://localhost');
+  /* A request line the URL parser rejects (for example "GET //%")
+     used to throw here and take the whole server down. Answer 400
+     instead; no real browser request looks like this. */
+  let url;
+  try {
+    url = new URL(req.url, 'http://localhost');
+  } catch (_) {
+    setSecurityHeaders(req, res, false);
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('bad request');
+  }
+  setSecurityHeaders(req, res, url.pathname.startsWith('/api/'));
   if (url.pathname.startsWith('/api/')) {
     handleApi(req, res, url).catch(() => {
       // The socket may already be gone (e.g., an oversized body was
