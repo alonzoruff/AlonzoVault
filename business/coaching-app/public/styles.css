@@ -2152,6 +2152,9 @@ details.card > summary { cursor: pointer; font-weight: 700; min-height: 32px; }
   background: none; border: 0; padding: 0; cursor: pointer; font: inherit;
   color: var(--landing-accent); text-decoration: underline; text-underline-offset: 3px;
 }
+/* On the log in page this link stands alone, so give it a full thumb
+   sized target (it was about 21px tall). */
+.acct-invite .landing-textlink { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
 .landing-signin-link { margin-left: auto; flex: none; }
 .landing-hero .landing-signin-link { min-height: 40px; padding: 6px 10px; }
 .home-log-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -2814,8 +2817,8 @@ body.logged-out .public-nav { margin-left: auto; }
 .invite-form label { display: block; margin-bottom: 12px; }
 .invite-form label[hidden] { display: none; }
 .invite-form label input[type="text"], .invite-form label input[type="email"], .invite-form label select, .invite-form label textarea { display: block; width: 100%; margin-top: 4px; }
-.invite-form .invite-for label { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.invite-form .invite-consent { display: flex; align-items: flex-start; gap: 10px; }
+.invite-form .invite-for label { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px; min-height: 44px; }
+.invite-form .invite-consent { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding-block: 10px; }
 .invite-form .invite-consent input { margin-top: 3px; flex: none; }
 .invite-next { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
 .invite-next p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; }
@@ -2843,7 +2846,7 @@ body.logged-out .public-nav { margin-left: auto; }
 .legal h2:first-child { margin-top: 0; }
 .legal p { margin: 0 0 8px; line-height: 1.6; }
 .footer-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0; }
-.footer-links a { color: inherit; text-decoration: underline; padding: 6px 0; min-height: 32px; display: inline-flex; align-items: center; }
+.footer-links a { color: inherit; text-decoration: underline; padding: 6px 0; min-height: 44px; display: inline-flex; align-items: center; }
 
 /* Public home refresh: a wider, editorial layout keeps the training
    proof and the next step visible without changing member app views. */
