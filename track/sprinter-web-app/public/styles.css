@@ -251,7 +251,11 @@ label { display: block; font-size: 14px; font-weight: 600; margin-top: 6px; }
 .day-card .plan { margin: 4px 0; font-size: 15px; }
 .day-card .warmup, .day-card .swap-note { font-size: 13px; color: var(--muted); }
 .day-card select { margin-bottom: 0; }
-.code-link { color: var(--red-dark); font-weight: 700; text-decoration: none; border-bottom: 1px dotted var(--red); cursor: pointer; }
+.code-link { color: var(--red-dark); font-weight: 700; text-decoration: underline dotted var(--red); text-underline-offset: 3px; cursor: pointer; }
+/* Workout code links are the main way into a workout from the day cards.
+   Vertical padding on an inline link grows the tap area to about 44px
+   without moving the text around it. */
+.code-link { padding: 12px 0; }
 .flag {
   background: #fff4e5; border: 1px solid #f0d9a8; color: #7a5200;
   border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 0 0 12px;
