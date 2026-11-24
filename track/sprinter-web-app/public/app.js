@@ -137,11 +137,29 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* Plain words for when a request fails without its own message. An
+   athlete should never see a status number or a browser error. */
+const OFFLINE_MSG = 'No connection. Check your signal or Wi-Fi and try again.';
+function plainStatusMsg(status) {
+  if (status === 401) return 'You were logged out. Log in again to keep going.';
+  if (status === 403) return "Your account doesn't have access to this.";
+  if (status === 404) return "We couldn't find that. It may have been removed.";
+  if (status === 413) return 'That is too big to send. Try something smaller.';
+  if (status === 429) return 'Too many tries in a row. Wait a minute and try again.';
+  return 'The app could not reach the server just now. Wait a moment and try again.';
+}
 async function api(path, opts) {
-  const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  let res;
+  try {
+    res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  } catch (_) {
+    /* No signal at the track: the browser's own words here are
+       "Failed to fetch" or "Load failed". */
+    throw new Error(OFFLINE_MSG);
+  }
   let data = {};
   try { data = await res.json(); } catch (_) { /* empty */ }
-  if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
+  if (!res.ok) throw new Error(data.error || plainStatusMsg(res.status));
   return data;
 }
 const apiPost = (path, body) => api(path, {
@@ -2862,7 +2880,7 @@ function renderAccount() {
     renderCoachInvites();
     const out = async () => {
       try { await apiPost('/api/logout'); }
-      catch (err) { alert('Log out failed: ' + err.message); return; }
+      catch (err) { alert("Couldn't log you out. " + err.message); return; }
       state.user = null; await refreshUserData(); syncAuthUi(); showView('home');
     };
     $('#chip-logout').addEventListener('click', out);
@@ -3610,12 +3628,14 @@ function uploadDemoVideo(file, onProgress) {
         resolve(json.secure_url);
         return;
       }
-      const msg = (json && json.error && json.error.message)
-        || ('Upload failed (HTTP ' + xhr.status + ').');
-      reject(new Error(msg));
+      /* The upload service answers in its own technical terms, so
+         the coach gets plain words instead of its message. */
+      reject(new Error(xhr.status === 413 || xhr.status === 400
+        ? 'That video did not upload. Make sure it is under 100 MB and try again.'
+        : 'That video did not upload. Please try again.'));
     });
     xhr.addEventListener('error', () => {
-      reject(new Error('Upload failed — check your connection and try again.'));
+      reject(new Error('That video did not upload. Check your signal and try again.'));
     });
     xhr.send(form);
   });
@@ -8514,13 +8534,21 @@ function ctDayWord(date) {
    refused because another coach changed the plan can show the
    current version instead of a bare message. */
 async function ctCall(path, method, body) {
-  const res = await fetch(path, {
-    method: method || 'GET', credentials: 'same-origin',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method: method || 'GET', credentials: 'same-origin',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (_) {
+    /* Offline: hand back a plain message instead of throwing, so the
+       form shows it and its Save button comes back. */
+    return { ok: false, status: 0, data: { error: OFFLINE_MSG } };
+  }
   let data = {};
   try { data = await res.json(); } catch (_) { /* empty */ }
+  if (!res.ok && !data.error) data.error = plainStatusMsg(res.status);
   return { ok: res.ok, status: res.status, data };
 }
 
