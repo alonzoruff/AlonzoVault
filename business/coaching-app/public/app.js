@@ -138,14 +138,32 @@ let lastPressed = null;
   const t = ev === 'submit' ? (e.submitter || e.target.querySelector('button[type="submit"], .btn.primary')) : e.target.closest && e.target.closest('button');
   lastPressed = t ? { el: t, at: Date.now() } : null;
 }, true));
+/* Plain words for when a request fails without its own message. A
+   member should never see a status number or a browser error. */
+const OFFLINE_MSG = "Can't reach AYG Lab right now. Check your signal and try again.";
+function plainStatusMsg(status) {
+  if (status === 401) return 'Please log in again.';
+  if (status === 403) return "Your account doesn't have access to this.";
+  if (status === 404) return "We couldn't find that. It may have been removed.";
+  if (status === 413) return 'That is too big to send. Try something smaller.';
+  if (status === 429) return 'Too many tries in a row. Wait a minute and try again.';
+  return 'Something went wrong on our side. Please try again.';
+}
 async function api(path, opts) {
   const btn = lastPressed && Date.now() - lastPressed.at < 800 && lastPressed.el.getAttribute('aria-busy') !== 'true' ? lastPressed.el : null;
   if (btn) btn.setAttribute('aria-busy', 'true');
   try {
-    const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+    let res;
+    try {
+      res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+    } catch (_) {
+      /* No signal (gym basement, airplane mode): the browser's own
+         words here are "Failed to fetch" or "Load failed". */
+      throw new Error(OFFLINE_MSG);
+    }
     let data = {};
     try { data = await res.json(); } catch (_) { /* empty */ }
-    if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
+    if (!res.ok) throw new Error(data.error || plainStatusMsg(res.status));
     return data;
   } finally {
     if (btn) btn.removeAttribute('aria-busy');
@@ -1826,7 +1844,7 @@ function renderAccount() {
     renderClientInvites();
     const out = async () => {
       try { await apiPost('/api/logout'); }
-      catch (err) { alert('Log out failed: ' + err.message); return; }
+      catch (err) { alert("Couldn't log you out. " + err.message); return; }
       state.user = null; await refreshUserData(); syncAuthUi(); showView('landing');
     };
     $('#chip-logout').addEventListener('click', out);
@@ -3621,12 +3639,14 @@ function uploadDemoVideo(file, onProgress) {
         resolve(json.secure_url);
         return;
       }
-      const msg = (json && json.error && json.error.message)
-        || ('Upload failed (HTTP ' + xhr.status + ').');
-      reject(new Error(msg));
+      /* The upload service answers in its own technical terms, so
+         the member gets plain words instead of its message. */
+      reject(new Error(xhr.status === 413
+        ? "That video didn't upload. Try a shorter clip, under a minute is best."
+        : "That video didn't upload. Please try again."));
     });
     xhr.addEventListener('error', () => {
-      reject(new Error('Upload failed. Check your connection and try again.'));
+      reject(new Error("That video didn't upload. Check your signal and try again."));
     });
     xhr.send(form);
   });
