@@ -6185,7 +6185,7 @@ function paintCalendar() {
       </div>
     </div>
     <div class="card">
-      <div class="table-wrap"><table class="matrix" style="table-layout:fixed">
+      <div class="table-wrap"><table class="matrix" style="table-layout:fixed;min-width:640px">
         <thead><tr>${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<th style="text-align:left">${d}</th>`).join('')}</tr></thead>
         <tbody>${rows.map(r => '<tr>' + r.map(cellHtml).join('') + '</tr>').join('')}</tbody>
       </table></div>

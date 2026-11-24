@@ -1504,6 +1504,9 @@ body.tv-awake .tv-bottom, .tv-bottom:focus-within { opacity: 1; transform: none;
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; flex: none; }
 .grid-table input.grid-in { width: 78px; padding: 6px 8px; }
+/* Number, phone and link fields below 16px make iPhones zoom in on tap.
+   Font size only, so the fixed widths above stay. */
+input[type="number"], input[type="tel"], input[type="url"] { font-size: 16px; }
 .grid-table input.grid-r { width: 62px; margin-left: 4px; }
 .grid-table td.cell-error { background: var(--accent-soft-bg); }
 .grid-table td.cell-error input { border-color: var(--red); }
@@ -2411,7 +2414,7 @@ body.tv-mode {
 .ch-run .run-today-btn { width: 100%; }
 .hub-label { margin: 16px 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .ch-back {
-  display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 4px 0; margin: 0 0 4px;
+  display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 4px 0; margin: 0 0 4px;
   background: none; border: none; cursor: pointer; color: var(--red-dark); font-size: 14.5px; font-weight: 700;
 }
 
@@ -2482,7 +2485,7 @@ body.on-welcome #app { max-width: none; padding: 0; margin: 0; }
 
 .ch-roster { padding-bottom: 8px; }
 .lvl-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
-.lvl-filter { min-height: 36px; padding: 4px 12px; font-size: 13.5px; cursor: pointer; }
+.lvl-filter { min-height: 44px; padding: 4px 12px; font-size: 13.5px; cursor: pointer; }
 .lvl-filter b { font-variant-numeric: tabular-nums; }
 .lvl-filter.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
 .lvl-filter:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
@@ -2504,7 +2507,7 @@ body.on-welcome #app { max-width: none; padding: 0; margin: 0; }
 .ch-roster-contact { display: flex; gap: 6px; flex: none; }
 .icon-link {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line);
+  width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--surface); color: var(--ink); text-decoration: none; font-size: 17px;
 }
 .icon-link:hover { background: var(--surface-2); }
@@ -2529,7 +2532,7 @@ body.ct-wide main, body.ct-wide .topbar-inner, body.ct-wide .mainnav, body.ct-wi
 .ct-asof { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ct-home-link { min-height: 48px; }
 .ct-textbtn {
-  background: none; border: 0; padding: 6px 4px; min-height: 36px; cursor: pointer;
+  background: none; border: 0; padding: 6px 4px; min-height: 44px; cursor: pointer;
   color: var(--red-dark); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px;
 }
 .ct-textbtn:focus-visible, .ct-gchip:focus-visible, .ct-day:focus-visible, .ct-daystep:focus-visible,
