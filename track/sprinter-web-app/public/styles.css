@@ -2767,3 +2767,6 @@ body.ct-sheet-open { overflow: hidden; }
 .todo-today { border: 2px solid var(--red); }
 .todo-steps { padding-left: 1.2em; margin: 0; }
 .todo-steps li { margin: .6em 0; }
+/* v69: What to do today, when the coach has published today's workout */
+.todo-published .todo-from-coach { margin: -.3em 0 .4em; }
+.todo-plan-title { font-weight: 700; }
