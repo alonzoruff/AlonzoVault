@@ -1,17 +1,45 @@
-# Sprinter Workout App — the real web app version
+# Sprinter Workout App, by Alonzo
 
-By Alonzo. Signed out, the app shows one simple welcome screen; signing in
-opens everything else.
+## Start here
 
-This is the standalone version of the Sprinter Workout App. It is a normal
-website: anybody can open it at its web address, look through the workout
-library and the season plan, create their own free account, and save their
-own practice log and cross-training swaps. No Muse account needed, nothing
-to install. On a phone it can be added to the home screen and it behaves
-like an app.
+**What it is:** the website AJ and his assistant coaches use to run the
+school track program's sprinters, hurdlers and jumpers: the workout
+library, the season plan, the roster, testing, attendance, and staff
+notes. Signed out, it shows one simple welcome screen. Signing in opens
+everything else. On a phone it can be added to the home screen and it
+behaves like an app.
 
-You own this. The code lives in your GitHub (AlonzoVault), and the site
-will live under your hosting account, in your name.
+**Who can sign in:** it is invite-only. The very first account became the
+head coach. After that, an email can sign up only if a coach invited it
+as a coach, or linked it to an athlete on the roster. Linked athletes can
+fill in one daily wellness check-in and browse; everything else is
+coach-only.
+
+**Where it runs:** on Render, service name `sprinter-workout-app`. The
+code is in AlonzoVault on GitHub, in the folder `track/sprinter-web-app`.
+A move from Render to Vercel is being planned; until AJ decides, Render
+is the live home.
+
+**It is separate from AYG Lab.** The two apps started from the same code
+but now share nothing: no accounts, no data, no settings. A change to one
+never touches the other.
+
+**Where the data lives:** everything coaches and athletes save is in one
+file, `db.json`, in the folder the `DATA_DIR` setting names (see "Data &
+backups" below). It is never in GitHub. Whether the live Render service
+has a permanent disk was not confirmed for this guide; AJ can see it in
+Render under the service's **Disks** tab. Until that is confirmed,
+download a backup from the app before any deploy or hosting change.
+
+**Run it, test it:** see "Run it on your own computer" below, and
+`node tests/run-tests.js` for the automatic checks (about 1,900; all
+passed on main on Nov 24, 2026).
+
+**How a change gets to the live site:** see
+[How a change ships](../../docs/HOW-A-CHANGE-SHIPS.md).
+
+The rest of this page is the full feature list, then the technical
+details.
 
 ## What's inside
 
@@ -20,10 +48,11 @@ will live under your hosting account, in your name.
 - **16 warm-up drills**, the **29-week season plan** (mini peak Feb 20,
   2027 · major peak May 15, 2027), the **400m Training** section, and the
   plain-English guide.
-- **Accounts are for coaches only.** Athletes never log in and never enter
-  data — the coach records everything. The first account registered becomes
-  the coach account; a coach can promote other accounts from the Account
-  page. Passwords are scrambled with a strong one-way hash (scrypt) — the
+- **Accounts are invite-only.** The coach records almost everything. The
+  one thing athletes enter is a daily wellness check-in, and only once a
+  coach has linked their email to their roster profile. The first account
+  registered becomes the coach account; a coach can promote other accounts
+  from the Account page. Passwords are scrambled with a strong one-way hash (scrypt) — the
   real password is never stored. Any non-coach account gets a firm "no" from
   every team-data screen.
 - **Saved per coach account**: your own practice log entries, and easy-day
@@ -163,7 +192,13 @@ accounts, no athlete typing.
 ## Run it on your own computer (to look at it)
 
 You need Node.js (version 18 or newer — it's a free download from
-nodejs.org). Then, in this folder:
+nodejs.org). Then, from the top of the repo:
+
+```
+cd track/sprinter-web-app
+```
+
+and:
 
 ```
 npm start
@@ -174,15 +209,17 @@ there is nothing to install first, because the app uses zero outside
 packages. Stop it with Ctrl+C.
 
 Register the first account with your own email — that account is the
-coach account and unlocks the whole coach system described below.
+coach account and unlocks the whole coach system described above.
 
-## Put it on the internet (deploy)
+## How it was first put on the internet (Render)
+
+This is already done and the app is live. The steps are kept here in
+case the service ever has to be rebuilt.
 
 You only do this once. The recommended path is **Render** (free tier),
 because it runs Node apps straight from GitHub:
 
-1. Push this folder to AlonzoVault on GitHub (Muse can do this push
-   with you).
+1. Have the code in AlonzoVault on GitHub (it already is).
 2. Make a free account at render.com and sign in with GitHub.
 3. Click **New → Web Service**, pick the AlonzoVault repository.
 4. Set the **Root Directory** to `track/sprinter-web-app`.
@@ -213,6 +250,9 @@ backed up.
 | `PORT` | Which port the site listens on. Hosts set this for you. | `3000` |
 | `DATA_DIR` | Folder where accounts, logs, and swaps are stored. | `./data` (inside the app folder) |
 | `SESSION_SECRET` | Secret that signs login cookies. Set a long random one when you deploy. If you skip it, the app makes one up and keeps it in the data folder. | auto-generated |
+| `PROTOCOLS_ENABLED` | Turns on the Protocols pages. Off unless set to `1`, `true`, `on` or `yes`. | off |
+| `PROTOCOLS_SHOW_UNPUBLISHED` | With Protocols on, also shows protocols not yet published. A preview switch; leave it off on the live site. | off |
+| `STUDIES_ENABLED` | Turns on the Studies section. Off unless set to `1`, `true`, `on` or `yes`. | off |
 | `COACH_INVITE_EMAILS` | Comma-separated emails to seed as assistant-coach invites at startup, so a friend is invited even before the head coach has registered. Seeding happens once per email: if the head coach later removes an invite in the app, restarts never bring it back. | _(empty)_ |
 
 ## Data & backups
@@ -242,6 +282,13 @@ that gets backed up) so the file survives restarts on its own.
   saves the data. One file, no outside packages.
 - `public/` — what people see: the pages, styling, and app logic, plus
   the app mark in `public/assets/app-mark.svg`.
+- `lib/` — two helpers: `protocols.js` and `studies.js`, behind the
+  Protocols and Studies sections (both stay hidden until their setting
+  is switched on, see Settings).
+- `scripts/protocols-import.js` and `scripts/protocols-report.js` —
+  tools for loading and checking protocol content (see
+  `PROTOCOLS_CONTENT_GUIDE.md`).
+- `DESIGN.md` — the app's design notes.
 - `content/` — the workouts, drills, season plan, and written guides,
   copied in so the app stands on its own. One file in here gets special
   handling: `movement_media.json`, the demo-video library. Its source of

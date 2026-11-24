@@ -1,6 +1,22 @@
 # AJ Command Portal (hosted)
 
-A game style dashboard with real saved state. Node 18 or newer, no dependencies, one process. Separate from the coaching app.
+## Start here
+
+**What it is:** AJ's personal dashboard for his phone, built like a game. AJ is the hero, each part of his life is a "land", and tasks are quests that earn XP and open new lands. AJ ticks quests and sends messages to the team from it. Luna keeps the quests, plans and status lines up to date through a private, key-protected connection.
+
+**What it is not:** it has nothing to do with AYG Lab or the sprinter app. It shares no code, accounts or data with either.
+
+**Where its data lives:** one file, `portal.json`, in the folder the `DATA_DIR` setting names, with the previous copy kept as `portal.json.bak`. It is never in GitHub.
+
+**Where it runs:** the steps for Render are below. Whether it is running on Render right now is not recorded in the repo.
+
+**Run it, test it:** see "Run it" below. Tests: `npm test` (or `node tests/portal-tests.js`) from this folder.
+
+**How a change gets to the live site:** see [How a change ships](../docs/HOW-A-CHANGE-SHIPS.md).
+
+The rest of this page is the technical detail.
+
+Node 18 or newer, no dependencies, one process.
 
 ## Run it
 
@@ -17,10 +33,11 @@ Environment variables
 | LUNA_KEY | Luna sends it in an `x-luna-key` header. Opens her endpoints only. At least 16 characters, and not the same as PORTAL_KEY. |
 | DATA_DIR | Folder for `portal.json`. Default is `./data` next to server.js. |
 | PORT | Default 3000. Render sets it for you. |
+| COOKIE_SECURE | Set to `1` to always mark the login cookie as https-only. Without it, the cookie is https-only whenever the request came in over https (as on Render). |
 
 Make keys with `openssl rand -hex 24`. Never put either key in the repo.
 
-Tests: `node tests/portal-tests.js` (boots the server on a test port with a throwaway folder and a movable clock, 54 checks).
+Tests: `node tests/portal-tests.js` (boots the server on a test port with a throwaway folder and a movable clock, 65 checks). On main on Nov 24, 2026, 64 pass and 1 fails: the check that the home-screen icon `/icon-180.png` loads. See "Known gap" at the bottom.
 
 ## Render
 
@@ -112,3 +129,7 @@ Quest fields: `land, title, owner (AJ, Luna, Char, Claude), xp (AJ quests, 0 to 
     lib/seed.js          starting content, taken from the design file
     public/              index.html, app.js, styles.css, manifest, icons
     tests/portal-tests.js
+
+## Known gap
+
+The home-screen icons (`icon-180.png` and the other PNG icons the page asks for) are not in `public/`. The repo's top-level `.gitignore` blocks every `.png` file, so the icons were never committed. On a fresh copy of the portal the icon requests fail, and one test fails because of it. The fix is a small code change (allow these icon files in `.gitignore`, or switch the icons to SVG) and is its own task.
