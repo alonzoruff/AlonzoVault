@@ -2763,3 +2763,7 @@ body.ct-sheet-open { overflow: hidden; }
 :root[data-theme="floodlight"] .ct-att-btn.on,
 :root[data-theme="floodlight"] .ct-chipradio input:checked + span,
 :root[data-theme="floodlight"] .ct-ho-tag { background: #f2f3f5; border-color: #f2f3f5; color: #0b0d10; }
+
+.todo-today { border: 2px solid var(--red); }
+.todo-steps { padding-left: 1.2em; margin: 0; }
+.todo-steps li { margin: .6em 0; }
