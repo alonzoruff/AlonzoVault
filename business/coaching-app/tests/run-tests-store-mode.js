@@ -64,5 +64,22 @@ const SUITE_EMAILS = [...new Set(
     if (!isDbFile(f)) return realExists.call(this, f);
     return fake.kv.has(tagFor(path.dirname(f)) + ':db');
   };
+  /* Steps that wipe a data folder file by file also wipe its store. */
+  const realReaddir = fs.readdirSync, realRm = fs.rmSync, realUnlink = fs.unlinkSync;
+  fs.readdirSync = function (dir, ...rest) {
+    const out = realReaddir.call(this, dir, ...rest);
+    if (!rest.length && fake.kv.has(tagFor(dir) + ':db') && !out.includes('db.json')) out.push('db.json');
+    return out;
+  };
+  const dropStore = (f) => { const pre = tagFor(path.dirname(f)); fake.kv.delete(pre + ':db'); fake.kv.delete(pre + ':ver'); };
+  fs.rmSync = function (f, ...rest) {
+    if (isDbFile(f)) return dropStore(f);
+    if (typeof f === 'string' && fake.kv.has(tagFor(f) + ':db')) dropStore(path.join(f, 'db.json'));
+    return realRm.call(this, f, ...rest);
+  };
+  fs.unlinkSync = function (f, ...rest) {
+    if (isDbFile(f)) return dropStore(f);
+    return realUnlink.call(this, f, ...rest);
+  };
   require('./run-tests.js');
 })();
