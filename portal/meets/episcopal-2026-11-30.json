@@ -1,0 +1,182 @@
+{
+  "id": "episcopal-2026-11-30",
+  "name": "Alexandria City Invite at Episcopal (Meet 1)",
+  "date": "2026-11-30",
+  "dateLabel": "Mon, Nov 30",
+  "place": "Episcopal High School, Flippin Field House, Alexandria, VA",
+  "entriesClose": "Sun, Nov 29 at 12:00 noon",
+  "slots": 5,
+  "source": "/Track/Meets/Meet File - Episcopal - Nov 30 1123.md",
+  "rules": [
+    {
+      "type": "group",
+      "label": "Open distance races",
+      "events": [
+        "g-1600m-run",
+        "b-1600m-run",
+        "g-1000m-run",
+        "b-1000m-run",
+        "g-3200m-run",
+        "b-3200m-run"
+      ],
+      "max": 1,
+      "upTo": {
+        "athletes": 3,
+        "max": 2
+      },
+      "note": "Meet info: only 3 athletes can run 2 open distance races. Everyone else can only run 1. (1000m, 1600m and 3200m counted as open distance.)"
+    }
+  ],
+  "events": [
+    {
+      "id": "g-pole-vault",
+      "name": "Girls Pole Vault",
+      "kind": "field"
+    },
+    {
+      "id": "b-pole-vault",
+      "name": "Boys Pole Vault",
+      "kind": "field"
+    },
+    {
+      "id": "g-high-jump",
+      "name": "Girls High Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-high-jump",
+      "name": "Boys High Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-long-jump",
+      "name": "Girls Long Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-long-jump",
+      "name": "Boys Long Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-triple-jump",
+      "name": "Girls Triple Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-triple-jump",
+      "name": "Boys Triple Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-shot-put",
+      "name": "Girls Shot Put",
+      "kind": "field"
+    },
+    {
+      "id": "b-shot-put",
+      "name": "Boys Shot Put",
+      "kind": "field"
+    },
+    {
+      "id": "g-3200m-relay-4x800",
+      "name": "Girls 3200m Relay (4x800)",
+      "kind": "relay"
+    },
+    {
+      "id": "b-3200m-relay-4x800",
+      "name": "Boys 3200m Relay (4x800)",
+      "kind": "relay"
+    },
+    {
+      "id": "g-55m-hurdles",
+      "name": "Girls 55m Hurdles",
+      "kind": "run"
+    },
+    {
+      "id": "b-55m-hurdles",
+      "name": "Boys 55m Hurdles",
+      "kind": "run"
+    },
+    {
+      "id": "g-55m-dash",
+      "name": "Girls 55m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-55m-dash",
+      "name": "Boys 55m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-800m-relay-4x200",
+      "name": "Girls 800m Relay (4x200)",
+      "kind": "relay"
+    },
+    {
+      "id": "b-800m-relay-4x200",
+      "name": "Boys 800m Relay (4x200)",
+      "kind": "relay"
+    },
+    {
+      "id": "g-1600m-run",
+      "name": "Girls 1600m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-1600m-run",
+      "name": "Boys 1600m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-500m-dash",
+      "name": "Girls 500m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-500m-dash",
+      "name": "Boys 500m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-1000m-run",
+      "name": "Girls 1000m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-1000m-run",
+      "name": "Boys 1000m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-300m-dash",
+      "name": "Girls 300m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-300m-dash",
+      "name": "Boys 300m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-3200m-run",
+      "name": "Girls 3200m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-3200m-run",
+      "name": "Boys 3200m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-1600m-relay-4x400",
+      "name": "Girls 1600m Relay (4x400)",
+      "kind": "relay"
+    },
+    {
+      "id": "b-1600m-relay-4x400",
+      "name": "Boys 1600m Relay (4x400)",
+      "kind": "relay"
+    }
+  ]
+}

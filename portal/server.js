@@ -5,7 +5,7 @@
  *
  *   PORTAL_KEY   opens the portal for AJ (his link carries it once, then a cookie remembers)
  *   LUNA_KEY     sent by Luna in an x-luna-key header; opens only her endpoints
- *   DATA_DIR     where portal.json lives (default: ./data next to this file)
+ *   DATA_DIR     where portal.json and entries.json live (default: ./data next to this file)
  *   PORT         default 3000
  *
  * Data is one JSON file with three separate parts: content (what Luna edits),
@@ -19,6 +19,7 @@ const crypto = require('crypto');
 const G = require('./lib/game');
 const C = require('./lib/content');
 const makeSeed = require('./lib/seed');
+const Entries = require('./lib/entries');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -374,9 +375,14 @@ async function start(opts) {
     status: 200, body: contentWrite((c) => C.applyQuestChanges(c, { [ctx.params[0]]: null }))
   }));
 
+  /* ---------- meet entry tracker (its own file, entries.json; see lib/entries.js) ---------- */
+  const entries = Entries.create({ dataDir, meetsDir: o.meetsDir, now: clock, HttpError });
+  entries.register(route);
+
   /* ---------- request handling ---------- */
+  const PAGE_ALIASES = { '/': '/index.html', '/entries': '/entries.html' };
   function serveStatic(res, pathname) {
-    const name = pathname === '/' ? '/index.html' : pathname;
+    const name = PAGE_ALIASES[pathname] || pathname;
     if (!/^\/[A-Za-z0-9._-]+$/.test(name)) return false;
     const file = path.join(PUBLIC_DIR, name);
     if (path.dirname(file) !== PUBLIC_DIR || !fs.existsSync(file) || !fs.statSync(file).isFile()) return false;
@@ -397,7 +403,7 @@ async function start(opts) {
       if (!portalKey) return sendLocked(res, 503, 'The portal is not set up yet.');
       if (keyAttemptsBlocked()) return sendLocked(res, 429, 'Too many tries. Wait a minute and open the link again.');
       if (safeEqual(url.searchParams.get('key'), portalKey)) {
-        res.writeHead(302, Object.assign({ Location: pathname === '/' || serveStaticExists(pathname) ? pathname : '/', 'Set-Cookie': cookieHeader(req), 'Cache-Control': 'no-store' }, SEC));
+        res.writeHead(302, Object.assign({ Location: PAGE_ALIASES[pathname] || serveStaticExists(pathname) ? pathname : '/', 'Set-Cookie': cookieHeader(req), 'Cache-Control': 'no-store' }, SEC));
         return res.end();
       }
       noteFailure();
@@ -455,7 +461,7 @@ async function start(opts) {
         log('Error:', e && e.message);
         e = new Error('Something went wrong on our side. Nothing was changed.');
       }
-      if (!res.headersSent) sendJson(res, status, { error: e.message });
+      if (!res.headersSent) sendJson(res, status, Object.assign({ error: e.message }, status !== 500 && e.extra ? e.extra : {}));
       else res.end();
     }).finally(() => {
       log(req.method, new URL(req.url, 'http://x').pathname, res.statusCode, (Date.now() - t0) + 'ms');
@@ -466,7 +472,7 @@ async function start(opts) {
     server.listen(o.port === undefined ? (parseInt(process.env.PORT, 10) || 3000) : o.port, o.host || '0.0.0.0', () => {
       const port = server.address().port;
       log('AJ Command Portal running on port ' + port + ', data in ' + dataDir);
-      resolve({ server, port, dataDir, getDb: () => db, close: () => new Promise((r) => server.close(() => r())) });
+      resolve({ server, port, dataDir, getDb: () => db, getEntries: () => entries.getDb(), close: () => new Promise((r) => server.close(() => r())) });
     });
   });
 }

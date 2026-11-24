@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meet Entries</title>
+<meta name="theme-color" content="#0c1022">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Entries">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" href="/icon-180.png">
+<link rel="stylesheet" href="/entries.css">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-row">
+    <a class="back" href="/">Portal</a>
+    <span class="save" id="save" role="status" aria-live="polite"></span>
+  </div>
+  <label class="pick">
+    <span class="sr">Meet</span>
+    <select id="meet"></select>
+  </label>
+</header>
+<main id="main">
+  <p class="loading">Loading meets…</p>
+</main>
+<datalist id="athletes"></datalist>
+<script src="/entries-rules.js"></script>
+<script src="/entries.js"></script>
+</body>
+</html>
