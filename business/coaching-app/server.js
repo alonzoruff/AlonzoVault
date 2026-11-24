@@ -710,6 +710,17 @@ function migrate() {
   db.concerns = db.concerns || {};
   db.mediaOverrides = db.mediaOverrides || {};
   db.inventory = Array.isArray(db.inventory) ? db.inventory : [];
+  // Filming tracker (coach-only): { movementId: { filmed, note,
+  // updatedAt } } for the movements in content/filming_list.json
+  // plus the coach's own additions in db.filmingExtras. A store that
+  // has never had the tracker starts with 90/90 Hip Rotations
+  // already marked filmed (shot Nov 20); after that it is left alone.
+  if (!db.filming || typeof db.filming !== 'object' || Array.isArray(db.filming)) {
+    db.filming = {
+      'VID-076': { filmed: true, note: 'Filmed Nov 20 as 90/90 Hip Switches', updatedAt: '2026-11-20T12:00:00.000Z' },
+    };
+  }
+  db.filmingExtras = Array.isArray(db.filmingExtras) ? db.filmingExtras : [];
   // Coach edits to the warm-up cards: { cardId: { sections: [...] } }.
   // Only cards a coach has actually edited appear here; anything else
   // renders the shipped card from public/index.html.
@@ -1071,6 +1082,40 @@ function loadVideoLibrary() {
     }
   } catch (_) { /* no video library bundled — that is fine */ }
   return [];
+}
+/* Filming tracker list (content/filming_list.json): every movement
+   in the AYG Lab Exercises List, grouped Mobility / Running /
+   Strengthening. Read once, tolerantly: a missing file means the
+   tracker shows only the coach's own additions. Filmed / not filmed
+   and notes live in db.filming; added movements in db.filmingExtras. */
+const FILMING_CATEGORIES = ['Mobility', 'Running', 'Strengthening'];
+let filmingListCache = null;
+function filmingList() {
+  if (filmingListCache) return filmingListCache;
+  filmingListCache = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'filming_list.json'), 'utf8'));
+    filmingListCache = (parsed && Array.isArray(parsed.movements) ? parsed.movements : [])
+      .filter(m => m && typeof m.id === 'string' && typeof m.movement === 'string'
+        && FILMING_CATEGORIES.includes(m.category))
+      .map(m => ({ id: m.id, movement: m.movement, category: m.category }));
+  } catch (_) { /* no list bundled: additions only */ }
+  return filmingListCache;
+}
+function filmingMovements() {
+  return filmingList().map(m => Object.assign({ custom: false }, m))
+    .concat(db.filmingExtras.map(m => ({ id: m.id, movement: m.movement, category: m.category, custom: true })));
+}
+function filmingPayload() {
+  const items = filmingMovements().map(m => {
+    const s = db.filming[m.id] || {};
+    return Object.assign(m, { filmed: s.filmed === true, note: typeof s.note === 'string' ? s.note : '', updatedAt: s.updatedAt || null });
+  });
+  const categories = FILMING_CATEGORIES.map(name => {
+    const movements = items.filter(i => i.category === name);
+    return { name, total: movements.length, filmed: movements.filter(i => i.filmed).length, movements };
+  });
+  return { categories, total: items.length, filmed: items.filter(i => i.filmed).length };
 }
 /* The Definitions tab glossary (content/glossary.json). Same tolerant
    loading as the video library: a missing or malformed file means an
@@ -3924,14 +3969,14 @@ const BACKUP_ARRAY_KEYS = {
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
   announcements: 'id', memberLogs: 'id', formChecks: 'id',
-  liveSessions: 'id', liveRequests: 'id',
+  liveSessions: 'id', liveRequests: 'id', filmingExtras: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
 const BACKUP_OBJECT_KEYS = [
   'overrides', 'completions', 'testResults', 'weekly', 'concerns',
   'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
-  'attendance', 'coachNotes', 'floorProgress',
+  'attendance', 'coachNotes', 'floorProgress', 'filming',
 ];
 function buildBackupData() {
   return {
@@ -3953,6 +3998,7 @@ function buildBackupData() {
     announcements: db.announcements, memberLogs: db.memberLogs,
     formChecks: db.formChecks,
     floorProgress: db.floorProgress,
+    filming: db.filming, filmingExtras: db.filmingExtras,
     liveSessions: db.liveSessions, liveRequests: db.liveRequests,
     /* Membership state rides along WITHOUT the accounts
        themselves (a backup never carries logins or password
@@ -9294,6 +9340,70 @@ async function handleApi(req, res, url) {
       return sendJson(res, 404, { error: 'Inventory item not found.' });
     }
     db.inventory = db.inventory.filter(i => i.id !== id);
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---------- filming tracker (coach-only) ----------
+     Every AYG Lab movement with a filmed / not filmed status and a
+     note. Statuses save to db.filming through saveDb like every
+     other coach record, so they survive a restart. */
+  if (p === '/api/filming' && req.method === 'GET') {
+    return sendJson(res, 200, filmingPayload());
+  }
+  if (p === '/api/filming' && req.method === 'POST') {
+    const body = await readBody(req);
+    const movement = typeof body.movement === 'string' ? body.movement.trim().replace(/\s+/g, ' ') : '';
+    if (!movement) return sendJson(res, 400, { error: 'Give the movement a name.' });
+    if (movement.length > 120) return sendJson(res, 400, { error: 'Keep the movement name under 120 characters.' });
+    if (!FILMING_CATEGORIES.includes(body.category)) {
+      return sendJson(res, 400, { error: 'Pick Mobility, Running, or Strengthening.' });
+    }
+    if (filmingMovements().some(m => m.movement.toLowerCase() === movement.toLowerCase())) {
+      return sendJson(res, 409, { error: 'That movement is already on the list.' });
+    }
+    const nums = db.filmingExtras.map(m => parseInt(String(m.id).replace('NEW-', ''), 10)).filter(n => n > 0);
+    const id = 'NEW-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+    const item = { id, movement, category: body.category, createdAt: new Date().toISOString() };
+    db.filmingExtras.push(item);
+    saveDb();
+    return sendJson(res, 201, { item });
+  }
+  const filmingMatch = p.match(/^\/api\/filming\/([^/]+)$/);
+  if (filmingMatch && req.method === 'PUT') {
+    const id = decodeURIComponent(filmingMatch[1]);
+    if (!filmingMovements().some(m => m.id === id)) return sendJson(res, 404, { error: 'Movement not found.' });
+    const body = await readBody(req);
+    if (body.filmed !== undefined && typeof body.filmed !== 'boolean') {
+      return sendJson(res, 400, { error: 'filmed must be true or false.' });
+    }
+    if (body.note !== undefined && typeof body.note !== 'string') {
+      return sendJson(res, 400, { error: 'The note must be text.' });
+    }
+    if (body.filmed === undefined && body.note === undefined) {
+      return sendJson(res, 400, { error: 'Nothing to change.' });
+    }
+    const note = body.note === undefined ? undefined : body.note.trim();
+    if (note !== undefined && note.length > 500) return sendJson(res, 400, { error: 'Keep the note under 500 characters.' });
+    const cur = db.filming[id] || { filmed: false, note: '' };
+    const next = {
+      filmed: body.filmed === undefined ? cur.filmed === true : body.filmed,
+      note: note === undefined ? (cur.note || '') : note,
+      updatedAt: new Date().toISOString(),
+    };
+    db.filming[id] = next;
+    saveDb();
+    return sendJson(res, 200, { id, filmed: next.filmed, note: next.note, updatedAt: next.updatedAt });
+  }
+  if (filmingMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(filmingMatch[1]);
+    if (!db.filmingExtras.some(m => m.id === id)) {
+      const listed = filmingList().some(m => m.id === id);
+      return sendJson(res, listed ? 400 : 404,
+        { error: listed ? 'Movements from the exercises list stay on the tracker.' : 'Movement not found.' });
+    }
+    db.filmingExtras = db.filmingExtras.filter(m => m.id !== id);
+    delete db.filming[id];
     saveDb();
     return sendJson(res, 200, { ok: true });
   }
