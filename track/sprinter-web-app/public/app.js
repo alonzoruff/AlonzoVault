@@ -1131,8 +1131,8 @@ function countUp(el) {
 /* ---------------- shared session rendering ---------------- */
 function badge(cns) {
   return cns === 'high'
-    ? '<span class="badge high">HARD · HIGH CNS</span>'
-    : '<span class="badge low">EASY · LOW CNS</span>';
+    ? '<span class="badge high">HARD DAY</span>'
+    : '<span class="badge low">EASY DAY</span>';
 }
 function sessionRow(s) {
   return `<button class="session-row" data-session="${esc(s.id)}">
