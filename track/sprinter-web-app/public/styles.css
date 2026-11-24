@@ -223,6 +223,9 @@ label { display: block; font-size: 14px; font-weight: 600; margin-top: 6px; }
 .filters input[type="search"] { margin-top: 0; }
 .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .filter-row select, .filter-row .btn { flex: 1 1 140px; width: auto; }
+/* A select with a long option ('Week 16 · 2027-02-08 · Mini-peak taper')
+   would not shrink below that option's width and pushed the page sideways. */
+.filter-row select { min-width: 0; }
 .session-row {
   width: 100%; text-align: left; display: flex; align-items: center; gap: 12px; cursor: pointer;
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
