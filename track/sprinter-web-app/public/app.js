@@ -2232,7 +2232,7 @@ function renderLibPaths() {
           const it = byKey.get(key);
           const isDone = doneSet.has(key);
           return `<li class="lib-path-step ${isDone ? 'done' : ''}">
-            ${state.user ? `<input type="checkbox" class="lib-path-check" data-path-toggle="${esc(p.id)}" data-path-step="${esc(key)}" ${isDone ? 'checked' : ''} aria-label="Mark step ${i + 1} done">` : `<span class="lib-path-num">${i + 1}</span>`}
+            ${state.user ? `<label class="lib-path-hit"><input type="checkbox" class="lib-path-check" data-path-toggle="${esc(p.id)}" data-path-step="${esc(key)}" ${isDone ? 'checked' : ''} aria-label="Mark step ${i + 1} done"></label>` : `<span class="lib-path-num">${i + 1}</span>`}
             <span class="lib-path-step-main">
               <strong>${esc(it ? it.title : s.ref)}</strong>
               <span class="muted">${esc(s.why)}</span>
@@ -2473,6 +2473,12 @@ function openTermPop(btn) {
   pop.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)) + 'px';
   const below = rect.bottom + 8;
   pop.style.top = (below + 190 < window.innerHeight ? below : Math.max(12, rect.top - 198)) + 'px';
+  /* Long definitions run taller than 190px; keep the whole card, and its
+     View in Library button, on screen. */
+  const popTop = parseFloat(pop.style.top);
+  if (popTop + pop.offsetHeight > window.innerHeight - 12) {
+    pop.style.top = Math.max(12, window.innerHeight - pop.offsetHeight - 12) + 'px';
+  }
   const closeBtn = $('#term-pop-close');
   if (closeBtn) closeBtn.addEventListener('click', closeTermPop);
 }

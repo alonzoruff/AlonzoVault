@@ -1855,7 +1855,11 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .lib-path-steps { list-style: none; padding: 0; margin: 12px 0 0; }
 .lib-path-step { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); }
 .lib-path-step .btn { margin-left: auto; flex-shrink: 0; }
-.lib-path-check { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; accent-color: var(--red); }
+.lib-path-check { width: 24px; height: 24px; margin: 0; flex-shrink: 0; accent-color: var(--red); }
+/* The label around the checkbox is the tap area: 44px square, pulled
+   into the row's padding so the layout does not move. */
+.lib-path-hit { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  min-width: 44px; min-height: 44px; margin: -10px -6px -10px -10px; cursor: pointer; }
 .lib-path-num { font-weight: 700; color: var(--red); min-width: 20px; text-align: center; }
 .lib-path-step-main { display: flex; flex-direction: column; gap: 1px; }
 .lib-path-step.done .lib-path-step-main strong { text-decoration: line-through; color: var(--muted); }
@@ -1867,7 +1871,8 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .term-pop { background: none; border: none; border-bottom: 2px dotted var(--red); color: inherit;
   font: inherit; padding: 0; cursor: pointer; }
 .term-popover { position: fixed; z-index: 1200; background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; box-shadow: var(--shadow-pop); padding: 14px; }
+  border-radius: 12px; box-shadow: var(--shadow-pop); padding: 14px;
+  max-height: calc(100vh - 24px); overflow-y: auto; }
 .term-popover p { line-height: 1.5; }
 .term-pop-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 body.tv-mode .term-popover { display: none; }
