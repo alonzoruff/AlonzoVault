@@ -1085,7 +1085,8 @@ details.card summary { cursor: pointer; }
   gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px solid var(--line);
 }
 .roster-row:last-child { border-bottom: none; }
-.roster-actions { display: inline-flex; gap: 6px; }
+.roster-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.roster-actions .btn.primary { width: auto; }
 .roster-card details { margin-top: 8px; }
 .check-line { display: flex; align-items: center; gap: 8px; font-weight: 500; min-height: 44px; padding: 6px 0; }
 .check-line input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--red); flex: none; }
@@ -2146,7 +2147,7 @@ html.ind-on .tabbar .tab.active::before { opacity: 0; }
   background: var(--surface-2); border-radius: 0 var(--r-inner) var(--r-inner) 0;
 }
 .fc-wait-late { color: var(--warn); font-weight: 700; }
-details.card > summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+details.card > summary { cursor: pointer; font-weight: 700; min-height: 32px; padding: 10px 0; }
 
 /* ================================================================
    REDESIGN STAGE 3 (v27) — landing text link, home one-liners,
@@ -3319,7 +3320,7 @@ body.member-mode .app-name { color: var(--mx-dim); }
   border: 1px solid rgba(255, 122, 26, .45); border-radius: var(--radius-sm); font-size: 14px; }
 .mx-preview-bar[hidden] { display: none; }
 @media (max-width: 1191px) { .mx-preview-bar { margin: 12px 16px 0; } }
-.mx-preview-exit { min-height: 40px; padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line-strong);
+.mx-preview-exit { min-height: 44px; padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line-strong);
   background: transparent; color: var(--ink); font-weight: 700; cursor: pointer; }
 
 /* Page frame */
@@ -3701,7 +3702,7 @@ body.rx-sheet-open { overflow: hidden; }
 .sb-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 var(--sp-4); }
 .sb-tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; min-width: 0; }
 .sb-tile-label { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
-.sb-tile-value { margin: 6px 0 2px; font-size: clamp(1.7rem, 4.2vw, 2.4rem); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--ink); }
+.sb-tile-value { margin: 6px 0 2px; font-size: clamp(1.3rem, 6.5vw, 2.4rem); overflow-wrap: anywhere; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--ink); }
 .sb-tile-value.sb-nt { font-size: 1.1rem; font-weight: 600; color: var(--muted); padding: 10px 0 6px; }
 .sb-tile-sub { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 .sb-delta { display: inline-block; margin-top: 8px; font-size: var(--fs-xs); padding: 3px 8px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--muted); }

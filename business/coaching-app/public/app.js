@@ -6088,7 +6088,7 @@ async function renderPrograms() {
         ${PROG_DAY_LABELS.map(([k, label]) => `
         <div class="roster-row">
           <span><strong>${label}</strong> ${(w[k] || []).map((c, ci) =>
-            `<span class="badge plain">${esc(c)}</span> <button class="btn danger" style="width:auto;padding:0 8px;min-height:28px" data-prog-delcode="${i}:${k}:${ci}" type="button" aria-label="Remove ${esc(c)}">×</button>`).join(' ')
+            `<span class="badge plain">${esc(c)}</span> <button class="btn danger" style="width:auto;padding:0 8px;min-width:44px;min-height:44px" data-prog-delcode="${i}:${k}:${ci}" type="button" aria-label="Remove ${esc(c)}">×</button>`).join(' ')
             || '<span class="muted">rest</span>'}</span>
           <span style="min-width:210px"><select class="prog-add-day" data-prog-add="${i}:${k}">${progSessionOptions()}</select></span>
         </div>`).join('')}
