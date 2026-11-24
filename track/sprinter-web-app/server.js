@@ -4130,6 +4130,16 @@ async function handleApi(req, res, url) {
       return sendJson(res, 409, { error: 'An account with that email already exists. Try logging in.' });
     }
     const firstAccount = db.users.length === 0;
+    /* A brand-new hosted store is empty, and the first account owns
+       it. In store mode only OWNER_SETUP_EMAIL may claim it, so a
+       stranger cannot get there first. Render (file mode) is unchanged. */
+    if (firstAccount && STORE) {
+      const setup = String(process.env.OWNER_SETUP_EMAIL || '').toLowerCase()
+        .split(',').map(x => x.trim()).filter(Boolean);
+      if (!setup.includes(email)) {
+        return sendJson(res, 403, { error: 'This app is being set up and is not open for sign-up yet.' });
+      }
+    }
     /* Invite-only registration: past the owner bootstrap, an email
        can sign up only when a coach has already claimed it — it is
        on the coach invite list, or it is the linked email on a
