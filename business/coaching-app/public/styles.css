@@ -3590,7 +3590,7 @@ body.rx-sheet-open { overflow: hidden; }
 .rx-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 26px 0 12px; }
 .rx-section-head .mx-section-title { margin: 0 !important; }
 .rx-range { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--r-pill); background: var(--mx-bg2, #f0f0f2); border: 1px solid var(--line, #ddd); }
-.rx-range-btn { min-height: 38px; padding: 6px 14px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted, #555); font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer; }
+.rx-range-btn { min-height: 44px; padding: 6px 14px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted, #555); font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer; }
 .rx-range-btn.on { background: var(--red, #ff7a1a); color: var(--accent-ink); }
 .rx-grid-2 { display: grid; gap: 16px; }
 .rx-grid-2 > .mx-card { margin: 0; min-width: 0; }
