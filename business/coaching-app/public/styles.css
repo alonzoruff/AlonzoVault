@@ -1375,8 +1375,9 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
 .chip {
   border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
-  /* 40px floor: chips live in dense filter rows; 44 would crowd them out */
-  padding: 6px 12px; min-height: 40px; border-radius: var(--r-pill); font-size: 13px; cursor: pointer; white-space: nowrap;
+  /* 44px floor like every other tap target: members filter one-handed
+     at the gym, and the rows already wrap. */
+  padding: 6px 12px; min-height: 44px; border-radius: var(--r-pill); font-size: 13px; cursor: pointer; white-space: nowrap;
 }
 .chip.active { background: var(--red); border-color: var(--red); color: var(--accent-ink); font-weight: 600; }
 .vid-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
@@ -3460,7 +3461,7 @@ body.member-mode .ci-save { min-height: 54px; font-size: 1.05rem; margin-top: 14
 .mx-week-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .mx-week-list li.is-today .mx-week-day { color: var(--red-dark); }
 .mx-week-day { width: 96px; flex: none; font-weight: 700; color: var(--muted); }
-.mx-link { background: none; border: 0; padding: 6px 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; min-height: 40px; }
+.mx-link { background: none; border: 0; padding: 6px 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; min-height: 44px; }
 .mx-link:hover { text-decoration-color: var(--red); }
 .mx-done { margin-left: auto; font-size: .82rem; font-weight: 700; color: var(--mx-ok); }
 .mx-programs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
