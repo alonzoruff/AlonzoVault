@@ -333,7 +333,7 @@ function applyMembershipChange(u, fields, actor, action, extra) {
 function tierGate(res, user, need) {
   if (hasTierAccess(user, need)) return true;
   sendJson(res, 403, {
-    error: 'This is part of ' + TIER_INFO[need].name + '. Your membership does not include it right now — see the Account tab for your membership and your options.',
+    error: 'This is part of ' + TIER_INFO[need].name + '. Your membership does not include it right now. The Account tab shows your membership and your options.',
     needsTier: need,
   });
   return false;
@@ -2752,7 +2752,7 @@ function formCheckVideoUrl(raw) {
 function validateFormCheck(body) {
   const videoUrl = formCheckVideoUrl(body.videoUrl);
   if (!videoUrl) {
-    return { error: 'That video link is not an uploaded video — upload your video first, then send the form check.' };
+    return { error: 'That video link is not an uploaded video. Upload your video first, then send the form check.' };
   }
   if (typeof body.note === 'string' && body.note.length > 500) {
     return { error: 'Keep the note to 500 characters or less.' };
@@ -2825,7 +2825,7 @@ function validateIntake(body) {
     return { error: 'Keep your goals to 1000 characters or less.' };
   }
   const goals = clean(body.goals, 1000);
-  if (!goals) return { error: 'Tell us your goals — a sentence or two is fine.' };
+  if (!goals) return { error: 'Tell us your goals. A sentence or two is fine.' };
   let sportsRaw = [];
   if (typeof body.sports === 'string') sportsRaw = body.sports.split(',');
   else if (Array.isArray(body.sports)) sportsRaw = body.sports;
@@ -2851,10 +2851,10 @@ function validateIntake(body) {
   const trainingAge = num(body.trainingAge);
   if (trainingAge === null || !Number.isInteger(trainingAge)
     || trainingAge < 0 || trainingAge > 70) {
-    return { error: 'Training age must be a whole number of years, 0 or more.' };
+    return { error: 'Enter how many years you have been training, as a whole number. Use 0 if you are just starting.' };
   }
   if (typeof body.hasInjury !== 'boolean') {
-    return { error: 'Answer the injury question — yes or no.' };
+    return { error: 'Answer the injury question with yes or no.' };
   }
   if (typeof body.injuryDetail === 'string' && body.injuryDetail.length > 1000) {
     return { error: 'Keep the injury note to 1000 characters or less.' };
@@ -3007,11 +3007,11 @@ function validateCheckin(body) {
   }
   const soreness = num(body.soreness);
   if (soreness === null || !Number.isInteger(soreness) || soreness < 1 || soreness > 5) {
-    return { error: 'Soreness must be a whole number from 1 to 5.' };
+    return { error: 'Pick your soreness, from 1 to 5.' };
   }
   const energy = num(body.energy);
   if (energy === null || !Number.isInteger(energy) || energy < 1 || energy > 5) {
-    return { error: 'Energy must be a whole number from 1 to 5.' };
+    return { error: 'Pick your energy, from 1 to 5.' };
   }
   if (body.painText !== undefined && body.painText !== null && typeof body.painText !== 'string') {
     return { error: 'Say what hurts in words.' };
@@ -3020,7 +3020,7 @@ function validateCheckin(body) {
     return { error: 'Keep the pain note to 240 characters or less.' };
   }
   if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') {
-    return { error: 'The note must be text.' };
+    return { error: 'The note did not come through. Please type it again.' };
   }
   if (typeof body.note === 'string' && body.note.length > 500) {
     return { error: 'Keep the note to 500 characters or less.' };
@@ -3052,7 +3052,7 @@ function validateCheckin(body) {
     if (body.painLevel !== undefined && body.painLevel !== null && body.painLevel !== '') {
       const lv = num(body.painLevel);
       if (lv === null || !Number.isInteger(lv) || lv < 0 || lv > 10) {
-        return { error: 'Pain level must be a whole number from 0 to 10.' };
+        return { error: 'Pick a pain level from 0 to 10.' };
       }
       painLevel = lv;
     }
@@ -4846,7 +4846,7 @@ async function handleApi(req, res, url) {
     const viewer = readSession(req);
     if (viewer && viewer.role !== 'coach' && !effectiveTier(viewer)) {
       return sendJson(res, 403, {
-        error: 'The Lab content needs a membership. Your account does not have an active tier right now — see the Account tab for your membership and your options.',
+        error: 'The Lab content needs a membership. Your account does not have an active membership right now. The Account tab shows your membership and your options.',
         needsTier: 'access',
       });
     }
@@ -5300,7 +5300,7 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/me' && req.method === 'GET') {
     const me = readSession(req);
-    if (!me) return sendJson(res, 401, { error: 'not logged in' });
+    if (!me) return sendJson(res, 401, { error: 'Please log in.' });
     return sendJson(res, 200, publicUser(me));
   }
 
@@ -6867,7 +6867,7 @@ async function handleApi(req, res, url) {
     if (!prof.groupId) return sendJson(res, 400, { error: 'That athlete is not in a group, so there is no assignment to complete.' });
     const a = resolveAssignment(prof.groupId, date);
     if (!a.sessionId && a.isOff) {
-      return sendJson(res, 400, { error: 'That day is an off day in the plan — there is no session to mark complete.' });
+      return sendJson(res, 400, { error: 'That day is an off day in the plan, so there is no session to mark complete.' });
     }
     let feel = parseInt(body.feel, 10);
     if (Number.isNaN(feel) || feel < 1 || feel > 5) feel = null;
@@ -7075,7 +7075,7 @@ async function handleApi(req, res, url) {
     }
     const status = clean(body.status, 20);
     if (!ATTENDANCE_STATUSES.includes(status)) {
-      return sendJson(res, 400, { error: 'Status must be present, late, excused, or absent — or null to clear.' });
+      return sendJson(res, 400, { error: 'Pick present, late, excused or absent, or clear the mark.' });
     }
     db.attendance[date] = db.attendance[date] || {};
     const rec = { status, updatedAt: new Date().toISOString(), updatedBy: user.id };
