@@ -9779,7 +9779,7 @@ const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.cs
 /* Brand tokens in the shell files (index.html, app.js, manifest,
    sw.js) are filled from the BRAND config at serve time, so the
    business name lives in exactly one place: the BRAND block above. */
-const BRAND_SUBSTITUTABLE = new Set(['.html', '.js', '.json', '.css']);
+const BRAND_SUBSTITUTABLE = new Set(['.html', '.js', '.json', '.css', '.xml', '.txt']);
 function applyBrand(text) {
   return text
     .replaceAll('__BRAND_NAME__', BRAND.name)
@@ -9789,7 +9789,8 @@ function applyBrand(text) {
     .replaceAll('__BRAND_CACHE__', BRAND.cache)
     .replaceAll('__CALENDLY_URL__', CALENDLY_URL)
     .replaceAll('__TRIAL_DAYS__', String(TRIAL_DAYS))
-    .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL);
+    .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL)
+    .replaceAll('__SITE_URL__', SITE_URL);
 }
 function serveStatic(req, res, url) {
   if (url.pathname === '/assets/ayg-lab-logo.jpg') {
