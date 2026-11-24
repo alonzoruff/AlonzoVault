@@ -3541,12 +3541,15 @@ body.member-mode .ci-save { min-height: 54px; font-size: 1.05rem; margin-top: 14
 .rx-chip { min-height: 44px; padding: 8px 14px; border-radius: var(--r-pill); border: 1.5px solid var(--line-strong); background: transparent; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
 .rx-chip.on { background: var(--red); border-color: var(--red); color: #fff; }
 .rx-level { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; }
+/* On a phone, 11 buttons in one row are about 23px wide each, too thin
+   to hit cleanly with a thumb. Two rows of six keep each one 44px+. */
+@media (max-width: 520px) { .rx-level { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; } }
 .rx-lv { min-height: 46px; padding: 0; border-radius: var(--radius-sm); border: 1.5px solid var(--line-strong); background: var(--mx-bg2); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer; }
 .rx-lv.on { background: #f2b84b; border-color: #f2b84b; color: #111; }
 .rx-lv.is-high.on { background: var(--red); border-color: var(--red); color: #fff; }
 .rx-field { display: block; margin-top: 16px; font-weight: 700; }
 .rx-field input { display: block; width: 100%; margin-top: 6px; min-height: 48px; padding: 10px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--line-strong);
-  background: var(--field-bg); color: var(--ink); font: inherit; font-weight: 400; }
+  background: var(--field-bg); color: var(--ink); font: inherit; font-size: 16px; font-weight: 400; }
 .rx-field input:focus { outline: 3px solid var(--focus-ring); border-color: var(--red); }
 .rx-error { color: var(--red-dark); font-weight: 700; margin: 10px 0 0 !important; }
 .rx-pain-flag { margin: 12px 0 0 !important; padding: 10px 14px; border-radius: var(--radius-sm); background: rgba(242, 184, 75, .12); border: 1px solid rgba(242, 184, 75, .4); color: var(--ink); font-size: .93rem; }
@@ -3655,7 +3658,7 @@ body.rx-sheet-open { overflow: hidden; }
   .rx-opt { min-height: 70px; padding: 8px 2px; border-radius: var(--radius-sm); }
   .rx-opt-label { font-size: .72rem; }
   .rx-scale { gap: 6px; }
-  .rx-level { gap: 3px; }
+  .rx-level { gap: 6px; }
   .rx-lv { min-height: 44px; font-size: .9rem; border-radius: var(--r-inner); }
   .rx-parts li { grid-template-columns: 66px minmax(0, 1fr) minmax(70px, auto); gap: 8px; }
   .rx-kpi-num { font-size: 1.25rem; }
