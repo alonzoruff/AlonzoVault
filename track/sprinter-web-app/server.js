@@ -11,6 +11,25 @@
  *   SESSION_SECRET  Secret used to sign login cookies. If not set, a random
  *                   one is generated once and kept in DATA_DIR so logins
  *                   survive restarts.
+ *   UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN  (or the same pair
+ *                   named KV_REST_API_URL / KV_REST_API_TOKEN, as Vercel's
+ *                   Upstash integration names them)
+ *                   When BOTH are set, saved data lives in that hosted
+ *                   Upstash Redis store instead of db.json, and every
+ *                   API request loads fresh and saves with a version
+ *                   check (see lib/store.js). For Vercel. When unset,
+ *                   nothing changes: db.json in DATA_DIR, as on Render.
+ *                   In store mode SESSION_SECRET must be set.
+ *   STORE_PREFIX    Optional key prefix inside the store (default sprinter).
+ *   OWNER_SETUP_EMAIL  Store mode only. On an empty store, only this
+ *                   email (or comma-separated emails) may register the
+ *                   first (head coach) account, so a stranger cannot
+ *                   claim a fresh store. Unset = no first sign-up at all
+ *                   in store mode (copy the real data in instead). File
+ *                   mode ignores it.
+ *   READ_ONLY_MODE  Set to 1 for a short pause during a move: sign-in
+ *                   still works, but every other change is refused with
+ *                   a calm message and nothing is saved.
  *   COACH_INVITE_EMAILS  Optional comma-separated emails to seed as
  *                   assistant-coach invites at startup (e.g. so a friend
  *                   is invited before the owner has even registered).
@@ -54,6 +73,18 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const CONTENT_DIR = path.join(__dirname, 'content');
 const studiesLib = require('./lib/studies');
 const protocolsLib = require('./lib/protocols');
+const storeLib = require('./lib/store');
+/* Hosted store (Vercel) when its settings are present; otherwise the
+   db.json file exactly as before (Render). */
+const STORE_CFG = storeLib.configFromEnv(process.env, 'sprinter');
+const STORE = STORE_CFG ? storeLib.createUpstash(STORE_CFG) : null;
+const READ_ONLY = /^(1|true|yes|on)$/i.test(String(process.env.READ_ONLY_MODE || '').trim());
+/* Vercel caps a request body at about 4.5 MB, so imports stay under
+   4 MB there. Render keeps its larger caps. */
+const ON_VERCEL = !!process.env.VERCEL;
+const BIG_UPLOAD_CAP = ON_VERCEL ? 4 * 1024 * 1024 : 10 * 1024 * 1024;
+const MID_UPLOAD_CAP = ON_VERCEL ? 4 * 1024 * 1024 : 5 * 1024 * 1024;
+let txns = null; /* set at the bottom in store mode */
 const COOKIE_NAME = 'swa_session';
 const SESSION_DAYS = 30;
 
@@ -62,6 +93,10 @@ const SESSION_DAYS = 30;
 /* ------------------------------------------------------------------ */
 function loadSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  /* Store mode has no lasting disk and many copies of the app, so a
+     made-up key would sign everyone out on every new copy. Requests
+     answer 503 until SESSION_SECRET is set (see the bottom). */
+  if (STORE) return null;
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const f = path.join(DATA_DIR, '.session-secret');
   try {
@@ -292,7 +327,19 @@ function migrate() {
     if (!PROFILE_STATUSES.includes(prof.status)) prof.status = 'active';
   }
 }
+/* Store mode: replace the in-memory store with a fresh copy loaded
+   from the hosted store (null = empty), then tidy and seed as a
+   restart would. Called at the start of a request when the version
+   changed. */
+const DB_EMPTY = JSON.stringify(db);
+function setDbFromStore(data) {
+  db = Object.assign(JSON.parse(DB_EMPTY), data && Array.isArray(data.users) ? data : {});
+  migrate();
+  seedCoachInvitesFromEnv();
+  seedCustomWorkouts();
+}
 function loadDb() {
+  if (STORE) { migrate(); return; }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   let raw;
   try {
@@ -313,7 +360,13 @@ function loadDb() {
   }
   migrate();
 }
+let readOnlyWarned = false;
 function saveDb() {
+  if (READ_ONLY) {
+    if (!readOnlyWarned) { readOnlyWarned = true; console.log('[read-only] READ_ONLY_MODE is on: changes are not saved.'); }
+    return;
+  }
+  if (STORE) { if (txns) txns.markDirty(); return; }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 1), { mode: 0o600 });
@@ -8705,23 +8758,59 @@ function serveStatic(req, res, url) {
   });
 }
 
-seedCoachInvitesFromEnv();
-seedCustomWorkouts();
+if (!STORE) {
+  seedCoachInvitesFromEnv();
+  seedCustomWorkouts();
+}
 
-const server = http.createServer((req, res) => {
+/* Read-only pause for a move: reads and sign-in work, changes do not. */
+const READ_ONLY_ALLOWED = new Set(['/api/login', '/api/logout']);
+function readOnlyBlocked(req, url) {
+  return READ_ONLY && req.method !== 'GET' && req.method !== 'HEAD'
+    && !READ_ONLY_ALLOWED.has(url.pathname);
+}
+
+function handleApiRequest(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  if (readOnlyBlocked(req, url)) {
+    return sendJson(res, 503, { error: 'The app is paused for a few minutes while it moves. Your data is safe. Please try again shortly.' });
+  }
+  return handleApi(req, res, url).catch(() => {
+    // The socket may already be gone (e.g., an oversized body was
+    // destroyed mid-read) — never let the error reply itself throw.
+    try { if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' }); } catch (_) { /* gone */ }
+  });
+}
+
+if (STORE) {
+  txns = storeLib.createTransactions(STORE, {
+    setData: setDbFromStore,
+    getData: () => db,
+    handle: handleApiRequest,
+  });
+}
+
+/* One request handler for both hosts: Render calls it through the
+   server below; Vercel calls it from api/index.js. */
+function handler(req, res) {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname.startsWith('/api/')) {
-    handleApi(req, res, url).catch(() => {
-      // The socket may already be gone (e.g., an oversized body was
-      // destroyed mid-read) — never let the error reply itself throw.
-      try { if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' }); } catch (_) { /* gone */ }
-    });
-  } else {
-    serveStatic(req, res, url);
+    if (STORE && !SECRET) {
+      console.error('[setup] SESSION_SECRET is not set: sign-in cannot work until it is.');
+      return sendJson(res, 503, { error: 'The app is not finished setting up yet. Please try again later.' });
+    }
+    return STORE ? txns.run(req, res) : handleApiRequest(req, res);
   }
-});
+  serveStatic(req, res, url);
+}
 
-server.listen(PORT, () => {
-  console.log(`Sprinter Workout App running at http://localhost:${PORT}`);
-  console.log(`Content loaded: ${CONTENT.sessions.length} sessions, ${CONTENT.drills.length} drills, ${CONTENT.weeks.length} weeks.`);
-});
+module.exports = { handler };
+
+if (require.main === module) {
+  const server = http.createServer(handler);
+  server.listen(PORT, () => {
+    console.log(`Sprinter Workout App running at http://localhost:${PORT}`);
+    console.log(`Content loaded: ${CONTENT.sessions.length} sessions, ${CONTENT.drills.length} drills, ${CONTENT.weeks.length} weeks.`);
+    if (STORE) console.log('Data store: hosted (' + STORE.prefix + ')');
+  });
+}
