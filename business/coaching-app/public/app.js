@@ -2994,6 +2994,67 @@ function srCardHtml(t) {
     ${seriesList}
   </div>`;
 }
+/* Results consent (Part 4d): "Can we show your before and after
+   numbers?", asked on the Lab Report and on My progress once the
+   member has been retested, and kept there afterwards as a line
+   they can change. The answer is stored on their roster profile
+   (POST /api/my/results-consent). A yes for a member under 18, or
+   with no intake on file, comes from a parent or guardian. */
+function rcCardHtml(data, cls) {
+  const rc = data.resultsConsent;
+  const needsParent = !!data.resultsConsentNeedsParent;
+  if (!rc && !data.askResultsConsent) return '';
+  const what = 'Coach AJ would show your test numbers from before and after your training, with no name, in the Lab results on the AYG Lab website. Nothing is posted until he adds it, and you can change your answer any time.';
+  if (rc && !data.rcEditing) {
+    const when = rc.answeredAt ? fmtDate(parseDate(String(rc.answeredAt).slice(0, 10))) : '';
+    return `<div class="${cls} rc-card" data-rc>
+      <p class="rc-status"><strong>Showing your before and after numbers:</strong> ${rc.answer === 'yes' ? 'Yes' : 'No'}${rc.byParent && rc.parentName ? ', from ' + esc(rc.parentName) : ''}${when ? ' · ' + esc(when) : ''}</p>
+      <button class="btn quiet" type="button" data-rc-change>Change my answer</button>
+    </div>`;
+  }
+  return `<div class="${cls} rc-card rc-ask" data-rc>
+      <h3>Can we show your before and after numbers?</h3>
+      <p>${esc(what)}</p>
+      ${needsParent ? `<div class="rc-parent">
+        <p class="muted">For a member under 18, a parent or guardian answers yes.</p>
+        <label class="check-line"><input type="checkbox" data-rc-parent-ok> I am this member's parent or guardian</label>
+        <label>Parent or guardian: your full name <input type="text" data-rc-parent-name maxlength="120"></label>
+      </div>` : ''}
+      <p class="error" data-rc-err role="alert"></p>
+      <p class="rc-actions">
+        <button class="btn primary" type="button" style="width:auto" data-rc-answer="yes">Yes, you can show them</button>
+        <button class="btn secondary" type="button" style="width:auto" data-rc-answer="no">No, keep them private</button>
+      </p>
+    </div>`;
+}
+function rcWire(root, data, rerender) {
+  const box = root.querySelector('[data-rc]');
+  if (!box) return;
+  const change = box.querySelector('[data-rc-change]');
+  if (change) change.addEventListener('click', () => { data.rcEditing = true; rerender(); });
+  box.querySelectorAll('[data-rc-answer]').forEach(btn => btn.addEventListener('click', async () => {
+    const answer = btn.dataset.rcAnswer;
+    const err = box.querySelector('[data-rc-err]');
+    const body = { answer };
+    if (answer === 'yes' && data.resultsConsentNeedsParent) {
+      const ok = box.querySelector('[data-rc-parent-ok]');
+      const name = box.querySelector('[data-rc-parent-name]');
+      body.parentConfirm = !!(ok && ok.checked);
+      body.parentName = name ? name.value.trim() : '';
+      if (!body.parentConfirm || !body.parentName) {
+        if (err) err.textContent = 'A parent or guardian needs to answer yes: please tick the box and type your full name.';
+        return;
+      }
+    }
+    try {
+      const r = await apiPost('/api/my/results-consent', body);
+      data.resultsConsent = r.resultsConsent;
+      data.askResultsConsent = false;
+      data.rcEditing = false;
+      rerender();
+    } catch (e) { if (err) err.textContent = e.message; }
+  }));
+}
 async function renderSpeedReport() {
   const el = $('#speedreport-main');
   if (!el) return;
@@ -3045,9 +3106,17 @@ async function renderSpeedReport() {
       <p><button class="btn secondary" id="sr-print" type="button">Print / Save as PDF</button></p>
     </div>
     <p class="muted">Measured speed, not promised speed. Your personal bests against your own baseline, from the tests your coach has recorded for you.</p>
+    ${rcCardHtml(data, 'card')}
     <div class="sr-grid">${core.map(srCardHtml).join('')}</div>
     ${others.length ? `<h2>More tests</h2><div class="sr-grid">${others.map(srCardHtml).join('')}</div>` : ''}
     <p class="sr-print-footer">AYG Lab. Measured speed, not promised speed.<br>Generated on ${esc(generatedOn)}</p>`;
+  const rcRerender = () => {
+    const box = el.querySelector('[data-rc]');
+    if (!box) return;
+    box.outerHTML = rcCardHtml(data, 'card');
+    rcWire(el, data, rcRerender);
+  };
+  rcWire(el, data, rcRerender);
   const pb = el.querySelector('#sr-print');
   if (pb) pb.addEventListener('click', () => {
     document.body.classList.add('printing-lab-report');
@@ -3356,6 +3425,13 @@ async function renderAmsProfile(el, profileId) {
     <div class="card">
       <h2>Member intake</h2>
       ${p.intake ? intakeSummaryHtml(p.intake) : '<p class="muted">No intake on file yet. A linked member completes their intake and waiver in their Account area. Until then this member carries the Intake needed flag.</p>'}
+    </div>
+    <div class="card">
+      <h2>Before and after numbers</h2>
+      ${p.resultsConsent
+        ? `<p>${p.resultsConsent.answer === 'yes' ? '<strong>Yes</strong>: their numbers may be shown with no name in the public Lab results.' : '<strong>No</strong>: keep their numbers out of the public Lab results.'}</p>
+           <p class="muted">Answered${p.resultsConsent.byParent && p.resultsConsent.parentName ? ' by ' + esc(p.resultsConsent.parentName) + ', parent or guardian,' : ''}${p.resultsConsent.answeredAt ? ' on ' + esc(fmtDate(parseDate(String(p.resultsConsent.answeredAt).slice(0, 10)))) : ''}.</p>`
+        : '<p class="muted">Not answered yet. The member is asked on their Lab Report after their first retest.</p>'}
     </div>
     <div class="card">
       <h2>Wellness: last 14 days</h2>
@@ -10632,7 +10708,17 @@ async function mxRenderProgress() {
     ${next ? `<div class="mx-card mx-next"><p class="mx-eyebrow">Next test day</p><h3>${esc(fmtDate(parseDate(next.date)))}</h3>${next.testNames && next.testNames.length ? `<p class="mx-muted">${esc(next.testNames.join(', '))}</p>` : ''}</div>` : ''}
     ${trendsHtml}
     <h2 class="mx-section-title">Test results</h2>
+    ${report.mxError ? '' : rcCardHtml(report, 'mx-card')}
     ${testsHtml}`;
+  if (!report.mxError) {
+    const rcRerender = () => {
+      const box = el.querySelector('[data-rc]');
+      if (!box) return;
+      box.outerHTML = rcCardHtml(report, 'mx-card');
+      rcWire(el, report, rcRerender);
+    };
+    rcWire(el, report, rcRerender);
+  }
   if (!ins.mxError) {
     rxPaintCharts(el, {
       'rx-comply-chart': rxComplianceSpec(ins),
