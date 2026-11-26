@@ -9929,6 +9929,104 @@ async function waitForServer(tries = 60) {
       }
     }
 
+    /* ---------------- Exercise of the Day pages (Part 4e) ----------------
+       Each public exercise has its own address, rendered by the server
+       with its own title, description, canonical, structured data and
+       sitemap line. Entries come from content/exercise_of_the_day.json.
+       Test entries here are made up and never touch that file. */
+    {
+      const eo = require(path.join(APP_DIR, 'lib', 'eotd.js'));
+      const eoFile = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'content', 'exercise_of_the_day.json'), 'utf8'));
+      const eoLoaded = eo.loadEotd(eoFile);
+      check('eotd: the shipped file loads with no bad entries', eoLoaded.errors.length === 0 && eoLoaded.entries.length >= 1, eoLoaded.errors);
+      const eoNordic = eoLoaded.entries.find(e => e.slug === 'nordic-hamstring-curl');
+      check('eotd: the Nordic entry is the homepage copy, word for word',
+        !!eoNordic && eoNordic.name === 'Nordic hamstring curl' &&
+        eoNordic.dose === '2 sets of 4 slow reps. Skip it the day before a meet. Stop if you feel sharp pain.' &&
+        eoNordic.why.startsWith('When you sprint, your hamstrings have to brake the lower leg while they stretch.') &&
+        eoNordic.steps.length === 3 && eoNordic.targets.join(',') === 'Hamstrings,Glutes,Trunk control' &&
+        eoNordic.program && eoNordic.program.route === 'programs', eoNordic);
+      check('eotd: the shipped exercises make no promise of a time or an outcome',
+        !/guarantee|promise|you will (run|get|be)|will make you|seconds faster|drop your time/i.test(JSON.stringify(eoFile)));
+
+      const eoGood = (slug, date, extra) => Object.assign({ slug, date, name: 'Test move ' + slug, targets: ['Calves'],
+        why: 'A made-up reason.', steps: ['Step one.'], dose: '1 set of 1.' }, extra || {});
+      const eoMix = eo.loadEotd([
+        eoGood('alpha', '2026-01-02'), eoGood('Bad Slug', '2026-01-02'), eoGood('beta', '2026-02-30'),
+        eoGood('gamma', '2026-01-03', { dose: '' }), eoGood('alpha', '2026-01-04'), eoGood('delta', '2026-01-05', { targets: [] }),
+        eoGood('eps', '2026-01-06', { program: { label: 'x' } }), 'nope', eoGood('zeta', '2099-01-01'),
+      ]);
+      check('eotd: bad slugs, dates, missing fields and repeats are left out with a reason, the rest still load',
+        eoMix.entries.map(e => e.slug).join(',') === 'alpha,zeta' && eoMix.errors.length === 7, eoMix);
+      const eoLive = eo.eotdLive(eo.loadEotd([eoGood('old', '2026-01-01'), eoGood('new', '2026-01-09'), eoGood('later', '2026-02-01')]).entries, '2026-01-10');
+      check('eotd: an exercise dated after today stays hidden, and the newest is today\'s',
+        eoLive.map(e => e.slug).join(',') === 'new,old');
+      check('eotd: addresses match only the list and one slug',
+        eo.eotdMatch('/exercise-of-the-day').list === true && eo.eotdMatch('/exercise-of-the-day/').list === true &&
+        eo.eotdMatch('/exercise-of-the-day/abc-1').slug === 'abc-1' && eo.eotdMatch('/exercise-of-the-day/a/b').slug === '' &&
+        eo.eotdMatch('/exercise-of-the-day/ABC').slug === '' && eo.eotdMatch('/exercise-of-the-dayx') === null &&
+        eo.eotdMatch('/programs') === null);
+      const eoEvil = eo.loadEotd([eoGood('evil', '2026-01-01', { name: '</script><b>x</b>', why: 'a "quote" & <tag>' })]).entries[0];
+      const eoEvilPage = eo.eotdShell('<html lang="en"><head><title>T</title></head><body><section id="view-landing" class="view active lp"><!--EOTD-PAGE--></section></body></html>',
+        eoEvil, [eoEvil], 'https://x.example', 'AYG Lab');
+      check('eotd: names and text are escaped in the page and in the structured data',
+        !eoEvilPage.includes('<b>x</b>') && eoEvilPage.includes('&lt;/script&gt;&lt;b&gt;x&lt;/b&gt;') &&
+        (eoEvilPage.match(/<\/script>/g) || []).length === 1 && eoEvilPage.includes('\\u003c/script\\u003e'));
+
+      const eoPage = await apiText(null, '/exercise-of-the-day/nordic-hamstring-curl');
+      const ep = eoPage.text;
+      check('eotd: the exercise has its own page, rendered with the whole exercise in it',
+        eoPage.status === 200 && ep.includes('<section id="view-landing" class="view active lp" data-page="exercise">') &&
+        ep.includes('<h1 class="eotd-name">Nordic hamstring curl</h1>') &&
+        ep.includes('Lower forward as slowly as you can, then catch yourself with your hands and push back up.') &&
+        ep.includes('<span class="lp-dose-label">The dose</span>') && !/<!--EOTD/.test(ep), eoPage.status);
+      check('eotd: the page has its own title, description, canonical and social tags',
+        ep.includes('<title>Nordic hamstring curl: Exercise of the Day | AYG Lab</title>') &&
+        ep.includes('<link rel="canonical" href="https://ruffin-performance.onrender.com/exercise-of-the-day/nordic-hamstring-curl">') &&
+        ep.includes('<meta property="og:url" content="https://ruffin-performance.onrender.com/exercise-of-the-day/nordic-hamstring-curl">') &&
+        ep.includes('<meta property="og:type" content="article">') &&
+        /<meta name="description" content="Nordic hamstring curl from AYG Lab&#39;s Exercise of the Day/.test(ep) &&
+        ep.includes('<meta name="robots" content="index, follow">') && ep.includes('data-base-title="AYG Lab | '));
+      const eoLdM = ep.match(/<script type="application\/ld\+json" data-eotd-ld>([\s\S]*?)<\/script>/);
+      const eoLd = eoLdM ? JSON.parse(eoLdM[1]) : null;
+      const eoHow = eoLd && eoLd['@graph'].find(g => g['@type'] === 'HowTo');
+      check('eotd: the structured data is a HowTo with the three steps, plus breadcrumbs',
+        !!eoHow && eoHow.name === 'Nordic hamstring curl' && eoHow.step.length === 3 && eoHow.datePublished === eoNordic.date &&
+        eoLd['@graph'].some(g => g['@type'] === 'BreadcrumbList' && g.itemListElement.length === 3), eoLd);
+      const eoList = await apiText(null, '/exercise-of-the-day');
+      const eoSlash = await apiText(null, '/exercise-of-the-day/');
+      check('eotd: the list page links every exercise whose day has come',
+        eoList.status === 200 && eoSlash.status === 200 && eoList.text.includes('<title>Exercise of the Day | AYG Lab</title>') &&
+        eoList.text.includes('<a href="/exercise-of-the-day/nordic-hamstring-curl">') &&
+        eoList.text.includes('<link rel="canonical" href="https://ruffin-performance.onrender.com/exercise-of-the-day">'));
+      const eoMiss = await apiText(null, '/exercise-of-the-day/not-a-real-exercise');
+      const eoDeep = await apiText(null, '/exercise-of-the-day/a/b');
+      check('eotd: an unknown exercise is a 404 that search engines skip, with the list to pick from',
+        eoMiss.status === 404 && eoMiss.text.includes('<meta name="robots" content="noindex">') &&
+        eoMiss.text.includes('<a href="/exercise-of-the-day/nordic-hamstring-curl">') && eoDeep.status === 404);
+      const eoHome = await apiText(null, '/');
+      const eoIdx = await apiText(null, '/index.html');
+      const eoPlans = await apiText(null, '/plans');
+      check("eotd: the homepage shows today's exercise with a link to its own page, and no shell has a leftover marker",
+        eoHome.text.includes('<h3 class="eotd-name">Nordic hamstring curl</h3>') &&
+        eoHome.text.includes('<a class="lp-more" href="/exercise-of-the-day/nordic-hamstring-curl">Open this exercise on its own page</a>') &&
+        eoHome.text.includes('<a class="lp-more" href="/exercise-of-the-day">Past exercises of the day</a>') &&
+        !eoHome.text.includes('data-page="exercise"') &&
+        [eoHome, eoIdx, eoPlans].every(r => r.status === 200 && !/<!--EOTD/.test(r.text)));
+      const eoSm = (await apiText(null, '/sitemap.xml')).text;
+      check('eotd: the sitemap lists the list page and every exercise whose day has come',
+        eoSm.includes('<loc>https://ruffin-performance.onrender.com/exercise-of-the-day</loc>') &&
+        eoSm.includes('<loc>https://ruffin-performance.onrender.com/exercise-of-the-day/nordic-hamstring-curl</loc>') &&
+        eoSm.trim().endsWith('</urlset>'));
+      const eoJs = (await apiText(null, '/app.js')).text;
+      const eoCss = (await apiText(null, '/styles.css')).text;
+      check('eotd: the app keeps the exercise address and title, and the page shows on its own',
+        eoJs.includes("document.documentElement.getAttribute('data-base-title')") && eoJs.includes('const RP_EOTD_RE') &&
+        eoJs.includes("rpSetLandingPage('exercise');") &&
+        eoCss.includes('#view-landing.lp[data-page="exercise"] [data-lp-section="exercise"]') &&
+        eoCss.includes('#view-landing.lp:not([data-page="exercise"]) #eotd-page { display: none; }'));
+    }
+
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {

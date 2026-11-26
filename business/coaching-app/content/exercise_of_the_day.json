@@ -1,0 +1,16 @@
+[
+  {
+    "slug": "nordic-hamstring-curl",
+    "date": "2026-11-26",
+    "name": "Nordic hamstring curl",
+    "targets": ["Hamstrings", "Glutes", "Trunk control"],
+    "why": "When you sprint, your hamstrings have to brake the lower leg while they stretch. The Nordic trains exactly that kind of strength. Research in field sports links regular Nordic work with fewer hamstring strains.",
+    "steps": [
+      "Kneel on a pad with your ankles held by a partner or anchored.",
+      "Keep one straight line from knees to shoulders.",
+      "Lower forward as slowly as you can, then catch yourself with your hands and push back up."
+    ],
+    "dose": "2 sets of 4 slow reps. Skip it the day before a meet. Stop if you feel sharp pain.",
+    "program": { "label": "Part of the Winter Base Protocol", "route": "programs" }
+  }
+]
