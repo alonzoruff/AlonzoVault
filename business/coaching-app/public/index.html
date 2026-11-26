@@ -64,9 +64,44 @@
   if (meta) meta.setAttribute('content', colors[t]);
 })();
 </script>
+<script>
+/* Logo intro: the AYG Lab logo shows for about a second the first
+   time a visitor opens the site in a browser session, then the page
+   it covers is already there underneath. It is skipped when the
+   visitor prefers reduced motion, when the session has seen it
+   already, when browser storage is off (so it can never repeat on
+   every page), and on a booking link. A tap, click or any key ends
+   it at once, and it never takes focus. */
+(function () {
+  var show = false;
+  try {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var booking = /[?&]booking=/.test(window.location.search);
+    if (!reduce && !booking && !window.sessionStorage.getItem('ayg-intro-seen')) {
+      window.sessionStorage.setItem('ayg-intro-seen', '1');
+      show = true;
+    }
+  } catch (e) { show = false; }
+  if (!show) return;
+  var root = document.documentElement;
+  root.classList.add('lab-intro-on');
+  var done = function () {
+    root.classList.remove('lab-intro-on');
+    document.removeEventListener('pointerdown', done, true);
+    document.removeEventListener('keydown', done, true);
+  };
+  document.addEventListener('pointerdown', done, true);
+  document.addEventListener('keydown', done, true);
+  document.addEventListener('animationend', function (e) {
+    if (e.target && e.target.id === 'lab-intro') done();
+  });
+  window.setTimeout(done, 1800);
+})();
+</script>
 <link rel="stylesheet" href="/styles.css?v=__APP_VERSION__">
 </head>
 <body>
+<div class="lab-intro" id="lab-intro" aria-hidden="true"><img src="/assets/ayg-lab-logo.jpg" alt="" width="640" height="640" decoding="async"></div>
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand-block" href="/" data-route="home" aria-label="__BRAND_NAME__ home">
