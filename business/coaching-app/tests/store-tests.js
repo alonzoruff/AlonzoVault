@@ -362,6 +362,10 @@ function startFakeResend() {
         assert.ok(!/__[A-Z_]+__/.test(html), 'a placeholder was left in the page');
         const sm = (await raw(app, 'GET', '/sitemap.xml')).buf.toString();
         assert.ok(sm.includes('<loc>https://ayg.example.test/programs</loc>') && !sm.includes('__SITE_URL__'));
+        assert.ok(sm.includes('<loc>https://ayg.example.test/exercise-of-the-day/nordic-hamstring-curl</loc>'));
+        const ex = (await raw(app, 'GET', '/exercise-of-the-day/nordic-hamstring-curl')).buf.toString();
+        assert.ok(ex.includes('<link rel="canonical" href="https://ayg.example.test/exercise-of-the-day/nordic-hamstring-curl">'));
+        assert.ok(!/__[A-Z_]+__/.test(ex), 'a placeholder was left in the exercise page');
         const rb = (await raw(app, 'GET', '/robots.txt')).buf.toString();
         assert.ok(rb.includes('Sitemap: https://ayg.example.test/sitemap.xml'));
         const js = (await raw(app, 'GET', '/app.js')).buf.toString();

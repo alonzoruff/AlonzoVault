@@ -8887,7 +8887,12 @@ const RP_TITLES = {
   account: 'Sign In', invite: 'Request an Invitation', book: 'Book a Lab Talk',
   privacy: 'Privacy', terms: 'Terms',
 };
-const RP_BASE_TITLE = document.title;
+/* An Exercise of the Day page carries its own title from the server,
+   and the site's usual title on <html data-base-title>. */
+const RP_BASE_TITLE = document.documentElement.getAttribute('data-base-title') || document.title;
+const RP_EOTD_RE = /^\/exercise-of-the-day(\/[a-z0-9-]+)?$/;
+const RP_EOTD_LOADED = document.getElementById('eotd-page') ? (location.pathname.replace(/\/+$/, '') || '/') : null;
+const RP_EOTD_TITLE = document.title;
 let rpPendingPath = null;
 let rpSuppressPush = false;
 
@@ -8925,6 +8930,16 @@ function rpSectionFor(path) {
 /* Open an address: a landing section, a public page, or any view. */
 function rpRoute(path, replaceUnknown) {
   path = (path || '/').replace(/\/+$/, '') || '/';
+  /* Exercise of the Day pages come whole from the server. Going back
+     to one this page did not load fetches it again. */
+  if (RP_EOTD_RE.test(path) && RP_EOTD_LOADED) {
+    if (RP_EOTD_LOADED !== path) { location.reload(); return; }
+    rpSetLandingPage('exercise');
+    rpSuppressPush = true;
+    try { showView('landing'); } finally { rpSuppressPush = false; }
+    document.title = RP_EOTD_TITLE;
+    return;
+  }
   const section = rpSectionFor(path);
   rpSetLandingPage(section);
   rpSuppressPush = true;

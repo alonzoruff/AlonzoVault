@@ -102,6 +102,7 @@ const path = require('path');
 const crypto = require('crypto');
 const stripeLib = require('./lib/stripe');
 const { notifyCoach: sendCoachEmail } = require('./lib/notify');
+const eotdLib = require('./lib/eotd');
 const storeLib = require('./lib/store');
 /* Hosted store (Vercel) when its settings are present; otherwise the
    db.json file exactly as before (Render). */
@@ -1176,6 +1177,21 @@ function loadGlossary() {
    display field or a usable source link are dropped; the sources
    array is kept (cleaned) so the card can note how many posts a
    movement was saved from. */
+/* Exercise of the Day (content/exercise_of_the_day.json): the
+   exercises Coach AJ makes public, each on its own page. A bad entry
+   is left out with a note in the log rather than breaking the site. */
+function loadExerciseOfTheDay() {
+  let raw = [];
+  try { raw = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'exercise_of_the_day.json'), 'utf8')); }
+  catch (_) { /* no file: no exercise of the day */ }
+  const { entries, errors } = eotdLib.loadEotd(raw);
+  errors.forEach(e => console.warn('[exercise of the day] ' + e));
+  return entries;
+}
+const EOTD_ENTRIES = loadExerciseOfTheDay();
+function eotdLiveToday() {
+  return eotdLib.eotdLive(EOTD_ENTRIES, NY_TODAY_FMT.format(new Date()));
+}
 function loadExerciseLibrary() {
   try {
     const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'instagram_movements.json'), 'utf8'));
@@ -9807,6 +9823,21 @@ function serveStatic(req, res, url) {
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
     return res.end(LOGO_JPEG);
   }
+  /* Exercise of the Day pages are rendered here, so search engines
+     get the whole exercise in the page itself. */
+  const eotdAsk = eotdLib.eotdMatch(url.pathname);
+  if (eotdAsk) {
+    return fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (err, html) => {
+      if (err) { res.writeHead(404); return res.end('not found'); }
+      const live = eotdLiveToday();
+      const entry = eotdAsk.slug ? live.find(e => e.slug === eotdAsk.slug) : null;
+      const found = eotdAsk.list || !!entry;
+      let page = eotdLib.eotdShell(applyBrand(html.toString('utf8')), entry || null, live, SITE_URL, BRAND.name);
+      if (!found) page = page.replace('<meta name="robots" content="index, follow">', '<meta name="robots" content="noindex">');
+      res.writeHead(found ? 200 : 404, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' });
+      res.end(page);
+    });
+  }
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
   const shellHeaders = SHELL_NO_CACHE_PATHS.has(url.pathname)
@@ -9818,7 +9849,7 @@ function serveStatic(req, res, url) {
       fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (err2, html) => {
         if (err2) { res.writeHead(404); return res.end('not found'); }
         res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache' });
-        res.end(applyBrand(html.toString('utf8')));
+        res.end(eotdLib.eotdHome(applyBrand(html.toString('utf8')), eotdLiveToday()));
       });
       return;
     }
@@ -9826,9 +9857,11 @@ function serveStatic(req, res, url) {
       { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' },
       shellHeaders
     ));
-    res.end(BRAND_SUBSTITUTABLE.has(path.extname(filePath))
-      ? applyBrand(data.toString('utf8'))
-      : data);
+    if (!BRAND_SUBSTITUTABLE.has(path.extname(filePath))) return res.end(data);
+    let text = applyBrand(data.toString('utf8'));
+    if (filePath === path.join(PUBLIC_DIR, 'index.html')) text = eotdLib.eotdHome(text, eotdLiveToday());
+    else if (filePath === path.join(PUBLIC_DIR, 'sitemap.xml')) text = text.replace('</urlset>', eotdLib.eotdSitemap(eotdLiveToday(), SITE_URL) + '</urlset>');
+    res.end(text);
   });
 }
 
