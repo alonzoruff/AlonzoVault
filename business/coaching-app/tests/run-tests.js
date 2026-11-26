@@ -9113,8 +9113,8 @@ async function waitForServer(tries = 60) {
 
         const lrPage = await lrText(null, '/');
         const lrJs = await lrText(null, '/app.js');
-        check('the landing sample report and the member view carry the new name',
-          lrPage.status === 200 && lrPage.text.includes('<h3>Your Lab Report</h3>') &&
+        check('the landing (its Lab results section replaced the sample report) and the member view carry the new name',
+          lrPage.status === 200 && lrPage.text.includes('Your Lab Report shows the change') &&
           lrPage.text.includes('<h1>Lab Report</h1>') &&
           lrJs.text.includes("['speedreport', 'Lab Report']") &&
           lrJs.text.includes('See your Lab Report'), lrPage.status);
@@ -9293,10 +9293,9 @@ async function waitForServer(tries = 60) {
           !lp.includes('landing-signin-link') && !lp.includes('Member sign in') &&
           !ivJs.text.includes("chip.textContent = 'Not logged in'"),
           '');
-        check('v35: one sample Lab Report with baseline, best and change columns',
-          (lp.match(/data-sample-report/g) || []).length === 1 &&
-          ivJs.text.includes('RP_SAMPLE_REPORT') && ivJs.text.includes('>Baseline<') && ivJs.text.includes('>Best<') &&
-          ivJs.text.includes('>Change<'),
+        check('v35 (now Part 4a): the sample Lab Report is gone, replaced by one Lab results section',
+          !lp.includes('data-sample-report') && !ivJs.text.includes('RP_SAMPLE_REPORT') &&
+          (lp.match(/data-lab-results/g) || []).length === 1,
           '');
         check('v35: routes, popstate and plan pre-select ship in the JS',
           ivJs.text.includes('history.pushState') && ivJs.text.includes("addEventListener('popstate'") &&
@@ -9927,6 +9926,72 @@ async function waitForServer(tries = 60) {
         snzChild.kill('SIGKILL');
         fs.rmSync(SNZ_DIR, { recursive: true, force: true });
       }
+    }
+
+    /* ---------------- Lab results (Part 4a) ----------------
+       Real numbers only. The shipped file is a placeholder, the page
+       shows no figures until it is published, and the checker drops
+       anything that is not real-shaped or lacks consent. */
+    {
+      const { cleanResults } = require(path.join(__dirname, '..', 'lib', 'results.js'));
+      const shipped = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'content', 'lab_results.json'), 'utf8'));
+      check('results: the shipped results file is a placeholder with no numbers in it',
+        shipped.status === 'placeholder' && shipped.cards.length === 0 &&
+        shipped.tests.every(t => ['athletes', 'medianChange', 'minChange', 'maxChange', 'improved'].every(k => t[k] === null)));
+      const pub = await api(null, 'GET', '/api/lab-results');
+      check('results: /api/lab-results is public and answers the placeholder, with no figures',
+        pub.status === 200 && pub.json.status === 'placeholder' && pub.json.cards.length === 0 &&
+        pub.json.tests.map(t => t.key).join(',') === '30m-sprint,fly-30m' &&
+        pub.json.tests.every(t => t.medianChange === undefined && t.athletes === undefined), pub.json);
+      const resPage = (await apiText(null, '/')).text;
+      const resM = resPage.match(/<div class="lp-report lp-results" id="results"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<\/div>/);
+      check('results: the landing section is marked as a placeholder and shows no numbers',
+        !!resM && resM[0].includes('Placeholder: no real numbers yet') &&
+        (resM[0].match(/<span class="lp-results-num">&mdash;<\/span>/g) || []).length === 4 &&
+        !/\d/.test(resM[0].replace(/<[^>]+>/g, '').replace(/30m/g, '')) &&
+        !resPage.includes('4.91') && !resPage.includes('These are sample numbers'));
+
+      const madeUp = {   // made-up test data only
+        status: 'published', asOf: '2026-12-15', source: 'Test block',
+        athletesTested: 10,
+        tests: [
+          { key: '30m-sprint', athletes: 10, medianChange: -0.08, minChange: -0.2, maxChange: 0.03, improved: 8 },
+          { key: 'fly-30m', athletes: 9, medianChange: -0.05, minChange: -0.12, maxChange: 0.02, improved: 7 },
+        ],
+        cards: [
+          { label: 'Test athlete one', program: 'Test program', consent: true, tests: [{ key: '30m-sprint', before: 4.6, after: 4.5 }] },
+          { label: 'Test athlete two', consent: false, tests: [{ key: '30m-sprint', before: 4.6, after: 4.5 }] },
+          { label: 'Test athlete three', consent: true, name: 'Made Up Name', tests: [{ key: '30m-sprint', before: 4.6, after: 4.5 }] },
+          { label: 'Test athlete four', tests: [{ key: '30m-sprint', before: 4.6, after: 4.5 }] },
+        ],
+      };
+      const ok = cleanResults(madeUp);
+      check('results: a published file keeps its numbers and only cards with consent: true and no extra fields',
+        ok.status === 'published' && ok.athletesTested === 10 && ok.tests.length === 2 &&
+        ok.cards.length === 1 && ok.cards[0].label === 'Test athlete one' && !('name' in ok.cards[0]), ok);
+      const bad = (mut) => { const c = JSON.parse(JSON.stringify(madeUp)); mut(c); return cleanResults(c); };
+      check('results: impossible or missing numbers never publish',
+        bad(c => { c.status = 'draft'; }).status === 'placeholder' &&
+        bad(c => { c.athletesTested = null; }).status === 'placeholder' &&
+        bad(c => { c.asOf = 'soon'; }).status === 'placeholder' &&
+        bad(c => { c.tests.forEach(t => { t.improved = 99; }); }).status === 'placeholder' &&
+        bad(c => { c.tests.forEach(t => { t.medianChange = 1; }); }).status === 'placeholder' &&
+        bad(c => { c.tests.forEach(t => { t.athletes = 11; }); }).status === 'placeholder' &&
+        bad(c => { c.tests = [{ key: '40-yard', athletes: 5, medianChange: 0, minChange: 0, maxChange: 0, improved: 0 }]; }).status === 'placeholder' &&
+        cleanResults(null).status === 'placeholder' && cleanResults('x').status === 'placeholder');
+
+      const resJs = (await apiText(null, '/app.js')).text;
+      const fnSrc = (resJs.match(/function rpSigned[\s\S]*?(?=async function rpLoadResults)/) || [''])[0];
+      const vmr = require('vm');
+      const sandbox = { out: null, r: ok };
+      vmr.runInNewContext('function esc(s){return String(s).replace(/[&<>"\']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","\'":"&#39;"})[c]);}\n' +
+        fnSrc + '\nout = rpResultsHtml(r);', sandbox);
+      const outHtml = String(sandbox.out || '');
+      check('results: a published file renders the aggregates and before/after cards, with signed changes',
+        fnSrc.length > 0 && outHtml.includes('>10<') && outHtml.includes('\u22120.08 s') &&
+        outHtml.includes('\u22120.20 to +0.03 s') && outHtml.includes('8 of 10') && outHtml.includes('Got faster on the 30m sprint retest') &&
+        outHtml.includes('Test athlete one') && outHtml.includes('4.60 s \u2192 <strong>4.50 s</strong>') &&
+        outHtml.includes('\u22120.10 s') && !outHtml.includes('Test athlete two'), outHtml.slice(0, 400));
     }
 
   } catch (err) {

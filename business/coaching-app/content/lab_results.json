@@ -1,0 +1,12 @@
+{
+  "_readme": "Real Lab numbers only. Leave status as placeholder until real numbers are in. See lib/results.js for the full shape. Cards need the athlete's consent and no names.",
+  "status": "placeholder",
+  "asOf": null,
+  "source": null,
+  "athletesTested": null,
+  "tests": [
+    { "key": "30m-sprint", "athletes": null, "medianChange": null, "minChange": null, "maxChange": null, "improved": null },
+    { "key": "fly-30m", "athletes": null, "medianChange": null, "minChange": null, "maxChange": null, "improved": null }
+  ],
+  "cards": []
+}

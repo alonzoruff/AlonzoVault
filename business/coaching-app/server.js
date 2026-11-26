@@ -103,6 +103,7 @@ const crypto = require('crypto');
 const stripeLib = require('./lib/stripe');
 const { notifyCoach: sendCoachEmail } = require('./lib/notify');
 const storeLib = require('./lib/store');
+const { cleanResults } = require('./lib/results');
 /* Hosted store (Vercel) when its settings are present; otherwise the
    db.json file exactly as before (Render). */
 const STORE_CFG = storeLib.configFromEnv(process.env, 'ayg-lab');
@@ -1257,6 +1258,12 @@ function loadLabPrograms() {
   return [];
 }
 const CONTENT = loadContent();
+/* Lab results (see lib/results.js). A missing or broken file means
+   the placeholder, never an error. */
+const LAB_RESULTS = (() => {
+  try { return cleanResults(JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'lab_results.json'), 'utf8'))); }
+  catch (_) { return cleanResults(null); }
+})();
 const SESSION_BY_ID = new Map(CONTENT.sessions.map(s => [s.id, s]));
 const SESSION_IDS = new Set(SESSION_BY_ID.keys());
 const XT_IDS = new Set(CONTENT.sessions.filter(s => s.id.startsWith('XT-')).map(s => s.id));
@@ -5150,6 +5157,15 @@ async function handleApi(req, res, url) {
       ok: true, token: rec.token, pagePath: '/?booking=' + rec.token,
       booking: visitorBookingView(rec),
     });
+  }
+
+  /* ---------- Lab results for the landing page ----------
+     Public and read-only. The numbers come from
+     content/lab_results.json, checked by lib/results.js: real
+     numbers only, before/after cards only with the athlete's
+     consent, and a placeholder with no figures until then. */
+  if (p === '/api/lab-results' && req.method === 'GET') {
+    return sendJson(res, 200, LAB_RESULTS, { 'Cache-Control': 'public, max-age=300' });
   }
 
   /* ---------- Invitation requests: the public form ----------

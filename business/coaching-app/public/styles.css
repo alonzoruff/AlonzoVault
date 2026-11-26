@@ -3822,3 +3822,22 @@ html, body, input, button, select, textarea { font-variant-numeric: tabular-nums
   .update-toast, .flash-ok, .saved-note, [data-saved], .btn[aria-busy="true"]::after { animation: none; }
 }
 #view-landing.lp .lp-btn-primary, #view-landing.lp .lp-btn-primary:hover { color: var(--lp-accent-ink); }
+
+/* ---------------- Lab results (Part 4a) ----------------
+   Aggregates and before/after cards from /api/lab-results, or a marked
+   placeholder with no figures. */
+.lp-results-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.lp-results-stat { border: 1px solid var(--lp-line); border-radius: var(--lp-radius); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.lp-results-num { font-size: 1.7rem; font-weight: 800; color: var(--lp-text); font-variant-numeric: tabular-nums; }
+.lp-results[data-results-status="placeholder"] .lp-results-num { color: var(--lp-dim); }
+.lp-results-label { font-size: .85rem; color: var(--lp-muted); }
+#view-landing.lp .lp-results-table { margin-top: 14px; }
+.lp-results-foot { font-size: .85rem; color: var(--lp-muted); margin: 10px 0 0; }
+.lp-results-cards { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.lp-results-card { border: 1px solid var(--lp-line); border-radius: var(--lp-radius); padding: 16px; }
+#view-landing.lp .lp-results-card h4 { margin: 0 0 2px; font-size: 1rem; }
+.lp-results-card p { margin: 0 0 8px; font-size: .85rem; }
+.lp-results-card dl { margin: 0; font-size: .9rem; }
+.lp-results-card dt { color: var(--lp-muted); margin-top: 6px; }
+.lp-results-card dd { margin: 0; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) { .lp-results-stats { grid-template-columns: 1fr 1fr; } .lp-results-num { font-size: 1.35rem; } }
