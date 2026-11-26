@@ -9929,6 +9929,113 @@ async function waitForServer(tries = 60) {
       }
     }
 
+    /* ---------------- hero video (Part 4b) ----------------
+       No video ships, so the hero shows the photo and no <video>. A
+       video from HERO_VIDEO_URL or a file in public/assets/hero turns
+       it on, files are served in byte ranges of at most 1 MB, and the
+       app screens now live only in "Inside the app". */
+    {
+      const hvPage = (await apiText(null, '/')).text;
+      const heroM = hvPage.match(/<figure class="lp-hero-media" data-hero-media data-photo-slot="hero">[\s\S]*?<\/figure>/);
+      const insideM = hvPage.match(/<div class="lp-band" id="inside-the-app"[\s\S]*?lp-preview-foot/);
+      check('hero video: with no video, the hero shows the photo, no <video> and no app screenshot',
+        !!heroM && heroM[0].includes('src="/assets/hero-sprinter.jpg"') && !heroM[0].includes('<video') &&
+        !heroM[0].includes('HERO_VIDEO') && !hvPage.includes('lp-phone-hero') && !hvPage.includes('<video'));
+      check('hero video: the Today screenshot moved down to "Inside the app"',
+        !!insideM && insideM[0].includes('/assets/preview/today.jpg') &&
+        (hvPage.match(/\/assets\/preview\/today\.jpg/g) || []).length === 1);
+      const hvJs = (await apiText(null, '/app.js')).text;
+      check('hero video: the page starts it only without reduced motion or data saver, with a pause button',
+        /function rpHeroVideo\(\)[\s\S]*prefers-reduced-motion: reduce[\s\S]*saveData[\s\S]*if \(reduce \|\| saveData\) return;/.test(hvJs) &&
+        hvJs.includes("btn.textContent = playing ? 'Pause video' : 'Play video';"));
+
+      const HV_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-hv-'));
+      const startHv = (port, extraEnv) => {
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, process.env, { PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(HV_DIR, 'd-')), SESSION_SECRET: 'hv-secret', HERO_VIDEO_URL: '' }, extraEnv),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', () => {});
+        c.stderr.on('data', () => {});
+        return c;
+      };
+      const waitHv = async (base) => {
+        for (let i = 0; i < 60; i++) {
+          try { if ((await fetch(base + '/')).status === 200) return true; } catch (_) { /* not up yet */ }
+          await new Promise(r => setTimeout(r, 150));
+        }
+        return false;
+      };
+      const stopHv = (c) => new Promise(r => { if (!c || c.exitCode !== null) return r(); c.once('exit', r); c.kill(); });
+
+      // A made-up hosted address turns the video on.
+      let hv = startHv(3241, { HERO_VIDEO_URL: 'https://video.example.test/ayg/hero-loop.mp4' });
+      try {
+        check('hero video: test server with HERO_VIDEO_URL starts', await waitHv('http://127.0.0.1:3241'));
+        const pg = await (await fetch('http://127.0.0.1:3241/')).text();
+        check('hero video: HERO_VIDEO_URL adds a muted, looping, inline video with a poster and a hidden pause button',
+          pg.includes('<video class="lp-hero-video" data-hero-video muted loop playsinline preload="none" poster="/assets/hero-sprinter.jpg" aria-hidden="true" tabindex="-1"><source src="https://video.example.test/ayg/hero-loop.mp4" type="video/mp4"></video>') &&
+          pg.includes('<button class="lp-hero-pause" type="button" data-hero-pause hidden aria-pressed="false">Pause video</button>') &&
+          !/<video[^>]*\sautoplay/.test(pg));
+      } finally { await stopHv(hv); }
+      hv = startHv(3242, { HERO_VIDEO_URL: 'http://video.example.test/x.mp4" onerror="alert(1)' });
+      try {
+        check('hero video: test server with a bad HERO_VIDEO_URL starts', await waitHv('http://127.0.0.1:3242'));
+        const pg = await (await fetch('http://127.0.0.1:3242/')).text();
+        check('hero video: a non-https or malformed HERO_VIDEO_URL is ignored', !pg.includes('<video') && !pg.includes('onerror="alert'));
+      } finally { await stopHv(hv); }
+
+      // A local file is found at start-up and served in byte ranges.
+      const heroDir = path.join(APP_DIR, 'public', 'assets', 'hero');
+      const heroDirExisted = fs.existsSync(heroDir);
+      const heroFile = path.join(heroDir, 'hero-loop.mp4');
+      const heroFileExisted = fs.existsSync(heroFile);
+      check('hero video: no real hero video is in the repo yet (Luna supplies it)', !heroFileExisted);
+      if (!heroFileExisted) {
+        const SIZE = 2500000;
+        const bytes = Buffer.alloc(SIZE);
+        for (let i = 0; i < SIZE; i++) bytes[i] = i % 251;
+        fs.mkdirSync(heroDir, { recursive: true });
+        fs.writeFileSync(heroFile, bytes);
+        hv = startHv(3243, {});
+        try {
+          const B = 'http://127.0.0.1:3243';
+          check('hero video: test server with a local video file starts', await waitHv(B));
+          const pg = await (await fetch(B + '/')).text();
+          check('hero video: a file in public/assets/hero turns the video on',
+            pg.includes('<source src="/assets/hero/hero-loop.mp4" type="video/mp4">'));
+          const r1 = await fetch(B + '/assets/hero/hero-loop.mp4', { headers: { range: 'bytes=0-' } });
+          const b1 = Buffer.from(await r1.arrayBuffer());
+          check('hero video: an open range answers 206 with at most 1 MB',
+            r1.status === 206 && r1.headers.get('content-type') === 'video/mp4' &&
+            r1.headers.get('accept-ranges') === 'bytes' &&
+            r1.headers.get('content-range') === 'bytes 0-1048575/' + SIZE && b1.length === 1048576 &&
+            b1.equals(bytes.subarray(0, 1048576)), [r1.status, r1.headers.get('content-range'), b1.length]);
+          const r2 = await fetch(B + '/assets/hero/hero-loop.mp4', { headers: { range: 'bytes=2000000-2000099' } });
+          const b2 = Buffer.from(await r2.arrayBuffer());
+          check('hero video: a middle range answers exactly those bytes',
+            r2.status === 206 && b2.length === 100 && b2.equals(bytes.subarray(2000000, 2000100)));
+          const r3 = await fetch(B + '/assets/hero/hero-loop.mp4', { headers: { range: 'bytes=-500' } });
+          const b3 = Buffer.from(await r3.arrayBuffer());
+          check('hero video: a suffix range answers the last bytes',
+            r3.status === 206 && b3.length === 500 && b3.equals(bytes.subarray(SIZE - 500)));
+          const r4 = await fetch(B + '/assets/hero/hero-loop.mp4', { headers: { range: 'bytes=99999999-' } });
+          await r4.arrayBuffer();
+          check('hero video: a range past the end answers 416', r4.status === 416 && r4.headers.get('content-range') === 'bytes */' + SIZE);
+          const r5 = await fetch(B + '/assets/hero/hero-loop.mp4');
+          const b5 = Buffer.from(await r5.arrayBuffer());
+          check('hero video: no range answers the whole file', r5.status === 200 && b5.length === SIZE);
+          const r6 = await fetch(B + '/assets/hero/missing.mp4', { headers: { range: 'bytes=0-' } });
+          await r6.arrayBuffer();
+          check('hero video: a missing video is a 404, not the app page', r6.status === 404);
+        } finally {
+          await stopHv(hv);
+          fs.unlinkSync(heroFile);
+          if (!heroDirExisted) fs.rmdirSync(heroDir);
+        }
+      }
+    }
+
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {

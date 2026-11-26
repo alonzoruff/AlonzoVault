@@ -9792,6 +9792,7 @@ const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.cs
 const BRAND_SUBSTITUTABLE = new Set(['.html', '.js', '.json', '.css', '.xml', '.txt']);
 function applyBrand(text) {
   return text
+    .replaceAll('<!-- HERO_VIDEO -->', HERO_VIDEO_HTML)
     .replaceAll('__BRAND_NAME__', BRAND.name)
     .replaceAll('__BRAND_SHORT__', BRAND.short)
     .replaceAll('__BRAND_TAGLINE__', BRAND.tagline)
@@ -9802,6 +9803,75 @@ function applyBrand(text) {
     .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL)
     .replaceAll('__SITE_URL__', SITE_URL);
 }
+/* ---------------- Hero video (Part 4b) ----------------
+   The landing hero can play a short muted loop. Nothing plays until a
+   video exists: either a file at public/assets/hero/hero-loop.mp4 (or
+   .webm), or an https address in HERO_VIDEO_URL (for a video hosted
+   elsewhere, such as Vercel Blob). An optional still frame goes at
+   public/assets/hero/hero-poster.jpg; otherwise the hero photo is
+   used. With no video the hero shows that photo and no <video> tag
+   at all. The page starts the video from app.js, never for reduced
+   motion or data saver, and shows a pause button. */
+const HERO_ASSET_DIR = path.join(PUBLIC_DIR, 'assets', 'hero');
+const VIDEO_TYPES = { '.mp4': 'video/mp4', '.webm': 'video/webm' };
+/* Each byte-range answer is at most 1 MB, so a long video still
+   streams within a serverless function's response limit. */
+const VIDEO_CHUNK = 1024 * 1024;
+function heroVideoConfig() {
+  const fromEnv = (process.env.HERO_VIDEO_URL || '').trim();
+  const poster = fs.existsSync(path.join(HERO_ASSET_DIR, 'hero-poster.jpg'))
+    ? '/assets/hero/hero-poster.jpg' : '/assets/hero-sprinter.jpg';
+  if (fromEnv) {
+    if (!/^https:\/\/[A-Za-z0-9.-]+(:\d+)?\/[^\s"'<>]*$/.test(fromEnv)) return null;
+    return { src: fromEnv, type: /\.webm(\?|$)/i.test(fromEnv) ? 'video/webm' : 'video/mp4', poster };
+  }
+  for (const name of ['hero-loop.mp4', 'hero-loop.webm']) {
+    if (fs.existsSync(path.join(HERO_ASSET_DIR, name))) {
+      return { src: '/assets/hero/' + name, type: VIDEO_TYPES[path.extname(name)], poster };
+    }
+  }
+  return null;
+}
+const HERO_VIDEO = heroVideoConfig();
+const HERO_VIDEO_HTML = HERO_VIDEO
+  ? `<video class="lp-hero-video" data-hero-video muted loop playsinline preload="none" poster="${HERO_VIDEO.poster}" aria-hidden="true" tabindex="-1"><source src="${HERO_VIDEO.src.replace(/&/g, '&amp;')}" type="${HERO_VIDEO.type}"></video>
+          <button class="lp-hero-pause" type="button" data-hero-pause hidden aria-pressed="false">Pause video</button>`
+  : '';
+/* Video files are answered in byte ranges, which phones (Safari in
+   particular) need before they will play a video at all. */
+function serveVideo(req, res, filePath) {
+  fs.stat(filePath, (err, st) => {
+    if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
+    const type = VIDEO_TYPES[path.extname(filePath)];
+    const base = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=86400' };
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || '').trim());
+    if (!req.headers.range) {
+      res.writeHead(200, Object.assign({ 'Content-Length': st.size }, base));
+      if (req.method === 'HEAD') return res.end();
+      return fs.createReadStream(filePath).pipe(res);
+    }
+    let start;
+    let end;
+    if (range && range[1] !== '') {
+      start = Number(range[1]);
+      end = range[2] !== '' ? Number(range[2]) : st.size - 1;
+    } else if (range && range[2] !== '') {
+      start = Math.max(0, st.size - Number(range[2]));
+      end = st.size - 1;
+    }
+    if (!range || start === undefined || start >= st.size || end < start) {
+      res.writeHead(416, { 'Content-Range': 'bytes */' + st.size });
+      return res.end();
+    }
+    end = Math.min(end, st.size - 1, start + VIDEO_CHUNK - 1);
+    res.writeHead(206, Object.assign({
+      'Content-Length': end - start + 1,
+      'Content-Range': `bytes ${start}-${end}/${st.size}`,
+    }, base));
+    if (req.method === 'HEAD') return res.end();
+    fs.createReadStream(filePath, { start, end }).pipe(res);
+  });
+}
 function serveStatic(req, res, url) {
   if (url.pathname === '/assets/ayg-lab-logo.jpg') {
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
@@ -9809,6 +9879,9 @@ function serveStatic(req, res, url) {
   }
   let filePath = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
+  if (VIDEO_TYPES[path.extname(filePath)] && filePath.startsWith(HERO_ASSET_DIR + path.sep)) {
+    return serveVideo(req, res, filePath);
+  }
   const shellHeaders = SHELL_NO_CACHE_PATHS.has(url.pathname)
     ? { 'Cache-Control': 'no-cache' }
     : {};
