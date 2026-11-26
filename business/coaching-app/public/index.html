@@ -275,6 +275,50 @@
       </div>
     </div>
 
+    <div class="lp-band lp-measure-band" id="measure" data-lp-section="measure">
+      <div class="lp-wrap">
+        <div class="lp-head">
+          <span class="lp-eyebrow">Free tool</span>
+          <h2>Measure yourself</h2>
+          <p class="lp-lead">Enter one 30m time and see your average speed. No account and nothing to buy.</p>
+        </div>
+        <div class="measure-tool" data-measure>
+          <form class="measure-form" id="measure-form" novalidate>
+            <fieldset class="measure-tests">
+              <legend>Which test?</legend>
+              <label><input type="radio" name="measure-test" value="30m-sprint" checked> 30m sprint from a start</label>
+              <label><input type="radio" name="measure-test" value="fly-30m"> Flying 30m</label>
+            </fieldset>
+            <label>Your time in seconds <input type="text" id="measure-time" inputmode="decimal" autocomplete="off" placeholder="4.25" maxlength="6"></label>
+            <label>How was it timed?
+              <select id="measure-timing">
+                <option value="unsure">Not sure</option>
+                <option value="electronic">Electronic gates</option>
+                <option value="hand">Hand stopwatch</option>
+              </select>
+            </label>
+            <p class="error" id="measure-err" role="alert"></p>
+            <button class="lp-btn lp-btn-primary" type="submit">Show my speed</button>
+          </form>
+          <div class="measure-result" id="measure-result" aria-live="polite" hidden></div>
+          <form class="measure-unlock" id="measure-unlock" novalidate hidden>
+            <h3>Get the full breakdown</h3>
+            <p>Your speed in km/h, your average per 10 m, what the number means, how to retest it the same way, and a baseline card to save.</p>
+            <label>Email <input type="email" id="measure-email" autocomplete="email" maxlength="200"></label>
+            <label class="measure-consent"><input type="checkbox" id="measure-consent"> Save my email and this result for Coach AJ, who may email me about it. I am 18 or older, or I am the athlete's parent or guardian.</label>
+            <div class="visually-hidden" aria-hidden="true">
+              <label>Website <input type="text" id="measure-website" name="website" tabindex="-1" autocomplete="off"></label>
+            </div>
+            <p class="error" id="measure-unlock-err" role="alert"></p>
+            <button class="lp-btn lp-btn-primary" type="submit" id="measure-send">Show the breakdown</button>
+            <p class="measure-fine">Nothing is emailed to you automatically. <a href="/privacy" data-route="privacy">Privacy</a></p>
+          </form>
+          <div class="measure-breakdown" id="measure-breakdown" hidden></div>
+        </div>
+        <p class="measure-note">This tool measures speed. It does not predict a time or promise a result.</p>
+      </div>
+    </div>
+
     <div class="lp-band" id="inside-the-app" data-lp-home>
       <div class="lp-wrap">
         <div class="lp-head">
@@ -528,9 +572,9 @@
     <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
     <div class="card legal">
       <h2>What I collect</h2>
-      <p>On the invitation form: your name, email, grade or age, sport, general location, goals and, if you are a parent, your athlete's name. In the portal: your account email, your training log, check-ins, test results and any videos you send for a form check.</p>
+      <p>On the invitation form: your name, email, grade or age, sport, general location, goals and, if you are a parent, your athlete's name. On the Measure yourself tool, only if you ask for the full breakdown: your email, the time you entered, which test it was and how it was timed. In the portal: your account email, your training log, check-ins, test results and any videos you send for a form check.</p>
       <h2>How I use it</h2>
-      <p>Only to review your request, coach you and show you your own progress. I do not sell your information or use it for advertising.</p>
+      <p>Only to review your request, coach you, show you your own progress and follow up on a time you measured. I do not sell your information or use it for advertising.</p>
       <h2>Who can see it</h2>
       <p>I can see it, and so can you. For athletes under 18, the parent or guardian can see the Lab Report. The booking calendar is run by Calendly, which handles the details you enter there under its own policy. When payments open, card details are handled by Stripe and never stored by this site.</p>
       <h2>Athletes under 18</h2>

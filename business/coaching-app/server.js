@@ -103,6 +103,7 @@ const crypto = require('crypto');
 const stripeLib = require('./lib/stripe');
 const { notifyCoach: sendCoachEmail } = require('./lib/notify');
 const storeLib = require('./lib/store');
+const { MEASURE_TIMING, parseMeasureInput, measureBreakdown } = require('./lib/measure');
 /* Hosted store (Vercel) when its settings are present; otherwise the
    db.json file exactly as before (Render). */
 const STORE_CFG = storeLib.configFromEnv(process.env, 'ayg-lab');
@@ -237,6 +238,7 @@ let db = {
   bookings: [],
   bookingSettings: null,
   inviteRequests: [],
+  measureLeads: [],
   stripeEvents: [],
   events: [],
   eventsStartedAt: null,
@@ -414,6 +416,9 @@ const FUNNEL_EVENT_LABELS = {
   referral_source: 'Requests that said how they heard',
 };
 const FUNNEL_EVENT_CAP = 50000;
+/* Measure yourself (Part 4c): results kept per email, and in all. */
+const MEASURE_LEADS_PER_EMAIL = 10;
+const MEASURE_LEADS_CAP = 5000;
 const PREVIEW_SCREENS = ['today', 'training', 'progress'];
 /* "How did you hear about us?" on the invitation form. kind keeps
    referrals apart from paid sources, as the playbook asks. */
@@ -908,6 +913,11 @@ function migrate() {
   // goal, status, createdAt, updatedAt }. Like bookings, invite
   // requests deliberately do NOT ride along in backups.
   db.inviteRequests = Array.isArray(db.inviteRequests) ? db.inviteRequests : [];
+  // Measure yourself emails (Part 4c): { id, email, test, time,
+  // timing, consent, createdAt } from the free speed tool. Like
+  // invite requests, they never ride along in backups.
+  db.measureLeads = Array.isArray(db.measureLeads)
+    ? db.measureLeads.filter(l => l && typeof l.email === 'string') : [];
   // Funnel events (v40): what happened and when, for the owner
   // scoreboard. Each is { id, name, at } plus, where the app already
   // has one, a member or request id and a short detail (tier,
@@ -5152,6 +5162,50 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* ---------- Measure yourself (Part 4c): the free speed tool ----------
+     A visitor enters one 30m or flying 30m time. The page shows the
+     average speed itself; this route answers the full breakdown in
+     exchange for an email. The email, the time, the test and the
+     timing method are stored in db.measureLeads and nothing else:
+     no name, no IP address, and no email is sent to anyone (there is
+     deliberately no notifyCoach here). Each email keeps its newest
+     MEASURE_LEADS_PER_EMAIL results, and the coach deletes an email
+     with everything saved with it from Coach Hub > Invitation
+     Requests. The website field is a honeypot, as on the invitation
+     form: a bot gets the breakdown and nothing is stored. */
+  if (p === '/api/measure' && req.method === 'POST') {
+    const body = await readBody(req);
+    const input = parseMeasureInput(body);
+    if (input.error) return sendJson(res, 400, { error: input.error });
+    const breakdown = measureBreakdown(input, nyDateOf(new Date().toISOString()));
+    if (typeof body.website === 'string' && body.website.trim() !== '') {
+      return sendJson(res, 201, { ok: true, breakdown });
+    }
+    const email = clean(body.email, 200).toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      return sendJson(res, 400, { error: 'Please enter a valid email address.' });
+    }
+    if (body.consent !== true) {
+      return sendJson(res, 400, {
+        error: 'Please tick the box to save your email. You need to be 18 or older, or the athlete\'s parent or guardian.',
+      });
+    }
+    if (db.measureLeads.length >= MEASURE_LEADS_CAP && !db.measureLeads.some(l => l.email === email)) {
+      return sendJson(res, 503, { error: 'The speed tool is full right now. Please try again later.' });
+    }
+    db.measureLeads.push({
+      id: crypto.randomUUID(), email, test: input.test, time: input.time,
+      timing: input.timing, consent: true, createdAt: new Date().toISOString(),
+    });
+    const mine = db.measureLeads.filter(l => l.email === email);
+    if (mine.length > MEASURE_LEADS_PER_EMAIL) {
+      const drop = new Set(mine.slice(0, mine.length - MEASURE_LEADS_PER_EMAIL).map(l => l.id));
+      db.measureLeads = db.measureLeads.filter(l => !drop.has(l.id));
+    }
+    saveDb();
+    return sendJson(res, 201, { ok: true, breakdown });
+  }
+
   /* ---------- Invitation requests: the public form ----------
      A visitor asks for an invitation from the landing page. No
      account, no token, no email is sent: the request sits pending
@@ -6446,6 +6500,36 @@ async function handleApi(req, res, url) {
      INVITE_REQUEST_TRANSITIONS only. Marking a request invited
      also adds its email to db.clientInvites, which is what lets
      the person register. */
+  /* ---------- Measure yourself emails: the coach's side (Part 4c) ----------
+     Grouped by email, newest first. Forget deletes the email and
+     every result saved with it, for a removal request. */
+  if (p === '/api/measure-leads' && req.method === 'GET') {
+    // Results are stored oldest first, so walking back from the end
+    // gives each email newest first and the emails in order of their
+    // latest result.
+    const groups = new Map();
+    for (let i = db.measureLeads.length - 1; i >= 0; i--) {
+      const l = db.measureLeads[i];
+      if (!groups.has(l.email)) groups.set(l.email, { email: l.email, lastAt: String(l.createdAt || ''), results: [] });
+      groups.get(l.email).results.push({
+        test: l.test, time: l.time, timing: l.timing,
+        timingLabel: MEASURE_TIMING[l.timing] || MEASURE_TIMING.unsure, createdAt: l.createdAt,
+      });
+    }
+    const leads = Array.from(groups.values());
+    return sendJson(res, 200, { leads, total: db.measureLeads.length });
+  }
+  if (p === '/api/measure-leads/forget' && req.method === 'POST') {
+    const body = await readBody(req);
+    const email = clean(body.email, 200).toLowerCase();
+    const before = db.measureLeads.length;
+    db.measureLeads = db.measureLeads.filter(l => l.email !== email);
+    const removed = before - db.measureLeads.length;
+    if (!removed) return sendJson(res, 404, { error: 'No saved results for that email.' });
+    saveDb();
+    return sendJson(res, 200, { ok: true, removed });
+  }
+
   if (p === '/api/invite-requests' && req.method === 'GET') {
     const rank = { pending: 0, invited: 1, declined: 2 };
     const list = db.inviteRequests.slice().sort((a, b) => {
