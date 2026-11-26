@@ -348,6 +348,9 @@ function spacingViolations() {
 function currentWeekNum() {
   const t = todayLocal();
   const weeks = state.content.weeks;
+  /* The empty skeleton (signed out, or a member with no active tier)
+     has no season weeks. */
+  if (!weeks || !weeks.length) return 1;
   for (const w of weeks) {
     if (t >= parseDate(w.start) && t <= parseDate(w.end)) return w.week;
   }
@@ -425,7 +428,9 @@ const VIEW_AREA = {
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['scoreboard', 'Scoreboard'], ['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  /* Filled from content/coach-views.html once a coach signs in
+     (ensureCoachViews), so the Coach menu is not in the public script. */
+  coachhub: [],
 };
 /* ---------------- membership tiers (v14) ----------------
    The nav mirror of the server's entitlement rules. The server is
@@ -603,6 +608,49 @@ function closeNavMenus() {
   if (scrim) scrim.hidden = true;
 }
 buildMainNav();
+
+/* ---------------- coach screens (loaded after a coach signs in) ----------------
+   The Coach screens are not in index.html. The server sends them only
+   to a signed-in coach (GET /api/coach/views), so a visitor who is not
+   signed in never receives their text. They are added to <main> once
+   per sign-in, with the Coach menu, and taken out again on sign-out.
+   Every coach render function already returns early when its
+   container is missing, so nothing runs against them until then. */
+let coachViewsLoaded = false;
+const coachViewIds = () => Object.keys(VIEW_AREA).filter(v => VIEW_AREA[v] === 'coachhub');
+function dropCoachViewNodes() {
+  coachViewIds().forEach(v => {
+    const el = document.getElementById('view-' + v);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  });
+}
+async function ensureCoachViews() {
+  if (coachViewsLoaded) return true;
+  let data;
+  try { data = await api('/api/coach/views'); } catch (_) { return false; }
+  if (!data || typeof data.html !== 'string' || coachViewsLoaded) return coachViewsLoaded;
+  const tpl = document.createElement('template');
+  tpl.innerHTML = data.html;
+  const navData = tpl.content.querySelector('#coach-subnav-data');
+  if (navData) {
+    try { GROUP_SUBNAV.coachhub = JSON.parse(navData.textContent) || []; } catch (_) { GROUP_SUBNAV.coachhub = []; }
+    navData.parentNode.removeChild(navData);
+  }
+  dropCoachViewNodes();
+  const main = document.getElementById('app');
+  if (main) main.appendChild(tpl.content);
+  coachViewsLoaded = true;
+  return true;
+}
+function unloadCoachViews() {
+  if (!coachViewsLoaded) return;
+  exitTvBoard();
+  exitWeightRoom();
+  dropCoachViewNodes();
+  GROUP_SUBNAV.coachhub = [];
+  coachViewsLoaded = false;
+  tvWired = false;
+}
 $$('.nav-group-btn').forEach(btn => btn.addEventListener('click', (e) => {
   e.stopPropagation();
   const group = btn.closest('.nav-group');
@@ -647,6 +695,11 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNavMe
 
 function showView(name) {
   name = mxResolveView(name);
+  /* A Coach screen exists only after a coach signs in (see
+     ensureCoachViews); anyone else lands on their own start page. */
+  if (VIEW_AREA[name] === 'coachhub' && !document.getElementById('view-' + name)) {
+    name = state.user ? 'home' : 'landing';
+  }
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const area = VIEW_AREA[name] || 'home';
   $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
@@ -1008,6 +1061,20 @@ function renderHome() {
     return;
   }
   const c = state.content;
+  /* Signed out the Lab content is not sent (the season plan needs an
+     account), so Home says so in one line instead of drawing a week. */
+  if (!c || !Array.isArray(c.weeks) || !c.weeks.length) {
+    const el = $('#home-content');
+    if (el) {
+      el.removeAttribute('aria-busy');
+      el.innerHTML = `<div class="empty">
+        <h3>Sign in to see your week</h3>
+        <p class="muted">The training plan, the library and the learn pages open once you sign in to your Lab account.</p>
+        <button class="btn secondary" type="button" data-view="account">Sign in</button>
+      </div>`;
+    }
+    return;
+  }
   const t = todayLocal();
   const weeks = c.weeks;
   const first = weeks[0], last = weeks[weeks.length - 1];
@@ -1782,6 +1849,9 @@ function renderLog() {
   }));
 }
 async function refreshUserData() {
+  if (state.user && state.user.role === 'coach') await ensureCoachViews();
+  else unloadCoachViews();
+  if (state.content) await loadAppContent();
   if (!state.user) { state.logs = []; state.swaps = {}; state.groups = []; state.membership = null; state.membershipData = null; return; }
   try {
     const [logs, swaps, groups] = await Promise.all([
@@ -9004,18 +9074,26 @@ function rpFillPublicBits() {
 rpFillPublicBits();
 rpWirePreview();
 
-(async function boot() {
-  try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
+/* The Lab content (library, videos, learn pages) needs an account:
+   /api/content answers 401 to a visitor who is not signed in and 403
+   to a member with no active tier. Either way the app boots on the
+   empty skeleton above. It is loaded again whenever the signed-in
+   account changes (sign-in, sign-out), from refreshUserData. */
+let contentLoadedFor = null;
+let contentLoads = 0;
+async function loadAppContent() {
+  const who = state.user ? (state.user.role || '') + ':' + (state.user.email || state.user.id || '') : '';
+  if (state.content && contentLoadedFor === who) return true;
+  let content;
   try {
-    state.content = await api('/api/content');
+    content = await api('/api/content');
   } catch (err) {
-    if (state.user && state.user.role === 'athlete') {
-      state.content = EMPTY_CONTENT;
-    } else {
-      $('#home-content').innerHTML = '<p class="error">Could not load the app content. Please reload.</p>';
-      return;
-    }
+    if (!state.user || state.user.role === 'athlete') content = EMPTY_CONTENT;
+    else return false;
   }
+  state.content = content;
+  contentLoadedFor = who;
+  state.sessions.clear();
   for (const s of state.content.sessions) state.sessions.set(s.id, s);
   state.week = currentWeekNum();
   fillLibFilters();
@@ -9029,6 +9107,19 @@ rpWirePreview();
   renderLabPrograms();
   $('#guide-doc').innerHTML = md(state.content.guide);
   $('#season-doc').innerHTML = md(state.content.season);
+  /* On a later load (sign-in or sign-out in the same page) the
+     workout list is redrawn too; the first load leaves that to the
+     end of boot, as before. */
+  if (contentLoads++ > 0) { renderLibrary(); renderSeason(); }
+  return true;
+}
+
+(async function boot() {
+  try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
+  if (!(await loadAppContent())) {
+    $('#home-content').innerHTML = '<p class="error">Could not load the app content. Please reload.</p>';
+    return;
+  }
   $('#log-date').value = todayStr();
   try { state.wuOverrides = (await api('/api/warmup-cards')).cards || {}; } catch (_) { state.wuOverrides = {}; }
   await refreshUserData();

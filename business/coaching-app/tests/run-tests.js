@@ -22,6 +22,10 @@ const PORT = 3217;
 const BASE = 'http://127.0.0.1:' + PORT;
 const APP_DIR = path.dirname(__dirname);
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-test-'));
+/* The Coach screens: no longer in the public page. The server sends
+   this file only to a signed-in coach (GET /api/coach/views); the
+   coach-views checks below prove the served copy is this file. */
+const COACH_VIEWS = fs.readFileSync(path.join(APP_DIR, 'content', 'coach-views.html'), 'utf8');
 
 let passed = 0;
 const failures = [];
@@ -66,7 +70,17 @@ async function apiText(cookie, p) {
 
 async function main() {
   /* ---------------- content + auth ---------------- */
+  /* The Lab content needs an account: signed out gets 401 and none
+     of the library. The head coach registers first (checked below,
+     where the auth checks live) and the content checks read the
+     payload as that account. */
+  const firstReg = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   let r = await api(null, 'GET', '/api/content');
+  check('signed-out /api/content is 401 and carries none of the library',
+    r.status === 401 && r.json.needsAccount === true && !('sessions' in r.json) &&
+    !('exerciseLibrary' in r.json) && !('glossary' in r.json) && !('coachEducation' in r.json) &&
+    !('season' in r.json) && !('videoLibrary' in r.json), r.status);
+  r = await api(cookieOf(firstReg), 'GET', '/api/content');
   check('content loads', r.status === 200);
   check('content counts are 57/17/29 (49 library + 8 Instagram sessions)',
     r.json.sessions.length === 57 && r.json.drills.length === 17 && r.json.weeks.length === 29,
@@ -92,7 +106,7 @@ async function main() {
     r.json && r.json.board && r.json.board.length);
 
   /* ---------------- video library ---------------- */
-  const contentJson = (await api(null, 'GET', '/api/content')).json;
+  const contentJson = (await api(cookieOf(firstReg), 'GET', '/api/content')).json;
   const vids = contentJson.videoLibrary;
   check('video library serves an array', Array.isArray(vids), typeof vids);
   check('video library has 102 entries', Array.isArray(vids) && vids.length === 102,
@@ -136,9 +150,9 @@ async function main() {
     appJs.text.includes('i.ytimg.com/vi/') && appJs.text.includes('youtube-nocookie.com/embed/'));
 
   /* ---------------- Lab programs (v15) ---------------- */
-  check('signed-out content keeps the public payload but withholds the Lab programs',
-    Array.isArray(contentJson.labPrograms) && contentJson.labPrograms.length === 0 &&
-    contentJson.sessions.length === 57, contentJson.labPrograms);
+  check('signed-in content carries the Lab programs and the full library',
+    Array.isArray(contentJson.labPrograms) && contentJson.labPrograms.length > 0 &&
+    contentJson.sessions.length === 57, contentJson.labPrograms && contentJson.labPrograms.length);
   check('Lab Programs view markers are in the served page',
     pageHtml.text.includes('id="view-labprograms"') &&
     pageHtml.text.includes('data-view="labprograms"') &&
@@ -469,8 +483,8 @@ async function main() {
       igSessions.find(s => s.id === 'IG-06').blocks);
   }
   check('inventory view markers are in the served page',
-    pageHtml.status === 200 && pageHtml.text.includes('id="view-inventory"') &&
-    pageHtml.text.includes('data-view="inventory"') && pageHtml.text.includes('id="inventory-main"'));
+    pageHtml.status === 200 && COACH_VIEWS.includes('id="view-inventory"') &&
+    COACH_VIEWS.includes('data-view="inventory"') && COACH_VIEWS.includes('id="inventory-main"'));
   check('inventory wiring is in the served JS',
     appJs.status === 200 && appJs.text.includes('renderInventory') &&
     appJs.text.includes('/api/inventory'));
@@ -494,7 +508,7 @@ async function main() {
       .every(t => appJs.text.includes(t)));
   check('hub views for Train, Learn and Coach are in the served page',
     pageHtml.text.includes('id="view-train"') && pageHtml.text.includes('id="view-learn"') &&
-    pageHtml.text.includes('id="view-coachhub"'));
+    COACH_VIEWS.includes('id="view-coachhub"'));
   check('primary nav carries the five destinations plus the coach area',
     ['data-view="home"', 'data-view="train"', 'data-view="learn"', 'data-view="log"',
      'data-view="account"', 'data-view="coachhub"'].every(s => pageHtml.text.includes(s)));
@@ -502,10 +516,11 @@ async function main() {
     pageHtml.text.includes('id="tab-bar"') && pageHtml.text.includes('tabbar'));
   check('every pre-existing view section survived the reorganization',
     ['view-home', 'view-library', 'view-season', 'view-log', 'view-cards', 'view-nutrition',
-     'view-videos', 'view-definitions', 'view-education', 'view-testing', 'view-top',
-     'view-health', 'view-groups', 'view-coach', 'view-inventory', 'view-drills',
+     'view-videos', 'view-definitions', 'view-education', 'view-drills',
      'view-qtr', 'view-guide', 'view-account']
-      .every(id => pageHtml.text.includes('id="' + id + '"')));
+      .every(id => pageHtml.text.includes('id="' + id + '"')) &&
+    ['view-testing', 'view-top', 'view-health', 'view-groups', 'view-coach', 'view-inventory']
+      .every(id => COACH_VIEWS.includes('id="' + id + '"')));
   check('grouped views keep a sub-navigation slot',
     (pageHtml.text.match(/subnav-slot/g) || []).length >= 12,
     (pageHtml.text.match(/subnav-slot/g) || []).length);
@@ -581,7 +596,7 @@ async function main() {
     qrSeg.includes('out.summary') && qrSeg.includes('out.checklist') &&
     qrSeg.includes("state.meetDayFlags") && !qrSeg.includes('renderMeetDay('), qrSeg.slice(0, 120));
 
-  r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
+  r = firstReg;
   check('first register is 201', r.status === 201, r.status);
   check('first account is coach', r.json.role === 'coach', r.json.role);
   const coach = cookieOf(r);
@@ -594,6 +609,75 @@ async function main() {
   r = await api(null, 'POST', '/api/register', { email: 'athlete@test.com', password: 'testpass123' });
   check('second account is athlete', r.json.role === 'athlete', r.json.role);
   const athlete = cookieOf(r);
+
+  /* ---------------- coach screens stay out of the public page (Nov 26) ----------------
+     The Coach screens used to ship inside index.html, so anyone could
+     read every coach tool's description with view-source. They now
+     live in content/coach-views.html and only a signed-in coach gets
+     them, from GET /api/coach/views. These checks guard that: a
+     signed-out visitor's page, script and fallback routes carry none
+     of that text, and the coach still gets every screen in full. */
+  {
+    const COACH_VIEW_IDS = ['coachhub', 'testing', 'top', 'health', 'groups', 'coach', 'inventory',
+      'meets', 'meetday', 'goals', 'reports', 'digest', 'announce', 'attendance', 'ams', 'access',
+      'bookings', 'scoreboard', 'inviterequests', 'formcheckqueue', 'tv', 'weightroom', 'custom',
+      'programs', 'calendar', 'data', 'devices', 'coverage'];
+    /* Every sentence of coach-screen prose: the screen descriptions
+       and the Coach hub's menu lines. */
+    const coachProse = [];
+    for (const m of COACH_VIEWS.matchAll(/<(?:p|span)[^>]*>([^<]{25,})</g)) {
+      if (!m[1].includes('__')) coachProse.push(m[1].trim()); // brand tokens are filled at serve time
+    }
+    const coachMenu = JSON.parse((COACH_VIEWS.match(
+      /<script type="application\/json" id="coach-subnav-data">([^<]*)<\/script>/) || [])[1] || '[]');
+    const leaks = (text) => [
+      ...COACH_VIEW_IDS.filter(v => text.includes('id="view-' + v + '"')),
+      ...coachProse.filter(s => text.includes(s)),
+    ];
+    check('coach screens file holds all 28 coach screens, their prose and the 27-item Coach menu',
+      COACH_VIEW_IDS.every(v => COACH_VIEWS.includes('<section id="view-' + v + '"')) &&
+      coachProse.length >= 40 && coachMenu.length === 27 &&
+      coachMenu.every(([v, label]) => COACH_VIEW_IDS.includes(v) && typeof label === 'string' && label),
+      [coachProse.length, coachMenu.length]);
+    const pubHome = await apiText(null, '/');
+    check('signed-out homepage carries no coach screen and no coach prose',
+      pubHome.status === 200 && leaks(pubHome.text).length === 0, leaks(pubHome.text).slice(0, 3));
+    check('signed-out homepage still carries the public and member pages',
+      ['view-landing', 'view-book', 'view-invite', 'view-privacy', 'view-terms', 'view-home',
+       'view-train', 'view-learn', 'view-log', 'view-account'].every(id => pubHome.text.includes('id="' + id + '"')) &&
+      pubHome.text.includes('Measured speed, not promised speed.'));
+    for (const route of ['/coach', '/testing', '/index.html', '/content/coach-views.html', '/api/../content/coach-views.html']) {
+      const page = await apiText(null, route);
+      check('signed-out ' + route + ' carries no coach screen and no coach prose',
+        leaks(page.text).length === 0 && !page.text.includes('coach-subnav-data'), [page.status, leaks(page.text).slice(0, 2)]);
+    }
+    const pubJs = await apiText(null, '/app.js');
+    check('signed-out app.js carries no coach screen prose and no Coach menu list',
+      pubJs.status === 200 && coachProse.every(s => !pubJs.text.includes(s)) &&
+      !pubJs.text.includes("['devices', 'Devices']") && !pubJs.text.includes("['access', 'Access']") &&
+      !pubJs.text.includes("['bookings', 'Bookings']"));
+    let cv = await api(null, 'GET', '/api/coach/views');
+    check('coach screens: signed out is 401 with no markup', cv.status === 401 && !(cv.json && cv.json.html), cv.status);
+    cv = await api(athlete, 'GET', '/api/coach/views');
+    check('coach screens: a member is 403 with no markup', cv.status === 403 && !(cv.json && cv.json.html), cv.status);
+    const cvRes = await fetch(BASE + '/api/coach/views', { headers: { cookie: coach } });
+    const cvJson = await cvRes.json();
+    const served = (cvJson && cvJson.html) || '';
+    check('coach screens: a coach gets every screen in full, branded, never cached',
+      cvRes.status === 200 && (cvRes.headers.get('cache-control') || '').includes('no-store') &&
+      COACH_VIEW_IDS.every(v => served.includes('<section id="view-' + v + '"')) &&
+      coachProse.every(s => served.includes(s)) &&
+      !served.includes('__BRAND_NAME__') && served.includes('TRAINING BOARD'),
+      cvRes.status);
+    check('coach screens: signed-out page plus served coach screens is the full set of views',
+      COACH_VIEW_IDS.every(v => (pubHome.text + served).includes('id="view-' + v + '"')) &&
+      (pubHome.text + served).match(/<section id="view-/g).length === 58,
+      (pubHome.text + served).match(/<section id="view-/g).length);
+    check('app.js loads the coach screens only for a coach and drops them on sign-out',
+      pubJs.text.includes("api('/api/coach/views')") && pubJs.text.includes('function ensureCoachViews') &&
+      pubJs.text.includes("if (state.user && state.user.role === 'coach') await ensureCoachViews();") &&
+      pubJs.text.includes('else unloadCoachViews();'));
+  }
   /* v14: member APIs are tier-gated — the coach grants the fixture
      athlete Lab Pass up front so the rest of this flow exercises
      features, not the gate (the gate gets its own block below). */
@@ -1260,10 +1344,10 @@ async function main() {
     (r.json.rows || []).find(x => x.id === noneKey));
   /* Served wiring: view, nav, endpoint, and the TV slice stays clean. */
   check('served page has the coverage view',
-    pageHtml.text.includes('id="view-coverage"') && pageHtml.text.includes('id="coverage-main"'));
+    COACH_VIEWS.includes('id="view-coverage"') && COACH_VIEWS.includes('id="coverage-main"'));
   check('coverage is reachable from the Coach hub and the coach sub-nav',
-    pageHtml.text.includes('data-view="coverage"') &&
-    appJs.text.includes("['coverage', 'Demo Coverage']") &&
+    COACH_VIEWS.includes('data-view="coverage"') &&
+    COACH_VIEWS.includes('["coverage", "Demo Coverage"]') &&
     appJs.text.includes("coverage: 'coachhub'"));
   check('served JS fetches the coverage endpoint and reuses demoHtml',
     appJs.text.includes("api('/api/demo-coverage')") && appJs.text.includes('renderCoverage') &&
@@ -1703,10 +1787,10 @@ async function main() {
      privacy rule: its render path never touches the aches-and-
      pains data. */
   check('TV board view is in the served page',
-    pageHtml.text.includes('id="view-tv"') && pageHtml.text.includes('id="tv-main"') &&
-    pageHtml.text.includes('id="tv-exit"') && pageHtml.text.includes('Exit TV board'));
+    COACH_VIEWS.includes('id="view-tv"') && COACH_VIEWS.includes('id="tv-main"') &&
+    COACH_VIEWS.includes('id="tv-exit"') && COACH_VIEWS.includes('Exit TV board'));
   check('TV board is reachable from the Coach hub and the coach sub-nav',
-    pageHtml.text.includes('data-view="tv"') && appJs.text.includes("['tv', 'TV Board']") &&
+    COACH_VIEWS.includes('data-view="tv"') && COACH_VIEWS.includes('["tv", "TV Board"]') &&
     appJs.text.includes("tv: 'coachhub'"));
   check('TV board entry button is on the coach checklist view',
     appJs.text.includes('coach-open-tv') && appJs.text.includes("showView('tv')"));
@@ -1977,8 +2061,8 @@ async function main() {
     meetCsv.text.startsWith('Date,Meet,Athlete,Group,Event,Mark') &&
     meetCsv.text.includes('Long Jump') && meetCsv.text.includes('22-01'), meetCsv.text.slice(0, 120));
   check('reports and meet views are in the served page',
-    pageHtml.text.includes('id="view-reports"') && pageHtml.text.includes('id="view-meets"') &&
-    pageHtml.text.includes('data-view="reports"') && pageHtml.text.includes('data-view="meets"'));
+    COACH_VIEWS.includes('id="view-reports"') && COACH_VIEWS.includes('id="view-meets"') &&
+    COACH_VIEWS.includes('data-view="reports"') && COACH_VIEWS.includes('data-view="meets"'));
   check('reports/meet/grid wiring is in the served JS',
     appJs.text.includes('renderReports') && appJs.text.includes('renderMeets') &&
     appJs.text.includes('/api/results/bulk') && appJs.text.includes('/api/reports/athlete/') &&
@@ -2281,7 +2365,7 @@ async function main() {
   r = await api(null, 'GET', '/api/meets');
   check('meets list without login is 401', r.status === 401, r.status);
   check('meet day view is in the served page',
-    pageHtml.text.includes('id="view-meetday"') && pageHtml.text.includes('data-view="meetday"'));
+    COACH_VIEWS.includes('id="view-meetday"') && COACH_VIEWS.includes('data-view="meetday"'));
   check('meet day wiring is in the served JS',
     appJs.text.includes('renderMeetDay') && appJs.text.includes('/api/meets'));
 
@@ -2410,7 +2494,7 @@ async function main() {
       core.parseRestSeconds('continuous flow') === 0);
   }
   check('custom workouts view + runner overlay are in the served page',
-    pageHtml.text.includes('id="view-custom"') && pageHtml.text.includes('data-view="custom"') &&
+    COACH_VIEWS.includes('id="view-custom"') && COACH_VIEWS.includes('data-view="custom"') &&
     pageHtml.text.includes('id="runner-overlay"') && pageHtml.text.includes('id="runner-main"'));
   check('runner + custom workouts wiring is in the served JS',
     appJs.text.includes('renderCustomWorkouts') && appJs.text.includes('openRunner') &&
@@ -2579,7 +2663,7 @@ async function main() {
     stylesCss.text.includes('body.printing-lab-report .sr-print-footer') &&
     stylesCss.text.includes('break-inside: avoid'),
     stylesCss.text.slice(0, 120));
-  const v23Content = (await api(null, 'GET', '/api/content')).json;
+  const v23Content = (await api(coach, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
     !!v23Content.brand && v23Content.brand.version === 'v41' &&
     v23Content.brand.cache === 'ayg-lab-v41', v23Content.brand);
@@ -2735,7 +2819,7 @@ async function main() {
     appJs.text.includes("e.key === 'Escape'"));
   check('dropdown menus contain the right views (drills under Train, AMS under Coach)',
     appJs.text.includes("['drills', 'Warm-Up Drills']") &&
-    appJs.text.includes("['ams', 'AMS']") &&
+    COACH_VIEWS.includes('["ams", "AMS"]') &&
     appJs.text.includes('data-view="${area}"'));
   check('cosmetic styles ship (dropdown menu, thumbnails, shadow tokens)',
     stylesCss.text.includes('.nav-menu') && stylesCss.text.includes('.row-thumb') &&
@@ -2766,8 +2850,8 @@ async function main() {
     appJs.text.includes('function thumbHtml') && appJs.text.includes('loading="lazy"') &&
     !tvCode.includes('thumbHtml'));
   check('weight room shell: coach view section + menu entry ship in the bundle',
-    pageHtml.text.includes('id="view-weightroom"') && pageHtml.text.includes('data-view="weightroom"') &&
-    appJs.text.includes("['weightroom', 'Weight Room']") && appJs.text.includes('/api/weight-room') &&
+    COACH_VIEWS.includes('id="view-weightroom"') && COACH_VIEWS.includes('data-view="weightroom"') &&
+    COACH_VIEWS.includes('["weightroom", "Weight Room"]') && appJs.text.includes('/api/weight-room') &&
     stylesCss.text.includes('.wr-grid'));
   /* ---------------- AYG Lab: landing + brand + theme ----
      The logged-out home is the landing page for AJ's own membership.
@@ -3002,7 +3086,7 @@ async function main() {
   check('qa: digest week navigation is bounded at the latest week',
     appJs.text.includes('digestLatest'));
   check('qa: TV board stamps freshness, flags a stale board, and rests groups on their own page',
-    pageHtml.text.includes('id="tv-updated"') && appJs.text.includes('tvStale') &&
+    COACH_VIEWS.includes('id="tv-updated"') && appJs.text.includes('tvStale') &&
     appJs.text.includes("label: g.group.name + ' · Rest day'"));
   check('qa: runner confirms before discarding a run in progress and holds a wake lock',
     appJs.text.includes('requestCloseRunner') && appJs.text.includes('wakeLock'));
@@ -3588,12 +3672,12 @@ async function main() {
       tvStart2 >= 0 && tvEnd2 > tvStart2 && !tvCode2.includes('/api/goals') &&
       !tvCode2.toLowerCase().includes('goal'), tvCode2.length);
     check('goals view + hub + sub-nav entries are in the served page',
-      pageHtml.text.includes('id="view-goals"') && pageHtml.text.includes('id="goals-main"') &&
-      pageHtml.text.includes('data-view="goals"') && pageHtml.text.includes('id="goals-slot"'),
+      COACH_VIEWS.includes('id="view-goals"') && COACH_VIEWS.includes('id="goals-main"') &&
+      COACH_VIEWS.includes('data-view="goals"') && pageHtml.text.includes('id="goals-slot"'),
       pageHtml.text.length);
     check('goals wiring is in the served JS',
       appJs.text.includes('renderGoals') && appJs.text.includes('renderMyGoals') &&
-      appJs.text.includes('/api/goals') && appJs.text.includes("['goals', 'Goals']") &&
+      appJs.text.includes('/api/goals') && COACH_VIEWS.includes('["goals", "Goals"]') &&
       appJs.text.includes("goals: 'coachhub'"));
   }
 
@@ -3604,10 +3688,10 @@ async function main() {
      squad; day counts on a guaranteed-untouched future date are
      exact for the marked statuses. */
   check('attendance view is in the served page',
-    pageHtml.text.includes('id="view-attendance"') && pageHtml.text.includes('id="attendance-main"') &&
-    pageHtml.text.includes('data-view="attendance"'));
+    COACH_VIEWS.includes('id="view-attendance"') && COACH_VIEWS.includes('id="attendance-main"') &&
+    COACH_VIEWS.includes('data-view="attendance"'));
   check('attendance wiring is in the served JS',
-    appJs.text.includes("['attendance', 'Attendance']") && appJs.text.includes("attendance: 'coachhub'") &&
+    COACH_VIEWS.includes('["attendance", "Attendance"]') && appJs.text.includes("attendance: 'coachhub'") &&
     appJs.text.includes("if (name === 'attendance') renderAttendance();") &&
     appJs.text.includes('/api/attendance'));
   const attTvStart = appJs.text.indexOf('TV BOARD');
@@ -3773,10 +3857,10 @@ async function main() {
        Cid — unlinked with no check-ins at all: NO No check-in flag
              (unlinked athletes get the neutral Not linked state). */
   check('ams view is in the served page',
-    pageHtml.text.includes('id="view-ams"') && pageHtml.text.includes('id="ams-main"') &&
-    pageHtml.text.includes('data-view="ams"'));
+    COACH_VIEWS.includes('id="view-ams"') && COACH_VIEWS.includes('id="ams-main"') &&
+    COACH_VIEWS.includes('data-view="ams"'));
   check('ams wiring is in the served JS',
-    appJs.text.includes("['ams', 'AMS']") && appJs.text.includes("ams: 'coachhub'") &&
+    COACH_VIEWS.includes('["ams", "AMS"]') && appJs.text.includes("ams: 'coachhub'") &&
     appJs.text.includes("if (name === 'ams') renderAms();") &&
     appJs.text.includes('/api/ams/roster') && appJs.text.includes('/api/ams/athlete/'));
   {
@@ -4015,11 +4099,11 @@ async function main() {
      2026-11-02 plans ACC-01 + STR-01 on Monday, so the program's
      MAX-01 + PLY-01 Monday can only have come from the apply. */
   check('programs + calendar views are in the served page',
-    pageHtml.text.includes('id="view-programs"') && pageHtml.text.includes('id="programs-main"') &&
-    pageHtml.text.includes('id="view-calendar"') && pageHtml.text.includes('id="calendar-main"') &&
-    pageHtml.text.includes('data-view="programs"') && pageHtml.text.includes('data-view="calendar"'));
+    COACH_VIEWS.includes('id="view-programs"') && COACH_VIEWS.includes('id="programs-main"') &&
+    COACH_VIEWS.includes('id="view-calendar"') && COACH_VIEWS.includes('id="calendar-main"') &&
+    COACH_VIEWS.includes('data-view="programs"') && COACH_VIEWS.includes('data-view="calendar"'));
   check('programs + calendar wiring is in the served JS',
-    appJs.text.includes("['programs', 'Programs']") && appJs.text.includes("['calendar', 'Calendar']") &&
+    COACH_VIEWS.includes('["programs", "Programs"]') && COACH_VIEWS.includes('["calendar", "Calendar"]') &&
     appJs.text.includes("programs: 'coachhub'") && appJs.text.includes("calendar: 'coachhub'") &&
     appJs.text.includes("if (name === 'programs') renderPrograms();") &&
     appJs.text.includes("if (name === 'calendar') renderCalendar();") &&
@@ -4221,10 +4305,10 @@ async function main() {
      fixtures (two groups, three linked athletes, one unlinked
      account) so every feed count is exact. */
   check('announcements view + Today slot are in the served page',
-    pageHtml.text.includes('id="view-announce"') && pageHtml.text.includes('id="announce-main"') &&
-    pageHtml.text.includes('id="announce-slot"') && pageHtml.text.includes('data-view="announce"'));
+    COACH_VIEWS.includes('id="view-announce"') && COACH_VIEWS.includes('id="announce-main"') &&
+    pageHtml.text.includes('id="announce-slot"') && COACH_VIEWS.includes('data-view="announce"'));
   check('announcements wiring is in the served JS',
-    appJs.text.includes("['announce', 'Announcements']") && appJs.text.includes("announce: 'coachhub'") &&
+    COACH_VIEWS.includes('["announce", "Announcements"]') && appJs.text.includes("announce: 'coachhub'") &&
     appJs.text.includes('renderAnnouncements') && appJs.text.includes('renderAnnouncePanel') &&
     appJs.text.includes('/api/announcements'));
   const annPause = () => new Promise(res => setTimeout(res, 15));
@@ -4396,10 +4480,10 @@ async function main() {
 
   /* ---------------- data: backup export / import + CSVs ---------------- */
   check('data view is in the served page',
-    pageHtml.text.includes('id="view-data"') && pageHtml.text.includes('id="data-main"') &&
-    pageHtml.text.includes('data-view="data"'));
+    COACH_VIEWS.includes('id="view-data"') && COACH_VIEWS.includes('id="data-main"') &&
+    COACH_VIEWS.includes('data-view="data"'));
   check('data wiring is in the served JS',
-    appJs.text.includes("['data', 'Data']") && appJs.text.includes("data: 'coachhub'") &&
+    COACH_VIEWS.includes('["data", "Data"]') && appJs.text.includes("data: 'coachhub'") &&
     appJs.text.includes('renderData') && appJs.text.includes('/api/export/backup') &&
     appJs.text.includes('/api/import/backup') && appJs.text.includes('/api/export/attendance.csv') &&
     appJs.text.includes('/api/export/testing-detail.csv') && appJs.text.includes('/api/export/checkins.csv') &&
@@ -4603,11 +4687,11 @@ async function main() {
   const fayD = r.json.profile.id;
 
   check('devices view is in the served page',
-    pageHtml.text.includes('id="view-devices"') && pageHtml.text.includes('id="devices-main"') &&
-    pageHtml.text.includes('data-view="devices"'));
+    COACH_VIEWS.includes('id="view-devices"') && COACH_VIEWS.includes('id="devices-main"') &&
+    COACH_VIEWS.includes('data-view="devices"'));
   check('devices wiring is in the served JS (tabs, importers, VALD API status)',
     appJs.text.includes('renderDevices') && appJs.text.includes('/api/devices/') &&
-    appJs.text.includes("devices: 'coachhub'") && appJs.text.includes("['devices', 'Devices']") &&
+    appJs.text.includes("devices: 'coachhub'") && COACH_VIEWS.includes('["devices", "Devices"]') &&
     appJs.text.includes('renderValdApiPanel') && appJs.text.includes('NOT CONNECTED') &&
     appJs.text.includes('paintTapexPanel'));
   {
@@ -5487,12 +5571,12 @@ async function main() {
                cannot use the coach queue paths.
        Una   — registered but NOT linked (403 notLinked). */
   check('form check slots are in the served page',
-    pageHtml.text.includes('id="form-checks-slot"') && pageHtml.text.includes('id="view-formcheckqueue"') &&
-    pageHtml.text.includes('id="formcheckqueue-main"') && pageHtml.text.includes('data-view="formcheckqueue"'));
+    pageHtml.text.includes('id="form-checks-slot"') && COACH_VIEWS.includes('id="view-formcheckqueue"') &&
+    COACH_VIEWS.includes('id="formcheckqueue-main"') && COACH_VIEWS.includes('data-view="formcheckqueue"'));
   check('form check wiring is in the served JS',
     appJs.text.includes('renderFormChecks') && appJs.text.includes('renderCoachFormChecks') &&
     appJs.text.includes('/api/my/form-checks') && appJs.text.includes('/api/form-checks') &&
-    appJs.text.includes("['formcheckqueue', 'Form Checks']") &&
+    COACH_VIEWS.includes('["formcheckqueue", "Form Checks"]') &&
     appJs.text.includes('one form check per week') &&
     appJs.text.includes('Lab Pass members get priority review within 48 hours') &&
     appJs.text.includes('Lab Training includes one form check per week') &&
@@ -6020,7 +6104,7 @@ async function main() {
 async function waitForServer(tries = 60) {
   for (let i = 0; i < tries; i++) {
     try {
-      const res = await fetch(BASE + '/api/content');
+      const res = await fetch(BASE + '/api/records');
       if (res.status === 200) return true;
     } catch (_) { /* not up yet */ }
     await new Promise(r => setTimeout(r, 150));
@@ -6134,7 +6218,7 @@ async function waitForServer(tries = 60) {
       const waitRt = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(RT_BASE + '/api/content');
+            const res = await fetch(RT_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -6222,7 +6306,7 @@ async function waitForServer(tries = 60) {
       const waitAc = async (base) => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(base + '/api/content');
+            const res = await fetch(base + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -6238,8 +6322,8 @@ async function waitForServer(tries = 60) {
         const acPage = await acText(AC_BASE, null, '/');
         const acJs = await acText(AC_BASE, null, '/app.js');
         check('access + live sessions views are in the served page',
-          acPage.status === 200 && acPage.text.includes('id="view-access"') &&
-          acPage.text.includes('id="access-main"') && acPage.text.includes('data-view="access"') &&
+          acPage.status === 200 && COACH_VIEWS.includes('id="view-access"') &&
+          COACH_VIEWS.includes('id="access-main"') && COACH_VIEWS.includes('data-view="access"') &&
           acPage.text.includes('id="view-livesessions"') && acPage.text.includes('id="livesessions-main"') &&
           acPage.text.includes('data-view="livesessions"'), acPage.status);
         check('access wiring is in the served JS',
@@ -6568,7 +6652,7 @@ async function waitForServer(tries = 60) {
       const waitSeed = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(SEED_BASE + '/api/content');
+            const res = await fetch(SEED_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -6668,7 +6752,7 @@ async function waitForServer(tries = 60) {
       const waitD = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(D_BASE + '/api/content');
+            const res = await fetch(D_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -6683,8 +6767,8 @@ async function waitForServer(tries = 60) {
         check('digest server starts', await waitD(), dLog);
         const dPage = await dText('/');
         check('digest view markers are in the served page',
-          dPage.status === 200 && dPage.text.includes('id="view-digest"') &&
-          dPage.text.includes('data-view="digest"') && dPage.text.includes('id="digest-main"'));
+          dPage.status === 200 && COACH_VIEWS.includes('id="view-digest"') &&
+          COACH_VIEWS.includes('data-view="digest"') && COACH_VIEWS.includes('id="digest-main"'));
         const dJs = await dText('/app.js');
         check('digest wiring is in the served JS',
           dJs.status === 200 && dJs.text.includes('renderDigest') && dJs.text.includes('/api/digest'));
@@ -6756,7 +6840,7 @@ async function waitForServer(tries = 60) {
         await dApi(dCoach, 'POST', '/api/completions', { profileId: amyP.id, date: '2026-11-04' });
         await dApi(dCoach, 'POST', '/api/completions', { profileId: benP.id, date: '2026-11-02' });
         await dApi(dCoach, 'POST', '/api/completions', { profileId: amyP.id, date: '2026-10-26' });
-        const dContent = (await dApi(null, 'GET', '/api/content')).json;
+        const dContent = (await dApi(dCoach, 'GET', '/api/content')).json;
         const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
         const wk2 = dContent.weeks.find(w => w.start === W2);
         const assignedW2 = dayKeys.filter(k => /[A-Z]{2,3}-\d{2}/.test(String(wk2[k] || ''))).length;
@@ -6927,7 +7011,7 @@ async function waitForServer(tries = 60) {
       const waitLb = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(LB_BASE + '/api/content');
+            const res = await fetch(LB_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -7233,7 +7317,7 @@ async function waitForServer(tries = 60) {
       const waitCo = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(CO_BASE + '/api/content');
+            const res = await fetch(CO_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -7414,7 +7498,7 @@ async function waitForServer(tries = 60) {
     const waitPl = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(PL_BASE + '/api/content');
+          const res = await fetch(PL_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -7718,7 +7802,7 @@ async function waitForServer(tries = 60) {
     const waitWr = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(WR_BASE + '/api/content');
+          const res = await fetch(WR_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -7735,10 +7819,10 @@ async function waitForServer(tries = 60) {
       const wrJs = await wrText(null, '/app.js');
       const wrCss = await wrText(null, '/styles.css');
       check('served page has the weight room view and hub entry',
-        wrPage.text.includes('id="view-weightroom"') && wrPage.text.includes('id="weightroom-main"') &&
-        wrPage.text.includes('data-view="weightroom"'), wrPage.status);
+        COACH_VIEWS.includes('id="view-weightroom"') && COACH_VIEWS.includes('id="weightroom-main"') &&
+        COACH_VIEWS.includes('data-view="weightroom"'), wrPage.status);
       check('weight room is wired in the served JS (nav, renderer, endpoints, timers)',
-        wrJs.text.includes("['weightroom', 'Weight Room']") && wrJs.text.includes("weightroom: 'coachhub'") &&
+        COACH_VIEWS.includes('["weightroom", "Weight Room"]') && wrJs.text.includes("weightroom: 'coachhub'") &&
         wrJs.text.includes('renderWeightRoom') && wrJs.text.includes('enterWeightRoom') &&
         wrJs.text.includes('/api/weight-room') && wrJs.text.includes('/api/weight-room/progress') &&
         wrJs.text.includes('No session assigned'), wrJs.status);
@@ -8005,7 +8089,7 @@ async function waitForServer(tries = 60) {
     const waitRp = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(RP_BASE + '/api/content');
+          const res = await fetch(RP_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -8274,7 +8358,7 @@ async function waitForServer(tries = 60) {
     const waitSr = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(SR_BASE + '/api/content');
+          const res = await fetch(SR_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -8637,7 +8721,7 @@ async function waitForServer(tries = 60) {
     const waitFc = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(FC_BASE + '/api/content');
+          const res = await fetch(FC_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -8738,7 +8822,7 @@ async function waitForServer(tries = 60) {
       const waitBk = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(BK_BASE + '/api/content');
+            const res = await fetch(BK_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -8755,13 +8839,13 @@ async function waitForServer(tries = 60) {
         check('booking views are in the served page',
           bkPage.status === 200 && bkPage.text.includes('id="view-book"') &&
           bkPage.text.includes('id="book-main"') && bkPage.text.includes('Book a free Lab Talk') &&
-          bkPage.text.includes('id="view-bookings"') && bkPage.text.includes('id="bookings-main"') &&
-          bkPage.text.includes('data-view="bookings"'), bkPage.status);
+          COACH_VIEWS.includes('id="view-bookings"') && COACH_VIEWS.includes('id="bookings-main"') &&
+          COACH_VIEWS.includes('data-view="bookings"'), bkPage.status);
         check('booking wiring is in the served JS',
           bkJs.text.includes('renderBook') && bkJs.text.includes('renderBookings') &&
           bkJs.text.includes('/api/book/slots') && bkJs.text.includes('/api/bookings') &&
           bkJs.text.includes('/api/booking-settings') &&
-          bkJs.text.includes("['bookings', 'Bookings']"), bkJs.text.length);
+          COACH_VIEWS.includes('["bookings", "Bookings"]'), bkJs.text.length);
         check('booking layout has a phone-width slot rule',
           bkCss.text.includes('.book-slots') &&
           bkCss.text.includes('.book-slot { flex: 1 1 28%; }'), bkCss.text.slice(0, 80));
@@ -9035,13 +9119,11 @@ async function waitForServer(tries = 60) {
           otherOpen.every(d => d.weekday === tomorrowWeekday),
           { tmrNarrow: tmrNarrow && tmrNarrow.slots, otherOpen: otherOpen.map(d => d.date) });
 
-        /* The content payload is unchanged in shape: v17, programs
-           still withheld signed out. */
+        /* The content payload needs an account: signed out is 401. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v41' &&
-          Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
-          br.json && br.json.brand);
+        check('content is 401 signed out, with no library and no Lab programs',
+          br.status === 401 && !('labPrograms' in br.json) && !('sessions' in br.json),
+          br.status);
       } finally {
         bkChild.kill('SIGKILL');
         fs.rmSync(BK_DIR, { recursive: true, force: true });
@@ -9091,7 +9173,7 @@ async function waitForServer(tries = 60) {
       const waitLr = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(LR_BASE + '/api/content');
+            const res = await fetch(LR_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -9157,7 +9239,7 @@ async function waitForServer(tries = 60) {
           tiers.map(t => t.key));
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
-        lr = await lrApi(null, 'GET', '/api/content');
+        lr = await lrApi(lrCoach, 'GET', '/api/content');
         check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v41',
           lr.json && lr.json.brand);
       } finally {
@@ -9208,7 +9290,7 @@ async function waitForServer(tries = 60) {
       const waitIv = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(IV_BASE + '/api/content');
+            const res = await fetch(IV_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -9225,9 +9307,9 @@ async function waitForServer(tries = 60) {
 
         check('invite views are in the served page',
           ivPage.text.includes('id="invite-main"') && ivPage.text.includes('<h1>Request an Invitation</h1>') &&
-          ivPage.text.includes('id="view-inviterequests"') &&
-          ivPage.text.includes('id="inviterequests-main"') &&
-          ivPage.text.includes('data-view="inviterequests"'), ivPage.status);
+          COACH_VIEWS.includes('id="view-inviterequests"') &&
+          COACH_VIEWS.includes('id="inviterequests-main"') &&
+          COACH_VIEWS.includes('data-view="inviterequests"'), ivPage.status);
         check('invite form fields are in the served JS',
           ivJs.text.includes('renderInvite') && ivJs.text.includes('renderInviteRequests') &&
           ivJs.text.includes('/api/invite-requests') &&
@@ -9530,7 +9612,7 @@ async function waitForServer(tries = 60) {
       const waitFc30 = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(FC30_BASE + '/api/content');
+            const res = await fetch(FC30_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -9758,7 +9840,7 @@ async function waitForServer(tries = 60) {
       const waitSnz = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(SNZ_BASE + '/api/content');
+            const res = await fetch(SNZ_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -9927,6 +10009,64 @@ async function waitForServer(tries = 60) {
         snzChild.kill('SIGKILL');
         fs.rmSync(SNZ_DIR, { recursive: true, force: true });
       }
+    }
+
+    /* ---------------- site address + contact fallbacks (Part 1b) ----------------
+       The main server runs with no SITE_URL and no CONTACT_EMAIL: the
+       page carries no blank mailto: link, and Render keeps its old
+       default address. A server started the way Vercel starts it
+       (VERCEL=1 plus Vercel's own VERCEL_PROJECT_PRODUCTION_URL) names
+       its own address in the tags, sitemap and robots file; SITE_URL
+       still wins when set. Made-up host names only. */
+    {
+      const plainPage = await apiText(null, '/');
+      check('1b: with no CONTACT_EMAIL the page has no blank mailto: link',
+        plainPage.status === 200 && !plainPage.text.includes('href="mailto:"') &&
+        !plainPage.text.includes('mailto:__CONTACT_EMAIL__') && plainPage.text.includes('href="/#contact" data-contact-mailto'),
+        (plainPage.text.match(/href="mailto:[^"]*"/g) || []).slice(0, 3));
+      check('1b: off Vercel with no SITE_URL the canonical stays on the Render address',
+        plainPage.text.includes('<link rel="canonical" href="https://ruffin-performance.onrender.com/">'));
+      const runSite = async (port, extra) => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-site-'));
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, process.env, { PORT: String(port), DATA_DIR: dir, SESSION_SECRET: 'site-secret',
+            SITE_URL: '', CONTACT_EMAIL: '', VERCEL: '', VERCEL_PROJECT_PRODUCTION_URL: '' }, extra),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', () => {}); c.stderr.on('data', () => {});
+        const base = 'http://127.0.0.1:' + port;
+        try {
+          let up = false;
+          for (let i = 0; i < 60 && !up; i++) {
+            try { up = (await fetch(base + '/api/records')).status === 200; } catch (_) { /* not up yet */ }
+            if (!up) await new Promise(r => setTimeout(r, 150));
+          }
+          if (!up) return null;
+          const get = async (u) => (await fetch(base + u)).text();
+          return { page: await get('/'), robots: await get('/robots.txt'), sitemap: await get('/sitemap.xml') };
+        } finally {
+          c.kill('SIGKILL');
+          fs.rmSync(dir, { recursive: true, force: true });
+        }
+      };
+      const vz = await runSite(3236, { VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'ayg-lab.example.test' });
+      check('1b: on Vercel with no SITE_URL the canonical, og tags, sitemap and robots name the Vercel address',
+        !!vz && vz.page.includes('<link rel="canonical" href="https://ayg-lab.example.test/">') &&
+        vz.page.includes('<meta property="og:url" content="https://ayg-lab.example.test/">') &&
+        vz.robots.includes('Sitemap: https://ayg-lab.example.test/sitemap.xml') &&
+        vz.sitemap.includes('<loc>https://ayg-lab.example.test/</loc>') &&
+        !vz.page.includes('ruffin-performance.onrender.com') && !vz.sitemap.includes('onrender.com'),
+        vz && vz.robots);
+      const vs = await runSite(3237, { VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'ayg-lab.example.test', SITE_URL: 'https://lab.example.test' });
+      check('1b: SITE_URL still wins over the Vercel address when set',
+        !!vs && vs.page.includes('<link rel="canonical" href="https://lab.example.test/">') &&
+        vs.robots.includes('Sitemap: https://lab.example.test/sitemap.xml'), vs && vs.robots);
+      const vbad = await runSite(3238, { VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'evil.test/"><script>' });
+      check('1b: a malformed Vercel address is ignored (falls back to the Render default)',
+        !!vbad && vbad.page.includes('<link rel="canonical" href="https://ruffin-performance.onrender.com/">'));
+      const ce = await runSite(3239, { CONTACT_EMAIL: 'coach@example.test' });
+      check('1b: with CONTACT_EMAIL set the Email Coach AJ links carry it',
+        !!ce && ce.page.includes('href="mailto:coach@example.test" data-contact-mailto'), null);
     }
 
   } catch (err) {
