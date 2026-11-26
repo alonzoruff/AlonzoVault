@@ -147,8 +147,12 @@
             <li>In person in Maryland and DC, or online</li>
           </ul>
         </div>
-        <figure class="lp-phone lp-phone-hero" data-photo-slot="hero">
-          <img src="/assets/preview/today.jpg" alt="The Today screen of the AYG Lab app for a sample member: today's goal, notes from their numbers, this week and their readiness check" width="600" height="1517" fetchpriority="high">
+        <!-- Hero media: a short muted loop when one exists (see the hero
+             video notes in server.js), otherwise the hero photo. The app
+             screens are in "Inside the app" below. -->
+        <figure class="lp-hero-media" data-hero-media data-photo-slot="hero">
+          <img class="lp-hero-still" src="/assets/hero-sprinter.jpg" alt="A sprinter driving out of the blocks under stadium lights" width="2048" height="1152" fetchpriority="high">
+          <!-- HERO_VIDEO -->
         </figure>
       </div>
     </div>

@@ -8972,6 +8972,32 @@ const RP_SAMPLE_REPORT = [
   ['Vertical jump', '24.5″', '27.0″', '+2.5″'],
   ['Broad jump', '7′6″', '8′1″', '+7″'],
 ];
+/* Hero video (Part 4b): the server only adds the <video> when a
+   video exists. It starts here, muted and looping, unless the visitor
+   prefers reduced motion or has data saver on, and the pause button
+   stops and restarts it. If it cannot play, the photo stays. */
+function rpHeroVideo() {
+  const v = document.querySelector('[data-hero-video]');
+  if (!v) return;
+  const btn = document.querySelector('[data-hero-pause]');
+  const media = v.closest('[data-hero-media]');
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const saveData = !!(navigator.connection && navigator.connection.saveData);
+  if (reduce || saveData) return;
+  const setBtn = (playing) => {
+    if (!btn) return;
+    btn.hidden = false;
+    btn.setAttribute('aria-pressed', playing ? 'false' : 'true');
+    btn.textContent = playing ? 'Pause video' : 'Play video';
+  };
+  v.addEventListener('playing', () => { if (media) media.classList.add('is-playing'); setBtn(true); });
+  v.addEventListener('pause', () => setBtn(false));
+  v.addEventListener('error', () => { if (media) media.classList.remove('is-playing'); if (btn) btn.hidden = true; }, true);
+  if (btn) btn.addEventListener('click', () => { if (v.paused) v.play().catch(() => {}); else v.pause(); });
+  v.preload = 'auto';
+  const p = v.play();
+  if (p && p.catch) p.catch(() => { if (btn) btn.hidden = true; });
+}
 function rpFillPublicBits() {
   $$('[data-trial-days]').forEach(n => { n.textContent = String(RP_TRIAL_DAYS); });
   $$('[data-sample-report]').forEach(n => {
@@ -9002,6 +9028,7 @@ function rpFillPublicBits() {
   if (pc && RP_CONTACT_EMAIL) pc.innerHTML = `Email me at <a href="mailto:${esc(RP_CONTACT_EMAIL)}">${esc(RP_CONTACT_EMAIL)}</a> and I will answer.`;
 }
 rpFillPublicBits();
+rpHeroVideo();
 rpWirePreview();
 
 (async function boot() {
