@@ -263,14 +263,21 @@
           <li><h3>Log each session</h3><p>Record what you did and how hard it felt. Your log is what Coach AJ reads when he adjusts your plan.</p></li>
           <li><h3>Track your development</h3><p>You test in week one, then repeat the same tests at the end of each six week training block. Your Lab Report shows the change.</p></li>
         </ol>
-        <div class="lp-report">
+        <div class="lp-report lp-results" id="results" data-lab-results data-results-status="placeholder">
           <div>
-            <span class="lp-sample-tag">Sample report</span>
-            <h3>Your Lab Report</h3>
-            <p class="lp-muted">Every test, side by side, after every block. It is the page you show a parent or a coach. These are sample numbers, not a real athlete.</p>
+            <span class="lp-sample-tag" data-results-tag>Placeholder: no real numbers yet</span>
+            <h3>Lab results, measured</h3>
+            <p class="lp-muted" data-results-note>Real baseline and retest numbers from Lab athletes go here once they are in. Until then this space shows no figures, on purpose.</p>
             <a class="lp-more lp-home-only" href="/how-it-works" data-route="how-it-works">See how it works</a>
           </div>
-          <div data-sample-report></div>
+          <div data-results-body>
+            <div class="lp-results-stats">
+              <div class="lp-results-stat"><span class="lp-results-num">&mdash;</span><span class="lp-results-label">Athletes tested twice</span></div>
+              <div class="lp-results-stat"><span class="lp-results-num">&mdash;</span><span class="lp-results-label">30m sprint, median change</span></div>
+              <div class="lp-results-stat"><span class="lp-results-num">&mdash;</span><span class="lp-results-label">Flying 30m, median change</span></div>
+              <div class="lp-results-stat"><span class="lp-results-num">&mdash;</span><span class="lp-results-label">Got faster on retest</span></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

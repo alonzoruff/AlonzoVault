@@ -8966,21 +8966,63 @@ document.addEventListener('click', (e) => {
   if (inv) { state.inviteTier = inv.dataset.inviteTier; showView('invite'); }
 });
 
-/* One sample Lab Report, shown wherever the page shows one. */
-const RP_SAMPLE_REPORT = [
-  ['40-yard dash', '4.91 s', '4.78 s', '−0.13 s'],
-  ['Vertical jump', '24.5″', '27.0″', '+2.5″'],
-  ['Broad jump', '7′6″', '8′1″', '+7″'],
-];
+/* Lab results on the landing page (GET /api/lab-results, built from
+   content/lab_results.json by lib/results.js). Real numbers only:
+   until the file is published the static placeholder in index.html
+   stays, with no figures. A time's change is after minus before, so
+   a negative change is a faster time. */
+function rpSigned(n, digits) {
+  const v = Math.abs(Number(n)).toFixed(digits);
+  if (Number(v) === 0) return v;
+  return (n < 0 ? '−' : '+') + v;
+}
+function rpResultsHtml(r) {
+  const stat = (num, label) => `<div class="lp-results-stat"><span class="lp-results-num">${esc(num)}</span><span class="lp-results-label">${esc(label)}</span></div>`;
+  const stats = [stat(String(r.athletesTested), 'Athletes tested twice')];
+  r.tests.forEach(t => {
+    stats.push(stat(`${rpSigned(t.medianChange, 2)} ${t.unit}`, `${t.label}, median change`));
+  });
+  const t0 = r.tests[0];
+  stats.push(stat(`${t0.improved} of ${t0.athletes}`, `Got faster on the ${t0.label} retest`));
+  const rows = r.tests.map(t => `<tr><th scope="row">${esc(t.label)}</th><td>${t.athletes}</td>
+    <td><strong>${rpSigned(t.medianChange, 2)} ${esc(t.unit)}</strong></td>
+    <td>${rpSigned(t.minChange, 2)} to ${rpSigned(t.maxChange, 2)} ${esc(t.unit)}</td>
+    <td>${t.improved} of ${t.athletes}</td></tr>`).join('');
+  const table = `<div class="sample-report-wrap"><table class="sample-report lp-results-table">
+    <caption class="visually-hidden">Lab results: change from baseline to retest</caption>
+    <thead><tr><th scope="col">Test</th><th scope="col">Athletes</th><th scope="col">Median change</th><th scope="col">Range</th><th scope="col">Got faster</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+  const cards = r.cards.length ? `<div class="lp-results-cards">${r.cards.map(c => `<article class="lp-results-card">
+      <h4>${esc(c.label)}</h4>${c.program ? `<p class="lp-muted">${esc(c.program)}</p>` : ''}
+      <dl>${c.tests.map(t => `<dt>${esc(t.label)}</dt><dd>${t.before.toFixed(2)} ${esc(t.unit)} → <strong>${t.after.toFixed(2)} ${esc(t.unit)}</strong> <span class="sample-report-change">${rpSigned(t.after - t.before, 2)} ${esc(t.unit)}</span></dd>`).join('')}</dl>
+    </article>`).join('')}</div>` : '';
+  return `<div class="lp-results-stats">${stats.join('')}</div>${table}
+    <p class="lp-results-foot">A negative change is a faster time. Every athlete here tested at the start and again at the end of a block. Cards are shown with each athlete's permission and without names.</p>${cards}`;
+}
+async function rpLoadResults() {
+  const nodes = $$('[data-lab-results]');
+  if (!nodes.length) return;
+  let r = null;
+  try {
+    const res = await fetch('/api/lab-results', { credentials: 'same-origin' });
+    if (res.ok) r = await res.json();
+  } catch (_) { r = null; }
+  if (!r || r.status !== 'published' || !Array.isArray(r.tests) || !r.tests.length) return;
+  nodes.forEach(n => {
+    n.dataset.resultsStatus = 'published';
+    const tag = n.querySelector('[data-results-tag]');
+    if (tag) tag.textContent = 'Real results, as of ' + parseDate(r.asOf).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+    const note = n.querySelector('[data-results-note]');
+    if (note) note.textContent = r.source
+      ? `Baseline and retest numbers from ${r.source}. Measured, not promised.`
+      : 'Baseline and retest numbers from Lab athletes. Measured, not promised.';
+    const body = n.querySelector('[data-results-body]');
+    if (body) body.innerHTML = rpResultsHtml(r);
+  });
+}
 function rpFillPublicBits() {
   $$('[data-trial-days]').forEach(n => { n.textContent = String(RP_TRIAL_DAYS); });
-  $$('[data-sample-report]').forEach(n => {
-    n.innerHTML = `<div class="sample-report-wrap"><table class="sample-report">
-      <caption class="visually-hidden">Sample Lab Report: baseline compared with best</caption>
-      <thead><tr><th scope="col">Test</th><th scope="col">Baseline</th><th scope="col">Best</th><th scope="col">Change</th></tr></thead>
-      <tbody>${RP_SAMPLE_REPORT.map(r => `<tr><th scope="row">${r[0]}</th><td>${r[1]}</td><td><strong>${r[2]}</strong></td><td class="sample-report-change">${r[3]}</td></tr>`).join('')}</tbody>
-    </table></div>`;
-  });
+  rpLoadResults();
   const yr = $('#footer-year'); if (yr) yr.textContent = String(new Date().getFullYear());
   const c = $('#footer-contact');
   if (c) {
