@@ -1,0 +1,313 @@
+<!--
+  Coach screens for __BRAND_NAME__.
+
+  These sections used to sit in public/index.html, where anyone could
+  read them with view-source. They now live here, outside public/, and
+  the server sends them only to a signed-in coach (GET /api/coach/views).
+  app.js adds them to the page after a coach signs in and takes them out
+  again on sign-out. Edit them here exactly as you would have in
+  index.html.
+
+  coach-subnav-data is the Coach menu (view id, label), read by app.js.
+-->
+<script type="application/json" id="coach-subnav-data">[["scoreboard", "Scoreboard"], ["coach", "Today's Checklist"], ["attendance", "Attendance"], ["meetday", "Meet Day"], ["tv", "TV Board"], ["weightroom", "Weight Room"], ["groups", "Roster & Groups"], ["ams", "AMS"], ["testing", "Testing"], ["top", "Top Athletes"], ["meets", "Meet Results"], ["goals", "Goals"], ["reports", "Reports"], ["digest", "Digest"], ["health", "Aches & Pains"], ["inviterequests", "Invitation Requests"], ["formcheckqueue", "Form Checks"], ["bookings", "Bookings"], ["custom", "Custom Workouts"], ["programs", "Programs"], ["calendar", "Calendar"], ["announce", "Announcements"], ["access", "Access"], ["inventory", "Inventory"], ["data", "Data"], ["devices", "Devices"], ["coverage", "Demo Coverage"]]</script>
+  <!-- COACH (hub, coaches only) -->
+  <section id="view-coachhub" class="view">
+    <h1>Coach</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <p class="view-sub muted">Coach tools only. Members never see this section. Everything for running the program lives here.</p>
+    <div class="menu-list">
+      <h2 class="menu-group-label owner-only" hidden>Business</h2>
+      <button type="button" class="menu-item owner-only" data-view="scoreboard" hidden>Scoreboard <span>This week and last: requests, paying members, monthly revenue, first-week training and cancellations. Only you see it</span></button>
+      <h2 class="menu-group-label">Today</h2>
+      <button type="button" class="menu-item" data-view="coach">Today's Checklist <span>Each group's workout for the day, with check-offs</span></button>
+      <button type="button" class="menu-item" data-view="attendance">Attendance <span>The daily roll-book (present, late, excused, absent) and every athlete's record</span></button>
+      <button type="button" class="menu-item" data-view="meetday">Meet Day <span>Run the meet: entries by event, a live checklist, and fast results with PR flags</span></button>
+      <button type="button" class="menu-item" data-view="tv">TV Board <span>The weight-room display: the full Workout of the Day, one page per group</span></button>
+      <button type="button" class="menu-item" data-view="weightroom">Weight Room <span>Every member's workout side by side. Walk each panel through its steps and check them off</span></button>
+      <h2 class="menu-group-label">Athletes</h2>
+      <button type="button" class="menu-item" data-view="groups">Roster &amp; Groups <span>Every athlete, their group, and their events</span></button>
+      <button type="button" class="menu-item" data-view="ams">AMS <span>Every athlete in one place: status, flags, testing, meets, attendance, health, goals, and private coach notes</span></button>
+      <button type="button" class="menu-item" data-view="testing">Testing <span>Test days, results, PBs, and ranked tables</span></button>
+      <button type="button" class="menu-item" data-view="top">Top Athletes <span>Weekly numbers for starred athletes, with graphs</span></button>
+      <button type="button" class="menu-item" data-view="leaderboard">Leaderboard <span>The team's best testing numbers and meet PRs, ranked. The same board the athletes see</span></button>
+      <button type="button" class="menu-item" data-view="meets">Meet Results <span>Race and field marks, PRs, and the team PR board</span></button>
+      <button type="button" class="menu-item" data-view="goals">Goals <span>Season target marks for every athlete, with progress from their real results</span></button>
+      <button type="button" class="menu-item" data-view="records">Club Records <span>Manage the all-time top 10 board</span></button>
+      <button type="button" class="menu-item" data-view="reports">Reports <span>Team trends, completion and load charts, and athlete report cards</span></button>
+      <button type="button" class="menu-item" data-view="digest">Weekly Digest <span>Last week at a glance (check-ins, training, PRs, health) and the week coming</span></button>
+      <button type="button" class="menu-item" data-view="health">Aches &amp; Pains <span>Record and track what athletes report to you</span></button>
+      <h2 class="menu-group-label">Requests</h2>
+      <button type="button" class="menu-item" data-view="inviterequests">Invitation Requests <span>Requests from the public invitation page. Mark invited or declined</span></button>
+      <button type="button" class="menu-item" data-view="formcheckqueue">Form Checks <span>Videos members sent for review. Watch, reply in the app, and clear the queue</span></button>
+      <button type="button" class="menu-item" data-view="bookings">Bookings <span>Lab Talk requests from the public booking page. Approve or decline, and set the open hours</span></button>
+      <h2 class="menu-group-label">Program</h2>
+      <button type="button" class="menu-item" data-view="custom">Custom Workouts <span>Build your own blocks, rounds, and rests, then run it step by step</span></button>
+      <button type="button" class="menu-item" data-view="programs">Programs <span>Reusable week-by-week training templates. Build once, apply to any group</span></button>
+      <button type="button" class="menu-item" data-view="calendar">Team Calendar <span>The whole month at a glance: every group's sessions, meets, and test days</span></button>
+      <button type="button" class="menu-item" data-view="announce">Announcements <span>One-way posts to the whole team or a single group. Athletes read them on Today</span></button>
+      <h2 class="menu-group-label">Admin</h2>
+      <button type="button" class="menu-item" data-view="access">Access <span>Every member account and its tier. Set tiers, cancel, and reactivate memberships</span></button>
+      <button type="button" class="menu-item" data-view="inventory">Equipment Inventory <span>What the program owns, and where it lives</span></button>
+      <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
+      <button type="button" class="menu-item" data-view="devices">Devices <span>ForceDecks, NordBord, and T-APEX: import each device's results file and they land in every athlete's testing history, labeled by device</span></button>
+      <button type="button" class="menu-item" data-view="coverage">Demo Coverage <span>The filming map: every drill and test marked. Your video, a placeholder, or still to film</span></button>
+      <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access: under Account</span></button>
+    </div>
+  </section>
+
+  <!-- TESTING -->
+  <section id="view-testing" class="view">
+    <h1>Testing</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record test days and results (lifts, jumps, and pull-ups) and see ranked tables and personal bests. Coaches only.</p>
+    <div id="testing-main"></div>
+  </section>
+
+  <!-- TOP ATHLETES -->
+  <section id="view-top" class="view">
+    <h1>Top Athletes</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Weekly numbers for your starred athletes. Enter them each week and watch the graphs move. Coaches only.</p>
+    <div id="top-main"></div>
+  </section>
+
+  <!-- HEALTH -->
+  <section id="view-health" class="view">
+    <h1>Aches &amp; Pains</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record what an athlete reports to you, and track it until it clears.</p>
+    <p class="muted">Your private notebook: record what an athlete reports to you (an ache, a pain, something tight) and track it until it clears. Athletes never see this; it is coach-only.</p>
+    <div id="health-main"></div>
+  </section>
+
+  <!-- GROUPS (coach) -->
+  <section id="view-groups" class="view">
+    <h1>Roster &amp; Groups</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Every athlete on the roster, their training group, and their events. Add athletes here, one at a time or in bulk. Coaches only.</p>
+    <div id="groups-main"></div>
+  </section>
+
+  <!-- COACH -->
+  <section id="view-coach" class="view">
+    <h1>Today's Checklist</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Each group's workout for the day. Change the plan when you need to, and check off who finished. Coaches only.</p>
+    <div id="coach-main"></div>
+  </section>
+
+  <!-- INVENTORY (coach) -->
+  <section id="view-inventory" class="view">
+    <h1>Equipment Inventory</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">What gear the program owns, how much of it, and where it lives.</p>
+    <p class="muted">The program's gear, counted by you: what you have, how many, what shape it is in, and where it lives. Coach-only. Athletes never see this.</p>
+    <div id="inventory-main"></div>
+  </section>
+
+  <!-- MEET RESULTS (coach) -->
+  <section id="view-meets" class="view">
+    <h1>Meet Results</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Record what your athletes run, jump, and throw at meets. PRs and the team board build themselves. Coaches only.</p>
+    <div id="meets-main"></div>
+  </section>
+
+  <!-- MEET DAY (coach) -->
+  <section id="view-meetday" class="view">
+    <h1>Meet Day</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One screen to run a meet: entries by event, a checklist that fills itself in as results land, and fast results entry with PRs flagged on the spot. Results saved here land in Meet Results. Coaches only.</p>
+    <div id="meetday-main"></div>
+  </section>
+
+  <!-- GOALS (coach) -->
+  <section id="view-goals" class="view">
+    <h1>Goals</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One target mark per athlete per event. Progress is figured from their real meet results. The first mark they record is the baseline, their PR is where they stand. Coaches only.</p>
+    <div id="goals-main"></div>
+  </section>
+
+  <!-- REPORTS (coach) -->
+  <section id="view-reports" class="view">
+    <h1>Reports</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The program in charts: strength trends, who is completing the work, planned load, and health. Plus a printable report card for every athlete.</p>
+    <div id="reports-main"></div>
+  </section>
+
+  <!-- WEEKLY DIGEST (coach) -->
+  <section id="view-digest" class="view">
+    <h1>Weekly Digest</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One week of the program, assembled for you: who checked in, who trained, what got faster, what needs attention, and the week coming.</p>
+    <div id="digest-main"></div>
+  </section>
+
+  <!-- ANNOUNCEMENTS (coach) -->
+  <section id="view-announce" class="view">
+    <h1>Announcements</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">One-way posts from the coaching staff. To the whole team, or to a single group. Athletes read them on their Today page. No replies, no read receipts. Coaches only.</p>
+    <div id="announce-main"></div>
+  </section>
+
+  <!-- ATTENDANCE (coach) -->
+  <section id="view-attendance" class="view">
+    <h1>Attendance</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The daily roll-book: who is here, who is late, who is excused, and who is absent. Every tap saves on its own. Coaches only. Athletes never see this.</p>
+    <div id="attendance-main"></div>
+  </section>
+
+  <!-- AMS (coach) -->
+  <section id="view-ams" class="view">
+    <h1>AMS</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The whole roster in one place: status, flags, and a page for every member with their check-ins, testing, meet results, attendance, health, and goals. Coaches only.</p>
+    <div id="ams-main"></div>
+  </section>
+
+  <!-- ACCESS (coach) -->
+  <section id="view-access" class="view">
+    <h1>Access</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Every member account and the tier it carries. Set a tier, cancel a membership, or bring one back. Changes apply at once and each one is recorded. Coaches only.</p>
+    <div id="access-main"></div>
+  </section>
+
+  <!-- BOOKINGS (coach) -->
+  <section id="view-bookings" class="view">
+    <h1>Bookings</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Lab Talk requests from the public booking page, and the hours that page offers. Approve a request and the visitor's booking link shows your meeting link and a calendar file. Coaches only.</p>
+    <div id="bookings-main"></div>
+  </section>
+
+  <!-- INVITATION REQUESTS (coach) -->
+  <section id="view-scoreboard" class="view">
+    <h1>Scoreboard</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <div id="scoreboard-main"></div>
+  </section>
+
+  <section id="view-inviterequests" class="view">
+    <h1>Invitation Requests</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Requests from the public invitation page. Mark a request invited and that email can register as a member. Coaches only.</p>
+    <div id="inviterequests-main"></div>
+  </section>
+
+  <!-- FORM CHECK QUEUE (coach) -->
+  <section id="view-formcheckqueue" class="view">
+    <h1>Form Checks</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Videos members sent for a form check, oldest waiting first. Watch each one, write your reply in the app, and the member sees it on their own list. Coaches only.</p>
+    <div id="formcheckqueue-main"></div>
+  </section>
+
+  <!-- TV BOARD (coach-only weight-room display) -->
+  <section id="view-tv" class="view">
+    <div class="tv-shell">
+      <div class="tv-top">
+        <div class="tv-brand">__BRAND_NAME__ <span>__BRAND_TAGLINE__ | TRAINING BOARD</span></div>
+        <div class="tv-top-right">
+          <div class="tv-clock" id="tv-clock"></div>
+          <div class="tv-updated" id="tv-updated"></div>
+          <button class="btn tv-exit" id="tv-exit" type="button">Exit TV board</button>
+        </div>
+      </div>
+      <div id="tv-main" class="tv-main"><p class="tv-loading">Loading the board…</p></div>
+      <div class="tv-bottom">
+        <button class="btn tv-ctl" id="tv-prev" type="button">← Prev</button>
+        <div class="tv-dots" id="tv-dots"></div>
+        <button class="btn tv-ctl" id="tv-pause" type="button">Pause</button>
+        <button class="btn tv-ctl" id="tv-next" type="button">Next →</button>
+        <button class="btn tv-ctl" id="tv-full" type="button">Full screen</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- WEIGHT ROOM (coach) -->
+  <section id="view-weightroom" class="view">
+    <h1>Weight Room</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Every member on one screen, each with today's workout and their own loads. Walk a panel through its steps as the room moves, and check the session off when it's done. Coaches only.</p>
+    <div id="weightroom-main"></div>
+  </section>
+
+  <!-- CUSTOM WORKOUTS (coach) -->
+  <section id="view-custom" class="view">
+    <h1>Custom Workouts</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Workouts you build yourself: blocks of exercises, rounds, and rests. Hit Run it and the screen walks the room through every step. Big enough to read across the weight room. Coaches only.</p>
+    <div id="custom-main"></div>
+  </section>
+
+  <!-- PROGRAMS (coach) -->
+  <section id="view-programs" class="view">
+    <h1>Programs</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Training templates you build once and reuse: lay out the weeks, then apply a program to a group (or all of them) from any start date. Applying writes coach overrides. The season plan itself never changes. Coaches only.</p>
+    <div id="programs-main"></div>
+  </section>
+
+  <!-- TEAM CALENDAR (coach) -->
+  <section id="view-calendar" class="view">
+    <h1>Team Calendar</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The whole team on one month: every group's sessions exactly as Today and the checklist resolve them, with meet and test days marked. Coaches only.</p>
+    <div id="calendar-main"></div>
+  </section>
+
+  <!-- DATA: BACKUP / RESTORE / SPREADSHEETS (coach) -->
+  <section id="view-data" class="view">
+    <h1>Data</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The whole team dataset, in and out: one backup file for safekeeping, restores that merge instead of wiping, and spreadsheets for everything else. Coaches only.</p>
+    <div id="data-main"></div>
+  </section>
+
+  <!-- DEVICES: FORCEDECKS / NORDBORD / T-APEX / VALD API (coach) -->
+  <section id="view-devices" class="view">
+    <h1>Devices</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The testing hardware: import a ForceDecks or NordBord results file from VALD Hub, key in a T-APEX session by hand, and every number lands in the athlete's testing history, labeled by device. Coaches only.</p>
+    <div id="devices-main"></div>
+  </section>
+
+  <!-- DEMO COVERAGE: WHOSE VIDEO IS ON EVERY MOVEMENT (coach) -->
+  <section id="view-coverage" class="view">
+    <h1>Demo Coverage</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">The filming map for a coach video on every movement: each drill and test the demo system covers, marked by whose video is attached. Yours, a placeholder, or none yet. Watch, add, or swap any demo right from its row. Coaches only.</p>
+    <div id="coverage-main"></div>
+  </section>

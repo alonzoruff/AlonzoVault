@@ -1257,6 +1257,10 @@ function loadLabPrograms() {
   return [];
 }
 const CONTENT = loadContent();
+/* The coach screens (content/coach-views.html). They are not in the
+   public page: GET /api/coach/views hands them to a signed-in coach
+   only, so a visitor who is not signed in never receives their text. */
+const COACH_VIEWS_HTML = fs.readFileSync(path.join(CONTENT_DIR, 'coach-views.html'), 'utf8');
 const SESSION_BY_ID = new Map(CONTENT.sessions.map(s => [s.id, s]));
 const SESSION_IDS = new Set(SESSION_BY_ID.keys());
 const XT_IDS = new Set(CONTENT.sessions.filter(s => s.id.startsWith('XT-')).map(s => s.id));
@@ -6286,6 +6290,15 @@ async function handleApi(req, res, url) {
     return sendJson(res, 403, { error: 'Coaches only. Members do not use this system — the coach records everything.' });
   }
   const coachOnly = () => sendJson(res, 403, { error: 'Coaches only.' });
+
+  /* ---------- coach screens ----------
+     The markup for every Coach screen, sent only past the coach check
+     above. app.js adds it to the page after a coach signs in. Never
+     cached, so it cannot be served back to someone signed out. */
+  if (p === '/api/coach/views' && req.method === 'GET') {
+    return sendJson(res, 200, { html: applyBrand(COACH_VIEWS_HTML) },
+      { 'Cache-Control': 'no-store' });
+  }
 
   /* ---------- coach accounts ---------- */
   if (p === '/api/coaches' && req.method === 'GET') {

@@ -425,7 +425,9 @@ const VIEW_AREA = {
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['scoreboard', 'Scoreboard'], ['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  /* Filled from content/coach-views.html once a coach signs in
+     (ensureCoachViews), so the Coach menu is not in the public script. */
+  coachhub: [],
 };
 /* ---------------- membership tiers (v14) ----------------
    The nav mirror of the server's entitlement rules. The server is
@@ -603,6 +605,49 @@ function closeNavMenus() {
   if (scrim) scrim.hidden = true;
 }
 buildMainNav();
+
+/* ---------------- coach screens (loaded after a coach signs in) ----------------
+   The Coach screens are not in index.html. The server sends them only
+   to a signed-in coach (GET /api/coach/views), so a visitor who is not
+   signed in never receives their text. They are added to <main> once
+   per sign-in, with the Coach menu, and taken out again on sign-out.
+   Every coach render function already returns early when its
+   container is missing, so nothing runs against them until then. */
+let coachViewsLoaded = false;
+const coachViewIds = () => Object.keys(VIEW_AREA).filter(v => VIEW_AREA[v] === 'coachhub');
+function dropCoachViewNodes() {
+  coachViewIds().forEach(v => {
+    const el = document.getElementById('view-' + v);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  });
+}
+async function ensureCoachViews() {
+  if (coachViewsLoaded) return true;
+  let data;
+  try { data = await api('/api/coach/views'); } catch (_) { return false; }
+  if (!data || typeof data.html !== 'string' || coachViewsLoaded) return coachViewsLoaded;
+  const tpl = document.createElement('template');
+  tpl.innerHTML = data.html;
+  const navData = tpl.content.querySelector('#coach-subnav-data');
+  if (navData) {
+    try { GROUP_SUBNAV.coachhub = JSON.parse(navData.textContent) || []; } catch (_) { GROUP_SUBNAV.coachhub = []; }
+    navData.parentNode.removeChild(navData);
+  }
+  dropCoachViewNodes();
+  const main = document.getElementById('app');
+  if (main) main.appendChild(tpl.content);
+  coachViewsLoaded = true;
+  return true;
+}
+function unloadCoachViews() {
+  if (!coachViewsLoaded) return;
+  exitTvBoard();
+  exitWeightRoom();
+  dropCoachViewNodes();
+  GROUP_SUBNAV.coachhub = [];
+  coachViewsLoaded = false;
+  tvWired = false;
+}
 $$('.nav-group-btn').forEach(btn => btn.addEventListener('click', (e) => {
   e.stopPropagation();
   const group = btn.closest('.nav-group');
@@ -647,6 +692,11 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNavMe
 
 function showView(name) {
   name = mxResolveView(name);
+  /* A Coach screen exists only after a coach signs in (see
+     ensureCoachViews); anyone else lands on their own start page. */
+  if (VIEW_AREA[name] === 'coachhub' && !document.getElementById('view-' + name)) {
+    name = state.user ? 'home' : 'landing';
+  }
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   const area = VIEW_AREA[name] || 'home';
   $$('.primary-nav .tab').forEach(t => t.classList.toggle('active', t.dataset.view === area));
@@ -1782,6 +1832,8 @@ function renderLog() {
   }));
 }
 async function refreshUserData() {
+  if (state.user && state.user.role === 'coach') await ensureCoachViews();
+  else unloadCoachViews();
   if (!state.user) { state.logs = []; state.swaps = {}; state.groups = []; state.membership = null; state.membershipData = null; return; }
   try {
     const [logs, swaps, groups] = await Promise.all([
