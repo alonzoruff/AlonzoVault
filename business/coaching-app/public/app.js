@@ -9787,7 +9787,12 @@ function renderInvite() {
     <button class="btn primary" type="submit" id="invite-send" style="width:auto">Send Request</button>
     <div class="invite-next">
       <p class="ci-label">What happens next</p>
-      <p>I read your request myself and reply by email within ${esc(RP_RESPONSE_WINDOW)}. If the Lab fits, I invite your email. Your first ${RP_TRIAL_DAYS} days are then a free trial at the Lab Access level, with no card. Sending a request needs no account and no payment.</p>
+      <ol class="invite-steps">
+        <li><strong>I read your request.</strong> I read every request myself and reply by email within ${esc(RP_RESPONSE_WINDOW)}. If the Lab fits, I invite your email.</li>
+        <li><strong>Your ${RP_TRIAL_DAYS}-day free start.</strong> Your first ${RP_TRIAL_DAYS} days are free at Lab Access, with no card.</li>
+        <li><strong>Your first testing block.</strong> You test in week one, train the block, then take the same tests again at the end. Your Lab Report shows what moved.</li>
+      </ol>
+      <p>Sending a request needs no account and no payment.</p>
       <p class="muted">Your details are used only to answer this request. <a href="/privacy" data-route="privacy">Privacy</a></p>
     </div>
   </form>`;

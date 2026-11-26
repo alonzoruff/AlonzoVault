@@ -9929,6 +9929,61 @@ async function waitForServer(tries = 60) {
       }
     }
 
+    /* ---------------- landing quick wins (Part 3) ----------------
+       The real week must come straight from the Winter Base program,
+       the guarantee must cover the measurement only, and nothing new
+       may promise a time or an outcome. */
+    {
+      const qwPage = (await apiText(null, '/')).text;
+      const qwJs = (await apiText(null, '/app.js')).text;
+      const wb = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'content', 'lab_programs.json'), 'utf8'))
+        .find(p => p.id === 'winter-base-protocol');
+      const unesc = (t) => t.replace(/&amp;/g, '&').replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"');
+      const weekM = qwPage.match(/<div class="lp-realweek" id="real-week"[\s\S]*?<\/dl>\s*<\/div>\s*<\/div>/);
+      const weekHtml = weekM ? unesc(weekM[0]) : '';
+      const weekText = weekHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      const wbTempo = wb.sections.find(x => x.title === 'Tempo progression');
+      const wbStr = wb.sections.find(x => x.title === 'Strength progression');
+      const missing = [];
+      wb.weeklyLayout.forEach(b => {
+        const [num, title] = b.title.split(' — ');
+        if (!weekHtml.includes('<span class="lp-rw-day">' + num + '</span><span class="lp-rw-name">' + title + '</span>')) missing.push(b.title);
+        b.details.forEach(d => { if (!weekHtml.includes('<li>' + d + '</li>')) missing.push(d); });
+      });
+      [wbTempo.intro, wbTempo.items[0].split(': ').slice(1).join(': '), wbStr.items[0].split(': ').slice(1).join(': '), wbStr.items[3]]
+        .concat(wb.intake.tests.map(t => t.name)).forEach(t => { if (!weekHtml.includes(t)) missing.push(t); });
+      check('quick wins: the real week on the landing is the Winter Base program word for word, all 4 days and the weeks 1-2 dose',
+        !!weekM && wb.weeklyLayout.length === 4 && missing.length === 0 &&
+        (weekHtml.match(/<details>/g) || []).length === 4, missing);
+      check('quick wins: the real week is laid out like the app week card and names no athlete',
+        weekHtml.includes('<h4>This week</h4>') && weekHtml.includes('class="lp-rw-list"') &&
+        !/\b(athlete|member)\s*:/i.test(weekText) && !/\b(Jordan|Taylor|Avery|Maya|Sam)\b/.test(weekText));
+      const notM = qwPage.match(/<div class="lp-not" id="what-this-is-not">[\s\S]*?<\/ul>/);
+      check('quick wins: "What this is not" names the three things the Lab is not',
+        !!notM && (notM[0].match(/<li>/g) || []).length === 3 &&
+        notM[0].includes('Not a promised time.') && notM[0].includes('Not a generic PDF program.') &&
+        notM[0].includes('Not for athletes who will not test.'));
+      const plansM = qwPage.match(/<div class="lp-band" id="plans"[\s\S]*?<div class="lp-band lp-alt" id="about"/);
+      check('quick wins: the measurement guarantee sits in the plans section and covers the measurement, never the outcome',
+        !!plansM && plansM[0].includes('id="measurement-guarantee"') &&
+        plansM[0].includes('If your retest is not done and your Lab Report is not in your hands at the end of a block, your next block is free.') &&
+        plansM[0].includes('The Lab guarantees the measurement, never the outcome.'));
+      const pageText = qwPage.replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<[^>]+>/g, '. ').replace(/\s+/g, ' ');
+      const guaranteeUses = (pageText.match(/[^.]*\bguarantee[sd]?\b[^.]*/gi) || []).map(g => g.trim());
+      check('quick wins: "guarantee" is only ever used for the measurement (or the terms page "No guarantees")',
+        guaranteeUses.some(g => /measurement/i.test(g)) &&
+        guaranteeUses.every(g => /measurement/i.test(g) || /^No guarantees$/i.test(g)), guaranteeUses);
+      const newCopy = [weekText, notM ? notM[0] : '', plansM ? (plansM[0].match(/id="measurement-guarantee"[\s\S]*?<\/div>/) || [''])[0] : ''].join(' ');
+      check('quick wins: none of the new copy promises a time or an outcome',
+        !/\b(will (run|get|be) faster|drop \d|shave|guaranteed? (faster|results|time)|personal best guaranteed|you will improve)\b/i.test(newCopy));
+      const stepsM = qwJs.match(/<ol class="invite-steps">[\s\S]*?<\/ol>/);
+      check('quick wins: the invite form ends with a three-step strip: AJ replies, the free start, the first testing block',
+        !!stepsM && (stepsM[0].match(/<li>/g) || []).length === 3 &&
+        stepsM[0].includes('I read every request myself and reply by email within ${esc(RP_RESPONSE_WINDOW)}') &&
+        stepsM[0].includes('Your ${RP_TRIAL_DAYS}-day free start.') && stepsM[0].includes('Your first testing block.') &&
+        /RP_RESPONSE_WINDOW = '2 business days'/.test(qwJs));
+    }
+
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {
