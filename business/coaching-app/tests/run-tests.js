@@ -9929,6 +9929,69 @@ async function waitForServer(tries = 60) {
       }
     }
 
+    /* ---------------- logo intro (Part 2) ----------------
+       The intro is one fixed overlay with the logo the site already
+       serves, shown once per browser session, never for reduced
+       motion or a booking link, and ended by any tap, click or key.
+       The head script runs here against a fake window to prove it. */
+    {
+      const introPage = await apiText(null, '/');
+      const introCss = await apiText(null, '/styles.css');
+      check('intro: one overlay, decorative, using the existing logo asset, no focus target',
+        (introPage.text.match(/id="lab-intro"/g) || []).length === 1 &&
+        introPage.text.includes('<div class="lab-intro" id="lab-intro" aria-hidden="true"><img src="/assets/ayg-lab-logo.jpg" alt=""') &&
+        !/id="lab-intro"[^>]*tabindex/.test(introPage.text));
+      check('intro: the overlay is off unless the head script turns it on, and never prints',
+        introCss.text.includes('.lab-intro { display: none; }') &&
+        introCss.text.includes('html.lab-intro-on .lab-intro {') &&
+        introCss.text.includes('@media print { .lab-intro { display: none !important; } }'));
+      const outM = introCss.text.match(/animation: lab-intro-out (\d+)ms ease-in (\d+)ms forwards/);
+      check('intro: it is over in under 1.5 seconds (fade out delay + length)',
+        !!outM && (Number(outM[1]) + Number(outM[2])) <= 1500, outM && outM.slice(1));
+      const headScript = (introPage.text.match(/<script>\s*\/\* Logo intro:[\s\S]*?<\/script>/) || [''])[0]
+        .replace(/^<script>/, '').replace(/<\/script>$/, '');
+      const vm = require('vm');
+      const runIntro = ({ reduce = false, search = '', storage = {}, storageThrows = false } = {}) => {
+        const classes = new Set();
+        const listeners = {};
+        const timers = [];
+        const win = {
+          matchMedia: () => ({ matches: reduce }),
+          location: { search },
+          sessionStorage: {
+            getItem: (k) => { if (storageThrows) throw new Error('off'); return k in storage ? storage[k] : null; },
+            setItem: (k, v) => { if (storageThrows) throw new Error('off'); storage[k] = String(v); },
+          },
+          setTimeout: (fn, ms) => { timers.push({ fn, ms }); },
+        };
+        const doc = {
+          documentElement: { classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c) } },
+          addEventListener: (t, fn) => { (listeners[t] = listeners[t] || []).push(fn); },
+          removeEventListener: (t, fn) => { listeners[t] = (listeners[t] || []).filter(f => f !== fn); },
+        };
+        vm.runInNewContext(headScript, { window: win, document: doc });
+        return { on: classes.has('lab-intro-on'), classes, listeners, timers, storage };
+      };
+      const first = runIntro();
+      const store = first.storage;
+      const second = runIntro({ storage: store });
+      check('intro: shows on the first page of a session and not again in that session',
+        headScript.length > 0 && first.on === true && store['ayg-intro-seen'] === '1' && second.on === false,
+        { first: first.on, second: second.on });
+      check('intro: never for reduced motion, a booking link, or when storage is off',
+        runIntro({ reduce: true }).on === false && runIntro({ search: '?booking=abc' }).on === false &&
+        runIntro({ storageThrows: true }).on === false);
+      const tap = runIntro();
+      (tap.listeners.pointerdown || []).forEach(fn => fn({}));
+      const key = runIntro();
+      (key.listeners.keydown || []).forEach(fn => fn({ key: 'Escape' }));
+      const timed = runIntro();
+      check('intro: a tap or any key ends it at once, and a timer ends it by 1.8 s even without animations',
+        tap.on === true && !tap.classes.has('lab-intro-on') && !key.classes.has('lab-intro-on') &&
+        timed.timers.length === 1 && timed.timers[0].ms <= 1800 &&
+        (timed.timers[0].fn(), !timed.classes.has('lab-intro-on')));
+    }
+
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {

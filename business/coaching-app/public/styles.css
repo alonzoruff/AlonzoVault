@@ -3822,3 +3822,36 @@ html, body, input, button, select, textarea { font-variant-numeric: tabular-nums
   .update-toast, .flash-ok, .saved-note, [data-saved], .btn[aria-busy="true"]::after { animation: none; }
 }
 #view-landing.lp .lp-btn-primary, #view-landing.lp .lp-btn-primary:hover { color: var(--lp-accent-ink); }
+
+/* ---------------- logo intro (first visit in a session) ----------------
+   Shown only while <html> carries .lab-intro-on (set by the small
+   script in index.html's head). The page loads and paints underneath;
+   the overlay fades the logo in, holds it, and fades out by about
+   1.3 seconds, then the class is removed. A tap, click or key ends it
+   early. Reduced-motion visitors never get the class. */
+.lab-intro { display: none; }
+html.lab-intro-on .lab-intro {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  align-items: center;
+  justify-content: center;
+  background: #04070c;
+  cursor: pointer;
+  animation: lab-intro-out 320ms ease-in 1000ms forwards;
+}
+html.lab-intro-on .lab-intro img {
+  width: min(58vw, 300px);
+  height: auto;
+  border-radius: 14px;
+  animation: lab-intro-in 450ms cubic-bezier(.2, .7, .2, 1) both;
+}
+@keyframes lab-intro-in {
+  from { opacity: 0; transform: scale(.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes lab-intro-out {
+  to { opacity: 0; visibility: hidden; }
+}
+@media print { .lab-intro { display: none !important; } }
