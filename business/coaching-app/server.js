@@ -2293,6 +2293,36 @@ function linkedEmailForProfile(profileId) {
   }
   return null;
 }
+/* Results consent (Part 4d). Once a member has been retested (two
+   or more results on any test), their Lab Report asks "Can we show
+   your before and after numbers?". The answer lives on the roster
+   profile as profile.resultsConsent, so the coach sees it on the
+   athlete's AMS page and it rides along with profiles in a backup:
+   { answer: 'yes' | 'no', answeredAt, byParent, parentName, version,
+     history: [earlier answers, newest last, at most 10] }.
+   A yes for a member who is not on record as 18 or older (their
+   intake says under 18, or there is no intake) must come from a
+   parent or guardian, who confirms and types their name. A no
+   needs nothing, and anyone can change their answer at any time.
+   "Yes" means the coach may use the numbers with no name on the
+   public results section; it never publishes anything by itself. */
+const RESULTS_CONSENT_VERSION = 'v1';
+function publicResultsConsent(raw) {
+  if (!raw || typeof raw !== 'object' || (raw.answer !== 'yes' && raw.answer !== 'no')) return null;
+  return {
+    answer: raw.answer,
+    answeredAt: raw.answeredAt || null,
+    byParent: raw.byParent === true,
+    parentName: raw.byParent === true ? (raw.parentName || '') : '',
+    version: raw.version || RESULTS_CONSENT_VERSION,
+  };
+}
+function resultsConsentNeedsParent(pr) {
+  return !(pr && pr.intake && typeof pr.intake === 'object' && pr.intake.isAdult === true);
+}
+function hasRetest(tests) {
+  return (tests || []).some(t => Array.isArray(t.series) && t.series.length >= 2);
+}
 function publicProfile(pr) {
   const g = pr.groupId ? groupById(pr.groupId) : null;
   return {
@@ -2309,6 +2339,9 @@ function publicProfile(pr) {
        /api/my/intake — never on a public or leaderboard payload. */
     intake: publicIntake(pr.intake),
     intakeCompleted: hasCompletedIntake(pr),
+    /* Part 4d: the member's answer to "Can we show your before and
+       after numbers?", or null when they have not answered. */
+    resultsConsent: publicResultsConsent(pr.resultsConsent),
   };
 }
 function publicUser(u) {
@@ -5883,12 +5916,64 @@ async function handleApi(req, res, url) {
         notLinked: true,
       });
     }
+    const srTests = speedReportFor(prof.id);
     return sendJson(res, 200, {
       linked: true, profileId: prof.id,
       athleteName: prof.firstName + ' ' + prof.lastName,
-      tests: speedReportFor(prof.id),
+      tests: srTests,
       nextTestDate: nextTestDateInfo(),
+      /* Part 4d: the before-and-after question, asked once there
+         is a retest and until it has an answer. */
+      resultsConsent: publicResultsConsent(prof.resultsConsent),
+      askResultsConsent: !publicResultsConsent(prof.resultsConsent) && hasRetest(srTests),
+      resultsConsentNeedsParent: resultsConsentNeedsParent(prof),
     });
+  }
+
+  /* ---------- results consent (Part 4d, member-entered, own only) ----------
+     The member's answer to "Can we show your before and after
+     numbers?". The profile comes from the caller's own link, never
+     from the request. Not tier-gated, so a member can always change
+     their answer, including to no. A yes for a member not on record
+     as 18 or older needs a parent or guardian to confirm and type
+     their name. Nothing is published or sent by answering. */
+  if (p === '/api/my/results-consent' && req.method === 'POST') {
+    const prof = linkedProfileFor(user);
+    if (!prof) {
+      return sendJson(res, 403, {
+        error: 'Your account is not linked to the member roster yet. Ask your coach to link it (they do it from Roster & Groups).',
+        notLinked: true,
+      });
+    }
+    if (prof.archived) {
+      return sendJson(res, 403, { error: 'This roster profile is archived. Ask your coach to restore it first.' });
+    }
+    const body = await readBody(req);
+    const answer = clean(body.answer, 5);
+    if (answer !== 'yes' && answer !== 'no') {
+      return sendJson(res, 400, { error: 'Please answer yes or no.' });
+    }
+    const needsParent = answer === 'yes' && resultsConsentNeedsParent(prof);
+    let parentName = '';
+    if (needsParent) {
+      parentName = clean(body.parentName, 120);
+      if (body.parentConfirm !== true || !parentName) {
+        return sendJson(res, 400, {
+          error: 'A parent or guardian needs to answer yes: please tick the box and type your full name.',
+          needsParent: true,
+        });
+      }
+    }
+    const prev = publicResultsConsent(prof.resultsConsent);
+    const history = prof.resultsConsent && Array.isArray(prof.resultsConsent.history)
+      ? prof.resultsConsent.history.slice(-9) : [];
+    if (prev) history.push({ answer: prev.answer, answeredAt: prev.answeredAt, byParent: prev.byParent });
+    prof.resultsConsent = {
+      answer, answeredAt: new Date().toISOString(), byParent: needsParent,
+      parentName, version: RESULTS_CONSENT_VERSION, history,
+    };
+    saveDb();
+    return sendJson(res, 200, { ok: true, resultsConsent: publicResultsConsent(prof.resultsConsent) });
   }
 
   /* ---------- member form checks (member-entered, own only) ----------

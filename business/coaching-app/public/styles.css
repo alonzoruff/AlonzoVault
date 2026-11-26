@@ -3822,3 +3822,12 @@ html, body, input, button, select, textarea { font-variant-numeric: tabular-nums
   .update-toast, .flash-ok, .saved-note, [data-saved], .btn[aria-busy="true"]::after { animation: none; }
 }
 #view-landing.lp .lp-btn-primary, #view-landing.lp .lp-btn-primary:hover { color: var(--lp-accent-ink); }
+
+/* ---------------- results consent (Part 4d) ---------------- */
+.rc-card.rc-ask { border: 1px solid var(--accent, #c9ccd1); }
+.rc-card h3 { margin-top: 0; }
+.rc-parent { display: grid; gap: 8px; margin: 10px 0; }
+.rc-parent label:not(.check-line) { display: grid; gap: 4px; max-width: 360px; }
+.rc-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.rc-status { margin: 0 0 6px; }
+@media print { .rc-card { display: none !important; } }

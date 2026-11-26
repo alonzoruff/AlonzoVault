@@ -9929,6 +9929,108 @@ async function waitForServer(tries = 60) {
       }
     }
 
+    /* ---------------- results consent at retest (Part 4d) ----------------
+       "Can we show your before and after numbers?" appears once a
+       member has been retested, the answer is stored on their
+       profile, a yes for a member under 18 (or with no intake) comes
+       from a parent or guardian, and the coach sees it on the AMS
+       page. Every name and number here is made up. */
+    {
+      const rcLogin = async (email) => cookieOf(await api(null, 'POST', '/api/login', { email, password: 'testpass123' }));
+      const rcCoach = await rcLogin('coach@test.com');
+      const rcReg = async (email) => {
+        await api(rcCoach, 'POST', '/api/client-invites', { email });
+        const rr = await api(null, 'POST', '/api/register', { email, password: 'testpass123' });
+        await api(rcCoach, 'PUT', '/api/access/' + rr.json.id, { tier: 'pass' });
+        return cookieOf(rr);
+      };
+      const rcAdult = await rcReg('rc-adult@test.com');
+      const rcTeen = await rcReg('rc-teen@test.com');
+      let rq = await api(rcCoach, 'POST', '/api/groups', { name: 'Consent Squad' });
+      const rcGroup = rq.json.group.id;
+      rq = await api(rcCoach, 'POST', '/api/profiles', { firstName: 'Ada', lastName: 'Adult', groupId: rcGroup, events: ['sprinter'] });
+      const rcAdultP = rq.json.profile.id;
+      rq = await api(rcCoach, 'POST', '/api/profiles', { firstName: 'Tess', lastName: 'Teen', groupId: rcGroup, events: ['sprinter'] });
+      const rcTeenP = rq.json.profile.id;
+      await api(rcCoach, 'PUT', '/api/profiles/' + rcAdultP + '/link', { email: 'rc-adult@test.com' });
+      await api(rcCoach, 'PUT', '/api/profiles/' + rcTeenP + '/link', { email: 'rc-teen@test.com' });
+      rq = await api(rcAdult, 'POST', '/api/my/intake', {
+        goals: 'Get faster over 30 metres', sports: ['Track and field'], equipmentAccess: ['full-gym'],
+        trainingAge: 3, hasInjury: false, isAdult: true, waiverAccepted: true, waiverSignature: 'Ada Adult',
+      });
+      check('results consent fixtures: two linked members, the adult with an adult intake',
+        !!rcCoach && !!rcAdult && !!rcTeen && !!rcAdultP && !!rcTeenP && rq.status === 201 && rq.json.intake.isAdult === true, rq.json);
+
+      rq = await api(rcCoach, 'POST', '/api/test-days', { date: '2026-09-01', title: 'Consent baseline', testKeys: ['forty-yard-dash'] });
+      const rcDay1 = rq.json.testDay.id;
+      rq = await api(rcCoach, 'POST', '/api/test-days', { date: '2026-10-27', title: 'Consent retest', testKeys: ['forty-yard-dash'] });
+      const rcDay2 = rq.json.testDay.id;
+      await api(rcCoach, 'POST', '/api/results', { profileId: rcAdultP, testDayId: rcDay1, testKey: 'forty-yard-dash', value: 5.4 });
+      await api(rcCoach, 'POST', '/api/results', { profileId: rcTeenP, testDayId: rcDay1, testKey: 'forty-yard-dash', value: 5.6 });
+
+      rq = await api(rcAdult, 'GET', '/api/my/speed-report');
+      check('results consent: with only a baseline, nothing is asked yet',
+        rq.status === 200 && rq.json.askResultsConsent === false && rq.json.resultsConsent === null &&
+        rq.json.resultsConsentNeedsParent === false, rq.json && [rq.json.askResultsConsent, rq.json.resultsConsent]);
+      await api(rcCoach, 'POST', '/api/results', { profileId: rcAdultP, testDayId: rcDay2, testKey: 'forty-yard-dash', value: 5.3 });
+      await api(rcCoach, 'POST', '/api/results', { profileId: rcTeenP, testDayId: rcDay2, testKey: 'forty-yard-dash', value: 5.5 });
+      rq = await api(rcAdult, 'GET', '/api/my/speed-report');
+      check('results consent: after the retest the adult is asked, and answers for themselves',
+        rq.json.askResultsConsent === true && rq.json.resultsConsent === null && rq.json.resultsConsentNeedsParent === false, rq.json);
+      rq = await api(rcTeen, 'GET', '/api/my/speed-report');
+      check('results consent: a member with no adult intake is asked, and a yes needs a parent or guardian',
+        rq.json.askResultsConsent === true && rq.json.resultsConsentNeedsParent === true, rq.json);
+
+      rq = await api(rcAdult, 'POST', '/api/my/results-consent', { answer: 'maybe' });
+      check('results consent: anything but yes or no is a 400', rq.status === 400, rq.json);
+      rq = await api(null, 'POST', '/api/my/results-consent', { answer: 'yes' });
+      check('results consent: signed out is a 401', rq.status === 401, rq.status);
+      rq = await api(rcCoach, 'POST', '/api/my/results-consent', { answer: 'yes' });
+      check('results consent: an account with no linked profile gets the not-linked 403', rq.status === 403 && rq.json.notLinked === true, rq.json);
+
+      rq = await api(rcAdult, 'POST', '/api/my/results-consent', { answer: 'yes' });
+      check('results consent: the adult says yes and it is stored as their own answer',
+        rq.status === 200 && rq.json.resultsConsent.answer === 'yes' && rq.json.resultsConsent.byParent === false &&
+        typeof rq.json.resultsConsent.answeredAt === 'string' && rq.json.resultsConsent.version === 'v1', rq.json);
+      rq = await api(rcAdult, 'GET', '/api/my/speed-report');
+      check('results consent: once answered, the question stops and the answer shows',
+        rq.json.askResultsConsent === false && rq.json.resultsConsent.answer === 'yes');
+
+      rq = await api(rcTeen, 'POST', '/api/my/results-consent', { answer: 'yes' });
+      check('results consent: a yes for a minor without a parent is refused',
+        rq.status === 400 && rq.json.needsParent === true, rq.json);
+      rq = await api(rcTeen, 'POST', '/api/my/results-consent', { answer: 'yes', parentConfirm: true, parentName: '  ' });
+      check('results consent: a parent yes needs a typed name', rq.status === 400, rq.json);
+      rq = await api(rcTeen, 'GET', '/api/my/speed-report');
+      check('results consent: nothing was stored by the refusals', rq.json.resultsConsent === null && rq.json.askResultsConsent === true);
+      rq = await api(rcTeen, 'POST', '/api/my/results-consent', { answer: 'yes', parentConfirm: true, parentName: 'Pat Teen' });
+      check('results consent: a parent or guardian says yes for the minor',
+        rq.status === 200 && rq.json.resultsConsent.answer === 'yes' && rq.json.resultsConsent.byParent === true &&
+        rq.json.resultsConsent.parentName === 'Pat Teen', rq.json);
+      rq = await api(rcTeen, 'POST', '/api/my/results-consent', { answer: 'no' });
+      check('results consent: anyone can change the answer to no, with no parent step',
+        rq.status === 200 && rq.json.resultsConsent.answer === 'no' && rq.json.resultsConsent.byParent === false &&
+        rq.json.resultsConsent.parentName === '', rq.json);
+
+      rq = await api(rcCoach, 'GET', '/api/ams/athlete/' + rcTeenP);
+      check('results consent: the coach sees the current answer on the AMS page',
+        rq.status === 200 && rq.json.profile.resultsConsent && rq.json.profile.resultsConsent.answer === 'no', rq.json && rq.json.profile);
+      rq = await api(rcCoach, 'GET', '/api/ams/athlete/' + rcAdultP);
+      check('results consent: and the adult\'s yes', rq.json.profile.resultsConsent.answer === 'yes');
+      rq = await api(rcTeen, 'GET', '/api/ams/athlete/' + rcAdultP);
+      check('results consent: a member cannot read someone else\'s answer', rq.status === 403, rq.status);
+
+      const rcJs = (await apiText(null, '/app.js')).text;
+      check('results consent: the Lab Report and My progress both carry the question, and the AMS page shows the answer',
+        rcJs.includes('Can we show your before and after numbers?') &&
+        rcJs.includes("${rcCardHtml(data, 'card')}") && rcJs.includes("rcCardHtml(report, 'mx-card')") &&
+        rcJs.includes("apiPost('/api/my/results-consent'") && rcJs.includes('<h2>Before and after numbers</h2>') &&
+        rcJs.includes('with no name, in the Lab results on the AYG Lab website. Nothing is posted until he adds it, and you can change your answer any time.'));
+      const rcCss = (await apiText(null, '/styles.css')).text;
+      check('results consent: the question stays off the printed Lab Report',
+        rcCss.includes('@media print { .rc-card { display: none !important; } }'));
+    }
+
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {
