@@ -8871,7 +8871,7 @@ function rpWirePreview() {
    landing page and scroll to the section. */
 const RP_SECTION_PATHS = {
   '/programs': 'programs', '/plans': 'plans', '/how-it-works': 'how-it-works',
-  '/faq': 'faq', '/about': 'about', '/contact': 'contact',
+  '/faq': 'faq', '/about': 'about', '/contact': 'contact', '/measure': 'measure',
 };
 const RP_VIEW_PATHS = {
   landing: '/', home: '/', account: '/login', invite: '/request-invitation',
@@ -8883,7 +8883,7 @@ RP_PATH_VIEWS['/'] = 'landing';
 RP_PATH_VIEWS['/my-account'] = 'account';
 const RP_TITLES = {
   programs: 'Programs', plans: 'Plans', 'how-it-works': 'How It Works', faq: 'FAQ', about: 'About',
-  contact: 'Contact',
+  contact: 'Contact', measure: 'Measure Yourself',
   account: 'Sign In', invite: 'Request an Invitation', book: 'Book a Lab Talk',
   privacy: 'Privacy', terms: 'Terms',
 };
@@ -8972,6 +8972,113 @@ const RP_SAMPLE_REPORT = [
   ['Vertical jump', '24.5″', '27.0″', '+2.5″'],
   ['Broad jump', '7′6″', '8′1″', '+7″'],
 ];
+/* Measure yourself (Part 4c): the free speed tool on the landing
+   page and at /measure. The average speed shows here at once, from
+   the visitor's own number. The full breakdown comes from POST
+   /api/measure once they give an email and tick the consent box;
+   the server stores the email and the result and sends nothing.
+   RP_MEASURE_TESTS is a copy of MEASURE_TESTS in lib/measure.js
+   (the tests check that the two match). */
+const RP_MEASURE_TESTS = {
+  '30m-sprint': { label: '30m sprint from a start', min: 3.2, max: 9 },
+  'fly-30m': { label: 'Flying 30m', min: 2.3, max: 8 },
+};
+/* MEASURE-PURE-START */
+function rpMeasureFree(test, raw) {
+  const t = RP_MEASURE_TESTS[test];
+  if (!t) return { error: 'Please pick the 30m sprint or the flying 30m.' };
+  const s = String(raw === undefined || raw === null ? '' : raw).trim();
+  if (!/^\d{1,2}(\.\d{1,3})?$/.test(s)) return { error: 'Please enter your time in seconds, like 4.25.' };
+  const time = Math.round(Number(s) * 100) / 100;
+  if (!(time >= t.min && time <= t.max)) {
+    return { error: 'That time looks off for a ' + t.label.toLowerCase() + '. Please check it and enter it in seconds.' };
+  }
+  const ms = 30 / time;
+  const note = test === '30m-sprint'
+    ? 'It includes your start and your acceleration, so it is below your top speed.'
+    : 'It is timed after a run-in, so it is close to your top speed over that stretch.';
+  return {
+    time,
+    html: `<p class="measure-big"><strong>${(Math.round(ms * 100) / 100).toFixed(2)} m/s</strong> <span>${(Math.round(ms * 2.236936 * 10) / 10).toFixed(1)} mph</span></p>
+      <p>Your average speed for a ${esc(t.label.toLowerCase())} in ${time.toFixed(2)} s. ${esc(note)}</p>`,
+  };
+}
+function rpMeasureBreakdownHtml(b) {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(b.date || ''));
+  const day = dm ? months[Number(dm[2]) - 1] + ' ' + Number(dm[3]) + ', ' + dm[1] : '';
+  const n2 = (v) => Number(v).toFixed(2);
+  const n1 = (v) => Number(v).toFixed(1);
+  const sp = b.speed || {};
+  return `<h3>Your full breakdown</h3>
+    <dl class="measure-tiles">
+      <div><dt>Time</dt><dd>${n2(b.time)} s</dd></div>
+      <div><dt>Meters per second</dt><dd>${n2(sp.ms)}</dd></div>
+      <div><dt>Kilometers per hour</dt><dd>${n1(sp.kmh)}</dd></div>
+      <div><dt>Miles per hour</dt><dd>${n1(sp.mph)}</dd></div>
+      <div><dt>Average per 10 m</dt><dd>${n2(b.per10m)} s</dd></div>
+    </dl>
+    <h4>What the number means</h4>
+    <ul>${(b.notes || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+    <h4>How to retest it the same way</h4>
+    <ol>${(b.retest || []).map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+    <div class="measure-card">
+      <p class="measure-card-head">Your baseline</p>
+      <p><strong>${esc(b.label)}</strong></p>
+      <p>${n2(b.time)} s · ${n2(sp.ms)} m/s · ${n1(sp.kmh)} km/h · ${n1(sp.mph)} mph</p>
+      <p class="measure-card-meta">${esc(b.timingLabel || '')}${day ? ' · ' + esc(day) : ''}</p>
+    </div>
+    <p class="measure-fine">Save or screenshot this card, and compare your next time against it.</p>`;
+}
+/* MEASURE-PURE-END */
+function rpMeasure() {
+  const form = document.getElementById('measure-form');
+  if (!form) return;
+  const result = document.getElementById('measure-result');
+  const unlock = document.getElementById('measure-unlock');
+  const out = document.getElementById('measure-breakdown');
+  const send = document.getElementById('measure-send');
+  let current = null;
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const picked = form.querySelector('input[name="measure-test"]:checked');
+    const r = rpMeasureFree(picked ? picked.value : '', document.getElementById('measure-time').value);
+    const err = document.getElementById('measure-err');
+    if (r.error) { err.textContent = r.error; return; }
+    err.textContent = '';
+    current = { test: picked.value, time: r.time, timing: document.getElementById('measure-timing').value };
+    result.innerHTML = r.html;
+    result.hidden = false;
+    unlock.hidden = false;
+    out.hidden = true;
+    out.innerHTML = '';
+  });
+  unlock.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!current) return;
+    const errEl = document.getElementById('measure-unlock-err');
+    const email = document.getElementById('measure-email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email address.'; return; }
+    if (!document.getElementById('measure-consent').checked) {
+      errEl.textContent = "Please tick the box to save your email. You need to be 18 or older, or the athlete's parent or guardian.";
+      return;
+    }
+    errEl.textContent = '';
+    send.disabled = true;
+    try {
+      const data = await apiPost('/api/measure', Object.assign({}, current, {
+        email, consent: true, website: document.getElementById('measure-website').value,
+      }));
+      out.innerHTML = rpMeasureBreakdownHtml(data.breakdown || {});
+      out.hidden = false;
+      unlock.hidden = true;
+    } catch (err) {
+      errEl.textContent = err.message;
+    } finally {
+      send.disabled = false;
+    }
+  });
+}
 function rpFillPublicBits() {
   $$('[data-trial-days]').forEach(n => { n.textContent = String(RP_TRIAL_DAYS); });
   $$('[data-sample-report]').forEach(n => {
@@ -9002,6 +9109,7 @@ function rpFillPublicBits() {
   if (pc && RP_CONTACT_EMAIL) pc.innerHTML = `Email me at <a href="mailto:${esc(RP_CONTACT_EMAIL)}">${esc(RP_CONTACT_EMAIL)}</a> and I will answer.`;
 }
 rpFillPublicBits();
+rpMeasure();
 rpWirePreview();
 
 (async function boot() {
@@ -9897,11 +10005,46 @@ async function renderInviteRequests() {
       ${declined.length
         ? declined.map(r => row(r, actBtn(r, 'pending', 'Back to pending'))).join('')
         : '<p class="muted">Nothing here yet.</p>'}
-    </details>`;
+    </details>
+    <div id="measure-leads"></div>`;
   el.querySelectorAll('[data-inv-act]').forEach(btn => btn.addEventListener('click', async () => {
     try {
       await apiPost('/api/invite-requests/' + encodeURIComponent(btn.dataset.invId) + '/status', { status: btn.dataset.invAct });
       renderInviteRequests();
+    } catch (err) { alert(err.message); }
+  }));
+  renderMeasureLeads();
+}
+
+/* Measure yourself emails (Part 4c), under the invitation requests:
+   who asked for the full breakdown on the free speed tool, with the
+   times they entered. Nothing is ever emailed to them by the app.
+   Delete removes the email and everything saved with it. */
+const RP_MEASURE_LABELS = { '30m-sprint': '30m sprint', 'fly-30m': 'Flying 30m' };
+async function renderMeasureLeads() {
+  const el = $('#measure-leads');
+  if (!el) return;
+  let data;
+  try { data = await api('/api/measure-leads'); }
+  catch (err) {
+    el.innerHTML = `<div class="card"><h2>Measure yourself emails</h2><p class="error">${esc(err.message)}</p></div>`;
+    return;
+  }
+  const leads = data.leads || [];
+  el.innerHTML = `<details class="card">
+      <summary>Measure yourself emails (${leads.length})</summary>
+      <p class="muted">People who entered a time on the free speed tool and asked for the full breakdown. The app never emails them. Delete removes the email and every result saved with it.</p>
+      ${leads.length ? leads.map(l => `<div class="roster-row" style="display:block">
+        <p><strong>${esc(l.email)}</strong></p>
+        ${(l.results || []).map(r => `<p class="muted">${esc(r.createdAt ? fmtDate(parseDate(String(r.createdAt).slice(0, 10))) : '')} · ${esc(RP_MEASURE_LABELS[r.test] || r.test)}: ${esc(Number(r.time).toFixed(2))} s (${esc(r.timingLabel || '')})</p>`).join('')}
+        <p><button class="btn secondary" type="button" style="width:auto" data-measure-forget="${esc(l.email)}">Delete</button></p>
+      </div>`).join('') : '<p class="muted">No one yet.</p>'}
+    </details>`;
+  el.querySelectorAll('[data-measure-forget]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('Delete ' + btn.dataset.measureForget + ' and every result saved with it?')) return;
+    try {
+      await apiPost('/api/measure-leads/forget', { email: btn.dataset.measureForget });
+      renderMeasureLeads();
     } catch (err) { alert(err.message); }
   }));
 }

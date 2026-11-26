@@ -3194,6 +3194,7 @@ body.rp-public { overflow-x: clip; }
 #view-landing.lp[data-page="how-it-works"] [data-lp-section="how-it-works"],
 #view-landing.lp[data-page="about"] [data-lp-section="about"],
 #view-landing.lp[data-page="faq"] [data-lp-section="faq"],
+#view-landing.lp[data-page="measure"] [data-lp-section="measure"],
 #view-landing.lp[data-page="contact"] [data-lp-section="contact"] { display: block; background: var(--lp-bg); padding-top: 56px; }
 #view-landing.lp[data-page] .lp-page-only { display: block; }
 #view-landing.lp[data-page] p.lp-page-only { margin-top: 28px; }
@@ -3822,3 +3823,35 @@ html, body, input, button, select, textarea { font-variant-numeric: tabular-nums
   .update-toast, .flash-ok, .saved-note, [data-saved], .btn[aria-busy="true"]::after { animation: none; }
 }
 #view-landing.lp .lp-btn-primary, #view-landing.lp .lp-btn-primary:hover { color: var(--lp-accent-ink); }
+
+/* ---------------- Measure yourself (Part 4c) ----------------
+   The free speed tool: one time in, average speed out, and the full
+   breakdown after an email. */
+.lp-measure-band { background: var(--lp-bg); border-top: 1px solid var(--lp-line, rgba(255,255,255,.08)); border-bottom: 1px solid var(--lp-line, rgba(255,255,255,.08)); }
+.measure-tool { display: grid; gap: 20px; max-width: 640px; }
+.measure-form, .measure-unlock { display: grid; gap: 14px; padding: 22px; border-radius: var(--lp-radius); background: var(--lp-bg2); }
+.measure-form label, .measure-unlock label { display: grid; gap: 6px; font-weight: 600; }
+.measure-form input[type="text"], .measure-unlock input[type="email"], .measure-form select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.25); color: inherit; max-width: 280px; }
+.measure-tests { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 10px 22px; }
+.measure-tests legend { font-weight: 700; margin-bottom: 8px; }
+.measure-tests label, .measure-consent { display: flex !important; align-items: flex-start; gap: 8px; font-weight: 500 !important; }
+.measure-form .lp-btn, .measure-unlock .lp-btn { justify-self: start; border: 0; cursor: pointer; font: inherit; }
+.measure-result { padding: 22px; border-radius: var(--lp-radius); border: 1px solid var(--lp-accent); }
+.measure-big { margin: 0 0 8px; font-size: 1.1rem; }
+.measure-big strong { font-size: 2.4rem; color: var(--lp-accent); margin-right: 10px; }
+.measure-big span { color: var(--lp-muted); font-weight: 700; }
+.measure-unlock h3 { margin: 0; }
+.measure-unlock p { margin: 0; }
+.measure-fine, .measure-note { color: var(--lp-muted); font-size: .9rem; }
+.measure-note { margin-top: 18px; }
+.measure-breakdown { padding: 22px; border-radius: var(--lp-radius); background: var(--lp-bg2); }
+.measure-breakdown h3 { margin-top: 0; }
+.measure-breakdown h4 { margin: 20px 0 8px; }
+.measure-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0; }
+.measure-tiles div { padding: 12px; border-radius: 10px; background: rgba(0,0,0,.25); }
+.measure-tiles dt { font-size: .8rem; color: var(--lp-muted); }
+.measure-tiles dd { margin: 4px 0 0; font-size: 1.3rem; font-weight: 800; }
+.measure-card { margin-top: 20px; padding: 18px; border-radius: var(--lp-radius); border: 2px solid var(--lp-accent); }
+.measure-card p { margin: 4px 0; }
+.measure-card-head { text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; color: var(--lp-accent); font-weight: 800; }
+.measure-card-meta { color: var(--lp-muted); font-size: .9rem; }

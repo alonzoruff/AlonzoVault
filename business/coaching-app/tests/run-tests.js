@@ -9929,6 +9929,147 @@ async function waitForServer(tries = 60) {
       }
     }
 
+    /* ---------------- Measure yourself (Part 4c) ----------------
+       The free speed tool: arithmetic on the visitor's own time, no
+       norms or promises, the full breakdown for an email that is
+       stored and never emailed, and a coach-only list with delete.
+       Every email and time here is made up. */
+    {
+      const msr = require(path.join(APP_DIR, 'lib', 'measure.js'));
+      const vmM = require('vm');
+      const mb1 = msr.measureBreakdown(msr.parseMeasureInput({ test: '30m-sprint', time: '4.50', timing: 'hand' }), '2026-11-26');
+      check('measure: a 4.50 s 30m is 6.67 m/s, 24.0 km/h, 14.9 mph and 1.50 s per 10 m',
+        mb1.speed.ms === 6.67 && mb1.speed.kmh === 24 && mb1.speed.mph === 14.9 && mb1.per10m === 1.5 &&
+        mb1.timingLabel === 'Hand stopwatch' && mb1.date === '2026-11-26', mb1);
+      const mb2 = msr.measureBreakdown(msr.parseMeasureInput({ test: 'fly-30m', time: 3 }), null);
+      check('measure: a 3.00 s flying 30m is 10.00 m/s, 36.0 km/h and 22.4 mph, timing not sure',
+        mb2.speed.ms === 10 && mb2.speed.kmh === 36 && mb2.speed.mph === 22.4 && mb2.timing === 'unsure', mb2);
+      check('measure: bad tests, times and timing are refused with a plain sentence, and times round to 0.01 s',
+        ['40yd', '', 'constructor'].every(t => !!msr.parseMeasureInput({ test: t, time: '4.5' }).error) &&
+        ['abc', '', '4.5s', '-4', '1.0', '20', '4.5.1', '3.1', '9.5'].every(x => !!msr.parseMeasureInput({ test: '30m-sprint', time: x }).error) &&
+        ['2.2', '8.5'].every(x => !!msr.parseMeasureInput({ test: 'fly-30m', time: x }).error) &&
+        !!msr.parseMeasureInput({ test: '30m-sprint', time: '4.5', timing: 'laser' }).error &&
+        msr.parseMeasureInput({ test: '30m-sprint', time: '4.126' }).time === 4.13);
+      const mbText = JSON.stringify([mb1, mb2, msr.measureBreakdown({ test: 'fly-30m', time: 3, timing: 'electronic' }, null)]);
+      check('measure: the breakdown makes no promise, prediction, ranking or comparison with others',
+        !/guarantee|promise|you will|will run|could run|predict|percentile|elite|world|ranked|top \d|better than|faster than (most|average|other)/i.test(mbText), mbText.slice(0, 200));
+
+      const mPage = (await apiText(null, '/')).text;
+      const mBandM = mPage.match(/<div class="lp-band lp-measure-band" id="measure" data-lp-section="measure">[\s\S]*?<p class="measure-note">[^<]*<\/p>/);
+      const mBand = mBandM ? mBandM[0] : '';
+      check('measure: the landing page has the tool with both tests, the timing choice, consent and a honeypot',
+        mBand.includes('value="30m-sprint" checked') && mBand.includes('value="fly-30m"') &&
+        mBand.includes('id="measure-timing"') && mBand.includes('id="measure-consent"') &&
+        mBand.includes('id="measure-website" name="website" tabindex="-1"') &&
+        mBand.includes("I am 18 or older, or I am the athlete's parent or guardian.") &&
+        mBand.includes('Nothing is emailed to you automatically.'));
+      check('measure: the tool says it measures and never predicts, and shows no numbers of its own',
+        mBand.includes('This tool measures speed. It does not predict a time or promise a result.') &&
+        !/\d+(\.\d+)?\s?(m\/s|mph|km\/h)/.test(mBand));
+      check('measure: /measure is a section page, in the sitemap and the router',
+        (await apiText(null, '/sitemap.xml')).text.includes('/measure</loc>'));
+      check('measure: the privacy page says what the tool saves and why',
+        mPage.includes('On the Measure yourself tool, only if you ask for the full breakdown: your email, the time you entered, which test it was and how it was timed.') &&
+        mPage.includes('follow up on a time you measured'));
+      const mCss = (await apiText(null, '/styles.css')).text;
+      check('measure: the /measure page shows the tool on its own',
+        mCss.includes('#view-landing.lp[data-page="measure"] [data-lp-section="measure"]'));
+
+      const mJs = (await apiText(null, '/app.js')).text;
+      const mTestsM = mJs.match(/const RP_MEASURE_TESTS = (\{[\s\S]*?\n\});/);
+      const mPureM = mJs.match(/\/\* MEASURE-PURE-START \*\/([\s\S]*?)\/\* MEASURE-PURE-END \*\//);
+      check('measure: the page and the server agree on the tests and the time ranges',
+        !!mTestsM && JSON.stringify(vmM.runInNewContext('(' + mTestsM[1] + ')')) === JSON.stringify(msr.MEASURE_TESTS));
+      check('measure: the router knows /measure',
+        mJs.includes("'/measure': 'measure'") && mJs.includes("measure: 'Measure Yourself'"));
+      const mBox = {
+        esc: (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+      };
+      if (mTestsM && mPureM) {
+        vmM.runInNewContext(mTestsM[0] + mPureM[1] + ';this.free = rpMeasureFree; this.full = rpMeasureBreakdownHtml;', mBox);
+      }
+      const mFree = mBox.free ? mBox.free('30m-sprint', ' 4.50 ') : {};
+      check('measure: the free result on the page matches the server (6.67 m/s, 14.9 mph)',
+        mFree.time === 4.5 && (mFree.html || '').includes('6.67 m/s') && (mFree.html || '').includes('14.9 mph') &&
+        !(mFree.html || '').includes('km/h'), mFree);
+      check('measure: the page refuses a bad time before anything is sent',
+        !!mBox.free && !!mBox.free('fly-30m', 'abc').error && !!mBox.free('30m-sprint', '1.0').error && !!mBox.free('nope', '4.5').error);
+      const mFull = mBox.full ? mBox.full(mb1) : '';
+      check('measure: the full breakdown shows every unit, the 10 m average, the retest steps and a dated baseline card',
+        mFull.includes('<dd>24.0</dd>') && mFull.includes('<dd>14.9</dd>') && mFull.includes('<dd>6.67</dd>') &&
+        mFull.includes('<dd>1.50 s</dd>') && mFull.includes('Take 3 tries with full rest') &&
+        mFull.includes('class="measure-card"') && mFull.includes('Hand stopwatch · November 26, 2026'), mFull.slice(0, 300));
+
+      const mSrc = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
+      const mRouteM = mSrc.match(/if \(p === '\/api\/measure' && req\.method === 'POST'\) \{[\s\S]*?\n  \}\n/);
+      check('measure: the tool route sends no email to anyone',
+        !!mRouteM && !/notifyCoach|sendCoachEmail|sendEmail|fetch\(/.test(mRouteM[0]));
+
+      // The public route: validation first, nothing stored on a refusal.
+      const mLogin = async (email) => cookieOf(await api(null, 'POST', '/api/login', { email, password: 'testpass123' }));
+      const coach = await mLogin('coach@test.com');
+      const athlete = await mLogin('athlete@test.com');
+      check('measure fixtures: the coach and member sign in', !!coach && !!athlete);
+      const mLeads = async () => (await api(coach, 'GET', '/api/measure-leads')).json;
+      const mStart = await mLeads();
+      check('measure: the coach can list the emails (none yet)', !!mStart && Array.isArray(mStart.leads), mStart);
+      const mBase = { test: '30m-sprint', time: 4.5, timing: 'hand' };
+      let mr = await api(null, 'POST', '/api/measure', mBase);
+      check('measure: no email is a 400', mr.status === 400 && /valid email/.test(mr.json.error), mr.json);
+      mr = await api(null, 'POST', '/api/measure', Object.assign({}, mBase, { email: 'not-an-email', consent: true }));
+      check('measure: a bad email is a 400', mr.status === 400, mr.json);
+      mr = await api(null, 'POST', '/api/measure', Object.assign({}, mBase, { email: 'measure.kid@example.com' }));
+      check('measure: no consent tick is a 400', mr.status === 400 && /18 or older/.test(mr.json.error), mr.json);
+      mr = await api(null, 'POST', '/api/measure', { test: '30m-sprint', time: '40', email: 'measure.kid@example.com', consent: true });
+      check('measure: an impossible time is a 400', mr.status === 400 && /looks off/.test(mr.json.error), mr.json);
+      check('measure: nothing was stored by the refusals', (await mLeads()).total === mStart.total);
+
+      mr = await api(null, 'POST', '/api/measure', Object.assign({}, mBase, { email: ' Measure.Kid@Example.com ', consent: true }));
+      check('measure: email and consent answer 201 with the full breakdown',
+        mr.status === 201 && mr.json.ok === true && mr.json.breakdown.speed.ms === 6.67 &&
+        /^\d{4}-\d{2}-\d{2}$/.test(mr.json.breakdown.date) && mr.json.breakdown.retest.length === 7, mr.json);
+      mr = await api(null, 'POST', '/api/measure', Object.assign({}, mBase, { email: 'bot@example.com', consent: true, website: 'http://spam.example' }));
+      check('measure: the honeypot looks like success and stores nothing',
+        mr.status === 201 && !!mr.json.breakdown && !(await mLeads()).leads.some(l => l.email === 'bot@example.com'));
+      let mList = await mLeads();
+      let mKid = mList.leads.find(l => l.email === 'measure.kid@example.com');
+      check('measure: the coach sees the email, lower-cased, with only the test, time and timing',
+        !!mKid && mKid.results.length === 1 && mKid.results[0].test === '30m-sprint' && mKid.results[0].time === 4.5 &&
+        mKid.results[0].timing === 'hand' && mKid.results[0].timingLabel === 'Hand stopwatch' &&
+        Object.keys(mKid).sort().join(',') === 'email,lastAt,results' &&
+        Object.keys(mKid.results[0]).sort().join(',') === 'createdAt,test,time,timing,timingLabel', mKid);
+
+      let mr2 = await api(null, 'GET', '/api/measure-leads');
+      check('measure: signed out, the list is a 401', mr2.status === 401, mr2.status);
+      mr2 = await api(athlete, 'GET', '/api/measure-leads');
+      check('measure: a member gets a 403 on the list', mr2.status === 403, mr2.status);
+      mr2 = await api(athlete, 'POST', '/api/measure-leads/forget', { email: 'measure.kid@example.com' });
+      check('measure: a member cannot delete', mr2.status === 403, mr2.status);
+
+      for (let i = 0; i < 11; i++) {
+        await api(null, 'POST', '/api/measure', { test: 'fly-30m', time: (3 + i / 100).toFixed(2), email: 'measure.kid@example.com', consent: true });
+      }
+      mList = await mLeads();
+      mKid = mList.leads.find(l => l.email === 'measure.kid@example.com');
+      check('measure: one email keeps its newest 10 results',
+        !!mKid && mKid.results.length === 10 && mKid.results[0].time === 3.1 &&
+        !mKid.results.some(x => x.test === '30m-sprint'), mKid && mKid.results.map(x => x.time));
+
+      const mBk = await apiText(coach, '/api/export/backup');
+      check('measure: the emails are not in the backup export',
+        mBk.status === 200 && !mBk.text.includes('measure.kid@example.com') && !mBk.text.includes('measureLeads'));
+
+      mr2 = await api(coach, 'POST', '/api/measure-leads/forget', { email: 'MEASURE.KID@example.com' });
+      check('measure: the coach deletes an email with everything saved with it',
+        mr2.status === 200 && mr2.json.removed === 10 &&
+        !(await mLeads()).leads.some(l => l.email === 'measure.kid@example.com'), mr2.json);
+      mr2 = await api(coach, 'POST', '/api/measure-leads/forget', { email: 'measure.kid@example.com' });
+      check('measure: deleting it again is a 404', mr2.status === 404, mr2.status);
+      check('measure: the coach page lists the emails under the invitation requests',
+        mJs.includes('<div id="measure-leads"></div>') && mJs.includes("api('/api/measure-leads')") &&
+        mJs.includes("apiPost('/api/measure-leads/forget'"));
+    }
+
   } catch (err) {
     failures.push('SUITE ERROR: ' + err.message);
   } finally {
