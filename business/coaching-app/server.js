@@ -63,7 +63,8 @@
  *                   still works, but every other change is refused with
  *                   a calm message and nothing is saved.
  *   SITE_URL        The public address written into the page tags,
- *                   sitemap and robots file (default
+ *                   sitemap and robots file (default on Vercel: the
+ *                   project's production address; elsewhere
  *                   https://ruffin-performance.onrender.com).
  *   COACH_INVITE_EMAILS  Optional comma-separated emails to seed as
  *                   assistant-coach invites at startup. Seeding is
@@ -113,9 +114,19 @@ const READ_ONLY = /^(1|true|yes|on)$/i.test(String(process.env.READ_ONLY_MODE ||
 const ON_VERCEL = !!process.env.VERCEL;
 const BIG_UPLOAD_CAP = ON_VERCEL ? 4 * 1024 * 1024 : 10 * 1024 * 1024;
 const MID_UPLOAD_CAP = ON_VERCEL ? 4 * 1024 * 1024 : 5 * 1024 * 1024;
+/* SITE_URL wins when set. On Vercel with no SITE_URL, the project's
+   own production address (VERCEL_PROJECT_PRODUCTION_URL, which Vercel
+   sets on every deployment: the custom domain once there is one, else
+   the .vercel.app name) is used, so the Vercel build's tags, sitemap
+   and robots file name the Vercel site and not Render. Render keeps
+   its old default. */
 const SITE_URL = (() => {
+  const ok = (v) => /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(v);
   const v = String(process.env.SITE_URL || '').trim().replace(/\/+$/, '');
-  return /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(v) ? v : 'https://ruffin-performance.onrender.com';
+  if (ok(v)) return v;
+  const host = String(process.env.VERCEL_PROJECT_PRODUCTION_URL || '').trim().replace(/\/+$/, '');
+  if (ON_VERCEL && /^[A-Za-z0-9.-]+$/.test(host) && ok('https://' + host)) return 'https://' + host;
+  return 'https://ruffin-performance.onrender.com';
 })();
 let txns = null; /* set at the bottom in store mode */
 /* Coach emails: on Render they go out right away, without waiting,
@@ -4919,28 +4930,27 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/content' && req.method === 'GET') {
     /* The content payload IS the library, the videos, and the
-       learn content, so it sits behind the tier gate for members:
-       a signed-in member whose membership is not active (no tier,
-       or cancelled) gets the plain 403 below. Signed-out reads
-       stay public (the landing page and the TV board load it
-       before any login) and coaches are never gated. */
+       learn content, so it needs an account: a visitor who is not
+       signed in gets 401 and none of it (the public pages are plain
+       HTML and need none of it; the app boots on an empty skeleton,
+       see EMPTY_CONTENT in app.js). A signed-in member whose
+       membership is not active (no tier, or cancelled) gets the
+       plain 403 below, and coaches are never gated. */
     const viewer = readSession(req);
-    if (viewer && viewer.role !== 'coach' && !effectiveTier(viewer)) {
+    if (!viewer) {
+      return sendJson(res, 401, {
+        error: 'Sign in to see the Lab content.',
+        needsAccount: true,
+      }, { 'Cache-Control': 'no-store' });
+    }
+    if (viewer.role !== 'coach' && !effectiveTier(viewer)) {
       return sendJson(res, 403, {
         error: 'The Lab content needs a membership. Your account does not have an active tier right now — see the Account tab for your membership and your options.',
         needsTier: 'access',
       });
     }
-    /* The three Lab programs are member content. Signed-out reads
-       keep the established public payload for the landing page and
-       the TV board, but the program collection itself is withheld
-       until the reader is a coach or a member with an active tier. */
-    if (!viewer) {
-      return sendJson(res, 200, Object.assign({}, CONTENT, {
-        labPrograms: [], videoUpload: VIDEO_UPLOAD, brand: BRAND,
-      }));
-    }
-    return sendJson(res, 200, Object.assign({}, CONTENT, { videoUpload: VIDEO_UPLOAD, brand: BRAND }));
+    return sendJson(res, 200, Object.assign({}, CONTENT, { videoUpload: VIDEO_UPLOAD, brand: BRAND }),
+      { 'Cache-Control': 'no-store' });
   }
 
   /* Membership checkout: creates a hosted Stripe Checkout Session
@@ -9812,6 +9822,10 @@ function applyBrand(text) {
     .replaceAll('__BRAND_CACHE__', BRAND.cache)
     .replaceAll('__CALENDLY_URL__', CALENDLY_URL)
     .replaceAll('__TRIAL_DAYS__', String(TRIAL_DAYS))
+    /* No CONTACT_EMAIL set: no blank mailto: link ships in the page.
+       The email links point at the Contact section instead (they stay
+       hidden there, and its Send a request button is shown). */
+    .replaceAll('mailto:__CONTACT_EMAIL__', CONTACT_EMAIL ? 'mailto:' + CONTACT_EMAIL : '/#contact')
     .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL)
     .replaceAll('__SITE_URL__', SITE_URL);
 }

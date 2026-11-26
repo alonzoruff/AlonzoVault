@@ -70,7 +70,17 @@ async function apiText(cookie, p) {
 
 async function main() {
   /* ---------------- content + auth ---------------- */
+  /* The Lab content needs an account: signed out gets 401 and none
+     of the library. The head coach registers first (checked below,
+     where the auth checks live) and the content checks read the
+     payload as that account. */
+  const firstReg = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
   let r = await api(null, 'GET', '/api/content');
+  check('signed-out /api/content is 401 and carries none of the library',
+    r.status === 401 && r.json.needsAccount === true && !('sessions' in r.json) &&
+    !('exerciseLibrary' in r.json) && !('glossary' in r.json) && !('coachEducation' in r.json) &&
+    !('season' in r.json) && !('videoLibrary' in r.json), r.status);
+  r = await api(cookieOf(firstReg), 'GET', '/api/content');
   check('content loads', r.status === 200);
   check('content counts are 57/17/29 (49 library + 8 Instagram sessions)',
     r.json.sessions.length === 57 && r.json.drills.length === 17 && r.json.weeks.length === 29,
@@ -96,7 +106,7 @@ async function main() {
     r.json && r.json.board && r.json.board.length);
 
   /* ---------------- video library ---------------- */
-  const contentJson = (await api(null, 'GET', '/api/content')).json;
+  const contentJson = (await api(cookieOf(firstReg), 'GET', '/api/content')).json;
   const vids = contentJson.videoLibrary;
   check('video library serves an array', Array.isArray(vids), typeof vids);
   check('video library has 102 entries', Array.isArray(vids) && vids.length === 102,
@@ -140,9 +150,9 @@ async function main() {
     appJs.text.includes('i.ytimg.com/vi/') && appJs.text.includes('youtube-nocookie.com/embed/'));
 
   /* ---------------- Lab programs (v15) ---------------- */
-  check('signed-out content keeps the public payload but withholds the Lab programs',
-    Array.isArray(contentJson.labPrograms) && contentJson.labPrograms.length === 0 &&
-    contentJson.sessions.length === 57, contentJson.labPrograms);
+  check('signed-in content carries the Lab programs and the full library',
+    Array.isArray(contentJson.labPrograms) && contentJson.labPrograms.length > 0 &&
+    contentJson.sessions.length === 57, contentJson.labPrograms && contentJson.labPrograms.length);
   check('Lab Programs view markers are in the served page',
     pageHtml.text.includes('id="view-labprograms"') &&
     pageHtml.text.includes('data-view="labprograms"') &&
@@ -586,7 +596,7 @@ async function main() {
     qrSeg.includes('out.summary') && qrSeg.includes('out.checklist') &&
     qrSeg.includes("state.meetDayFlags") && !qrSeg.includes('renderMeetDay('), qrSeg.slice(0, 120));
 
-  r = await api(null, 'POST', '/api/register', { email: 'coach@test.com', password: 'testpass123' });
+  r = firstReg;
   check('first register is 201', r.status === 201, r.status);
   check('first account is coach', r.json.role === 'coach', r.json.role);
   const coach = cookieOf(r);
@@ -2653,7 +2663,7 @@ async function main() {
     stylesCss.text.includes('body.printing-lab-report .sr-print-footer') &&
     stylesCss.text.includes('break-inside: avoid'),
     stylesCss.text.slice(0, 120));
-  const v23Content = (await api(null, 'GET', '/api/content')).json;
+  const v23Content = (await api(coach, 'GET', '/api/content')).json;
   check('printable report: BRAND reports v29 with the v29 cache',
     !!v23Content.brand && v23Content.brand.version === 'v41' &&
     v23Content.brand.cache === 'ayg-lab-v41', v23Content.brand);
@@ -6094,7 +6104,7 @@ async function main() {
 async function waitForServer(tries = 60) {
   for (let i = 0; i < tries; i++) {
     try {
-      const res = await fetch(BASE + '/api/content');
+      const res = await fetch(BASE + '/api/records');
       if (res.status === 200) return true;
     } catch (_) { /* not up yet */ }
     await new Promise(r => setTimeout(r, 150));
@@ -6208,7 +6218,7 @@ async function waitForServer(tries = 60) {
       const waitRt = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(RT_BASE + '/api/content');
+            const res = await fetch(RT_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -6296,7 +6306,7 @@ async function waitForServer(tries = 60) {
       const waitAc = async (base) => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(base + '/api/content');
+            const res = await fetch(base + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -6642,7 +6652,7 @@ async function waitForServer(tries = 60) {
       const waitSeed = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(SEED_BASE + '/api/content');
+            const res = await fetch(SEED_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -6742,7 +6752,7 @@ async function waitForServer(tries = 60) {
       const waitD = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(D_BASE + '/api/content');
+            const res = await fetch(D_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -6830,7 +6840,7 @@ async function waitForServer(tries = 60) {
         await dApi(dCoach, 'POST', '/api/completions', { profileId: amyP.id, date: '2026-11-04' });
         await dApi(dCoach, 'POST', '/api/completions', { profileId: benP.id, date: '2026-11-02' });
         await dApi(dCoach, 'POST', '/api/completions', { profileId: amyP.id, date: '2026-10-26' });
-        const dContent = (await dApi(null, 'GET', '/api/content')).json;
+        const dContent = (await dApi(dCoach, 'GET', '/api/content')).json;
         const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
         const wk2 = dContent.weeks.find(w => w.start === W2);
         const assignedW2 = dayKeys.filter(k => /[A-Z]{2,3}-\d{2}/.test(String(wk2[k] || ''))).length;
@@ -7001,7 +7011,7 @@ async function waitForServer(tries = 60) {
       const waitLb = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(LB_BASE + '/api/content');
+            const res = await fetch(LB_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -7307,7 +7317,7 @@ async function waitForServer(tries = 60) {
       const waitCo = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(CO_BASE + '/api/content');
+            const res = await fetch(CO_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -7488,7 +7498,7 @@ async function waitForServer(tries = 60) {
     const waitPl = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(PL_BASE + '/api/content');
+          const res = await fetch(PL_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -7792,7 +7802,7 @@ async function waitForServer(tries = 60) {
     const waitWr = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(WR_BASE + '/api/content');
+          const res = await fetch(WR_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -8079,7 +8089,7 @@ async function waitForServer(tries = 60) {
     const waitRp = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(RP_BASE + '/api/content');
+          const res = await fetch(RP_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -8348,7 +8358,7 @@ async function waitForServer(tries = 60) {
     const waitSr = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(SR_BASE + '/api/content');
+          const res = await fetch(SR_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -8711,7 +8721,7 @@ async function waitForServer(tries = 60) {
     const waitFc = async () => {
       for (let i = 0; i < 60; i++) {
         try {
-          const res = await fetch(FC_BASE + '/api/content');
+          const res = await fetch(FC_BASE + '/api/records');
           if (res.status === 200) return true;
         } catch (_) { /* not up yet */ }
         await new Promise(r => setTimeout(r, 150));
@@ -8812,7 +8822,7 @@ async function waitForServer(tries = 60) {
       const waitBk = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(BK_BASE + '/api/content');
+            const res = await fetch(BK_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -9109,13 +9119,11 @@ async function waitForServer(tries = 60) {
           otherOpen.every(d => d.weekday === tomorrowWeekday),
           { tmrNarrow: tmrNarrow && tmrNarrow.slots, otherOpen: otherOpen.map(d => d.date) });
 
-        /* The content payload is unchanged in shape: v17, programs
-           still withheld signed out. */
+        /* The content payload needs an account: signed out is 401. */
         br = await bkApi(null, 'GET', '/api/content');
-        check('content reports v24 with the Lab programs still withheld signed out',
-          br.status === 200 && br.json.brand.version === 'v41' &&
-          Array.isArray(br.json.labPrograms) && br.json.labPrograms.length === 0,
-          br.json && br.json.brand);
+        check('content is 401 signed out, with no library and no Lab programs',
+          br.status === 401 && !('labPrograms' in br.json) && !('sessions' in br.json),
+          br.status);
       } finally {
         bkChild.kill('SIGKILL');
         fs.rmSync(BK_DIR, { recursive: true, force: true });
@@ -9165,7 +9173,7 @@ async function waitForServer(tries = 60) {
       const waitLr = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(LR_BASE + '/api/content');
+            const res = await fetch(LR_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -9231,7 +9239,7 @@ async function waitForServer(tries = 60) {
           tiers.map(t => t.key));
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
-        lr = await lrApi(null, 'GET', '/api/content');
+        lr = await lrApi(lrCoach, 'GET', '/api/content');
         check('content reports v24', lr.status === 200 && lr.json.brand.version === 'v41',
           lr.json && lr.json.brand);
       } finally {
@@ -9282,7 +9290,7 @@ async function waitForServer(tries = 60) {
       const waitIv = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(IV_BASE + '/api/content');
+            const res = await fetch(IV_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -9604,7 +9612,7 @@ async function waitForServer(tries = 60) {
       const waitFc30 = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(FC30_BASE + '/api/content');
+            const res = await fetch(FC30_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -9832,7 +9840,7 @@ async function waitForServer(tries = 60) {
       const waitSnz = async () => {
         for (let i = 0; i < 60; i++) {
           try {
-            const res = await fetch(SNZ_BASE + '/api/content');
+            const res = await fetch(SNZ_BASE + '/api/records');
             if (res.status === 200) return true;
           } catch (_) { /* not up yet */ }
           await new Promise(r => setTimeout(r, 150));
@@ -10001,6 +10009,64 @@ async function waitForServer(tries = 60) {
         snzChild.kill('SIGKILL');
         fs.rmSync(SNZ_DIR, { recursive: true, force: true });
       }
+    }
+
+    /* ---------------- site address + contact fallbacks (Part 1b) ----------------
+       The main server runs with no SITE_URL and no CONTACT_EMAIL: the
+       page carries no blank mailto: link, and Render keeps its old
+       default address. A server started the way Vercel starts it
+       (VERCEL=1 plus Vercel's own VERCEL_PROJECT_PRODUCTION_URL) names
+       its own address in the tags, sitemap and robots file; SITE_URL
+       still wins when set. Made-up host names only. */
+    {
+      const plainPage = await apiText(null, '/');
+      check('1b: with no CONTACT_EMAIL the page has no blank mailto: link',
+        plainPage.status === 200 && !plainPage.text.includes('href="mailto:"') &&
+        !plainPage.text.includes('mailto:__CONTACT_EMAIL__') && plainPage.text.includes('href="/#contact" data-contact-mailto'),
+        (plainPage.text.match(/href="mailto:[^"]*"/g) || []).slice(0, 3));
+      check('1b: off Vercel with no SITE_URL the canonical stays on the Render address',
+        plainPage.text.includes('<link rel="canonical" href="https://ruffin-performance.onrender.com/">'));
+      const runSite = async (port, extra) => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'swa-site-'));
+        const c = spawn(process.execPath, [path.join(APP_DIR, 'server.js')], {
+          env: Object.assign({}, process.env, { PORT: String(port), DATA_DIR: dir, SESSION_SECRET: 'site-secret',
+            SITE_URL: '', CONTACT_EMAIL: '', VERCEL: '', VERCEL_PROJECT_PRODUCTION_URL: '' }, extra),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        c.stdout.on('data', () => {}); c.stderr.on('data', () => {});
+        const base = 'http://127.0.0.1:' + port;
+        try {
+          let up = false;
+          for (let i = 0; i < 60 && !up; i++) {
+            try { up = (await fetch(base + '/api/records')).status === 200; } catch (_) { /* not up yet */ }
+            if (!up) await new Promise(r => setTimeout(r, 150));
+          }
+          if (!up) return null;
+          const get = async (u) => (await fetch(base + u)).text();
+          return { page: await get('/'), robots: await get('/robots.txt'), sitemap: await get('/sitemap.xml') };
+        } finally {
+          c.kill('SIGKILL');
+          fs.rmSync(dir, { recursive: true, force: true });
+        }
+      };
+      const vz = await runSite(3236, { VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'ayg-lab.example.test' });
+      check('1b: on Vercel with no SITE_URL the canonical, og tags, sitemap and robots name the Vercel address',
+        !!vz && vz.page.includes('<link rel="canonical" href="https://ayg-lab.example.test/">') &&
+        vz.page.includes('<meta property="og:url" content="https://ayg-lab.example.test/">') &&
+        vz.robots.includes('Sitemap: https://ayg-lab.example.test/sitemap.xml') &&
+        vz.sitemap.includes('<loc>https://ayg-lab.example.test/</loc>') &&
+        !vz.page.includes('ruffin-performance.onrender.com') && !vz.sitemap.includes('onrender.com'),
+        vz && vz.robots);
+      const vs = await runSite(3237, { VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'ayg-lab.example.test', SITE_URL: 'https://lab.example.test' });
+      check('1b: SITE_URL still wins over the Vercel address when set',
+        !!vs && vs.page.includes('<link rel="canonical" href="https://lab.example.test/">') &&
+        vs.robots.includes('Sitemap: https://lab.example.test/sitemap.xml'), vs && vs.robots);
+      const vbad = await runSite(3238, { VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'evil.test/"><script>' });
+      check('1b: a malformed Vercel address is ignored (falls back to the Render default)',
+        !!vbad && vbad.page.includes('<link rel="canonical" href="https://ruffin-performance.onrender.com/">'));
+      const ce = await runSite(3239, { CONTACT_EMAIL: 'coach@example.test' });
+      check('1b: with CONTACT_EMAIL set the Email Coach AJ links carry it',
+        !!ce && ce.page.includes('href="mailto:coach@example.test" data-contact-mailto'), null);
     }
 
   } catch (err) {

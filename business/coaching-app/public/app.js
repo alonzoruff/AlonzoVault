@@ -348,6 +348,9 @@ function spacingViolations() {
 function currentWeekNum() {
   const t = todayLocal();
   const weeks = state.content.weeks;
+  /* The empty skeleton (signed out, or a member with no active tier)
+     has no season weeks. */
+  if (!weeks || !weeks.length) return 1;
   for (const w of weeks) {
     if (t >= parseDate(w.start) && t <= parseDate(w.end)) return w.week;
   }
@@ -1058,6 +1061,20 @@ function renderHome() {
     return;
   }
   const c = state.content;
+  /* Signed out the Lab content is not sent (the season plan needs an
+     account), so Home says so in one line instead of drawing a week. */
+  if (!c || !Array.isArray(c.weeks) || !c.weeks.length) {
+    const el = $('#home-content');
+    if (el) {
+      el.removeAttribute('aria-busy');
+      el.innerHTML = `<div class="empty">
+        <h3>Sign in to see your week</h3>
+        <p class="muted">The training plan, the library and the learn pages open once you sign in to your Lab account.</p>
+        <button class="btn secondary" type="button" data-view="account">Sign in</button>
+      </div>`;
+    }
+    return;
+  }
   const t = todayLocal();
   const weeks = c.weeks;
   const first = weeks[0], last = weeks[weeks.length - 1];
@@ -1834,6 +1851,7 @@ function renderLog() {
 async function refreshUserData() {
   if (state.user && state.user.role === 'coach') await ensureCoachViews();
   else unloadCoachViews();
+  if (state.content) await loadAppContent();
   if (!state.user) { state.logs = []; state.swaps = {}; state.groups = []; state.membership = null; state.membershipData = null; return; }
   try {
     const [logs, swaps, groups] = await Promise.all([
@@ -9056,18 +9074,26 @@ function rpFillPublicBits() {
 rpFillPublicBits();
 rpWirePreview();
 
-(async function boot() {
-  try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
+/* The Lab content (library, videos, learn pages) needs an account:
+   /api/content answers 401 to a visitor who is not signed in and 403
+   to a member with no active tier. Either way the app boots on the
+   empty skeleton above. It is loaded again whenever the signed-in
+   account changes (sign-in, sign-out), from refreshUserData. */
+let contentLoadedFor = null;
+let contentLoads = 0;
+async function loadAppContent() {
+  const who = state.user ? (state.user.role || '') + ':' + (state.user.email || state.user.id || '') : '';
+  if (state.content && contentLoadedFor === who) return true;
+  let content;
   try {
-    state.content = await api('/api/content');
+    content = await api('/api/content');
   } catch (err) {
-    if (state.user && state.user.role === 'athlete') {
-      state.content = EMPTY_CONTENT;
-    } else {
-      $('#home-content').innerHTML = '<p class="error">Could not load the app content. Please reload.</p>';
-      return;
-    }
+    if (!state.user || state.user.role === 'athlete') content = EMPTY_CONTENT;
+    else return false;
   }
+  state.content = content;
+  contentLoadedFor = who;
+  state.sessions.clear();
   for (const s of state.content.sessions) state.sessions.set(s.id, s);
   state.week = currentWeekNum();
   fillLibFilters();
@@ -9081,6 +9107,19 @@ rpWirePreview();
   renderLabPrograms();
   $('#guide-doc').innerHTML = md(state.content.guide);
   $('#season-doc').innerHTML = md(state.content.season);
+  /* On a later load (sign-in or sign-out in the same page) the
+     workout list is redrawn too; the first load leaves that to the
+     end of boot, as before. */
+  if (contentLoads++ > 0) { renderLibrary(); renderSeason(); }
+  return true;
+}
+
+(async function boot() {
+  try { state.user = await api('/api/me'); } catch (_) { state.user = null; }
+  if (!(await loadAppContent())) {
+    $('#home-content').innerHTML = '<p class="error">Could not load the app content. Please reload.</p>';
+    return;
+  }
   $('#log-date').value = todayStr();
   try { state.wuOverrides = (await api('/api/warmup-cards')).cards || {}; } catch (_) { state.wuOverrides = {}; }
   await refreshUserData();
