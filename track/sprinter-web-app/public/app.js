@@ -137,11 +137,29 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* Plain words for when a request fails without its own message. An
+   athlete should never see a status number or a browser error. */
+const OFFLINE_MSG = 'No connection. Check your signal or Wi-Fi and try again.';
+function plainStatusMsg(status) {
+  if (status === 401) return 'You were logged out. Log in again to keep going.';
+  if (status === 403) return "Your account doesn't have access to this.";
+  if (status === 404) return "We couldn't find that. It may have been removed.";
+  if (status === 413) return 'That is too big to send. Try something smaller.';
+  if (status === 429) return 'Too many tries in a row. Wait a minute and try again.';
+  return 'The app could not reach the server just now. Wait a moment and try again.';
+}
 async function api(path, opts) {
-  const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  let res;
+  try {
+    res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  } catch (_) {
+    /* No signal at the track: the browser's own words here are
+       "Failed to fetch" or "Load failed". */
+    throw new Error(OFFLINE_MSG);
+  }
   let data = {};
   try { data = await res.json(); } catch (_) { /* empty */ }
-  if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
+  if (!res.ok) throw new Error(data.error || plainStatusMsg(res.status));
   return data;
 }
 const apiPost = (path, body) => api(path, {
@@ -153,8 +171,8 @@ const apiPut = (path, body) => api(path, {
 const apiDel = (path) => api(path, { method: 'DELETE' });
 
 /* ---------------- app version + update delivery ---------------- */
-const APP_VERSION = 'v66';
-const APP_BUILD_LABEL = 'Sprinter Workout App · v66';
+const APP_VERSION = 'v69';
+const APP_BUILD_LABEL = 'Sprinter Workout App · v69';
 function appVersionHtml() {
   return `<p class="app-version" data-app-version="${APP_VERSION}">${APP_BUILD_LABEL}</p>`;
 }
@@ -1113,8 +1131,8 @@ function countUp(el) {
 /* ---------------- shared session rendering ---------------- */
 function badge(cns) {
   return cns === 'high'
-    ? '<span class="badge high">HARD · HIGH CNS</span>'
-    : '<span class="badge low">EASY · LOW CNS</span>';
+    ? '<span class="badge high">HARD DAY</span>'
+    : '<span class="badge low">EASY DAY</span>';
 }
 function sessionRow(s) {
   return `<button class="session-row" data-session="${esc(s.id)}">
@@ -1351,6 +1369,65 @@ function homeLearnHtml(info, inSeason) {
   </div>`;
 }
 
+/* "What to do today": three plain steps at the very top of home
+   (warm up, run the workout, log it) so an athlete never has to
+   hunt. A rest day gets one line instead of steps.
+   v69: when the athlete's coach has PUBLISHED a workout for the
+   athlete's group today (state.myPlan, filled by renderMyPlan from
+   /api/my/plan, which only ever returns a published version), step 2
+   names that workout and its Start button runs that session, not the
+   season plan's. A published plan also shows on a season rest day and
+   outside the season, because the coach's word for today wins. */
+function todoCardHtml() {
+  const c = state.content;
+  if (!c || !c.weeks || !c.weeks.length) return '';
+  const t = todayLocal();
+  const wk = c.weeks.find(w => w.week === currentWeekNum());
+  const todayKey = DAY_KEYS[(t.getDay() + 6) % 7];
+  const inSeason = !!wk && t >= parseDate(wk.start) && t <= parseDate(wk.end);
+  const info = inSeason ? dayInfo(wk, todayKey) : null;
+  const warm = info && info.warmup ? state.sessions.get(info.warmup) : null;
+  const plan = (!isCoachUser() && state.user && state.myPlan) ? state.myPlan : null;
+  const warmLi = `<li><strong>Warm up.</strong> ${warm ? `Do ${esc(warm.name)}. <button class="btn secondary" id="todo-warmup" type="button">Open warm-up card</button>` : 'Jog easy and loosen up for 10 minutes.'}</li>`;
+  const logLi = `<li><strong>Log it.</strong> Write down what you ran. <button class="btn secondary" id="todo-log" type="button">Open my log</button></li>`;
+  if (plan) {
+    const ps = plan.sessionId ? state.sessions.get(plan.sessionId) : null;
+    const runLi = `<li><strong>Run today's workout.</strong> <span class="todo-plan-title">${esc(plan.title)}</span>. ${ps
+      ? `<button class="btn primary" data-run-today="${esc(ps.id)}" type="button">Start ${esc(ps.id)}</button>`
+      : 'The details are in your coach\'s card below.'}</li>`;
+    return `<div class="card todo-today todo-published" id="todo-today">
+      <h2>What to do today</h2>
+      <p class="ct-eyebrow todo-from-coach">Published by your coach${plan.groupName ? ' for ' + esc(plan.groupName) : ''}</p>
+      <ol class="todo-steps">${warmLi}${runLi}${logLi}</ol>
+    </div>`;
+  }
+  if (!inSeason) return '';
+  if (!info.codes || !info.codes.length) {
+    return `<div class="card todo-today" id="todo-today"><h2>What to do today</h2><p>Rest day. No workout. Eat, sleep, and stay loose.</p></div>`;
+  }
+  const sid = isCoachUser() ? null : featuredRunSessionId(info);
+  return `<div class="card todo-today" id="todo-today">
+      <h2>What to do today</h2>
+      <ol class="todo-steps">
+        ${warmLi}
+        <li><strong>Run today's workout.</strong> ${sid ? `<button class="btn primary" data-run-today="${esc(sid)}" type="button">Start ${esc(sid)}</button>` : (isCoachUser() ? `Open each group's workout and start it from Coach Today. <button class="btn primary" id="todo-coach" type="button">Open Coach Today</button>` : 'Your coach will give you the workout.')}</li>
+        ${logLi}
+      </ol>
+    </div>`;
+}
+function paintTodoCard() {
+  const todoSlot = $('#todo-slot');
+  if (!todoSlot) return;
+  todoSlot.innerHTML = todoCardHtml();
+  wireRunTodayButtons(todoSlot);
+  const todoWarm = $('#todo-warmup');
+  if (todoWarm) todoWarm.addEventListener('click', openWarmupCard);
+  const todoCoach = $('#todo-coach');
+  if (todoCoach) todoCoach.addEventListener('click', () => showView('coachtoday'));
+  const todoLog = $('#todo-log');
+  if (todoLog) todoLog.addEventListener('click', () => showView('log'));
+}
+
 function renderHome() {
   const c = state.content;
   const t = todayLocal();
@@ -1394,25 +1471,6 @@ function renderHome() {
   }
   const daysHtml = restKeys.map(dk => dayCardHtml(wk, dk, dayInfo(wk, dk), { highlight: false })).join('');
 
-  /* "What to do today": three plain steps at the very top of home
-     (warm up, run the workout, log it) so an athlete never has to
-     hunt. A rest day gets one line instead of steps. */
-  const todayCardHtml = inSeason ? (() => {
-    const info = dayInfo(wk, todayKey);
-    const sid = isCoachUser() ? null : featuredRunSessionId(info);
-    const warm = info.warmup ? state.sessions.get(info.warmup) : null;
-    if (!info.codes || !info.codes.length) {
-      return `<div class="card todo-today" id="todo-today"><h2>What to do today</h2><p>Rest day. No workout. Eat, sleep, and stay loose.</p></div>`;
-    }
-    return `<div class="card todo-today" id="todo-today">
-      <h2>What to do today</h2>
-      <ol class="todo-steps">
-        <li><strong>Warm up.</strong> ${warm ? `Do ${esc(warm.name)}. <button class="btn secondary" id="todo-warmup" type="button">Open warm-up card</button>` : 'Jog easy and loosen up for 10 minutes.'}</li>
-        <li><strong>Run today's workout.</strong> ${sid ? `<button class="btn primary" data-run-today="${esc(sid)}" type="button">Start ${esc(sid)}</button>` : (isCoachUser() ? `Open each group's workout and start it from Coach Today. <button class="btn primary" id="todo-coach" type="button">Open Coach Today</button>` : 'Your coach will give you the workout.')}</li>
-        <li><strong>Log it.</strong> Write down what you ran. <button class="btn secondary" id="todo-log" type="button">Open my log</button></li>
-      </ol>
-    </div>`;
-  })() : '';
 
   const startStrip = startHereDismissed() ? '' : `
     <div class="card start-strip" id="start-strip">
@@ -1465,14 +1523,7 @@ function renderHome() {
   $('#home-search-btn').addEventListener('click', runHomeSearch);
   $('#home-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runHomeSearch(); } });
   $('#home-open-season').addEventListener('click', () => { state.week = wkNum; renderSeason(); showView('season'); });
-  const todoSlot = $('#todo-slot');
-  if (todoSlot) { todoSlot.innerHTML = todayCardHtml; wireRunTodayButtons(todoSlot); }
-  const todoWarm = $('#todo-warmup');
-  if (todoWarm) todoWarm.addEventListener('click', openWarmupCard);
-  const todoCoach = $('#todo-coach');
-  if (todoCoach) todoCoach.addEventListener('click', () => showView('coachtoday'));
-  const todoLog = $('#todo-log');
-  if (todoLog) todoLog.addEventListener('click', () => showView('log'));
+  paintTodoCard();
   const warmBtn = $('#home-warmup-card');
   if (warmBtn) warmBtn.addEventListener('click', openWarmupCard);
   wireWotd();
@@ -2214,7 +2265,7 @@ function renderLibPaths() {
           const it = byKey.get(key);
           const isDone = doneSet.has(key);
           return `<li class="lib-path-step ${isDone ? 'done' : ''}">
-            ${state.user ? `<input type="checkbox" class="lib-path-check" data-path-toggle="${esc(p.id)}" data-path-step="${esc(key)}" ${isDone ? 'checked' : ''} aria-label="Mark step ${i + 1} done">` : `<span class="lib-path-num">${i + 1}</span>`}
+            ${state.user ? `<label class="lib-path-hit"><input type="checkbox" class="lib-path-check" data-path-toggle="${esc(p.id)}" data-path-step="${esc(key)}" ${isDone ? 'checked' : ''} aria-label="Mark step ${i + 1} done"></label>` : `<span class="lib-path-num">${i + 1}</span>`}
             <span class="lib-path-step-main">
               <strong>${esc(it ? it.title : s.ref)}</strong>
               <span class="muted">${esc(s.why)}</span>
@@ -2455,6 +2506,12 @@ function openTermPop(btn) {
   pop.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)) + 'px';
   const below = rect.bottom + 8;
   pop.style.top = (below + 190 < window.innerHeight ? below : Math.max(12, rect.top - 198)) + 'px';
+  /* Long definitions run taller than 190px; keep the whole card, and its
+     View in Library button, on screen. */
+  const popTop = parseFloat(pop.style.top);
+  if (popTop + pop.offsetHeight > window.innerHeight - 12) {
+    pop.style.top = Math.max(12, window.innerHeight - pop.offsetHeight - 12) + 'px';
+  }
   const closeBtn = $('#term-pop-close');
   if (closeBtn) closeBtn.addEventListener('click', closeTermPop);
 }
@@ -2862,7 +2919,7 @@ function renderAccount() {
     renderCoachInvites();
     const out = async () => {
       try { await apiPost('/api/logout'); }
-      catch (err) { alert('Log out failed: ' + err.message); return; }
+      catch (err) { alert("Couldn't log you out. " + err.message); return; }
       state.user = null; await refreshUserData(); syncAuthUi(); showView('home');
     };
     $('#chip-logout').addEventListener('click', out);
@@ -2911,6 +2968,9 @@ function syncAuthUi() {
   document.body.classList.toggle('signed-out', !!state.authKnown && !state.user);
   $$('.coach-tab').forEach(t => { t.hidden = !isCoach; });
   renderAccount(); renderAppearance(); renderLog(); renderSeason(); renderHome();
+  /* v69: the athlete's published workout loads on every auth change,
+     first load included, not only when Today is re-opened. */
+  renderMyPlan();
   renderGroups(); renderCoach(); renderTesting(); renderTop(); renderInventory();
   renderMeets(); renderMeetDay(); renderReports(); renderDigest(); renderAnnouncements(); renderCustomWorkouts();
   renderPrograms(); renderCalendar(); renderCoachHome();
@@ -3610,12 +3670,14 @@ function uploadDemoVideo(file, onProgress) {
         resolve(json.secure_url);
         return;
       }
-      const msg = (json && json.error && json.error.message)
-        || ('Upload failed (HTTP ' + xhr.status + ').');
-      reject(new Error(msg));
+      /* The upload service answers in its own technical terms, so
+         the coach gets plain words instead of its message. */
+      reject(new Error(xhr.status === 413 || xhr.status === 400
+        ? 'That video did not upload. Make sure it is under 100 MB and try again.'
+        : 'That video did not upload. Please try again.'));
     });
     xhr.addEventListener('error', () => {
-      reject(new Error('Upload failed — check your connection and try again.'));
+      reject(new Error('That video did not upload. Check your signal and try again.'));
     });
     xhr.send(form);
   });
@@ -4908,7 +4970,12 @@ async function renderTop() {
   const tm = $('#top-metric');
   if (tm) tm.addEventListener('change', () => { state.topMetric = tm.value; renderTop(); });
   const tw = $('#top-week');
-  if (tw) tw.addEventListener('change', () => { state.topWeek = tw.value; renderTop(); });
+  if (tw) tw.addEventListener('change', () => {
+    /* Any day picked moves to its Monday, so saving never hits a
+       "pick the Monday" error. */
+    if (tw.value) { const d = parseDate(tw.value); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); tw.value = dateStrOf(d); }
+    state.topWeek = tw.value; renderTop();
+  });
   const tem = $('#top-entry-metric');
   if (tem) tem.addEventListener('change', () => { state.entryMetric = tem.value; renderTop(); });
   /* Weekly saves update just the athlete's row in place (plus
@@ -6154,7 +6221,7 @@ function paintCalendar() {
       </div>
     </div>
     <div class="card">
-      <div class="table-wrap"><table class="matrix" style="table-layout:fixed">
+      <div class="table-wrap"><table class="matrix" style="table-layout:fixed;min-width:640px">
         <thead><tr>${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<th style="text-align:left">${d}</th>`).join('')}</tr></thead>
         <tbody>${rows.map(r => '<tr>' + r.map(cellHtml).join('') + '</tr>').join('')}</tbody>
       </table></div>
@@ -7559,7 +7626,7 @@ async function renderData() {
   main.innerHTML = `
     <div class="card">
       <h3>Full backup</h3>
-      <p class="muted">One JSON file with the whole team dataset: roster and groups, assignments and completions, testing, weekly numbers, health concerns, inventory, warm-up card edits, meet results, school records, goals, check-ins, attendance, coach notes, custom workouts, programs, and announcements. Accounts and passwords are never in the file.</p>
+      <p class="muted">One JSON file with the whole team dataset: roster and groups, assignments and completions, testing, weekly numbers, health concerns, inventory, warm-up card edits, meet results, school records, goals, check-ins, attendance, coach notes, custom workouts, programs, announcements, and saved settings. Logins, passwords, and each login's own practice log are never in the file.</p>
       <p><strong>Handling a backup:</strong> it holds athlete health information. Encrypt it with a passphrase below, keep it only in school-managed storage, and delete local copies (Downloads, desktops) within 30 days.</p>
       <p><a class="btn secondary" href="/api/export/backup">Download plain backup</a></p>
       <div class="filter-row">
@@ -7680,7 +7747,7 @@ async function renderData() {
       box.innerHTML = '<p class="error">That file is not valid JSON.</p>';
       return;
     }
-    if (parsed && parsed.app === 'sprinter-workout-app' && parsed.kind === 'backup-encrypted' && parsed.encrypted) {
+    if (parsed && parsed.app === 'sprinter-workout-app' && parsed.kind === 'backup-encrypted') {
       pendingBackup = parsed;
       const when = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString() : 'an unknown date';
       box.innerHTML =
@@ -8514,13 +8581,21 @@ function ctDayWord(date) {
    refused because another coach changed the plan can show the
    current version instead of a bare message. */
 async function ctCall(path, method, body) {
-  const res = await fetch(path, {
-    method: method || 'GET', credentials: 'same-origin',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method: method || 'GET', credentials: 'same-origin',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (_) {
+    /* Offline: hand back a plain message instead of throwing, so the
+       form shows it and its Save button comes back. */
+    return { ok: false, status: 0, data: { error: OFFLINE_MSG } };
+  }
   let data = {};
   try { data = await res.json(); } catch (_) { /* empty */ }
+  if (!res.ok && !data.error) data.error = plainStatusMsg(res.status);
   return { ok: res.ok, status: res.status, data };
 }
 
@@ -9163,10 +9238,22 @@ async function renderHandoffs() {
 async function renderMyPlan() {
   const el = $('#my-plan-slot');
   if (!el) return;
-  if (!state.user || state.user.role !== 'athlete') { el.innerHTML = ''; return; }
+  /* v69: the last call wins, so a quick sign-out or a second render
+     can't paint a stale plan; and the plan is kept in state.myPlan so
+     the What to do today card can follow it (paintTodoCard). */
+  const seq = (renderMyPlan.seq = (renderMyPlan.seq || 0) + 1);
+  const hadPlan = !!state.myPlan;
+  if (!state.user || state.user.role !== 'athlete') {
+    el.innerHTML = ''; state.myPlan = null;
+    if (hadPlan) paintTodoCard();
+    return;
+  }
   let d;
-  try { d = await api('/api/my/plan'); } catch (_) { el.innerHTML = ''; return; }
-  const p = d.plan;
+  try { d = await api('/api/my/plan'); } catch (_) { d = null; }
+  if (seq !== renderMyPlan.seq) return;
+  const p = d && d.plan ? d.plan : null;
+  state.myPlan = p;
+  if (p || hadPlan) paintTodoCard();
   if (!p) { el.innerHTML = ''; return; }
   const when = [p.location, ctStartTime(p.startTime)].filter(Boolean).join(' · ');
   el.innerHTML = `<section class="card my-plan" aria-labelledby="my-plan-h">

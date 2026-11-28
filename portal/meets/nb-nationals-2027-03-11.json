@@ -1,0 +1,229 @@
+{
+  "id": "nb-nationals-2027-03-11",
+  "name": "New Balance Nationals Indoor",
+  "date": "2027-03-11",
+  "dateLabel": "Thu, Mar 11 to Sun, Mar 14",
+  "place": "The TRACK at New Balance, Boston, MA",
+  "entriesClose": "Not published for 2027",
+  "slots": 5,
+  "source": "/Track/Meets/Meet File - New Balance Indoor Nationals - Mar 11-14 1124.md",
+  "note": "Per-athlete event limit for 2027 is not published yet (last year it was 4), so no double warning is set.",
+  "rules": [],
+  "events": [
+    {
+      "id": "g-high-jump",
+      "name": "Girls High Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-high-jump",
+      "name": "Boys High Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-pole-vault",
+      "name": "Girls Pole Vault",
+      "kind": "field"
+    },
+    {
+      "id": "b-pole-vault",
+      "name": "Boys Pole Vault",
+      "kind": "field"
+    },
+    {
+      "id": "g-long-jump",
+      "name": "Girls Long Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-long-jump",
+      "name": "Boys Long Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-triple-jump",
+      "name": "Girls Triple Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-triple-jump",
+      "name": "Boys Triple Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-shot-put",
+      "name": "Girls Shot Put",
+      "kind": "field"
+    },
+    {
+      "id": "b-shot-put",
+      "name": "Boys Shot Put",
+      "kind": "field"
+    },
+    {
+      "id": "g-weight-throw",
+      "name": "Girls Weight Throw",
+      "kind": "field"
+    },
+    {
+      "id": "b-weight-throw",
+      "name": "Boys Weight Throw",
+      "kind": "field"
+    },
+    {
+      "id": "g-60m-dash",
+      "name": "Girls 60m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-60m-dash",
+      "name": "Boys 60m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-200m-dash",
+      "name": "Girls 200m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-200m-dash",
+      "name": "Boys 200m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-400m-dash",
+      "name": "Girls 400m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-400m-dash",
+      "name": "Boys 400m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-60m-hurdles",
+      "name": "Girls 60m Hurdles",
+      "kind": "run"
+    },
+    {
+      "id": "b-60m-hurdles",
+      "name": "Boys 60m Hurdles",
+      "kind": "run"
+    },
+    {
+      "id": "g-800m-run",
+      "name": "Girls 800m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-800m-run",
+      "name": "Boys 800m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-mile",
+      "name": "Girls Mile",
+      "kind": "run"
+    },
+    {
+      "id": "b-mile",
+      "name": "Boys Mile",
+      "kind": "run"
+    },
+    {
+      "id": "g-2-mile",
+      "name": "Girls 2 Mile",
+      "kind": "run"
+    },
+    {
+      "id": "b-2-mile",
+      "name": "Boys 2 Mile",
+      "kind": "run"
+    },
+    {
+      "id": "g-5000m",
+      "name": "Girls 5000m",
+      "kind": "run"
+    },
+    {
+      "id": "b-5000m",
+      "name": "Boys 5000m",
+      "kind": "run"
+    },
+    {
+      "id": "g-4x200m-relay",
+      "name": "Girls 4x200m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x200m-relay",
+      "name": "Boys 4x200m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-4x400m-relay",
+      "name": "Girls 4x400m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x400m-relay",
+      "name": "Boys 4x400m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-sprint-medley-relay",
+      "name": "Girls Sprint Medley Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-sprint-medley-relay",
+      "name": "Boys Sprint Medley Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-4x800m-relay",
+      "name": "Girls 4x800m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x800m-relay",
+      "name": "Boys 4x800m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-distance-medley-relay",
+      "name": "Girls Distance Medley Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-distance-medley-relay",
+      "name": "Boys Distance Medley Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-4xmile-relay",
+      "name": "Girls 4 x Mile Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4xmile-relay",
+      "name": "Boys 4 x Mile Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-shuttle-hurdle-relay-4x55mh",
+      "name": "Girls Shuttle Hurdle Relay (4x55mH)",
+      "kind": "relay"
+    },
+    {
+      "id": "b-shuttle-hurdle-relay-4x55mh",
+      "name": "Boys Shuttle Hurdle Relay (4x55mH)",
+      "kind": "relay"
+    },
+    {
+      "id": "x-4x400m-relay",
+      "name": "Mixed 4x400m Relay",
+      "kind": "relay"
+    }
+  ]
+}

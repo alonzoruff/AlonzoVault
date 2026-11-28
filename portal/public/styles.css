@@ -26,6 +26,7 @@
   .top-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .top-row .t { font-size: 13px; color: var(--accent); }
   .top-row .lv { font-size: 13px; color: var(--gold); }
+  .top-row .ent { margin-left: auto; font-size: 13px; color: var(--accent); text-decoration: none; padding: 10px 4px; }
   .top .xpline { margin-top: 6px; }
   main { padding: 16px 14px calc(var(--nav) + var(--sab) + 28px); max-width: 720px; margin: 0 auto; }
   .view[hidden] { display: none; }

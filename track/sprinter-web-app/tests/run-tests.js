@@ -452,6 +452,24 @@ async function main() {
   check('home has a What to do today card with warm-up, run and log steps',
     appJs.text.includes('todo-today') && appJs.text.includes('todo-warmup') &&
     appJs.text.includes('todo-log') && appJs.text.includes('What to do today'));
+  /* v69 fix: the athlete's published workout card was blank on first
+     load (it only rendered when Today was re-opened), and What to do
+     today ignored the published workout. */
+  const fnBody = (name) => { const i = appJs.text.indexOf('function ' + name + '('); return i < 0 ? '' : appJs.text.slice(i, appJs.text.indexOf('\n}\n', i)); };
+  check('v69: the published workout loads on every auth change, first load included',
+    /renderHome\(\);[\s\S]{0,200}renderMyPlan\(\);/.test(fnBody('syncAuthUi')));
+  check('v69: renderMyPlan keeps the plan in state and repaints What to do today',
+    fnBody('renderMyPlan').includes('state.myPlan = p') && fnBody('renderMyPlan').includes('paintTodoCard()') &&
+    fnBody('renderMyPlan').includes('seq !== renderMyPlan.seq'));
+  check('v69: renderMyPlan clears the kept plan when no athlete is signed in',
+    fnBody('renderMyPlan').includes('state.myPlan = null'));
+  check('v69: What to do today runs the published session, from the published plan',
+    fnBody('todoCardHtml').includes('state.myPlan') && fnBody('todoCardHtml').includes('plan.sessionId') &&
+    fnBody('todoCardHtml').includes('data-run-today="${esc(ps.id)}"') && fnBody('todoCardHtml').includes('todo-published'));
+  check('v69: a coach never gets the athlete published-plan version of the card',
+    fnBody('todoCardHtml').includes('!isCoachUser() && state.user && state.myPlan'));
+  check('v69: renderHome paints the card through paintTodoCard (one wiring path)',
+    fnBody('renderHome').includes('paintTodoCard();') && !fnBody('renderHome').includes('todayCardHtml'));
   const idxHtml = await apiText(null, '/');
   check('What to do today card sits above practice plan, check-in and announcements',
     idxHtml.text.indexOf('id="todo-slot"') > 0 && idxHtml.text.indexOf('id="todo-slot"') < idxHtml.text.indexOf('id="my-plan-slot"') &&
@@ -459,8 +477,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v68 (What to do today card)',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v68"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v69 (athlete published workout fix)',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v69"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2385,16 +2403,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v66'") &&
-    swJs.text.includes("sprinter-app-v68"));
+    appJs.text.includes("const APP_VERSION = 'v69'") &&
+    swJs.text.includes("sprinter-app-v69"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v66"') &&
-    pageHtml.text.includes('Sprinter Workout App · v66') &&
+    pageHtml.text.includes('data-app-version="v69"') &&
+    pageHtml.text.includes('Sprinter Workout App · v69') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v59) ----------------
@@ -3886,7 +3904,8 @@ async function main() {
     'inventory', 'meetResults', 'meets', 'meetEntries', 'schoolRecords', 'goals', 'coachInvites',
     'customWorkouts', 'programs', 'programApplications', 'announcements'];
   const BK_OBJECTS = ['overrides', 'completions', 'testResults', 'weekly', 'concerns',
-    'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins', 'attendance', 'coachNotes'];
+    'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins', 'attendance', 'coachNotes',
+    'settings'];
   check('backup carries every team-data collection with the right shape',
     BK_ARRAYS.every(k => Array.isArray(bkEnv.data[k])) &&
     BK_OBJECTS.every(k => !!bkEnv.data[k] && typeof bkEnv.data[k] === 'object' && !Array.isArray(bkEnv.data[k])) &&
@@ -3897,6 +3916,18 @@ async function main() {
     bkEnv.data.profiles.some(p => p.id === dataP.id) &&
     bkEnv.data.attendance['2027-01-04'] && bkEnv.data.attendance['2027-01-04'][dataP.id].status === 'present',
     bkEnv.data.announcements.length);
+  check('backup carries the saved settings (retention window, weight room display)',
+    Number.isInteger(bkEnv.data.settings.retentionMonths) &&
+    typeof bkEnv.data.settings.weightRoomSharedDisplay === 'boolean', bkEnv.data.settings);
+  check('backup opens with a readable summary: athlete count, per-collection counts, what is left out',
+    !!bkEnv.summary && bkEnv.summary.athletes === bkEnv.data.profiles.length &&
+    bkEnv.summary.contents.profiles === bkEnv.data.profiles.length &&
+    bkEnv.summary.contents.announcements === bkEnv.data.announcements.length &&
+    Array.isArray(bkEnv.summary.notIncluded) &&
+    bkEnv.summary.notIncluded.some(t => t.startsWith('Logins')) &&
+    bk.text.indexOf('"summary"') < bk.text.indexOf('"data"'), bkEnv.summary);
+  check('the Data page recognizes an encrypted backup file by its kind (the envelope has no "encrypted" flag)',
+    appJs.text.includes("parsed.kind === 'backup-encrypted') {") && !appJs.text.includes('parsed.encrypted'));
   check('backup contains no accounts or secrets',
     !('users' in bkEnv.data) && !bk.text.includes('passHash') && !bk.text.includes('"users"') &&
     !bk.text.includes('test-secret') && !bk.text.includes('"logs"'),
@@ -4002,6 +4033,10 @@ async function main() {
   check('an envelope missing the app marker is 400', r.status === 400, r.status);
   r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: [] });
   check('a backup whose data is a list is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: { settings: { retentionMonths: 0 } } });
+  check('a backup with an out-of-range retention setting is 400', r.status === 400, r.status);
+  r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: { settings: { weightRoomSharedDisplay: 'no' } } });
+  check('a backup with a non-boolean weight room setting is 400', r.status === 400, r.status);
   r = await api(coach, 'POST', '/api/import/backup', { app: 'sprinter-workout-app', kind: 'backup', data: { profiles: [{ firstName: 'No', lastName: 'Id' }] } });
   check('a record missing its id is 400', r.status === 400, r.status);
   r = await api(coach, 'POST', '/api/import/backup', undefined, { raw: 'this is not json', contentType: 'application/json' });
@@ -5182,37 +5217,101 @@ async function waitForServer(tries = 60) {
         }
         return false;
       };
+      /* The source: the main suite's made-up team, with both saved
+         settings moved off their defaults so the round trip has to
+         carry them. A fresh export is the file under test; the main
+         store's settings go back to defaults right after. */
+      await api(ctx.coach, 'PUT', '/api/retention/settings', { months: 18 });
+      await api(ctx.coach, 'POST', '/api/weight-room/display', { shared: false });
+      const src = (await api(ctx.coach, 'GET', '/api/export/backup')).json;
+      await api(ctx.coach, 'PUT', '/api/retention/settings', { months: 12 });
+      await api(ctx.coach, 'POST', '/api/weight-room/display', { shared: true });
+      check('round-trip source carries non-default settings',
+        src && src.data && src.data.settings.retentionMonths === 18 &&
+        src.data.settings.weightRoomSharedDisplay === false, src && src.data && src.data.settings);
+      /* Order-insensitive for object keys, exact for list order. */
+      const sameValue = (a, b) => {
+        if (Array.isArray(a) || Array.isArray(b)) {
+          return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => sameValue(v, b[i]));
+        }
+        if (a && b && typeof a === 'object' && typeof b === 'object') {
+          const ka = Object.keys(a), kb = Object.keys(b);
+          return ka.length === kb.length && ka.every(k => Object.prototype.hasOwnProperty.call(b, k) && sameValue(a[k], b[k]));
+        }
+        return a === b;
+      };
+      /* Every collection of the restored export, compared to the
+         source record for record. Returns the names that differ. */
+      const diffKeys = (a, b) => {
+        const keys = new Set(Object.keys(a).concat(Object.keys(b)));
+        return [...keys].filter(k => !sameValue(a[k], b[k]));
+      };
+      const nonEmpty = Object.keys(src.data).filter(k => {
+        const v = src.data[k];
+        return Array.isArray(v) ? v.length > 0 : (v && typeof v === 'object' ? Object.keys(v).length > 0 : !!v);
+      });
+      check('round-trip source exercises most collections (not an empty file)',
+        nonEmpty.length >= 25, nonEmpty);
       let rtChild = startRt();
       try {
         check('round-trip server starts on an empty store', await waitRt(), rtLog);
         let sr = await rtApi(null, 'POST', '/api/register', { email: 'rt-coach@test.com', password: 'testpass123', ageAttested: true });
         check('round-trip store: first account is the coach', sr.status === 201 && sr.json.role === 'coach', sr.json);
-        const rtCoach = cookieOf(sr);
-        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', ctx.backup);
+        let rtCoach = cookieOf(sr);
+        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', src);
         check('round-trip import lands in the empty store',
           sr.status === 200 && sr.json.ok === true &&
-          sr.json.counts.profiles.added === ctx.backup.data.profiles.length &&
-          sr.json.counts.announcements.added === ctx.backup.data.announcements.length &&
+          sr.json.counts.profiles.added === src.data.profiles.length &&
+          sr.json.counts.announcements.added === src.data.announcements.length &&
           sr.json.totalAdded > 0, sr.json && sr.json.counts && sr.json.counts.profiles);
         sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
         check('round-trip store reproduces the source dataset',
           sr.status === 200 &&
-          sr.json.data.profiles.length === ctx.backup.data.profiles.length &&
-          sr.json.data.announcements.length === ctx.backup.data.announcements.length &&
-          sr.json.data.schoolRecords.length === ctx.backup.data.schoolRecords.length &&
-          Object.keys(sr.json.data.attendance).length === Object.keys(ctx.backup.data.attendance).length &&
+          sr.json.data.profiles.length === src.data.profiles.length &&
           sr.json.data.profiles.some(p => p.id === ctx.dataProfileId),
           sr.json && sr.json.data && sr.json.data.profiles && sr.json.data.profiles.length);
+        check('round trip: every collection matches the source record for record',
+          sr.status === 200 && diffKeys(src.data, sr.json.data).length === 0,
+          sr.json && diffKeys(src.data, sr.json.data));
+        check('round trip: the summary counts match too',
+          sr.status === 200 && sameValue(src.summary, sr.json.summary), sr.json && sr.json.summary);
+        check('round trip: the new app\'s own runner-test seed is not left as a duplicate',
+          sr.json.data.customWorkouts.filter(w => w.title === 'Strength Circuit — Runner Test').length ===
+          src.data.customWorkouts.filter(w => w.title === 'Strength Circuit — Runner Test').length,
+          sr.json.data.customWorkouts.map(w => w.title));
+        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', src);
+        check('importing the same file twice changes nothing',
+          sr.status === 200 && sr.json.totalAdded === 0 && sr.json.totalUpdated === 0, sr.json);
         rtChild.kill('SIGKILL');
         await new Promise(r => setTimeout(r, 300));
         rtChild = startRt();
         check('round-trip server restarts', await waitRt(), rtLog);
         sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
         check('the imported dataset survives a restart of the new store',
-          sr.status === 200 &&
-          sr.json.data.profiles.length === ctx.backup.data.profiles.length &&
-          sr.json.data.announcements.length === ctx.backup.data.announcements.length,
-          sr.json && sr.json.data && sr.json.data.profiles && sr.json.data.profiles.length);
+          sr.status === 200 && diffKeys(src.data, sr.json.data).length === 0,
+          sr.json && diffKeys(src.data, sr.json.data));
+
+        /* Wipe the test copy outright (delete its data folder), boot
+           it empty, and restore the same file again. */
+        rtChild.kill('SIGKILL');
+        await new Promise(r => setTimeout(r, 300));
+        for (const f of fs.readdirSync(RT_DIR)) fs.rmSync(path.join(RT_DIR, f), { recursive: true, force: true });
+        rtChild = startRt();
+        check('wiped test copy boots', await waitRt(), rtLog);
+        sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
+        check('wiped test copy: the old login is gone with the data', sr.status === 401, sr.status);
+        sr = await rtApi(null, 'POST', '/api/register', { email: 'rt-coach2@test.com', password: 'testpass123', ageAttested: true });
+        rtCoach = cookieOf(sr);
+        sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
+        check('wiped test copy is empty before the restore',
+          sr.status === 200 && sr.json.data.profiles.length === 0 && sr.json.data.groups.length === 0 &&
+          Object.keys(sr.json.data.checkins).length === 0, sr.json && sr.json.summary);
+        sr = await rtApi(rtCoach, 'POST', '/api/import/backup', src);
+        check('wiped test copy takes the restore', sr.status === 200 && sr.json.ok === true, sr.json);
+        sr = await rtApi(rtCoach, 'GET', '/api/export/backup');
+        check('after wipe and restore, every collection matches the source again',
+          sr.status === 200 && diffKeys(src.data, sr.json.data).length === 0,
+          sr.json && diffKeys(src.data, sr.json.data));
       } finally {
         rtChild.kill('SIGKILL');
         fs.rmSync(RT_DIR, { recursive: true, force: true });
@@ -8159,6 +8258,52 @@ async function waitForServer(tries = 60) {
     check('v64: the pipe-line import format still works', r.status === 200 && r.json.report.created === 1, r.json);
   }
 
+  /* ---------------- v66.1: Final Roster tab as it is ----------------
+     The tab heads its level column "Class" and lists team managers with
+     "Manager" as their event group. Made-up names only. */
+  {
+    const classTab = [
+      'First Name,Last Name,Class,Event Group',
+      'Corin,Dashwell,Var B,"SS, LJ"',
+      'Tamsin,Hopwood,JV,Hurdles',
+      'Pell,Organizer,,Manager',
+      'Quinby,Clipboard,,Managers',
+    ].join('\n');
+    let r = await api(coach, 'POST', '/api/profiles/import', { text: classTab });
+    const rep = r.json && r.json.report;
+    check('v66.1: a "Class" header is read as the team level',
+      r.status === 200 && rep.created === 2, r.json);
+    r = await api(coach, 'GET', '/api/profiles');
+    const cd = r.json.profiles.find(pr => pr.name === 'Corin Dashwell');
+    const th = r.json.profiles.find(pr => pr.name === 'Tamsin Hopwood');
+    check('v66.1: levels from the Class column land on each athlete',
+      cd && cd.level === 'varsity-b' && th && th.level === 'jv', [cd, th]);
+    check('v66.1: team managers are skipped, not added as athletes',
+      !r.json.profiles.some(pr => pr.name === 'Pell Organizer' || pr.name === 'Quinby Clipboard') &&
+      rep.skipped.filter(s => /manager/i.test(s.reason)).length === 2, rep);
+    // "Class of 2027" is a grad year, never the team level.
+    r = await api(coach, 'POST', '/api/profiles/import', { text: 'First Name,Last Name,Class of 2027,Event Group\nVale,Yearling,yes,SS' });
+    r = await api(coach, 'GET', '/api/profiles');
+    const vy = r.json.profiles.find(pr => pr.name === 'Vale Yearling');
+    check('v66.1: a "Class of 2027" column is not taken as the level', vy && !vy.level, vy);
+    // The team roster form heads its name columns "Athlete's First Name"
+    // and only fills in contacts for athletes already on the roster.
+    const formCsv = [
+      'Timestamp,Email Address,Athlete\'s First Name,Athlete\'s Last Name,Athlete\'s Best Email,Athlete\'s Cell Number,1st Parent\'s/Guardian\'s Email ,Do you currently have any food allergies?',
+      '11/20/2026 10:00:00,signin@example.com,Corin,Dashwell,corin.d@example.com,(555) 010-3333,parent@example.com,none',
+      '11/20/2026 10:05:00,other@example.com,Newbie,Notonroster,newbie@example.com,5550104444,p2@example.com,none',
+    ].join('\n');
+    r = await api(coach, 'POST', '/api/profiles/import', { text: formCsv });
+    const frep = r.json && r.json.report;
+    r = await api(coach, 'GET', '/api/profiles');
+    const cd2 = r.json.profiles.find(pr => pr.name === 'Corin Dashwell');
+    check('v66.1: the roster form\'s "Athlete\'s First Name" columns fill in contacts',
+      frep && frep.updated === 1 && cd2 && cd2.email === 'corin.d@example.com' && cd2.phone === '555-010-3333', [frep, cd2]);
+    check('v66.1: the roster form adds no one new and stores no parent email or health answer',
+      !r.json.profiles.some(pr => pr.name === 'Newbie Notonroster') &&
+      !JSON.stringify(r.json.profiles).includes('parent@example.com'), frep);
+  }
+
   /* ---------------- v65: Coach Today + staff handoffs ----------------
      One published workout per group per day with a reviewed path to
      athletes, coach-only attendance where a blank stays Not recorded,
@@ -8291,7 +8436,7 @@ async function waitForServer(tries = 60) {
     r = await api(c2, 'POST', '/api/plans/' + plan.id + '/revise', { rev: plan.rev });
     check('v65: a change to a published workout starts a new draft version', r.status === 201 && r.json.plan.pendingRevision && r.json.plan.pendingRevision.version === 2 && r.json.plan.status === 'published', r.json);
     plan = r.json.plan;
-    r = await api(c2, 'PUT', '/api/plans/' + plan.id, { rev: plan.rev, location: 'Gym' });
+    r = await api(c2, 'PUT', '/api/plans/' + plan.id, { rev: plan.rev, location: 'Gym', sessionId: 'SE-02' });
     plan = r.json.plan;
     r = await api(veeCookie, 'GET', '/api/my/plan');
     check('v65: athletes keep the published version while a revision is a draft', r.json.plan && r.json.plan.location === 'Main track', r.json.plan);
@@ -8310,6 +8455,8 @@ async function waitForServer(tries = 60) {
     check('v65: the athlete sees the new version and the change note',
       r.json.plan && r.json.plan.location === 'Gym' && r.json.plan.status === 'updated' &&
       r.json.plan.changeNotice && r.json.plan.changeNotice.summary === 'Moved to the gym because of rain', r.json.plan);
+    check('v69: the athlete payload carries the published session code that What to do today starts',
+      r.json.plan && r.json.plan.sessionId === 'SE-02' && !!r.json.plan.sessionName, r.json.plan);
     check('v65: version history keeps every version and every step',
       plan.history.length === 2 && plan.history[1].status === 'superseded' &&
       plan.history[0].log.map(e => e.to).join(',') === 'draft,review,approved,published', plan.history);
