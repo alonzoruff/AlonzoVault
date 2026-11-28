@@ -4870,6 +4870,7 @@ function coachInviteRequestView(r) {
     id: r.id, name: r.name, email: r.email, forWhom: r.forWhom,
     athleteName: r.athleteName || '', tierInterest: r.tierInterest,
     goal: r.goal || '', status: r.status,
+    grade: r.grade || '', sport: r.sport || '', location: r.location || '',
     heardFrom: r.heardFrom || null,
     heardFromLabel: r.heardFrom && REFERRAL_SOURCES[r.heardFrom] ? REFERRAL_SOURCES[r.heardFrom].label : null,
     createdAt: r.createdAt, updatedAt: r.updatedAt,
@@ -6548,7 +6549,13 @@ async function handleApi(req, res, url) {
       if (a.status === 'pending') return a.createdAt < b.createdAt ? -1 : 1;
       return a.updatedAt < b.updatedAt ? -1 : 1;
     }).map(coachInviteRequestView);
-    return sendJson(res, 200, { requests: list });
+    const counts = { total: db.inviteRequests.length, new: 0, invited: 0, declined: 0 };
+    for (const r of db.inviteRequests) {
+      if (r.status === 'pending') counts.new++;
+      else if (r.status === 'invited') counts.invited++;
+      else if (r.status === 'declined') counts.declined++;
+    }
+    return sendJson(res, 200, { requests: list, counts });
   }
 
   const inviteRequestStatusChange = p.match(/^\/api\/invite-requests\/([^/]+)\/status$/);
@@ -6562,6 +6569,12 @@ async function handleApi(req, res, url) {
     }
     if (!(INVITE_REQUEST_TRANSITIONS[r.status] || []).includes(next)) {
       return sendJson(res, 400, { error: 'A ' + r.status + ' request cannot become ' + next + '.' });
+    }
+    /* Approving adds the email to the member invite list, the same
+       list the head coach's own Invite button writes, so it follows
+       the same rule: head coach only. */
+    if (next === 'invited' && !user.isOwner) {
+      return sendJson(res, 403, { error: 'Only the head coach can invite members.' });
     }
     r.status = next;
     r.updatedAt = new Date().toISOString();

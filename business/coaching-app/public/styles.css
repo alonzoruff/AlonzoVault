@@ -3754,6 +3754,12 @@ body.rx-sheet-open { overflow: hidden; }
 .sb-table tfoot td { font-weight: 700; }
 .sb-table td.sb-nt { color: var(--muted); font-size: var(--fs-sm); }
 .sb-how summary { cursor: pointer; font-weight: 600; }
+/* Invitation hub (Nov 28, 2026) */
+.badge.inv-pending { background: var(--accent-tint); color: var(--red-on-dark); }
+.badge.inv-invited { background: var(--surface-2); color: var(--ink); }
+.badge.inv-declined { background: var(--surface-2); color: var(--muted); }
+.inv-msg { padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); user-select: all; }
+#inviterequests-main .chip.active { background: var(--red); color: var(--accent-ink); border-color: var(--red); }
 .sb-how ul { margin: 12px 0 0; padding-left: 1.2em; color: var(--muted); line-height: 1.5; }
 @media (max-width: 860px) {
   .sb-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
