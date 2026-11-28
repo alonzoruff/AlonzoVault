@@ -162,10 +162,10 @@ node tests/access-page-tests.js      # coach's member access page
 node tests/membership-card-tests.js  # member's membership card
 node tests/growth-tests.js           # sign-up funnel and scoreboard
 node tests/security-headers-tests.js # security headers and the bad-request crash fix
+node tests/founding-code-tests.js    # Founding code at sign-up: redeem, reject, cap, on/off
 node tests/filming-tests.js          # Filming Tracker
 node tests/risky-areas-tests.js      # the riskiest areas, with a coverage report
 node tests/phase1-membership-tests.js # Phase 1 plans: prices, retired $10 tier, Lab Pass cap of 50
-node tests/founding-code-tests.js    # Founding code at sign-up: redeem, reject, cap, on/off
 node tests/store-tests.js            # hosted data store (uses a pretend Upstash)
 node tests/run-tests-store-mode.js   # the big suite again, in hosted-store mode
 ```

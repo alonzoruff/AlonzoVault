@@ -237,8 +237,8 @@ let db = {
   liveRequests: [],
   bookings: [],
   bookingSettings: null,
-  inviteRequests: [],
   codeRedemptions: [],
+  inviteRequests: [],
   stripeEvents: [],
   events: [],
   eventsStartedAt: null,
@@ -981,13 +981,13 @@ function migrate() {
   db.stripeEvents = Array.isArray(db.stripeEvents)
     ? db.stripeEvents.filter(e => e && typeof e.id === 'string') : [];
   db.bookingSettings = normalizeBookingSettings(db.bookingSettings);
+  // Founding code redemptions (Nov 28, 2026): { email, userId, at }.
+  db.codeRedemptions = Array.isArray(db.codeRedemptions) ? db.codeRedemptions : [];
   // Invitation requests (v20): public requests from the landing
   // page — { id, name, email, forWhom, athleteName, tierInterest,
   // goal, status, createdAt, updatedAt }. Like bookings, invite
   // requests deliberately do NOT ride along in backups.
   db.inviteRequests = Array.isArray(db.inviteRequests) ? db.inviteRequests : [];
-  // Founding code redemptions (Nov 28, 2026): { email, userId, at }.
-  db.codeRedemptions = Array.isArray(db.codeRedemptions) ? db.codeRedemptions : [];
   // Funnel events (v40): what happened and when, for the owner
   // scoreboard. Each is { id, name, at } plus, where the app already
   // has one, a member or request id and a short detail (tier,

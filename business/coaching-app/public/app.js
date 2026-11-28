@@ -9418,6 +9418,24 @@ function accessEndDate(iso) {
   }).format(d);
 }
 let accessMsgOnce = null;
+/* Founding code (Nov 28, 2026): status and the redemption log on the
+   coach Access page. The code word itself is never sent to the page. */
+async function renderFoundingCodeCard() {
+  const el = $('#access-main');
+  if (!el || $('#founding-code-card')) return;
+  let d;
+  try { d = await api('/api/founding-code'); } catch (_) { return; }
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'founding-code-card';
+  card.innerHTML = `<h2>Founding code</h2>
+    <p>${d.enabled ? '<span class="badge low">On</span> Anyone with the code can create an account and starts on Lab Pass, free.' : '<span class="badge plain">Off</span> The code is turned off. Set FOUNDING_CODE on the host to turn it on.'}</p>
+    <p class="muted">Lab Pass: ${esc(String(d.labPass.active))} of ${esc(String(d.labPass.capacity))} spots used, founding members included. To change or turn off the code, change FOUNDING_CODE on the host; no code change needed.</p>
+    <h3>${d.count} ${d.count === 1 ? 'redemption' : 'redemptions'}</h3>
+    ${d.count ? `<ul class="code-redemptions">${d.redemptions.map(r => `<li>${esc(r.email)} · ${esc(fmtDate(new Date(r.at)))}</li>`).join('')}</ul>` : '<p class="muted">No one has used it yet.</p>'}`;
+  el.prepend(card);
+}
+
 async function renderAccess() {
   const el = $('#access-main');
   if (!el) return;
@@ -11650,22 +11668,4 @@ async function renderScoreboard() {
   }));
   const rf = el.querySelector('[data-sb-refresh]');
   if (rf) rf.addEventListener('click', () => renderScoreboard());
-}
-
-/* Founding code (Nov 28, 2026): status and the redemption log on the
-   coach Access page. The code word itself is never sent to the page. */
-async function renderFoundingCodeCard() {
-  const el = $('#access-main');
-  if (!el || $('#founding-code-card')) return;
-  let d;
-  try { d = await api('/api/founding-code'); } catch (_) { return; }
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.id = 'founding-code-card';
-  card.innerHTML = `<h2>Founding code</h2>
-    <p>${d.enabled ? '<span class="badge low">On</span> Anyone with the code can create an account and starts on Lab Pass, free.' : '<span class="badge plain">Off</span> The code is turned off. Set FOUNDING_CODE on the host to turn it on.'}</p>
-    <p class="muted">Lab Pass: ${esc(String(d.labPass.active))} of ${esc(String(d.labPass.capacity))} spots used, founding members included. To change or turn off the code, change FOUNDING_CODE on the host; no code change needed.</p>
-    <h3>${d.count} ${d.count === 1 ? 'redemption' : 'redemptions'}</h3>
-    ${d.count ? `<ul class="code-redemptions">${d.redemptions.map(r => `<li>${esc(r.email)} · ${esc(fmtDate(new Date(r.at)))}</li>`).join('')}</ul>` : '<p class="muted">No one has used it yet.</p>'}`;
-  el.prepend(card);
 }
