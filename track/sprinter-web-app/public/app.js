@@ -7559,7 +7559,7 @@ async function renderData() {
   main.innerHTML = `
     <div class="card">
       <h3>Full backup</h3>
-      <p class="muted">One JSON file with the whole team dataset: roster and groups, assignments and completions, testing, weekly numbers, health concerns, inventory, warm-up card edits, meet results, school records, goals, check-ins, attendance, coach notes, custom workouts, programs, and announcements. Accounts and passwords are never in the file.</p>
+      <p class="muted">One JSON file with the whole team dataset: roster and groups, assignments and completions, testing, weekly numbers, health concerns, inventory, warm-up card edits, meet results, school records, goals, check-ins, attendance, coach notes, custom workouts, programs, announcements, and saved settings. Logins, passwords, and each login's own practice log are never in the file.</p>
       <p><strong>Handling a backup:</strong> it holds athlete health information. Encrypt it with a passphrase below, keep it only in school-managed storage, and delete local copies (Downloads, desktops) within 30 days.</p>
       <p><a class="btn secondary" href="/api/export/backup">Download plain backup</a></p>
       <div class="filter-row">
@@ -7680,7 +7680,7 @@ async function renderData() {
       box.innerHTML = '<p class="error">That file is not valid JSON.</p>';
       return;
     }
-    if (parsed && parsed.app === 'sprinter-workout-app' && parsed.kind === 'backup-encrypted' && parsed.encrypted) {
+    if (parsed && parsed.app === 'sprinter-workout-app' && parsed.kind === 'backup-encrypted') {
       pendingBackup = parsed;
       const when = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString() : 'an unknown date';
       box.innerHTML =

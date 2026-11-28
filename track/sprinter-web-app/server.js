@@ -371,6 +371,15 @@ const CUSTOM_WORKOUT_SEED = {
     ] },
   ],
 };
+/* True for the startup seed exactly as planted: same content as
+   CUSTOM_WORKOUT_SEED and never saved since (updatedAt unchanged). */
+function isUntouchedWorkoutSeed(w) {
+  if (!w || w.createdAt !== w.updatedAt) return false;
+  const plain = ['blocks', 'createdAt', 'id', 'title', 'updatedAt'];
+  if (Object.keys(w).some(k => !plain.includes(k))) return false;
+  return w.title === CUSTOM_WORKOUT_SEED.title
+    && JSON.stringify(w.blocks) === JSON.stringify(CUSTOM_WORKOUT_SEED.blocks);
+}
 function seedCustomWorkouts() {
   if (db.customWorkoutsSeeded) return;
   db.customWorkoutsSeeded = true;
@@ -3491,6 +3500,7 @@ const BACKUP_OBJECT_KEYS = [
   'overrides', 'completions', 'testResults', 'weekly', 'concerns',
   'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
   'attendance', 'coachNotes', 'floorProgress', 'pathProgress',
+  'settings',
 ];
 function buildBackupData() {
   return {
@@ -3515,6 +3525,39 @@ function buildBackupData() {
     pathProgress: db.pathProgress,
     sessionPlans: db.sessionPlans,
     handoffs: db.handoffs,
+    settings: db.settings,
+  };
+}
+/* What a backup deliberately leaves out, written into every file so
+   whoever opens it later knows without reading the code. */
+const BACKUP_NOT_INCLUDED = [
+  'Logins: account emails, passwords and roles. Everyone signs up again on a new app; '
+    + 'an athlete whose email is linked to a roster profile is reconnected automatically.',
+  'Each login\'s personal practice log and workout swaps (they belong to the login, not the team).',
+  'Per-coach staff settings (display name, landing groups, approver), which are tied to logins.',
+  'The data audit log (who exported or imported what).',
+];
+/* The whole backup file: a short human-readable summary up top
+   (counts per collection and what is not included) and then the
+   data itself. The import reads only app/kind/version/data, so the
+   summary is for people, never for the merge. */
+function buildBackupEnvelope() {
+  const data = buildBackupData();
+  const contents = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (Array.isArray(v)) contents[k] = v.length;
+    else if (isPlainObj(v)) contents[k] = Object.keys(v).length;
+  }
+  return {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    exportedAt: new Date().toISOString(),
+    summary: {
+      athletes: data.profiles.length,
+      groups: data.groups.length,
+      contents,
+      notIncluded: BACKUP_NOT_INCLUDED,
+    },
+    data,
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -3541,6 +3584,16 @@ function validateBackupData(data) {
   for (const k of BACKUP_OBJECT_KEYS) {
     if (data[k] === undefined) continue;
     if (!isPlainObj(data[k])) return 'The backup\'s "' + k + '" should be an object.';
+  }
+  if (data.settings !== undefined) {
+    const st = data.settings;
+    if (st.retentionMonths !== undefined
+      && (!Number.isInteger(st.retentionMonths) || st.retentionMonths < 1 || st.retentionMonths > 60)) {
+      return 'The backup\'s retention setting should be a whole number of months from 1 to 60.';
+    }
+    if (st.weightRoomSharedDisplay !== undefined && typeof st.weightRoomSharedDisplay !== 'boolean') {
+      return 'The backup\'s weight room display setting should be true or false.';
+    }
   }
   if (data.customWorkoutsSeeded !== undefined
     && typeof data.customWorkoutsSeeded !== 'boolean') {
@@ -3569,6 +3622,18 @@ function mergeLeaves(target, source, counts) {
 function mergeBackupData(data) {
   const counts = {};
   let totalAdded = 0, totalUpdated = 0;
+  /* A brand-new app plants its own copy of the runner-test workout
+     at startup (a fresh id). A backup from an app that already had
+     its seed carries that app's copy (or none, if the coach deleted
+     it), so restoring would leave two. The backup's version wins:
+     drop this app's own untouched seed when the file says the seed
+     was already planted and does not carry this exact record. Only
+     a seed nobody has edited goes — any coach-made workout stays. */
+  if (data.customWorkoutsSeeded === true && Array.isArray(data.customWorkouts)) {
+    const incoming = new Set(data.customWorkouts.map(w => w.id));
+    db.customWorkouts = db.customWorkouts.filter(w =>
+      incoming.has(w.id) || !isUntouchedWorkoutSeed(w));
+  }
   const tally = (k, c) => { counts[k] = c; totalAdded += c.added; totalUpdated += c.updated; };
   for (const [k, keyField] of Object.entries(BACKUP_ARRAY_KEYS)) {
     if (data[k] === undefined) continue;
@@ -6001,10 +6066,8 @@ async function handleApi(req, res, url) {
   if (p === '/api/export/backup' && req.method === 'GET') {
     logDataEvent(user, 'backup', 'Full backup (plain JSON)');
     saveDb();
-    return sendBackupDownload(res, {
-      app: 'sprinter-workout-app', kind: 'backup', version: 1,
-      exportedAt: new Date().toISOString(), data: buildBackupData(),
-    }, 'sprinter-backup-' + todayStr() + '.json');
+    return sendBackupDownload(res, buildBackupEnvelope(),
+      'sprinter-backup-' + todayStr() + '.json');
   }
   /* Encrypted backup: same dataset, sealed with the coach's
      passphrase (AES-256-GCM + scrypt). The passphrase never leaves
@@ -6015,10 +6078,7 @@ async function handleApi(req, res, url) {
     if (passphrase.length < 8) {
       return sendJson(res, 400, { error: 'A passphrase of at least 8 characters is required to encrypt a backup.' });
     }
-    const plain = JSON.stringify({
-      app: 'sprinter-workout-app', kind: 'backup', version: 1,
-      exportedAt: new Date().toISOString(), data: buildBackupData(),
-    });
+    const plain = JSON.stringify(buildBackupEnvelope());
     const envelope = encryptBackupEnvelope(plain, passphrase);
     logDataEvent(user, 'backup', 'Full backup (passphrase-encrypted)');
     saveDb();

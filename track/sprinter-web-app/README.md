@@ -236,6 +236,14 @@ data folder and restart. Once the site matters day to day, the real fix
 is Render's paid persistent disk (or pointing `DATA_DIR` at any folder
 that gets backed up) so the file survives restarts on its own.
 
+The Data page also has a **Full backup** download: one readable JSON
+file with the whole team dataset (roster, groups, testing, results,
+check-ins, notes, workouts, plans, saved settings) and a summary at the
+top. Restoring it on the Data page of a new, empty app brings the team
+data back exactly. It leaves out logins and each login's own practice
+log, so people sign up again on a new app; athletes whose email is
+linked to the roster reconnect on their own.
+
 ## The files, in plain words
 
 - `server.js` — the whole engine: serves the pages, runs the accounts,
