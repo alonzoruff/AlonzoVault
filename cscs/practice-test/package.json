@@ -1,0 +1,13 @@
+{
+  "name": "cscs-practice-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CSCS practice test: timed sets, one question at a time, scored by topic. Zero dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/practice-tests.js",
+    "check": "node scripts/check-questions.js"
+  },
+  "engines": { "node": ">=18" }
+}

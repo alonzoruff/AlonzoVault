@@ -44,6 +44,27 @@
  *                   membership (see processStripeEvent). It needs
  *                   STRIPE_SECRET_KEY too, to look up a new
  *                   subscription's price.
+ *   UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN  (or the same pair
+ *                   named KV_REST_API_URL / KV_REST_API_TOKEN, as Vercel's
+ *                   Upstash integration names them)
+ *                   When BOTH are set, saved data lives in that hosted
+ *                   Upstash Redis store instead of db.json, and every
+ *                   API request loads fresh and saves with a version
+ *                   check (see lib/store.js). For Vercel. When unset,
+ *                   nothing changes: db.json in DATA_DIR, as on Render.
+ *                   In store mode SESSION_SECRET must be set.
+ *   STORE_PREFIX    Optional key prefix inside the store (default ayg-lab).
+ *   OWNER_SETUP_EMAIL  Store mode only. On an empty store, only this
+ *                   email (or comma-separated emails) may register the first (head coach) account,
+ *                   so a stranger cannot claim a fresh store. Unset =
+ *                   no first sign-up at all in store mode (copy the
+ *                   real data in instead). File mode ignores it.
+ *   READ_ONLY_MODE  Set to 1 for a short pause during a move: sign-in
+ *                   still works, but every other change is refused with
+ *                   a calm message and nothing is saved.
+ *   SITE_URL        The public address written into the page tags,
+ *                   sitemap and robots file (default
+ *                   https://ruffin-performance.onrender.com).
  *   COACH_INVITE_EMAILS  Optional comma-separated emails to seed as
  *                   assistant-coach invites at startup. Seeding is
  *                   idempotent and removal-wins: once an email has
@@ -80,7 +101,30 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const stripeLib = require('./lib/stripe');
-const { notifyCoach } = require('./lib/notify');
+const { notifyCoach: sendCoachEmail } = require('./lib/notify');
+const storeLib = require('./lib/store');
+/* Hosted store (Vercel) when its settings are present; otherwise the
+   db.json file exactly as before (Render). */
+const STORE_CFG = storeLib.configFromEnv(process.env, 'ayg-lab');
+const STORE = STORE_CFG ? storeLib.createUpstash(STORE_CFG) : null;
+const READ_ONLY = /^(1|true|yes|on)$/i.test(String(process.env.READ_ONLY_MODE || '').trim());
+/* Vercel caps a request body at about 4.5 MB, so imports stay under
+   4 MB there. Render keeps its larger caps. */
+const ON_VERCEL = !!process.env.VERCEL;
+const BIG_UPLOAD_CAP = ON_VERCEL ? 4 * 1024 * 1024 : 10 * 1024 * 1024;
+const MID_UPLOAD_CAP = ON_VERCEL ? 4 * 1024 * 1024 : 5 * 1024 * 1024;
+const SITE_URL = (() => {
+  const v = String(process.env.SITE_URL || '').trim().replace(/\/+$/, '');
+  return /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(v) ? v : 'https://ruffin-performance.onrender.com';
+})();
+let txns = null; /* set at the bottom in store mode */
+/* Coach emails: on Render they go out right away, without waiting,
+   as before. In store mode they wait until the save is safe and are
+   finished before the reply, so the host cannot cut them off. */
+function notifyCoach(opts) {
+  if (txns && txns.inTransaction()) { txns.defer(() => sendCoachEmail(opts)); return; }
+  sendCoachEmail(opts);
+}
 const LOGO_JPEG = Buffer.from(require('./lib/logo-data'), 'base64');
 /* Absolute link into the app for a notification email. */
 function appLink(viewPath) {
@@ -141,6 +185,10 @@ const CALENDLY_URL = (() => {
 /* ------------------------------------------------------------------ */
 function loadSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  /* Store mode has no lasting disk and many copies of the app, so a
+     made-up key would sign everyone out on every new copy. Requests
+     answer 503 until SESSION_SECRET is set (see the bottom). */
+  if (STORE) return null;
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const f = path.join(DATA_DIR, '.session-secret');
   try {
@@ -669,10 +717,18 @@ function noteMemberActivity(member, firstWorkout) {
    address is never written anywhere. */
 const PUBLIC_EVENT_LIMIT = 30;
 const publicEventHits = new Map();
-function publicEventAllowed(req) {
+async function publicEventAllowed(req) {
   const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   const key = fwd || (req.socket && req.socket.remoteAddress) || 'unknown';
   const minute = Math.floor(Date.now() / 60000);
+  if (STORE) {
+    /* Many short-lived copies of the app: the count has to be shared.
+       Only a keyed one-way hash of the address is used, and the
+       counter deletes itself after two minutes. */
+    const tag = crypto.createHmac('sha256', SECRET || 'events').update(key).digest('hex').slice(0, 24);
+    try { return (await STORE.hit('ev:' + minute + ':' + tag, 120)) <= PUBLIC_EVENT_LIMIT; }
+    catch (_) { return true; }
+  }
   const hit = publicEventHits.get(key);
   if (!hit || hit.minute !== minute) {
     if (publicEventHits.size > 5000) publicEventHits.clear();
@@ -686,6 +742,9 @@ function publicEventAllowed(req) {
    are written to disk a moment later, several at once. */
 let saveSoonTimer = null;
 function saveDbSoon() {
+  /* Store mode: save with the request, before the reply. A delayed
+     save could be lost when the host freezes the app after replying. */
+  if (STORE) return saveDb();
   if (saveSoonTimer) return;
   saveSoonTimer = setTimeout(() => {
     saveSoonTimer = null;
@@ -710,6 +769,17 @@ function migrate() {
   db.concerns = db.concerns || {};
   db.mediaOverrides = db.mediaOverrides || {};
   db.inventory = Array.isArray(db.inventory) ? db.inventory : [];
+  // Filming tracker (coach-only): { movementId: { filmed, note,
+  // updatedAt } } for the movements in content/filming_list.json
+  // plus the coach's own additions in db.filmingExtras. A store that
+  // has never had the tracker starts with 90/90 Hip Rotations
+  // already marked filmed (shot Nov 20); after that it is left alone.
+  if (!db.filming || typeof db.filming !== 'object' || Array.isArray(db.filming)) {
+    db.filming = {
+      'VID-076': { filmed: true, note: 'Filmed Nov 20 as 90/90 Hip Switches', updatedAt: '2026-11-20T12:00:00.000Z' },
+    };
+  }
+  db.filmingExtras = Array.isArray(db.filmingExtras) ? db.filmingExtras : [];
   // Coach edits to the warm-up cards: { cardId: { sections: [...] } }.
   // Only cards a coach has actually edited appear here; anything else
   // renders the shipped card from public/index.html.
@@ -897,7 +967,19 @@ function migrate() {
     if (!PROFILE_STATUSES.includes(prof.status)) prof.status = 'active';
   }
 }
+/* Store mode: replace the in-memory store with a fresh copy loaded
+   from the hosted store (null = empty), then tidy and seed as a
+   restart would. Called at the start of a request when the version
+   changed. */
+const DB_EMPTY = JSON.stringify(db);
+function setDbFromStore(data) {
+  db = Object.assign(JSON.parse(DB_EMPTY), data && Array.isArray(data.users) ? data : {});
+  migrate();
+  seedCoachInvitesFromEnv();
+  seedCustomWorkouts();
+}
 function loadDb() {
+  if (STORE) { migrate(); return; }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   let raw;
   try {
@@ -918,7 +1000,13 @@ function loadDb() {
   }
   migrate();
 }
+let readOnlyWarned = false;
 function saveDb() {
+  if (READ_ONLY) {
+    if (!readOnlyWarned) { readOnlyWarned = true; console.log('[read-only] READ_ONLY_MODE is on: changes are not saved.'); }
+    return;
+  }
+  if (STORE) { if (txns) txns.markDirty(); return; }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 1), { mode: 0o600 });
@@ -1071,6 +1159,40 @@ function loadVideoLibrary() {
     }
   } catch (_) { /* no video library bundled — that is fine */ }
   return [];
+}
+/* Filming tracker list (content/filming_list.json): every movement
+   in the AYG Lab Exercises List, grouped Mobility / Running /
+   Strengthening. Read once, tolerantly: a missing file means the
+   tracker shows only the coach's own additions. Filmed / not filmed
+   and notes live in db.filming; added movements in db.filmingExtras. */
+const FILMING_CATEGORIES = ['Mobility', 'Running', 'Strengthening'];
+let filmingListCache = null;
+function filmingList() {
+  if (filmingListCache) return filmingListCache;
+  filmingListCache = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'filming_list.json'), 'utf8'));
+    filmingListCache = (parsed && Array.isArray(parsed.movements) ? parsed.movements : [])
+      .filter(m => m && typeof m.id === 'string' && typeof m.movement === 'string'
+        && FILMING_CATEGORIES.includes(m.category))
+      .map(m => ({ id: m.id, movement: m.movement, category: m.category }));
+  } catch (_) { /* no list bundled: additions only */ }
+  return filmingListCache;
+}
+function filmingMovements() {
+  return filmingList().map(m => Object.assign({ custom: false }, m))
+    .concat(db.filmingExtras.map(m => ({ id: m.id, movement: m.movement, category: m.category, custom: true })));
+}
+function filmingPayload() {
+  const items = filmingMovements().map(m => {
+    const s = db.filming[m.id] || {};
+    return Object.assign(m, { filmed: s.filmed === true, note: typeof s.note === 'string' ? s.note : '', updatedAt: s.updatedAt || null });
+  });
+  const categories = FILMING_CATEGORIES.map(name => {
+    const movements = items.filter(i => i.category === name);
+    return { name, total: movements.length, filmed: movements.filter(i => i.filmed).length, movements };
+  });
+  return { categories, total: items.length, filmed: items.filter(i => i.filmed).length };
 }
 /* The Definitions tab glossary (content/glossary.json). Same tolerant
    loading as the video library: a missing or malformed file means an
@@ -3924,14 +4046,14 @@ const BACKUP_ARRAY_KEYS = {
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
   announcements: 'id', memberLogs: 'id', formChecks: 'id',
-  liveSessions: 'id', liveRequests: 'id',
+  liveSessions: 'id', liveRequests: 'id', filmingExtras: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
 const BACKUP_OBJECT_KEYS = [
   'overrides', 'completions', 'testResults', 'weekly', 'concerns',
   'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
-  'attendance', 'coachNotes', 'floorProgress',
+  'attendance', 'coachNotes', 'floorProgress', 'filming',
 ];
 function buildBackupData() {
   return {
@@ -3953,6 +4075,7 @@ function buildBackupData() {
     announcements: db.announcements, memberLogs: db.memberLogs,
     formChecks: db.formChecks,
     floorProgress: db.floorProgress,
+    filming: db.filming, filmingExtras: db.filmingExtras,
     liveSessions: db.liveSessions, liveRequests: db.liveRequests,
     /* Membership state rides along WITHOUT the accounts
        themselves (a backup never carries logins or password
@@ -5178,7 +5301,7 @@ async function handleApi(req, res, url) {
     const name = clean(body.name, 40);
     if (!PUBLIC_FUNNEL_EVENTS.includes(name)) return sendJson(res, 400, { error: 'Unknown event.' });
     if (readSession(req)) return sendJson(res, 200, { ok: true, counted: false });
-    if (!publicEventAllowed(req)) return sendJson(res, 429, { error: 'Too many events. Try again in a minute.' });
+    if (!(await publicEventAllowed(req))) return sendJson(res, 429, { error: 'Too many events. Try again in a minute.' });
     const pagePath = clean(body.page, 60);
     const fields = { page: /^\/[a-z0-9\-/]*$/.test(pagePath) ? pagePath : '/' };
     if (name === 'portal_preview_open') {
@@ -5226,6 +5349,16 @@ async function handleApi(req, res, url) {
       return sendJson(res, 409, { error: 'An account with that email already exists. Try logging in.' });
     }
     const firstAccount = db.users.length === 0;
+    /* A brand-new hosted store is empty, and the first account owns
+       it. In store mode only OWNER_SETUP_EMAIL may claim it, so a
+       stranger cannot get there first. Render (file mode) is unchanged. */
+    if (firstAccount && STORE) {
+      const setup = String(process.env.OWNER_SETUP_EMAIL || '').toLowerCase()
+        .split(',').map(x => x.trim()).filter(Boolean);
+      if (!setup.includes(email)) {
+        return sendJson(res, 403, { error: 'This app is being set up and is not open for sign-up yet.' });
+      }
+    }
     // Invite-only pilot: after the first account (the owner), an
     // email can register only if the owner invited it — onto the
     // coach list (coach access) or the member list (member access).
@@ -7361,7 +7494,7 @@ async function handleApi(req, res, url) {
     if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
     let body;
     try {
-      body = await readJsonBody(req, 5 * 1024 * 1024);
+      body = await readJsonBody(req, MID_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That file is too large — device exports over 5 MB are not accepted.' });
@@ -7383,7 +7516,7 @@ async function handleApi(req, res, url) {
     if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
     let body;
     try {
-      body = await readJsonBody(req, 5 * 1024 * 1024);
+      body = await readJsonBody(req, MID_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That import is too large.' });
@@ -7501,7 +7634,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/import/backup' && req.method === 'POST') {
     let body;
     try {
-      body = await readJsonBody(req, 10 * 1024 * 1024);
+      body = await readJsonBody(req, BIG_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That file is too large — backups over 10 MB are not accepted.' });
@@ -9298,6 +9431,70 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
+  /* ---------- filming tracker (coach-only) ----------
+     Every AYG Lab movement with a filmed / not filmed status and a
+     note. Statuses save to db.filming through saveDb like every
+     other coach record, so they survive a restart. */
+  if (p === '/api/filming' && req.method === 'GET') {
+    return sendJson(res, 200, filmingPayload());
+  }
+  if (p === '/api/filming' && req.method === 'POST') {
+    const body = await readBody(req);
+    const movement = typeof body.movement === 'string' ? body.movement.trim().replace(/\s+/g, ' ') : '';
+    if (!movement) return sendJson(res, 400, { error: 'Give the movement a name.' });
+    if (movement.length > 120) return sendJson(res, 400, { error: 'Keep the movement name under 120 characters.' });
+    if (!FILMING_CATEGORIES.includes(body.category)) {
+      return sendJson(res, 400, { error: 'Pick Mobility, Running, or Strengthening.' });
+    }
+    if (filmingMovements().some(m => m.movement.toLowerCase() === movement.toLowerCase())) {
+      return sendJson(res, 409, { error: 'That movement is already on the list.' });
+    }
+    const nums = db.filmingExtras.map(m => parseInt(String(m.id).replace('NEW-', ''), 10)).filter(n => n > 0);
+    const id = 'NEW-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+    const item = { id, movement, category: body.category, createdAt: new Date().toISOString() };
+    db.filmingExtras.push(item);
+    saveDb();
+    return sendJson(res, 201, { item });
+  }
+  const filmingMatch = p.match(/^\/api\/filming\/([^/]+)$/);
+  if (filmingMatch && req.method === 'PUT') {
+    const id = decodeURIComponent(filmingMatch[1]);
+    if (!filmingMovements().some(m => m.id === id)) return sendJson(res, 404, { error: 'Movement not found.' });
+    const body = await readBody(req);
+    if (body.filmed !== undefined && typeof body.filmed !== 'boolean') {
+      return sendJson(res, 400, { error: 'filmed must be true or false.' });
+    }
+    if (body.note !== undefined && typeof body.note !== 'string') {
+      return sendJson(res, 400, { error: 'The note must be text.' });
+    }
+    if (body.filmed === undefined && body.note === undefined) {
+      return sendJson(res, 400, { error: 'Nothing to change.' });
+    }
+    const note = body.note === undefined ? undefined : body.note.trim();
+    if (note !== undefined && note.length > 500) return sendJson(res, 400, { error: 'Keep the note under 500 characters.' });
+    const cur = db.filming[id] || { filmed: false, note: '' };
+    const next = {
+      filmed: body.filmed === undefined ? cur.filmed === true : body.filmed,
+      note: note === undefined ? (cur.note || '') : note,
+      updatedAt: new Date().toISOString(),
+    };
+    db.filming[id] = next;
+    saveDb();
+    return sendJson(res, 200, { id, filmed: next.filmed, note: next.note, updatedAt: next.updatedAt });
+  }
+  if (filmingMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(filmingMatch[1]);
+    if (!db.filmingExtras.some(m => m.id === id)) {
+      const listed = filmingList().some(m => m.id === id);
+      return sendJson(res, listed ? 400 : 404,
+        { error: listed ? 'Movements from the exercises list stay on the tracker.' : 'Movement not found.' });
+    }
+    db.filmingExtras = db.filmingExtras.filter(m => m.id !== id);
+    delete db.filming[id];
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
   /* ---------- custom workouts (coach-built, for runner mode) ------
      Coach-only like everything in this section: athletes get a 403
      on read and write alike. Runner mode itself is a client-side
@@ -9702,7 +9899,7 @@ const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.cs
 /* Brand tokens in the shell files (index.html, app.js, manifest,
    sw.js) are filled from the BRAND config at serve time, so the
    business name lives in exactly one place: the BRAND block above. */
-const BRAND_SUBSTITUTABLE = new Set(['.html', '.js', '.json', '.css']);
+const BRAND_SUBSTITUTABLE = new Set(['.html', '.js', '.json', '.css', '.xml', '.txt']);
 function applyBrand(text) {
   return text
     .replaceAll('__BRAND_NAME__', BRAND.name)
@@ -9712,7 +9909,8 @@ function applyBrand(text) {
     .replaceAll('__BRAND_CACHE__', BRAND.cache)
     .replaceAll('__CALENDLY_URL__', CALENDLY_URL)
     .replaceAll('__TRIAL_DAYS__', String(TRIAL_DAYS))
-    .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL);
+    .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL)
+    .replaceAll('__SITE_URL__', SITE_URL);
 }
 function serveStatic(req, res, url) {
   if (url.pathname === '/assets/ayg-lab-logo.jpg') {
@@ -9744,23 +9942,59 @@ function serveStatic(req, res, url) {
   });
 }
 
-seedCoachInvitesFromEnv();
-seedCustomWorkouts();
+if (!STORE) {
+  seedCoachInvitesFromEnv();
+  seedCustomWorkouts();
+}
 
-const server = http.createServer((req, res) => {
+/* Read-only pause for a move: reads and sign-in work, changes do not. */
+const READ_ONLY_ALLOWED = new Set(['/api/login', '/api/logout']);
+function readOnlyBlocked(req, url) {
+  return READ_ONLY && req.method !== 'GET' && req.method !== 'HEAD'
+    && !READ_ONLY_ALLOWED.has(url.pathname);
+}
+
+function handleApiRequest(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  if (readOnlyBlocked(req, url)) {
+    return sendJson(res, 503, { error: BRAND.name + ' is paused for a few minutes while it moves. Your data is safe. Please try again shortly.' });
+  }
+  return handleApi(req, res, url).catch(() => {
+    // The socket may already be gone (e.g., an oversized body was
+    // destroyed mid-read) — never let the error reply itself throw.
+    try { if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' }); } catch (_) { /* gone */ }
+  });
+}
+
+if (STORE) {
+  txns = storeLib.createTransactions(STORE, {
+    setData: setDbFromStore,
+    getData: () => db,
+    handle: handleApiRequest,
+  });
+}
+
+/* One request handler for both hosts: Render calls it through the
+   server below; Vercel calls it from api/index.js. */
+function handler(req, res) {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname.startsWith('/api/')) {
-    handleApi(req, res, url).catch(() => {
-      // The socket may already be gone (e.g., an oversized body was
-      // destroyed mid-read) — never let the error reply itself throw.
-      try { if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' }); } catch (_) { /* gone */ }
-    });
-  } else {
-    serveStatic(req, res, url);
+    if (STORE && !SECRET) {
+      console.error('[setup] SESSION_SECRET is not set: sign-in cannot work until it is.');
+      return sendJson(res, 503, { error: BRAND.name + ' is not finished setting up yet. Please try again later.' });
+    }
+    return STORE ? txns.run(req, res) : handleApiRequest(req, res);
   }
-});
+  serveStatic(req, res, url);
+}
 
-server.listen(PORT, () => {
-  console.log(`${BRAND.name} (${BRAND.tagline}) running at http://localhost:${PORT}`);
-  console.log(`Content loaded: ${CONTENT.sessions.length} sessions, ${CONTENT.drills.length} drills, ${CONTENT.weeks.length} weeks.`);
-});
+module.exports = { handler };
+
+if (require.main === module) {
+  const server = http.createServer(handler);
+  server.listen(PORT, () => {
+    console.log(`${BRAND.name} (${BRAND.tagline}) running at http://localhost:${PORT}`);
+    console.log(`Content loaded: ${CONTENT.sessions.length} sessions, ${CONTENT.drills.length} drills, ${CONTENT.weeks.length} weeks.`);
+    if (STORE) console.log('Data store: hosted (' + STORE.prefix + ')');
+  });
+}

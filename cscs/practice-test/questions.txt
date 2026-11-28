@@ -1,0 +1,313 @@
+# CSCS PRACTICE QUESTIONS
+#
+# Practice questions written by Claude for AJ's study. They are NOT real NSCA
+# exam items and were not copied from any exam, past or leaked. They follow the
+# exam's style: short scenarios, one best answer.
+#
+# HOW TO ADD A QUESTION (full guide in README.md, next to this file)
+#   1. Put a line with three dashes --- after the last question.
+#   2. Copy the pattern below and fill it in.
+#   3. Exactly 3 choices: A), B) and C). Answer is one letter.
+#   4. Section is Applied or Scientific Foundations. Topic is any name you
+#      like; questions with the same Topic are scored together.
+#
+#   Section: Applied
+#   Topic: Program Design
+#   Q: Your question here.
+#   A) First choice
+#   B) Second choice
+#   C) Third choice
+#   Answer: B
+#   Why: One or two sentences on why B is the best answer.
+#
+# Lines that start with # (like these) are notes and the app skips them.
+
+# ---------------- APPLIED: EXERCISE TECHNIQUE ----------------
+
+Section: Applied
+Topic: Exercise Technique
+Q: During a back squat, a coach sees the athlete's knees cave inward as the athlete comes up out of the bottom position. Which cue best fixes this?
+A) "Rise onto your toes as you drive up."
+B) "Push your knees out so they track over your toes."
+C) "Let your chest drop forward to shorten the lift."
+Answer: B
+Why: Knees should stay in line with the feet. Cueing the knees out over the toes corrects valgus; rising onto the toes or letting the chest drop adds new faults.
+---
+Section: Applied
+Topic: Exercise Technique
+Q: An athlete doing a power clean starts bending the elbows to pull the bar up before the hips, knees and ankles have fully extended. What instruction corrects this?
+A) "Pull harder with your arms right off the floor."
+B) "Point your elbows down and back during the second pull."
+C) "Keep your elbows straight and pointed out until your hips, knees and ankles fully extend."
+Answer: C
+Why: The arms stay straight, elbows out, until the explosive triple extension is finished. Bending the arms early takes power away from the legs and hips.
+---
+Section: Applied
+Topic: Exercise Technique
+Q: Which of these exercises should NOT be spotted? If the athlete misses a rep, they push the bar away and move clear of it.
+A) Hang clean
+B) Flat barbell bench press
+C) Dumbbell incline press
+Answer: A
+Why: Power exercises such as cleans and snatches are not spotted. Athletes learn to drop or push a missed bar away and step clear. Pressing exercises are spotted.
+---
+Section: Applied
+Topic: Exercise Technique
+Q: An athlete is doing a heavy dumbbell bench press. Where should the spotter's hands go?
+A) On the athlete's elbows
+B) Near the athlete's wrists
+C) Under the middle of the bench
+Answer: B
+Why: Dumbbell exercises are spotted at or near the wrists. Spotting at the elbows can let the dumbbell roll over the forearm and fall toward the face or chest.
+---
+Section: Applied
+Topic: Exercise Technique
+Q: A novice athlete is learning the standing shoulder press with a moderate load. What breathing pattern should the coach teach?
+A) Exhale through the sticking point of the upward phase and inhale while lowering.
+B) Hold the breath for the whole set to keep the trunk stiff.
+C) Inhale while pressing up and exhale while lowering.
+Answer: A
+Why: For most lifts, the recommended pattern is to exhale through the sticking point and inhale during the easier lowering phase. A brief held breath is reserved for trained lifters with heavy loads.
+
+---
+# ---------------- APPLIED: PROGRAM DESIGN ----------------
+
+Section: Applied
+Topic: Program Design
+Q: A sprinter's 1RM back squat is 300 lb. The goal for this block is strength, with sets of 6 repetitions. Using the usual relationship between %1RM and reps, what load fits best?
+A) 225 lb
+B) 285 lb
+C) 255 lb
+Answer: C
+Why: About 6 repetitions matches roughly 85% of 1RM. 300 x 0.85 = 255 lb. 285 lb is near a 2 to 3RM, and 225 lb is closer to a 10RM load.
+---
+Section: Applied
+Topic: Program Design
+Q: An athlete in a hypertrophy block does 3 sets of 10 at about 75% of 1RM on the leg press. Which rest period between sets fits that goal?
+A) 30 to 90 seconds
+B) 2 to 5 minutes
+C) 5 to 8 minutes
+Answer: A
+Why: Hypertrophy training uses short to moderate rest, about 30 seconds to 1.5 minutes. Rest of 2 to 5 minutes fits maximal strength and power work.
+---
+Section: Applied
+Topic: Program Design
+Q: Today's session has a hang clean, a back squat and a dumbbell biceps curl. In what order should they be done?
+A) Back squat, hang clean, biceps curl
+B) Hang clean, back squat, biceps curl
+C) Biceps curl, back squat, hang clean
+Answer: B
+Why: Power exercises go first while the athlete is fresh, then core multijoint lifts, then small single-joint assistance work.
+---
+Section: Applied
+Topic: Program Design
+Q: An athlete's assigned work is 3 sets of 8 on the bench press. For two workouts in a row, the athlete finishes 10 reps on the final set. Following the 2-for-2 rule, what should the coach do?
+A) Add a fourth set and keep the same load.
+B) Keep the load until the athlete reaches 12 reps on the last set.
+C) Increase the load at the next session.
+Answer: C
+Why: The 2-for-2 rule says that when an athlete can do two or more reps over the goal in the last set for two workouts in a row, the load goes up next time.
+---
+Section: Applied
+Topic: Program Design
+Q: A basketball player is in season and plays two games a week. The goal of resistance training now is to keep the strength built in the off-season. What plan fits best?
+A) 1 to 2 short sessions a week, moderate to high intensity, low volume
+B) 4 sessions a week with high volume to keep building muscle
+C) Stop lifting until the season ends to save energy for games
+Answer: A
+Why: In-season maintenance uses brief sessions, often 1 to 2 a week (up to 3), with low volume and moderate to high loads. High volume adds fatigue before games, and stopping lets strength fade.
+---
+Section: Applied
+Topic: Program Design
+Q: A high school athlete with no plyometric experience is starting lower-body plyometrics in the off-season. About how many foot contacts per session is a good starting volume?
+A) 200 to 250
+B) 60 to 100
+C) About 400
+Answer: B
+Why: Beginners in the off-season start around 60 to 100 foot contacts per session. Higher counts are for intermediate and advanced athletes.
+---
+Section: Applied
+Topic: Program Design
+Q: A 20-year-old athlete has a resting heart rate of 60 beats per minute. Using the Karvonen method with age-predicted max heart rate, what is the target heart rate at 70% intensity?
+A) 140 beats per minute
+B) 168 beats per minute
+C) 158 beats per minute
+Answer: C
+Why: Max HR = 220 - 20 = 200. Heart rate reserve = 200 - 60 = 140. 140 x 0.70 = 98. Add resting HR back: 98 + 60 = 158.
+
+---
+# ---------------- APPLIED: TESTING AND EVALUATION ----------------
+
+Section: Applied
+Topic: Testing and Evaluation
+Q: A coach plans one testing day with a skinfold assessment, a T-test, a vertical jump and a 1.5-mile run. Which test should come last?
+A) 1.5-mile run
+B) T-test
+C) Vertical jump
+Answer: A
+Why: Aerobic capacity tests are the most fatiguing, so they go last. Non-fatiguing tests come first, then agility, then power and strength.
+---
+Section: Applied
+Topic: Testing and Evaluation
+Q: A test gives the same score every time the same athlete takes it under the same conditions, but it does not actually measure the quality it claims to measure. How should this test be described?
+A) Valid but not reliable
+B) Reliable but not valid
+C) Both valid and reliable
+Answer: B
+Why: Consistent scores mean the test is reliable. Not measuring what it is supposed to measure means it is not valid. A test can be reliable without being valid.
+---
+Section: Applied
+Topic: Testing and Evaluation
+Q: A team's back squat 1RM has a mean of 300 lb and a standard deviation of 25 lb. One athlete squats 350 lb. What is that athlete's z-score?
+A) +0.5
+B) +1.0
+C) +2.0
+Answer: C
+Why: z = (score - mean) / standard deviation = (350 - 300) / 25 = +2.0, two standard deviations above the team average.
+---
+Section: Applied
+Topic: Testing and Evaluation
+Q: A volleyball coach wants a quick field test of lower-body maximal power with very little equipment. Which test fits best?
+A) Vertical jump
+B) 12-minute run
+C) Push-ups to failure
+Answer: A
+Why: The vertical jump is a valid, simple field test of lower-body power. The 12-minute run measures aerobic capacity, and push-ups to failure measure upper-body muscular endurance.
+---
+Section: Applied
+Topic: Testing and Evaluation
+Q: A coach will retest athletes at the end of a training block to compare with the preseason results. What matters most for a fair comparison?
+A) Using a new tester so the results are not biased
+B) Using the same time of day, warm-up, test order and testers as the first session
+C) Testing right after a hard practice to copy game fatigue
+Answer: B
+Why: Keeping conditions the same between sessions improves reliability, so a change in score reflects training and not a change in how the test was run.
+
+---
+# ---------------- APPLIED: ORGANIZATION AND ADMINISTRATION ----------------
+
+Section: Applied
+Topic: Organization and Administration
+Q: You are laying out a row of squat racks with Olympic bars in the weight room. What is the recommended minimum space between the ends of the bars on neighboring racks?
+A) 3 feet (0.91 m)
+B) 1 foot (0.3 m)
+C) 10 feet (3 m)
+Answer: A
+Why: Guidelines call for at least 3 feet between the ends of Olympic bars so athletes and spotters can move safely between stations.
+---
+Section: Applied
+Topic: Organization and Administration
+Q: A high school weight room session has 45 athletes training at once. Using the recommended supervision ratio for high school, how many qualified supervisors are needed?
+A) 1
+B) 3
+C) 6
+Answer: B
+Why: The recommended ratio for high school is about 1 supervisor for every 15 athletes. 45 / 15 = 3.
+---
+Section: Applied
+Topic: Organization and Administration
+Q: Midway through a session, an athlete reports chest pain and dizziness. What should the strength and conditioning coach do first?
+A) Have the athlete jog lightly to cool down.
+B) Let the athlete finish the set, then send them to the athletic trainer.
+C) Stop the activity, keep the athlete still and start the emergency action plan.
+Answer: C
+Why: Chest pain with dizziness is a possible medical emergency. Stop exercise, keep the athlete safe and activate the facility's written emergency plan.
+
+---
+# ---------------- SCIENTIFIC FOUNDATIONS: EXERCISE SCIENCE ----------------
+
+Section: Scientific Foundations
+Topic: Exercise Science
+Q: A sprinter runs an all-out 200 m in about 22 seconds. Which energy systems supply most of the energy for this effort?
+A) Mostly the oxidative (aerobic) system
+B) Fat oxidation alone
+C) The phosphagen system and fast glycolysis
+Answer: C
+Why: Maximal efforts of about 6 to 30 seconds draw mainly on the phosphagen system and fast glycolysis. The oxidative system takes over in longer, lower-intensity work.
+---
+Section: Scientific Foundations
+Topic: Exercise Science
+Q: As an athlete lifts heavier and heavier loads, in what order are motor units recruited?
+A) Small, low-threshold units first, then larger, high-threshold units
+B) Large, high-threshold units first, then smaller units
+C) In random order, depending on the exercise
+Answer: A
+Why: The size principle says small, low-threshold motor units (mostly Type I) are recruited first, and larger, high-threshold units (Type II) join as force demand rises.
+---
+Section: Scientific Foundations
+Topic: Exercise Science
+Q: Elbow flexion during a biceps curl is a third-class lever. What does that mean for the muscle?
+A) The resistance sits between the joint and the muscle, so the muscle has a mechanical advantage.
+B) The muscle pulls between the joint and the resistance, so it must produce more force than the resistance.
+C) The joint sits between the muscle and the resistance, so the forces are equal.
+Answer: B
+Why: In a third-class lever the muscle force is applied between the fulcrum (the joint) and the resistance. The muscle has the shorter moment arm, so it must produce more force than the load.
+---
+Section: Scientific Foundations
+Topic: Exercise Science
+Q: Which workout is likely to produce the largest short-term rise in growth hormone?
+A) High volume, about a 10RM load, about 1 minute of rest
+B) Low volume, 1 to 3RM loads, 5 minutes of rest
+C) One light set with long rest
+Answer: A
+Why: Growth hormone rises most after high-volume, multiple-set workouts with moderate to heavy loads and short rest periods.
+---
+Section: Scientific Foundations
+Topic: Exercise Science
+Q: Why does a countermovement jump usually go higher than a jump started from a paused squat position?
+A) The pause recruits more motor units.
+B) A longer transition between lowering and jumping adds power.
+C) Elastic energy and the stretch reflex add to the jump during a quick switch from lowering to jumping.
+Answer: C
+Why: The stretch-shortening cycle stores elastic energy and triggers the stretch reflex. It helps only when the switch from eccentric to concentric is quick; a long pause loses the benefit.
+---
+Section: Scientific Foundations
+Topic: Exercise Science
+Q: After several months of aerobic training, an athlete's resting heart rate has dropped. What is the main reason?
+A) The heart pumps more blood per beat (larger stroke volume).
+B) Blood volume has gone down.
+C) Maximal oxygen uptake has gone down.
+Answer: A
+Why: Aerobic training raises stroke volume (and vagal tone), so the heart can move the same resting cardiac output with fewer beats. Blood volume and VO2max go up with training, not down.
+
+---
+# ---------------- SCIENTIFIC FOUNDATIONS: NUTRITION ----------------
+
+Section: Scientific Foundations
+Topic: Nutrition
+Q: An 80 kg athlete is in a strength and muscle-building phase. Which daily protein intake falls in the commonly recommended range?
+A) About 40 to 60 g
+B) About 115 to 135 g
+C) About 300 to 350 g
+Answer: B
+Why: Strength athletes are commonly advised to eat roughly 1.4 to 1.7 g of protein per kg per day, and some sources go up to 2.0. For 80 kg, 115 to 135 g sits inside all of those ranges.
+---
+Section: Scientific Foundations
+Topic: Nutrition
+Q: An athlete weighs 1 kg less after practice than before it. About how much fluid should they drink to rehydrate?
+A) About 0.25 L
+B) About 4 L
+C) About 1.25 to 1.5 L
+Answer: C
+Why: Athletes should replace about 1.25 to 1.5 L of fluid for each kg of body mass lost, because some fluid keeps being lost as urine during recovery.
+
+---
+# ---------------- SCIENTIFIC FOUNDATIONS: SPORT PSYCHOLOGY ----------------
+
+Section: Scientific Foundations
+Topic: Sport Psychology
+Q: Compared with a simple, gross-motor task such as pushing a sled, at what arousal level is a complex fine-motor skill such as a golf putt usually performed best?
+A) A lower arousal level
+B) A higher arousal level
+C) The same maximal arousal level
+Answer: A
+Why: The inverted-U idea says complex, fine-motor skills are best at lower arousal, while simple, gross-motor tasks tolerate or benefit from higher arousal.
+---
+Section: Scientific Foundations
+Topic: Sport Psychology
+Q: Which of these is a process goal for a 100 m sprinter?
+A) Win the conference 100 m title.
+B) Hold a forward body lean through the first 10 meters of every start.
+C) Run under 11.0 seconds this season.
+Answer: B
+Why: Process goals focus on the actions the athlete controls during performance. Winning is an outcome goal, and a target time is a performance goal.

@@ -1,0 +1,57 @@
+name: Idea or new feature
+description: Ask for something new or a change to how an app works, in plain words.
+title: "Idea: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the idea the way you'd say it out loud. No tech terms needed.
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app?
+      options:
+        - AYG Lab
+        - Sprinter app
+        - Portal
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: who
+    attributes:
+      label: Who is it for?
+      description: Athletes, coaches, members, AJ, parents...
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do they need to do, or what's getting in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would make it better?
+      description: Your idea of how it could work. A rough idea is fine.
+  - type: textarea
+    id: done
+    attributes:
+      label: How will we know it's done?
+      description: What someone should be able to see or do on their phone once it's built.
+      placeholder: "A member can open the Library and see today's exercise at the top."
+  - type: dropdown
+    id: timing
+    attributes:
+      label: When is it needed?
+      options:
+        - Before a set date (say when below)
+        - Soon
+        - Whenever there's time
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else? (optional)
+      description: Dates, examples from other apps, sketches or screenshots.

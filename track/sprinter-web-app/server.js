@@ -371,6 +371,15 @@ const CUSTOM_WORKOUT_SEED = {
     ] },
   ],
 };
+/* True for the startup seed exactly as planted: same content as
+   CUSTOM_WORKOUT_SEED and never saved since (updatedAt unchanged). */
+function isUntouchedWorkoutSeed(w) {
+  if (!w || w.createdAt !== w.updatedAt) return false;
+  const plain = ['blocks', 'createdAt', 'id', 'title', 'updatedAt'];
+  if (Object.keys(w).some(k => !plain.includes(k))) return false;
+  return w.title === CUSTOM_WORKOUT_SEED.title
+    && JSON.stringify(w.blocks) === JSON.stringify(CUSTOM_WORKOUT_SEED.blocks);
+}
 function seedCustomWorkouts() {
   if (db.customWorkoutsSeeded) return;
   db.customWorkoutsSeeded = true;
@@ -3491,6 +3500,7 @@ const BACKUP_OBJECT_KEYS = [
   'overrides', 'completions', 'testResults', 'weekly', 'concerns',
   'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
   'attendance', 'coachNotes', 'floorProgress', 'pathProgress',
+  'settings',
 ];
 function buildBackupData() {
   return {
@@ -3515,6 +3525,39 @@ function buildBackupData() {
     pathProgress: db.pathProgress,
     sessionPlans: db.sessionPlans,
     handoffs: db.handoffs,
+    settings: db.settings,
+  };
+}
+/* What a backup deliberately leaves out, written into every file so
+   whoever opens it later knows without reading the code. */
+const BACKUP_NOT_INCLUDED = [
+  'Logins: account emails, passwords and roles. Everyone signs up again on a new app; '
+    + 'an athlete whose email is linked to a roster profile is reconnected automatically.',
+  'Each login\'s personal practice log and workout swaps (they belong to the login, not the team).',
+  'Per-coach staff settings (display name, landing groups, approver), which are tied to logins.',
+  'The data audit log (who exported or imported what).',
+];
+/* The whole backup file: a short human-readable summary up top
+   (counts per collection and what is not included) and then the
+   data itself. The import reads only app/kind/version/data, so the
+   summary is for people, never for the merge. */
+function buildBackupEnvelope() {
+  const data = buildBackupData();
+  const contents = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (Array.isArray(v)) contents[k] = v.length;
+    else if (isPlainObj(v)) contents[k] = Object.keys(v).length;
+  }
+  return {
+    app: 'sprinter-workout-app', kind: 'backup', version: 1,
+    exportedAt: new Date().toISOString(),
+    summary: {
+      athletes: data.profiles.length,
+      groups: data.groups.length,
+      contents,
+      notIncluded: BACKUP_NOT_INCLUDED,
+    },
+    data,
   };
 }
 /* Validate an import payload's data object WITHOUT touching the
@@ -3541,6 +3584,16 @@ function validateBackupData(data) {
   for (const k of BACKUP_OBJECT_KEYS) {
     if (data[k] === undefined) continue;
     if (!isPlainObj(data[k])) return 'The backup\'s "' + k + '" should be an object.';
+  }
+  if (data.settings !== undefined) {
+    const st = data.settings;
+    if (st.retentionMonths !== undefined
+      && (!Number.isInteger(st.retentionMonths) || st.retentionMonths < 1 || st.retentionMonths > 60)) {
+      return 'The backup\'s retention setting should be a whole number of months from 1 to 60.';
+    }
+    if (st.weightRoomSharedDisplay !== undefined && typeof st.weightRoomSharedDisplay !== 'boolean') {
+      return 'The backup\'s weight room display setting should be true or false.';
+    }
   }
   if (data.customWorkoutsSeeded !== undefined
     && typeof data.customWorkoutsSeeded !== 'boolean') {
@@ -3569,6 +3622,18 @@ function mergeLeaves(target, source, counts) {
 function mergeBackupData(data) {
   const counts = {};
   let totalAdded = 0, totalUpdated = 0;
+  /* A brand-new app plants its own copy of the runner-test workout
+     at startup (a fresh id). A backup from an app that already had
+     its seed carries that app's copy (or none, if the coach deleted
+     it), so restoring would leave two. The backup's version wins:
+     drop this app's own untouched seed when the file says the seed
+     was already planted and does not carry this exact record. Only
+     a seed nobody has edited goes — any coach-made workout stays. */
+  if (data.customWorkoutsSeeded === true && Array.isArray(data.customWorkouts)) {
+    const incoming = new Set(data.customWorkouts.map(w => w.id));
+    db.customWorkouts = db.customWorkouts.filter(w =>
+      incoming.has(w.id) || !isUntouchedWorkoutSeed(w));
+  }
   const tally = (k, c) => { counts[k] = c; totalAdded += c.added; totalUpdated += c.updated; };
   for (const [k, keyField] of Object.entries(BACKUP_ARRAY_KEYS)) {
     if (data[k] === undefined) continue;
@@ -3732,6 +3797,7 @@ const EVENT_GROUP_CODES = {
   multis: 'Multis', multi: 'Multis', everything: 'Multis',
   distance: 'Distance', md: 'Distance', d: 'Distance',
   throws: 'Throws', throw: 'Throws',
+  manager: 'Manager', managers: 'Manager', 'team manager': 'Manager',
 };
 const cleanEventGroups = (v) => {
   const raw = Array.isArray(v) ? v : String(v == null ? '' : v).split(/[,;/]+/);
@@ -3786,8 +3852,9 @@ const rosterHeaderMap = (cells) => {
   const h = cells.map(c => String(c || '').trim().toLowerCase());
   const find = (re, not) => h.findIndex(x => re.test(x) && !(not && not.test(x)));
   const map = {
-    first: find(/^first\s*name/),
-    last: find(/^last\s*name/),
+    // "First Name", or "Athlete's First Name" on the team roster form.
+    first: find(/^(athlete['\u2019]?s?\s+)?first\s*name/),
+    last: find(/^(athlete['\u2019]?s?\s+)?last\s*name/),
     name: find(/^(athlete\s*)?name$/),
     level: find(/^(classification|level|team\s*level|team)\b/),
     groups: find(/^event\s*groups?\b/),
@@ -3796,6 +3863,9 @@ const rosterHeaderMap = (cells) => {
     phone: find(/(cell|phone|mobile)/),
   };
   if (map.email < 0) map.email = find(/^(athlete\s*)?e-?mail(\s*address)?\b/);
+  // A plain "Class" header (the Final Roster tab) also means level;
+  // "Class of 2027" or "Class year" does not.
+  if (map.level < 0) map.level = find(/^class$/);
   const hasName = (map.first >= 0 && map.last >= 0) || map.name >= 0;
   const hasField = map.level >= 0 || map.groups >= 0 || map.email >= 0 || map.phone >= 0;
   return hasName && hasField ? map : null;
@@ -4624,6 +4694,12 @@ async function handleApi(req, res, url) {
           if (ph === null) notes.push('phone not saved (does not look like a phone number)');
           const existing = db.profiles.find(pr => !pr.archived && nameKey(pr.firstName, pr.lastName) === key)
             || db.profiles.find(pr => nameKey(pr.firstName, pr.lastName) === key);
+          // Team managers are listed on the roster sheet but are not
+          // athletes, so they are never added (or changed) by an import.
+          if (groups.length && groups.every(g => g === 'Manager')) {
+            report.skipped.push({ line: lineNo, text: label, reason: 'Team manager, not added as an athlete.' });
+            continue;
+          }
           if (addsAthletes && !groups.length && !existing) {
             report.skipped.push({ line: lineNo, text: label, reason: 'No event group listed, so not added.' });
             continue;
@@ -5990,10 +6066,8 @@ async function handleApi(req, res, url) {
   if (p === '/api/export/backup' && req.method === 'GET') {
     logDataEvent(user, 'backup', 'Full backup (plain JSON)');
     saveDb();
-    return sendBackupDownload(res, {
-      app: 'sprinter-workout-app', kind: 'backup', version: 1,
-      exportedAt: new Date().toISOString(), data: buildBackupData(),
-    }, 'sprinter-backup-' + todayStr() + '.json');
+    return sendBackupDownload(res, buildBackupEnvelope(),
+      'sprinter-backup-' + todayStr() + '.json');
   }
   /* Encrypted backup: same dataset, sealed with the coach's
      passphrase (AES-256-GCM + scrypt). The passphrase never leaves
@@ -6004,10 +6078,7 @@ async function handleApi(req, res, url) {
     if (passphrase.length < 8) {
       return sendJson(res, 400, { error: 'A passphrase of at least 8 characters is required to encrypt a backup.' });
     }
-    const plain = JSON.stringify({
-      app: 'sprinter-workout-app', kind: 'backup', version: 1,
-      exportedAt: new Date().toISOString(), data: buildBackupData(),
-    });
+    const plain = JSON.stringify(buildBackupEnvelope());
     const envelope = encryptBackupEnvelope(plain, passphrase);
     logDataEvent(user, 'backup', 'Full backup (passphrase-encrypted)');
     saveDb();
@@ -8459,6 +8530,12 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
 };
 const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/sw.js']);
 function serveStatic(req, res, url) {
@@ -8488,8 +8565,47 @@ function serveStatic(req, res, url) {
 seedCoachInvitesFromEnv();
 seedCustomWorkouts();
 
+/* ------------------------------------------------------------------ */
+/* Security headers (sent on every response)                           */
+/* ------------------------------------------------------------------ */
+/* None of these changes what an athlete or coach sees or how sign-in
+   works. They tell the browser: never guess a file's type (nosniff);
+   never let another website show this app inside a frame, which is
+   how "clickjacking" tricks work (X-Frame-Options + frame-ancestors);
+   keep using HTTPS for this site (HSTS, only sent over HTTPS); share
+   only the site name, never the page path, with other sites
+   (Referrer-Policy); and nothing here may use the camera,
+   microphone, or location. API answers hold athlete data, so the
+   browser and any shared cache must not store them (no-store); a
+   handler that sets its own Cache-Control still wins, because its
+   writeHead headers replace these defaults. */
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Content-Security-Policy': "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+function setSecurityHeaders(req, res, isApi) {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
+  const isHttps = req.headers['x-forwarded-proto'] === 'https' || !!(req.socket && req.socket.encrypted);
+  if (isHttps) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+  if (isApi) res.setHeader('Cache-Control', 'no-store');
+}
+
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://localhost');
+  /* A request line the URL parser rejects (for example "GET //%")
+     used to throw here and take the whole server down. Answer 400
+     instead; no real browser request looks like this. */
+  let url;
+  try {
+    url = new URL(req.url, 'http://localhost');
+  } catch (_) {
+    setSecurityHeaders(req, res, false);
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('bad request');
+  }
+  setSecurityHeaders(req, res, url.pathname.startsWith('/api/'));
   if (url.pathname.startsWith('/api/')) {
     handleApi(req, res, url).catch(() => {
       // The socket may already be gone (e.g., an oversized body was
