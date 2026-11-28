@@ -3082,7 +3082,7 @@ function checkinReportHtml(ci) {
     : '';
   const pts = ci.dailyTrend.filter(d => d.avgSleep != null).map(d => ({ week: d.date, value: d.avgSleep }));
   const trend = pts.length
-    ? lineChart([{ points: pts, color: '#cc0033' }], { name: 'Avg sleep', unit: 'hrs', better: 'higher' }, true)
+    ? lineChart([{ points: pts, color: CHART_COLORS[0] }], { name: 'Avg sleep', unit: 'hrs', better: 'higher' }, true)
     : '';
   return `<h3>Daily check-ins</h3>
     <p class="muted">${ci.totalCheckins} check-in${ci.totalCheckins === 1 ? '' : 's'} logged so far.</p>
@@ -3942,7 +3942,9 @@ function drawWuEditor() {
 }
 
 /* ---------------- SVG line charts (hand-rolled) ---------------- */
-const CHART_COLORS = ['#c9ccd4', '#e8eaed', '#8a939f', '#c9a227', '#7d99ae', '#a58fc0'];
+/* First series in Accelerate Your Game orange, second in the AYG Lab
+   theme's cyan highlight; the rest stay distinct for multi-athlete overlays. */
+const CHART_COLORS = ['#ff7a1a', '#6fe3f7', '#8a939f', '#c9a227', '#7d99ae', '#a58fc0'];
 function seriesFromEntries(entriesForProfile, metricKey) {
   const byWeek = (entriesForProfile || {})[metricKey] || {};
   return Object.keys(byWeek).sort().map(week => ({ week, value: byWeek[week] }));
@@ -4877,7 +4879,7 @@ async function renderTop() {
       if (!pts.length) return '';
       const stats = seriesStats(pts, m);
       return `<h4>${esc(m.name)} <span class="muted">best ${stats.best !== null ? fmtNum(stats.best) + ' ' + esc(m.unit) : '-'}</span> ${deltaHtml(m, stats)}</h4>
-        ${lineChart([{ label: pr.name, color: '#c9ccd4', points: pts }], m, true)}`;
+        ${lineChart([{ label: pr.name, color: CHART_COLORS[0], points: pts }], m, true)}`;
     }).join('');
     return `<h3>${esc(pr.name)} ${eventBadges(pr)}</h3>${charts || '<p class="muted">No weekly numbers yet.</p>'}`;
   };

@@ -89,7 +89,7 @@
 * { box-sizing: border-box; }
 button { color: inherit; font-family: inherit; }
 html { -webkit-text-size-adjust: 100%; }
-* { -webkit-tap-highlight-color: rgba(201, 204, 212, .16); }
+* { -webkit-tap-highlight-color: var(--accent-tint); }
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
 }
@@ -148,7 +148,7 @@ body {
   color: var(--ink); font-size: 14.5px; text-align: left; cursor: pointer;
 }
 @media (hover: hover) { .nav-item:hover { background: var(--surface-hover); } }
-.nav-item.active { background: rgba(201, 204, 212, .13); color: var(--red); font-weight: 700; }
+.nav-item.active { background: var(--accent-tint); color: var(--red); font-weight: 700; }
 .nav-overview { font-weight: 700; }
 .nav-menu .nav-overview { border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; margin-bottom: 4px; }
 /* The Menu button + sheet exist only on narrow screens. */
@@ -418,7 +418,7 @@ details.card summary { cursor: pointer; }
 .fore-near { animation: foreNear .88s linear infinite; }
 .fore-far { animation: foreFar .88s linear infinite; }
 .runner-shadow { transform-box: fill-box; transform-origin: center; animation: shadowPulse .88s linear infinite, shadowFade .88s linear infinite; }
-.streak { stroke: var(--gray); stroke-width: 3; stroke-linecap: round; opacity: 0; animation: streakMove .88s linear infinite; }
+.streak { stroke: var(--red); stroke-width: 3; stroke-linecap: round; opacity: 0; animation: streakMove .88s linear infinite; }
 .streak.s2 { animation-delay: .29s; }
 .streak.s3 { animation-delay: .59s; }
 @keyframes streakMove {
@@ -426,6 +426,12 @@ details.card summary { cursor: pointer; }
   35% { opacity: .5; }
   100% { transform: translateX(-14px); opacity: 0; }
 }
+/* AYG Lab logo match: the far leg is at toe-off, the drive leg, so
+   it carries the brand orange like the drive leg in the logo; the
+   starting blocks are orange too. CSS beats the SVG attributes. */
+.runner .leg-far line { stroke: var(--red); }
+.hero .blk { fill: var(--red); }
+.hero .blk-top { fill: var(--red-on-dark); }
 /* Starting blocks + start line, parked at the left of the band */
 .blocks { position: absolute; left: calc(10% - 52px); bottom: 24px; width: 58px; opacity: .95; }
 @media (max-width: 560px) {
@@ -1242,7 +1248,7 @@ body.tv-mode .footer { display: none !important; }
 body.tv-mode main { max-width: none; margin: 0; padding: 0; }
 body.tv-mode #view-tv.active {
   position: fixed; inset: 0; z-index: 80;
-  background: #101216; color: #f2f3f5;
+  background: var(--bg); color: var(--ink);
 }
 .tv-shell { display: flex; flex-direction: column; height: 100%; }
 .tv-top {
@@ -1254,10 +1260,10 @@ body.tv-mode #view-tv.active {
 .tv-top-right { display: flex; align-items: center; gap: 18px; }
 .tv-clock { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .btn.tv-exit, .btn.tv-ctl {
-  background: #1d2026; border: 1px solid #3a3f47; color: #f2f3f5;
+  background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--ink);
   font-size: 17px; padding: 10px 18px; min-height: 48px; width: auto;
 }
-.btn.tv-exit { background: var(--red); border-color: var(--red); font-weight: 700; }
+.btn.tv-exit { background: var(--red); border-color: var(--red); color: var(--accent-ink); font-weight: 700; }
 .tv-main { flex: 1; position: relative; min-height: 0; }
 .tv-loading { font-size: 26px; color: var(--gray); padding: 40px 44px; }
 .tv-panel { position: absolute; inset: 0; padding: 30px 44px; overflow-y: auto; display: none; }
@@ -1266,7 +1272,7 @@ body.tv-mode #view-tv.active {
 .tv-fit { --tv-scale: 1; }
 .tv-wod-kicker {
   font-size: calc(max(23px, 1.8vw) * var(--tv-scale, 1));
-  font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #d7dae0;
+  font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--red-on-dark);
 }
 .tv-date { font-size: calc(max(44px, 3.8vw) * var(--tv-scale, 1)); font-weight: 800; line-height: 1.1; color: #fff; }
 .tv-weekline { font-size: calc(max(26px, 2vw) * var(--tv-scale, 1)); color: var(--gray); font-weight: 700; margin: 10px 0 26px; }
@@ -1292,12 +1298,12 @@ body.tv-mode #view-tv.active {
   gap: calc(10px * var(--tv-scale, 1)) calc(28px * var(--tv-scale, 1)); margin: calc(16px * var(--tv-scale, 1)) 0 0;
 }
 .tv-spec dt { font-size: calc(max(15px, 15px * var(--tv-scale, 1))); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--gray); }
-.tv-spec dd { margin: 2px 0 0; font-size: calc(max(24px, 1.9vw) * var(--tv-scale, 1)); font-weight: 700; color: #f2f3f5; line-height: 1.3; }
+.tv-spec dd { margin: 2px 0 0; font-size: calc(max(24px, 1.9vw) * var(--tv-scale, 1)); font-weight: 700; color: var(--ink); line-height: 1.3; }
 .tv-cues { margin-top: calc(16px * var(--tv-scale, 1)); }
 .tv-cues-label { font-size: calc(max(15px, 15px * var(--tv-scale, 1))); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--gray); }
 .tv-cues p { margin: 4px 0 0; font-size: calc(max(24px, 1.9vw) * var(--tv-scale, 1)); line-height: 1.4; }
 .tv-session-source { font-size: calc(max(18px, 17px * var(--tv-scale, 1))); color: var(--gray); margin: calc(12px * var(--tv-scale, 1)) 0 0; }
-.tv-code { color: #d7dae0; font-weight: 800; }
+.tv-code { color: var(--red-on-dark); font-weight: 800; }
 .tv-empty { padding: 7vh 0; text-align: center; }
 .tv-empty-big { font-size: max(38px, 3.4vw); font-weight: 800; color: #fff; margin: 0; }
 .tv-empty-sub { font-size: max(23px, 1.8vw); color: var(--gray); max-width: 920px; margin: 16px auto 0; }
@@ -1390,7 +1396,7 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .vid-play {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: 52px; height: 52px; border-radius: 50%;
-  background: rgba(215, 218, 224, .92); color: #101216;
+  background: var(--red); color: var(--accent-ink);
   display: flex; align-items: center; justify-content: center;
   font-size: 19px; padding-left: 3px; pointer-events: none;
   box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
@@ -1477,7 +1483,7 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .start-steps li { padding: 5px 0; }
 .start-steps .btn { width: auto; padding: 4px 12px; font-size: 13.5px; margin-left: 6px; }
 .warmup-panel h3 { margin: 0 0 6px; font-size: 16.5px; }
-:focus-visible { outline: 3px solid rgba(201, 204, 212, .55); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* ---- Reports, meet results, and the test-day grid ---- */
 .bar-a { fill: var(--red); background: var(--red); }
@@ -1511,7 +1517,7 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .cw-ex-row .btn { min-height: 44px; }
 .runner-overlay {
   position: fixed; inset: 0; z-index: 90;
-  background: #101216; color: #f5f5f7;
+  background: var(--hud-bg); color: var(--ink);
   display: flex; flex-direction: column;
   padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
 }
@@ -1523,7 +1529,7 @@ body.runner-mode { overflow: hidden; }
 .runner-workout { font-size: 17px; font-weight: 700; letter-spacing: .02em; color: var(--red-soft-on-dark); }
 .btn.runner-exit {
   width: auto; min-height: 48px; padding: 8px 22px;
-  background: transparent; color: #f5f5f7; border: 2px solid var(--red); font-weight: 700;
+  background: transparent; color: var(--ink); border: 2px solid var(--red); font-weight: 700;
 }
 .runner-main {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1563,7 +1569,7 @@ body.runner-mode { overflow: hidden; }
   width: auto; flex: 1 1 150px; min-height: 64px; font-size: 20px; font-weight: 700; border-radius: var(--r-card);
 }
 .btn.runner-btn.primary { background: var(--red); border-color: var(--red); color: var(--accent-ink); flex-grow: 2; }
-.btn.runner-btn.secondary { background: #1d2026; color: #f5f5f7; border: 2px solid #3a3e46; }
+.btn.runner-btn.secondary { background: var(--surface-2); color: var(--ink); border: 2px solid var(--line-strong); }
 .btn.runner-btn[disabled] { opacity: .35; }
 .runner-done { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .runner-done-title { font-size: clamp(40px, 9vw, 76px); margin: 0; font-weight: 800; }
@@ -1942,7 +1948,7 @@ body.logged-out .primary-nav { display: none !important; }
 .wr-steps { list-style: none; margin: 10px 0; padding: 0; counter-reset: wrstep; }
 .wr-step { padding: 7px 10px; border-left: 3px solid transparent; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 15.5px; }
 .wr-step.done { color: var(--muted); }
-.wr-step.current { border-left-color: var(--scarlet); background: rgba(201, 204, 212, .1); font-size: 16.5px; }
+.wr-step.current { border-left-color: var(--scarlet); background: var(--accent-tint); font-size: 16.5px; }
 
 /* Lab Report (member-facing): PR cards a member shows a parent —
    the best mark big, the baseline beneath it, a plain-language
@@ -2455,14 +2461,19 @@ input.field-invalid, select.field-invalid, textarea.field-invalid { border-color
 [data-theme="studio"] .landing-talk-line { color: var(--ink); }
 
 /* ---- The TV board is a fixed display, not a device preference:
-   it keeps the Silverline treatment in every theme by pinning the
-   tokens its rules read back to the baseline values. ---- */
+   it keeps the AYG Lab brand look (black-blue rooms, Accelerate
+   Your Game orange) in every theme by pinning the tokens its rules
+   read to the AYG Lab theme values. The accent aliases are declared
+   again here because a custom property resolves its var() where it
+   is declared. ---- */
 body.tv-mode {
-  --red: #ff7a1a; --red-dark: #ff8f3d; --gray: #868d96;
-  --ink: #eef6fb; --muted: #93a5b5; --line: #1b2836;
-  --bg: #0d0d0f; --card: #17181c;
-  --accent-ink: #101216;
-  --surface-2: #1e1f24; --surface-hover: #23242a;
+  --red: #ff7a1a; --red-dark: #ff8f3d; --red-on-dark: #ffa25e; --red-soft-on-dark: #ffc79b;
+  --gray: #93a5b5; --ink: #eef6fb; --muted: #93a5b5; --line: #1b2836; --line-strong: #46617c;
+  --bg: #04070c; --card: #0a0f16; --hud-bg: #030509; --hud-text-dim: #c9d8e4;
+  --accent-ink: #1a0d02;
+  --surface-2: #0e1620; --surface-hover: #132130;
+  --accent: var(--red); --accent-strong: var(--red-dark);
+  --accent-tint: rgba(255, 122, 26, .13); --focus: #6fe3f7;
   --radius: 14px; --radius-sm: 10px;
 }
 
@@ -2609,8 +2620,8 @@ body.tv-mode .rp-backbar { display: none; }
 .rp-hero-main { margin: 0 0 16px; font-size: clamp(17px, 2.6vw, 22px); font-weight: 600; color: #e6e8ec; max-width: 30ch; }
 .rp-session { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 8px; }
 .rp-session-code {
-  padding: 4px 10px; border-radius: var(--r-pill); background: rgba(201, 204, 212, .16);
-  border: 1px solid rgba(201, 204, 212, .35); font-size: var(--fs-sm); font-weight: 700; letter-spacing: .06em; color: #fff;
+  padding: 4px 10px; border-radius: var(--r-pill); background: var(--accent-tint);
+  border: 1px solid var(--red); font-size: var(--fs-sm); font-weight: 700; letter-spacing: .06em; color: #fff;
 }
 .rp-session-name { font-size: var(--fs-md); font-weight: 700; color: #fff; }
 .rp-done {
@@ -2634,7 +2645,7 @@ body.tv-mode .rp-backbar { display: none; }
 .rp-start-quiet:hover { background: rgba(255, 255, 255, .18); }
 .rp-weekstrip { display: flex; gap: 6px; margin-top: 22px; }
 .rp-day { display: flex; flex: 1 1 0; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
-.rp-day-dow { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #aeb3bc; }
+.rp-day-dow { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .rp-day-dot {
   display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%;
   border: 1.5px solid rgba(255, 255, 255, .28); background: rgba(0, 0, 0, .35); font-size: 14px; font-weight: 800; color: #101216;
@@ -2922,7 +2933,7 @@ body.logged-out #view-landing .landing-faq + .landing-card + .landing-card {
 }
 body.logged-out #view-landing .landing-final {
   padding: clamp(28px, 5vw, 56px); border-color: #50535b;
-  background: radial-gradient(ellipse at 92% 10%, rgba(201, 204, 212, .1), transparent 42%), #111215;
+  background: radial-gradient(ellipse at 92% 10%, var(--accent-tint), transparent 42%), #111215;
 }
 body.logged-out #view-landing .landing-final h2 { font-size: clamp(30px, 5vw, 44px); }
 body.logged-out #view-landing .landing-footer-strip {
@@ -3107,7 +3118,7 @@ body.rp-public { overflow-x: clip; }
 .lp-eotd-body { padding: 36px; }
 #view-landing.lp .lp-eotd-body h3 { font-size: 1.9rem; font-weight: 800; margin-bottom: .6rem; }
 .lp-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 1.4rem; padding: 0; list-style: none; }
-.lp-chips li { font-size: .82rem; background: var(--lp-accent-soft); color: #ffb8bb; border: 1px solid rgba(255, 122, 26, .45); padding: 4px 10px; border-radius: var(--r-pill); }
+.lp-chips li { font-size: .82rem; background: var(--lp-accent-soft); color: var(--lp-accent-text); border: 1px solid rgba(255, 122, 26, .45); padding: 4px 10px; border-radius: var(--r-pill); }
 .lp-eotd-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; margin-bottom: 1.4rem; }
 #view-landing.lp .lp-eotd-cols h4 { margin: 0 0 .35rem; font-size: .78rem; letter-spacing: .12em; text-transform: uppercase; color: var(--lp-dim); }
 .lp-eotd-cols p, .lp-eotd-cols ol { margin: 0; font-size: .95rem; color: #d7d7d9; }
