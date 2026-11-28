@@ -223,7 +223,8 @@ async function main() {
       await test('no cookie: /api/me says not logged in and team data is closed', async () => {
         const me = await call(app, 'GET', '/api/me');
         assert.strictEqual(me.status, 401);
-        assert.strictEqual(me.json.error, 'not logged in');
+        // PR 34 reworded this message in plain words.
+        assert.strictEqual(me.json.error, 'Please log in.');
         const prof = await call(app, 'GET', '/api/profiles');
         assert.strictEqual(prof.status, 401);
       });
