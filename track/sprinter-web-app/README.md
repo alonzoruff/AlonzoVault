@@ -276,6 +276,8 @@ linked to the roster reconnect on their own.
   tests/run-tests.js`). It starts the app on a throwaway port with a
   temporary data folder, checks the whole coach system end to end, and
   cleans up after itself.
+  `tests/security-headers-tests.js` checks the security headers the
+  same way.
 - `data/` — created the first time the app runs. Holds accounts, logs,
   and swaps. It is **never** committed to GitHub (it's in `.gitignore`)
   because it's private and it belongs to the live server.
