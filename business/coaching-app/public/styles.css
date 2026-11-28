@@ -3879,9 +3879,9 @@ html, body, input, button, select, textarea { font-variant-numeric: tabular-nums
 .badge.health-ok { background: var(--accent-tint); color: var(--red-on-dark); }
 .badge.health-off { background: var(--surface-2); color: var(--muted); }
 .health-key { display: block; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); word-break: break-all; user-select: all; }
-.health-workouts { list-style: none; padding: 0; margin: 0; }
-.health-workouts li { padding: 8px 0; border-top: 1px solid var(--line); }
-.health-workouts li:first-child { border-top: 0; }
+.health-days { list-style: none; padding: 0; margin: 0; }
+.health-days li { padding: 10px 0; border-top: 1px solid var(--line); }
+.health-days li:first-child { border-top: 0; }
 .health-steps summary { cursor: pointer; font-weight: 600; margin-top: 12px; }
 #view-applehealth .btn-row, #view-athletehealth .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 #view-athletehealth .linkish { background: none; border: 0; padding: 0; color: var(--red-on-dark); text-decoration: underline; font: inherit; cursor: pointer; text-align: left; }

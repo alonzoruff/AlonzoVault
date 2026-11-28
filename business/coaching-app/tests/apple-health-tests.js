@@ -3,7 +3,8 @@
 /*
  * Apple Health (Nov 28, 2026): per-member connection keys, the
  * /api/health/ingest endpoint an iPhone Shortcut posts to, the
- * member's own page and the coach view.
+ * member's own page and the coach view. Strictly steps, gait, speed
+ * and calories (AJ's ruling): anything else a phone sends is dropped.
  *
  *   node tests/apple-health-tests.js
  *
@@ -82,10 +83,10 @@ async function main() {
       assert.strictEqual(page.json.days.length, 0);
     });
 
-    await r.test('a valid day is stored against the member, numbers sent as text included', async () => {
+    await r.test('a valid day is stored: steps, gait, speed and calories, numbers sent as text included', async () => {
       const res = await ingest(app, key, {
-        date: today, steps: '8,432', sleepMinutes: 451.5, restingHeartRate: '52 bpm', hrv: 61,
-        workouts: [{ type: 'Running', start: today + 'T11:00:00Z', durationMinutes: 32, distanceMeters: '5,010', energyKcal: 410 }],
+        date: today, steps: '8,432', activeCalories: 410, walkingSpeed: '3.1 mph', runningSpeed: 7.4,
+        stepLength: 28, walkingAsymmetry: '2%', doubleSupport: 27.5,
       });
       assert.strictEqual(res.status, 200, JSON.stringify(res.json));
       assert.deepStrictEqual(res.json.saved, [today]);
@@ -93,31 +94,43 @@ async function main() {
       const d = page.json.days[0];
       assert.strictEqual(d.date, today);
       assert.strictEqual(d.steps, 8432);
-      assert.strictEqual(d.sleepMinutes, 451.5);
-      assert.strictEqual(d.restingHeartRate, 52);
-      assert.strictEqual(d.hrv, 61);
-      assert.strictEqual(page.json.workouts.length, 1);
-      assert.strictEqual(page.json.workouts[0].distanceMeters, 5010);
+      assert.strictEqual(d.activeCalories, 410);
+      assert.strictEqual(d.walkingSpeed, 3.1);
+      assert.strictEqual(d.runningSpeed, 7.4);
+      assert.strictEqual(d.stepLength, 28);
+      assert.strictEqual(d.walkingAsymmetry, 2);
+      assert.strictEqual(d.doubleSupport, 27.5);
       assert.ok(page.json.lastSyncAt);
     });
 
-    await r.test('sending the same day again updates it; the same workout is not doubled', async () => {
+    await r.test('anything beyond steps, gait, speed and calories is dropped, never stored', async () => {
       const res = await ingest(app, key, {
-        date: today, steps: 9100,
-        workouts: [{ type: 'Running', start: today + 'T11:00:00Z', durationMinutes: 33 }],
+        date: today, steps: 8432, sleepMinutes: 451, restingHeartRate: 52, hrv: 61,
+        workouts: [{ type: 'Running', start: today + 'T11:00:00Z', durationMinutes: 32 }],
       });
       assert.strictEqual(res.status, 200);
+      const d = (await api(app, 'GET', '/api/my/health', undefined, mc)).json;
+      assert.ok(!('sleepMinutes' in d.days[0]) && !('restingHeartRate' in d.days[0]) && !('hrv' in d.days[0]));
+      assert.ok(!('workouts' in d));
+      const raw = fs.readFileSync(path.join(app.dataDir, 'db.json'), 'utf8');
+      assert.ok(!raw.includes('sleepMinutes') && !raw.includes('restingHeartRate') && !raw.includes('"hrv"') && !raw.includes('Running'));
+      const only = await ingest(app, key, { date: today, sleepMinutes: 400, hrv: 60 });
+      assert.strictEqual(only.status, 400);
+    });
+
+    await r.test('sending the same day again updates it and keeps fields not sent', async () => {
+      const res = await ingest(app, key, { date: today, steps: 9100 });
+      assert.strictEqual(res.status, 200);
       const page = await api(app, 'GET', '/api/my/health', undefined, mc);
+      assert.strictEqual(page.json.days.length, 1);
       assert.strictEqual(page.json.days[0].steps, 9100);
-      assert.strictEqual(page.json.days[0].hrv, 61, 'fields not sent are kept');
-      assert.strictEqual(page.json.workouts.length, 1);
-      assert.strictEqual(page.json.workouts[0].durationMinutes, 33);
+      assert.strictEqual(page.json.days[0].walkingSpeed, 3.1, 'fields not sent are kept');
     });
 
     await r.test('a batch of days is accepted', async () => {
       const res = await ingest(app, key, { days: [
-        { date: shift(today, -1), steps: 7000, sleepMinutes: 420 },
-        { date: shift(today, -2), steps: 6500, restingHeartRate: 54 },
+        { date: shift(today, -1), steps: 7000, activeCalories: 380 },
+        { date: shift(today, -2), steps: 6500, runningSpeed: 8.2 },
       ] });
       assert.strictEqual(res.status, 200);
       const page = await api(app, 'GET', '/api/my/health', undefined, mc);
@@ -130,8 +143,9 @@ async function main() {
         { date: 'yesterday', steps: 5 },
         { date: shift(today, 5), steps: 5 },
         { date: shift(today, -3), steps: -4 },
-        { date: shift(today, -3), restingHeartRate: 400 },
-        { date: shift(today, -3), sleepMinutes: 'lots' },
+        { date: shift(today, -3), walkingSpeed: 40 },
+        { date: shift(today, -3), activeCalories: 'lots' },
+        { date: shift(today, -3), doubleSupport: 140 },
         { date: shift(today, -3) },
         { days: [{ date: shift(today, -3), steps: 10 }, { date: 'nope', steps: 10 }] },
       ]) {
@@ -146,7 +160,7 @@ async function main() {
       const list = await api(app, 'GET', '/api/health/members', undefined, oc);
       assert.strictEqual(list.status, 200);
       const row = list.json.members.find(m => m.id === memberId);
-      assert.ok(row && row.connected === true && row.latest.steps === 9100 && row.workouts7 === 1, JSON.stringify(row));
+      assert.ok(row && row.connected === true && row.latest.steps === 9100 && row.latest.stepLength === 28, JSON.stringify(row));
       const one = await api(app, 'GET', '/api/health/members/' + memberId, undefined, oc);
       assert.strictEqual(one.status, 200);
       assert.strictEqual(one.json.days.length, 3);
@@ -195,7 +209,6 @@ async function main() {
       assert.strictEqual((await api(app, 'DELETE', '/api/my/health/data', undefined, mc)).status, 200);
       const page = await api(app, 'GET', '/api/my/health', undefined, mc);
       assert.strictEqual(page.json.days.length, 0);
-      assert.strictEqual(page.json.workouts.length, 0);
     });
 
     await r.test('the data survives a restart', async () => {

@@ -11655,11 +11655,6 @@ async function renderScoreboard() {
    for the iPhone Shortcut, and the days and workouts it has sent. The
    coach page lists every connected account. Health numbers are only
    ever fetched by the signed-in member or a coach. */
-function healthMins(m) {
-  if (m === undefined || m === null) return '—';
-  const h = Math.floor(m / 60), r = Math.round(m % 60);
-  return h ? h + 'h ' + r + 'm' : r + 'm';
-}
 function healthVal(v, unit) { return v === undefined || v === null ? '—' : esc(String(v)) + (unit ? ' ' + unit : ''); }
 function healthWhen(iso) {
   if (!iso) return 'never';
@@ -11670,15 +11665,29 @@ function healthDay(d) {
   const t = new Date(d + 'T12:00:00');
   return t.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
-function healthDaysTable(days) {
-  if (!days.length) return '<p class="muted">Nothing synced yet. Run the AYG Lab Health shortcut on your iPhone, then come back here.</p>';
-  return `<div class="sb-table-wrap"><table class="sb-table"><thead><tr><th>Day</th><th>Steps</th><th>Sleep</th><th>Resting HR</th><th>HRV</th></tr></thead><tbody>
-    ${days.map(d => `<tr><td>${esc(healthDay(d.date))}</td><td>${d.steps === undefined ? '—' : esc(Number(d.steps).toLocaleString())}</td><td>${healthMins(d.sleepMinutes)}</td><td>${healthVal(d.restingHeartRate, 'bpm')}</td><td>${healthVal(d.hrv, 'ms')}</td></tr>`).join('')}
-  </tbody></table></div>`;
+/* Steps, gait, speed and calories only (AJ, Nov 28, 2026). One short
+   block per day reads better on a phone than a seven-column table. */
+function healthDayLines(d) {
+  const has = (k) => d[k] !== undefined && d[k] !== null;
+  const lines = [];
+  const top = [];
+  if (has('steps')) top.push(esc(Number(d.steps).toLocaleString()) + ' steps');
+  if (has('activeCalories')) top.push(esc(String(Math.round(d.activeCalories))) + ' active cal');
+  if (top.length) lines.push(top.join(' · '));
+  const sp = [];
+  if (has('walkingSpeed')) sp.push('walk ' + healthVal(d.walkingSpeed, 'mph'));
+  if (has('runningSpeed')) sp.push('run ' + healthVal(d.runningSpeed, 'mph'));
+  if (sp.length) lines.push('Speed: ' + sp.join(' · '));
+  const g = [];
+  if (has('stepLength')) g.push('step length ' + healthVal(d.stepLength, 'in'));
+  if (has('walkingAsymmetry')) g.push('asymmetry ' + healthVal(d.walkingAsymmetry, '%'));
+  if (has('doubleSupport')) g.push('double support ' + healthVal(d.doubleSupport, '%'));
+  if (g.length) lines.push('Gait: ' + g.join(' · '));
+  return lines;
 }
-function healthWorkoutsList(ws) {
-  if (!ws.length) return '<p class="muted">No workouts synced yet.</p>';
-  return `<ul class="health-workouts">${ws.map(w => `<li><strong>${esc(w.type)}</strong> · ${esc(new Date(w.start).toLocaleDateString([], { month: 'short', day: 'numeric' }))}${w.durationMinutes !== undefined ? ' · ' + esc(String(Math.round(w.durationMinutes))) + ' min' : ''}${w.distanceMeters !== undefined ? ' · ' + esc((w.distanceMeters / 1000).toFixed(2)) + ' km' : ''}${w.energyKcal !== undefined ? ' · ' + esc(String(Math.round(w.energyKcal))) + ' kcal' : ''}</li>`).join('')}</ul>`;
+function healthDaysList(days) {
+  if (!days.length) return '<p class="muted">Nothing synced yet. Run the AYG Lab Health shortcut on your iPhone, then come back here.</p>';
+  return `<ul class="health-days">${days.map(d => `<li><strong>${esc(healthDay(d.date))}</strong>${healthDayLines(d).map(l => `<div>${l}</div>`).join('')}</li>`).join('')}</ul>`;
 }
 async function renderAppleHealth() {
   const el = $('#applehealth-main');
@@ -11707,11 +11716,10 @@ async function renderAppleHealth() {
           <li>Run it once and allow it to read Health when your iPhone asks.</li>
           <li>Come back here: today's numbers show up within a few seconds.</li>
         </ol>
-        <p class="muted">Steps, sleep, resting heart rate, HRV and workouts are the only things it sends. Only you and your coaches can see them.</p>
+        <p class="muted">It sends only steps, gait (step length, walking asymmetry, double support), walking and running speed, and active calories. Only you and your coaches can see them.</p>
       </details>
     </div>
-    <div class="card"><h2>Last 30 days</h2>${healthDaysTable(d.days)}</div>
-    <div class="card"><h2>Recent workouts</h2>${healthWorkoutsList(d.workouts)}</div>
+    <div class="card"><h2>Last 30 days</h2>${healthDaysList(d.days)}</div>
     <div class="card"><h2>Your data</h2><p class="muted">Delete everything Apple Health has sent here. Your phone keeps its own copy.</p>
       <button class="btn secondary" id="health-delete" type="button">Delete my Apple Health data</button></div>`;
   $('#health-make-key').addEventListener('click', async () => {
@@ -11747,8 +11755,7 @@ async function renderAthleteHealth(memberId) {
     }
     el.innerHTML = `<button class="btn secondary" id="ah-back" type="button">Back to all athletes</button>
       <div class="card"><h2>${esc(d.email)}</h2><p>${d.connected ? '<span class="badge health-ok">Connected</span>' : '<span class="badge health-off">Not connected</span>'} Last sync: ${esc(healthWhen(d.lastSyncAt))}</p></div>
-      <div class="card"><h2>Last 60 days</h2>${healthDaysTable(d.days)}</div>
-      <div class="card"><h2>Recent workouts</h2>${healthWorkoutsList(d.workouts)}</div>`;
+      <div class="card"><h2>Last 60 days</h2>${healthDaysList(d.days)}</div>`;
     $('#ah-back').addEventListener('click', () => renderAthleteHealth());
     return;
   }
@@ -11762,8 +11769,8 @@ async function renderAthleteHealth(memberId) {
   }
   el.innerHTML = `<div class="card"><h2>${d.members.length} connected</h2><ul class="health-members">
     ${d.members.map(m => { const l = m.latest || {}; return `<li><button class="linkish" type="button" data-ah-member="${esc(m.id)}">${esc(m.email)}</button>${m.connected ? '' : ' <span class="muted">(disconnected)</span>'}
-      <div class="muted">Last sync ${esc(healthWhen(m.lastSyncAt))}</div>
-      <div>${l.steps === undefined ? '' : esc(Number(l.steps).toLocaleString()) + ' steps · '}Sleep ${healthMins(l.sleepMinutes)} · RHR ${healthVal(l.restingHeartRate)} · HRV ${healthVal(l.hrv)} · ${esc(String(m.workouts7))} ${m.workouts7 === 1 ? 'workout' : 'workouts'} this week</div></li>`; }).join('')}
+      <div class="muted">Last sync ${esc(healthWhen(m.lastSyncAt))}${l.date ? ' · latest day ' + esc(healthDay(l.date)) : ''}</div>
+      ${healthDayLines(l).map(x => `<div>${x}</div>`).join('')}</li>`; }).join('')}
   </ul></div>`;
   el.querySelectorAll('[data-ah-member]').forEach(b => b.addEventListener('click', () => renderAthleteHealth(b.dataset.ahMember)));
 }

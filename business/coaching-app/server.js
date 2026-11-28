@@ -952,9 +952,10 @@ function migrate() {
   // requests deliberately do NOT ride along in backups.
   db.inviteRequests = Array.isArray(db.inviteRequests) ? db.inviteRequests : [];
   // Apple Health (Nov 28, 2026): { [userId]: { days: { 'YYYY-MM-DD':
-  // { steps, sleepMinutes, restingHeartRate, hrv, updatedAt } },
-  // workouts: [...], lastSyncAt } }. Personal health data: never in
-  // backups, never on a public page.
+  // { steps, activeCalories, walkingSpeed, runningSpeed, stepLength,
+  //   walkingAsymmetry, doubleSupport, updatedAt } }, lastSyncAt } }.
+  // Steps, gait, speed and calories only. Never in backups, never on a
+  // public page.
   db.health = (db.health && typeof db.health === 'object' && !Array.isArray(db.health)) ? db.health : {};
   // Funnel events (v40): what happened and when, for the owner
   // scoreboard. Each is { id, name, at } plus, where the app already
@@ -5006,7 +5007,6 @@ function validateLiveSession(body) {
    the key disconnects the old phone at once. */
 const HEALTH_KEY_PREFIX = 'aygh_';
 const HEALTH_MAX_DAYS = 400;
-const HEALTH_MAX_WORKOUTS = 500;
 function healthKeyHash(key) { return crypto.createHash('sha256').update(String(key)).digest('hex'); }
 function userForHealthKey(req) {
   const h = String(req.headers.authorization || '');
@@ -5029,15 +5029,24 @@ function healthNum(v, min, max) {
   if (n < min || n > max) return null;
   return Math.round(n * 10) / 10;
 }
+/* AJ's ruling (Nov 28, 2026): Apple Health in AYG Lab is strictly
+   steps, gait, speed and calories. Nothing else is stored: any other
+   field a phone sends (sleep, heart rate, workouts...) is dropped.
+   Units are what an iPhone set to US units reports. */
 const HEALTH_DAY_FIELDS = {
-  steps: [0, 200000], sleepMinutes: [0, 1440],
-  restingHeartRate: [20, 250], hrv: [1, 400],
+  steps: [0, 200000],            // steps that day
+  activeCalories: [0, 10000],    // active energy, kcal
+  walkingSpeed: [0, 15],         // mph
+  runningSpeed: [0, 30],         // mph
+  stepLength: [5, 60],           // walking step length, inches (gait)
+  walkingAsymmetry: [0, 100],    // % of steps (gait)
+  doubleSupport: [0, 100],       // % of time both feet down (gait)
 };
 function healthRecordFor(userId) {
-  if (!db.health[userId]) db.health[userId] = { days: {}, workouts: [], lastSyncAt: null };
+  if (!db.health[userId]) db.health[userId] = { days: {}, lastSyncAt: null };
   return db.health[userId];
 }
-/* Returns { ok, errors, day } for one day's summary. */
+/* Returns { ok, errors, date, day } for one day's summary. */
 function parseHealthDay(raw, today) {
   const errors = [];
   if (!raw || typeof raw !== 'object') return { ok: false, errors: ['Each day must be an object.'] };
@@ -5054,58 +5063,35 @@ function parseHealthDay(raw, today) {
     if (n === null) errors.push(k + ' must be a number from ' + min + ' to ' + max + '.');
     else if (n !== undefined) day[k] = n;
   }
-  const workouts = [];
-  if (raw.workouts !== undefined) {
-    const list = Array.isArray(raw.workouts) ? raw.workouts : [raw.workouts];
-    if (list.length > 50) errors.push('At most 50 workouts per day.');
-    for (const w of list.slice(0, 50)) {
-      if (!w || typeof w !== 'object') { errors.push('Each workout must be an object.'); continue; }
-      const type = clean(String(w.type || ''), 60);
-      const start = clean(String(w.start || ''), 40);
-      if (!type || Number.isNaN(Date.parse(start))) { errors.push('Each workout needs a type and a start time.'); continue; }
-      const wk = { type, start: new Date(start).toISOString(), date };
-      const dur = healthNum(w.durationMinutes, 0, 1440);
-      const kcal = healthNum(w.energyKcal, 0, 10000);
-      const dist = healthNum(w.distanceMeters, 0, 500000);
-      if (dur === null || kcal === null || dist === null) { errors.push('Workout numbers are out of range.'); continue; }
-      if (dur !== undefined) wk.durationMinutes = dur;
-      if (kcal !== undefined) wk.energyKcal = kcal;
-      if (dist !== undefined) wk.distanceMeters = dist;
-      workouts.push(wk);
-    }
-  }
   if (errors.length) return { ok: false, errors };
-  if (!Object.keys(day).length && !workouts.length) return { ok: false, errors: ['Nothing to save for ' + date + '.'] };
-  return { ok: true, date, day, workouts };
+  if (!Object.keys(day).length) return { ok: false, errors: ['Nothing to save for ' + date + '. Send steps, gait, speed or calories.'] };
+  return { ok: true, date, day };
 }
 function storeHealthDays(userId, parsed) {
   const rec = healthRecordFor(userId);
   const now = new Date().toISOString();
   for (const d of parsed) {
-    if (Object.keys(d.day).length) rec.days[d.date] = Object.assign({}, rec.days[d.date] || {}, d.day, { updatedAt: now });
-    for (const w of d.workouts) {
-      // Same start time and type = the same workout sent again.
-      const i = rec.workouts.findIndex(x => x.start === w.start && x.type === w.type);
-      if (i >= 0) rec.workouts[i] = w; else rec.workouts.push(w);
-    }
+    rec.days[d.date] = Object.assign({}, rec.days[d.date] || {}, d.day, { updatedAt: now });
   }
   const keep = Object.keys(rec.days).sort().slice(-HEALTH_MAX_DAYS);
   const days = {};
   for (const k of keep) days[k] = rec.days[k];
   rec.days = days;
-  rec.workouts.sort((a, b) => (a.start < b.start ? 1 : -1));
-  rec.workouts = rec.workouts.slice(0, HEALTH_MAX_WORKOUTS);
+  delete rec.workouts;
   rec.lastSyncAt = now;
 }
 function healthSummaryFor(u, nDays) {
-  const rec = db.health[u.id] || { days: {}, workouts: [], lastSyncAt: null };
+  const rec = db.health[u.id] || { days: {}, lastSyncAt: null };
   const dates = Object.keys(rec.days).sort().reverse().slice(0, nDays || 30);
   return {
     connected: !!u.healthKeyHash,
     keyCreatedAt: u.healthKeyCreatedAt || null,
     lastSyncAt: rec.lastSyncAt || null,
-    days: dates.map(d => Object.assign({ date: d }, rec.days[d])),
-    workouts: rec.workouts.slice(0, 30),
+    days: dates.map(d => {
+      const out = { date: d };
+      for (const k of Object.keys(HEALTH_DAY_FIELDS)) if (rec.days[d][k] !== undefined) out[k] = rec.days[d][k];
+      return out;
+    }),
   };
 }
 
@@ -5600,7 +5586,8 @@ async function handleApi(req, res, url) {
   /* Apple Health ingest: authenticated by the member's own
      connection key, not a cookie, because the request comes from an
      Apple Shortcut on their phone. Accepts one day ({ date, steps,
-     sleepMinutes, restingHeartRate, hrv, workouts }) or { days: [...] }. */
+     activeCalories, walkingSpeed, runningSpeed, stepLength,
+     walkingAsymmetry, doubleSupport }) or { days: [...] }. */
   if (p === '/api/health/ingest' && req.method === 'POST') {
     const owner = userForHealthKey(req);
     if (!owner) return sendJson(res, 401, { error: 'That Apple Health connection key is not valid. Make a new one on the Apple Health page in the app.' });
@@ -5663,7 +5650,6 @@ async function handleApi(req, res, url) {
         return {
           id: u.id, email: u.email, role: u.role, connected: sum.connected,
           lastSyncAt: sum.lastSyncAt, latest,
-          workouts7: sum.workouts.filter(w => w.date >= addDaysStr(todayStr(), -6)).length,
         };
       })
       .sort((a, b) => String(b.lastSyncAt || '').localeCompare(String(a.lastSyncAt || '')));
