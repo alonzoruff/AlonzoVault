@@ -157,6 +157,7 @@ node tests/stripe-step1-tests.js     # payments, part 1
 node tests/stripe-step1c-tests.js    # payments, part 2
 node tests/stripe-step1d-tests.js    # payments, cancelling
 node tests/notify-tests.js           # email alerts and booking page
+node tests/sprint-analysis-tests.js # Sprint Analysis: sign-in and plan gate, 7/30 a week, reports saved, coach review
 node tests/access-page-tests.js      # coach's member access page
 node tests/membership-card-tests.js  # member's membership card
 node tests/growth-tests.js           # sign-up funnel and scoreboard
@@ -164,7 +165,6 @@ node tests/security-headers-tests.js # security headers and the bad-request cras
 node tests/filming-tests.js          # Filming Tracker
 node tests/risky-areas-tests.js      # the riskiest areas, with a coverage report
 node tests/phase1-membership-tests.js # Phase 1 plans: prices, retired $10 tier, Lab Pass cap of 50
-node tests/sprint-analysis-tests.js # Sprint Analysis: sign-in and plan gate, 7/30 a week, reports saved, coach review
 node tests/store-tests.js            # hosted data store (uses a pretend Upstash)
 node tests/run-tests-store-mode.js   # the big suite again, in hosted-store mode
 ```
