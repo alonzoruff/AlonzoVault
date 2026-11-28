@@ -237,6 +237,7 @@ let db = {
   liveRequests: [],
   bookings: [],
   bookingSettings: null,
+  codeRedemptions: [],
   inviteRequests: [],
   stripeEvents: [],
   events: [],
@@ -744,6 +745,41 @@ function noteMemberActivity(member, firstWorkout) {
     recordEvent('first_workout_completed', { memberId: member.id });
   }
 }
+/* ---------- Founding code (Nov 28, 2026) ----------
+   A code word typed at sign-up stands in for an email invite and
+   starts the account on Lab Pass, free. The word lives ONLY in the
+   FOUNDING_CODE environment setting on the host, never in the code or
+   on any page: change it there to rotate it, delete it to turn the
+   code off. Matching ignores case and spaces at the ends. Each
+   redemption is logged (email and date) and counts against the Lab
+   Pass cap. Wrong guesses are limited per address. */
+function foundingCodeSetting() { return String(process.env.FOUNDING_CODE || '').trim().toUpperCase(); }
+function foundingCodeMatches(input) {
+  const want = foundingCodeSetting();
+  if (!want) return false;
+  const a = crypto.createHash('sha256').update(String(input || '').trim().toUpperCase()).digest();
+  const b = crypto.createHash('sha256').update(want).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+const CODE_GUESS_LIMIT = 10;
+const codeGuessHits = new Map();
+async function codeGuessAllowed(req, countThisOne) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const key = fwd || (req.socket && req.socket.remoteAddress) || 'unknown';
+  const hour = Math.floor(Date.now() / 3600000);
+  if (STORE) {
+    const tag = crypto.createHmac('sha256', SECRET || 'codes').update(key).digest('hex').slice(0, 24);
+    try {
+      const n = countThisOne ? await STORE.hit('fc:' + hour + ':' + tag, 7200) : 0;
+      return n <= CODE_GUESS_LIMIT;
+    } catch (_) { return true; }
+  }
+  const k = hour + ':' + key;
+  const n = (codeGuessHits.get(k) || 0) + (countThisOne ? 1 : 0);
+  if (countThisOne) codeGuessHits.set(k, n);
+  if (codeGuessHits.size > 5000) codeGuessHits.clear();
+  return n <= CODE_GUESS_LIMIT;
+}
 /* In-memory only: a few public events a minute per address. The
    address is never written anywhere. */
 const PUBLIC_EVENT_LIMIT = 30;
@@ -945,6 +981,8 @@ function migrate() {
   db.stripeEvents = Array.isArray(db.stripeEvents)
     ? db.stripeEvents.filter(e => e && typeof e.id === 'string') : [];
   db.bookingSettings = normalizeBookingSettings(db.bookingSettings);
+  // Founding code redemptions (Nov 28, 2026): { email, userId, at }.
+  db.codeRedemptions = Array.isArray(db.codeRedemptions) ? db.codeRedemptions : [];
   // Invitation requests (v20): public requests from the landing
   // page — { id, name, email, forWhom, athleteName, tierInterest,
   // goal, status, createdAt, updatedAt }. Like bookings, invite
@@ -5408,7 +5446,24 @@ async function handleApi(req, res, url) {
     // no public sign-up while the founding pilot is enrolling.
     const coachInvited = db.coachInvites.includes(email);
     const clientInvited = db.clientInvites.includes(email);
-    if (!firstAccount && !coachInvited && !clientInvited) {
+    /* The founding code stands in for an invite. An invited email
+       follows the invite exactly as before; the code is ignored. */
+    const codeTyped = clean(body.code, 60);
+    let viaFoundingCode = false;
+    if (!firstAccount && !coachInvited && !clientInvited && codeTyped) {
+      if (!(await codeGuessAllowed(req, false))) {
+        return sendJson(res, 429, { error: 'Too many tries with a code. Please wait an hour and try again.' });
+      }
+      if (!foundingCodeMatches(codeTyped)) {
+        await codeGuessAllowed(req, true);
+        return sendJson(res, 400, { error: 'That code is not valid. Check it with Coach AJ, or request an invitation instead.' });
+      }
+      if (labPassFull()) {
+        return sendJson(res, 409, { error: 'The founding spots on Lab Pass are full right now. Request an invitation and Coach AJ will reach out.' });
+      }
+      viaFoundingCode = true;
+    }
+    if (!firstAccount && !coachInvited && !clientInvited && !viaFoundingCode) {
       notifyCoach({
         subject: 'Sign-up attempt without an invitation: ' + email,
         intro: email + ' tried to create an account but has not been invited, so the app turned them away. To let them in, invite this email under Coach Hub > Access, or reply to this email to reach them.',
@@ -5443,11 +5498,17 @@ async function handleApi(req, res, url) {
     db.users.push(user);
     db.logs[user.id] = [];
     db.swaps[user.id] = {};
+    if (viaFoundingCode) {
+      applyMembershipChange(user, { tier: 'pass', status: 'active' }, { by: 'founding-code', email }, 'set-tier');
+      user.complimentary = 'founding-code';
+      db.codeRedemptions.push({ email, userId: user.id, at: new Date().toISOString() });
+      recordEvent('founding_code_redeemed', { memberId: user.id });
+    }
     saveDb();
     if (!firstAccount) {
       notifyCoach({
         subject: 'New ' + (user.role === 'coach' ? 'coach' : 'member') + ' account: ' + email,
-        intro: email + ' created their ' + BRAND.name + ' account.',
+        intro: email + ' created their ' + BRAND.name + ' account' + (viaFoundingCode ? ' with the founding code (Lab Pass, free).' : '.'),
         fields: [['Email', email], ['Role', user.role === 'coach' ? 'coach' : 'member']],
         link: appLink('/'), replyTo: email,
       });
@@ -6376,6 +6437,17 @@ async function handleApi(req, res, url) {
     return sendJson(res, 403, { error: 'Coaches only. Members do not use this system — the coach records everything.' });
   }
   const coachOnly = () => sendJson(res, 403, { error: 'Coaches only.' });
+
+  /* ---------- founding code: status and redemptions (never the code) ---------- */
+  if (p === '/api/founding-code' && req.method === 'GET') {
+    const list = db.codeRedemptions.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    return sendJson(res, 200, {
+      enabled: !!foundingCodeSetting(),
+      count: list.length,
+      redemptions: list.map(r => ({ email: r.email, at: r.at })),
+      labPass: { capacity: LAB_PASS_CAPACITY, active: labPassCount() },
+    });
+  }
 
   /* ---------- coach accounts ---------- */
   if (p === '/api/coaches' && req.method === 'GET') {

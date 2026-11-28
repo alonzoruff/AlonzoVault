@@ -1100,6 +1100,10 @@ details.card summary { cursor: pointer; }
 .check-inputs input[type="text"], .check-inputs input[type="number"] { width: 130px; }
 .check-inputs select { width: auto; }
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Founding code redemptions (Nov 28, 2026) */
+.code-redemptions { list-style: none; padding: 0; margin: 0; }
+.code-redemptions li { padding: 8px 0; border-top: 1px solid var(--line); }
+.code-redemptions li:first-child { border-top: 0; }
 table.matrix, table.ranked { border-collapse: collapse; width: 100%; font-size: 14px; }
 table.matrix th, table.matrix td, table.ranked th, table.ranked td {
   border: 1px solid var(--line); padding: 6px 8px; text-align: left; white-space: nowrap;

@@ -102,6 +102,7 @@ written in the repo.
 | `READ_ONLY_MODE` | Set to `1` for a short pause during a move: sign-in and reading work, every change is refused. | Normal (changes allowed) |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL`, `KV_REST_API_TOKEN`) | Turns on the hosted data store (Vercel). | Data stays in `db.json` |
 | `OWNER_SETUP_EMAIL` | On an empty hosted store, the only email allowed to create the first (owner) account. | No one can claim an empty hosted store |
+| `FOUNDING_CODE` | The founding code word. Typed at sign-up instead of an invite, it starts the account on Lab Pass, free (counts against the 50 spots). Not case sensitive. Delete it to turn the code off. | Off |
 | `STORE_PREFIX` | Key prefix in the hosted store. | `ayg-lab` |
 
 Payments are switched off on purpose right now: with no Stripe key set,
@@ -161,6 +162,7 @@ node tests/access-page-tests.js      # coach's member access page
 node tests/membership-card-tests.js  # member's membership card
 node tests/growth-tests.js           # sign-up funnel and scoreboard
 node tests/security-headers-tests.js # security headers and the bad-request crash fix
+node tests/founding-code-tests.js    # Founding code at sign-up: redeem, reject, cap, on/off
 node tests/filming-tests.js          # Filming Tracker
 node tests/risky-areas-tests.js      # the riskiest areas, with a coverage report
 node tests/phase1-membership-tests.js # Phase 1 plans: prices, retired $10 tier, Lab Pass cap of 50
