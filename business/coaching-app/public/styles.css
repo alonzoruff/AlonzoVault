@@ -3772,8 +3772,10 @@ body.rx-sheet-open { overflow: hidden; }
    Playbook order additions: who it's for, the real portal preview,
    what's different, and the closing invitation band. Same landing
    tokens as the rest of the page. */
-#view-landing.lp .lp-who { padding: 64px 0; }
-#view-landing.lp .lp-who .lp-head { margin-bottom: 28px; }
+/* Scoped to the section band: the plan cards also have a .lp-who
+   line, and the bare selector padded each card with big empty gaps. */
+#view-landing.lp .lp-band.lp-who { padding: 64px 0; }
+#view-landing.lp .lp-band.lp-who .lp-head { margin-bottom: 28px; }
 .lp-who-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .lp-who-list li, .lp-diff li { background: var(--lp-card); border: 1px solid var(--lp-line); border-radius: var(--lp-radius); padding: 22px 24px; }
 #view-landing.lp .lp-who-list h3, #view-landing.lp .lp-diff h3 { font-size: 1.1rem; margin: 0 0 6px; }

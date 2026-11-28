@@ -149,7 +149,7 @@ async function main() {
     appJs.text.includes('data-lab-program-open') &&
     appJs.text.includes('data-lab-program-back') &&
     appJs.text.includes('data-lab-test-action') &&
-    appJs.text.includes("labprograms: 'access'") &&
+    appJs.text.includes("labprograms: 'training'") &&
     appJs.text.includes("['labprograms', 'Programs']") &&
     appJs.text.includes("showView('testing')") &&
     appJs.text.includes("showView('speedreport')"), appJs.text.slice(0, 120));
@@ -6301,10 +6301,10 @@ async function waitForServer(tries = 60) {
           ar.json.membership);
         check('membership payload carries the account + the tier catalog',
           ar.json.account.email === 'none-ac@test.com' && ar.json.account.profileId === null &&
-          Array.isArray(ar.json.tiers) && ar.json.tiers.length === 3 &&
-          ar.json.tiers[0].name === 'Lab Access' && ar.json.tiers[0].priceLabel === '$10/month' &&
-          ar.json.tiers[1].name === 'Lab Training' && ar.json.tiers[2].name === 'Lab Pass' &&
-          ar.json.tiers[2].includes.some(x => x.includes('Live web sessions')), ar.json.tiers);
+          Array.isArray(ar.json.tiers) && ar.json.tiers.length === 2 &&
+          ar.json.tiers[0].name === 'Lab Training' && ar.json.tiers[0].priceLabel === '$79.99/month' &&
+          ar.json.tiers[1].name === 'Lab Pass' && ar.json.tiers[1].priceLabel === '$150/month' &&
+          ar.json.tiers[1].includes.some(x => x.includes('Live web coaching calls')), ar.json.tiers);
         ar = await acApi(noneM.jar, 'GET', '/api/my/membership');
         check('an unlinked member reads profileName null, not an error',
           ar.status === 200 && ar.json.account.profileName === null, ar.json.account);
@@ -6320,7 +6320,7 @@ async function waitForServer(tries = 60) {
         /* The gates, tier by tier. No tier first. */
         ar = await acApi(noneM.jar, 'GET', '/api/content');
         check('no-tier member: content is 403 naming the membership need',
-          ar.status === 403 && ar.json.needsTier === 'access' && ar.json.labPrograms === undefined &&
+          ar.status === 403 && ar.json.needsTier === 'training' && ar.json.labPrograms === undefined &&
           /membership/i.test(ar.json.error || ''), ar.json);
         for (const [method, p, body] of [
           ['GET', '/api/checkin/today'], ['POST', '/api/checkin', { sleep: 8, soreness: 2, energy: 3 }],
@@ -6335,9 +6335,13 @@ async function waitForServer(tries = 60) {
         ar = await acApi(noneM.jar, 'GET', '/api/my/intake');
         check('no-tier member still reads their intake state', ar.status === 200, ar.status);
 
-        /* Coach grants the three tiers. */
+        /* Coach grants the tiers. The $10 Lab Access tier was retired
+           on Nov 27, 2026, so the old entry-level member now starts on
+           Lab Training, which carries the full libraries. */
         ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { tier: 'access' });
-        check('coach sets Lab Access', ar.status === 200 && ar.json.membership.tier === 'access' && ar.json.membership.active === true, ar.json);
+        check('the retired Lab Access tier cannot be set (400)', ar.status === 400, ar.json);
+        ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { tier: 'training' });
+        check('coach sets Lab Training', ar.status === 200 && ar.json.membership.tier === 'training' && ar.json.membership.active === true, ar.json);
         await acApi(acCoach, 'PUT', '/api/access/' + trnM.id, { tier: 'training' });
         await acApi(acCoach, 'PUT', '/api/access/' + pasM.id, { tier: 'pass' });
 
@@ -6359,12 +6363,9 @@ async function waitForServer(tries = 60) {
         ar = await acApi(accM.jar, 'GET', '/api/my/speed-report');
         check('access member reads their Speed Report', ar.status === 200 && ar.json.linked === true && Array.isArray(ar.json.tests), ar.status);
         ar = await acApi(accM.jar, 'GET', '/api/my/loads');
-        check('access member: loads are 403 naming Lab Training',
-          ar.status === 403 && ar.json.needsTier === 'training' && /Lab Training/.test(ar.json.error || ''), ar.json);
+        check('entry member (Lab Training) reads loads', ar.status === 200, ar.json);
         ar = await acApi(accM.jar, 'GET', '/api/my/form-checks');
-        check('access member: form checks are 403', ar.status === 403 && ar.json.needsTier === 'training', ar.json);
-        ar = await acApi(accM.jar, 'POST', '/api/my/form-checks', { videoUrl: 'https://res.cloudinary.com/l8qblw99/video/upload/fc-ac.mp4' });
-        check('access member: form check create is 403', ar.status === 403, ar.status);
+        check('entry member (Lab Training) reads form reviews', ar.status === 200, ar.json);
         ar = await acApi(accM.jar, 'GET', '/api/live-sessions');
         check('access member: live sessions are 403 naming Lab Pass',
           ar.status === 403 && ar.json.needsTier === 'pass' && /Lab Pass/.test(ar.json.error || ''), ar.json);
@@ -6397,13 +6398,13 @@ async function waitForServer(tries = 60) {
         const rowFor = (em) => rows.find(x => x.email === em) || {};
         check('access list shows every member with tier, status, created date',
           ar.status === 200 && rows.length === 4 &&
-          rowFor('acc-ac@test.com').tier === 'access' && rowFor('acc-ac@test.com').tierName === 'Lab Access' &&
-          rowFor('acc-ac@test.com').priceLabel === '$10/month' && rowFor('acc-ac@test.com').active === true &&
+          rowFor('acc-ac@test.com').tier === 'training' && rowFor('acc-ac@test.com').tierName === 'Lab Training' &&
+          rowFor('acc-ac@test.com').priceLabel === '$79.99/month' && rowFor('acc-ac@test.com').active === true &&
           rowFor('trn-ac@test.com').tier === 'training' && rowFor('pas-ac@test.com').tier === 'pass' &&
           rowFor('none-ac@test.com').tier === null && typeof rowFor('none-ac@test.com').createdAt === 'string' &&
           rowFor('acc-ac@test.com').profileName === 'Ann Access', rows.map(x => x.email + ':' + x.tier));
         check('access list records the grant in history',
-          (rowFor('acc-ac@test.com').history || []).some(h => h.action === 'set-tier' && h.by === 'coach' && h.tier === 'access'),
+          (rowFor('acc-ac@test.com').history || []).some(h => h.action === 'set-tier' && h.by === 'coach' && h.tier === 'training'),
           rowFor('acc-ac@test.com').history);
         ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { tier: 'gold' });
         check('setting an unknown tier is 400', ar.status === 400, ar.status);
@@ -6416,11 +6417,11 @@ async function waitForServer(tries = 60) {
         ar = await acApi(noneM.jar, 'PUT', '/api/access/' + accM.id, { tier: 'pass' });
         check('a member cannot set tiers (403)', ar.status === 403, ar.status);
 
-        /* Tier change applies at once: Access -> Training opens loads. */
+        /* A coach can re-save a tier; it is recorded like any change. */
         ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { tier: 'training' });
-        check('coach upgrades Access to Training', ar.status === 200 && ar.json.membership.tier === 'training', ar.json);
+        check('coach re-saves Lab Training', ar.status === 200 && ar.json.membership.tier === 'training', ar.json);
         ar = await acApi(accM.jar, 'GET', '/api/my/loads');
-        check('the upgrade opens loads immediately', ar.status === 200, ar.status);
+        check('loads stay open after the re-save', ar.status === 200, ar.status);
 
         /* Coach cancel + reactivate. */
         ar = await acApi(acCoach, 'PUT', '/api/access/' + accM.id, { status: 'cancelled' });
@@ -7358,8 +7359,8 @@ async function waitForServer(tries = 60) {
           return { res, price: hit && hit.params['line_items[0][price]'], hits: stubHits.length - before };
         };
         let tp = await tierPrice('access');
-        check('tier access sells the Lab Access price',
-          tp.res.status === 200 && tp.price === 'price_1UWTZpAelNSvNtsvHAVExdYX', tp);
+        check('the retired Lab Access tier is no longer sold (400, never reaches Stripe)',
+          tp.res.status === 400 && tp.hits === 0, tp);
         tp = await tierPrice('training');
         check('tier training sells the Lab Training price',
           tp.res.status === 200 && tp.price === 'price_1UWSwJAelNSvNtsvz0ctLK9z', tp);
@@ -7385,9 +7386,9 @@ async function waitForServer(tries = 60) {
         tp = await tierPrice('training');
         check('the tier env var overrides the baked-in price',
           tp.res.status === 200 && tp.price === 'price_override_training', tp);
-        tp = await tierPrice('access');
+        tp = await tierPrice('pass');
         check('other tiers keep their baked-in price under an override',
-          tp.res.status === 200 && tp.price === 'price_1UWTZpAelNSvNtsvHAVExdYX', tp);
+          tp.res.status === 200 && tp.price === 'price_1UWSwiAelNSvNtsv5R2KyEu0', tp);
       } finally {
         coChild.kill('SIGKILL');
         stub.close();
@@ -9142,7 +9143,7 @@ async function waitForServer(tries = 60) {
         check('internal identifiers are unchanged by the rename',
           lrPage.text.includes('id="view-speedreport"') &&
           lrPage.text.includes('data-view="speedreport"') &&
-          lrJs.text.includes("speedreport: 'access'") &&
+          lrJs.text.includes("speedreport: 'training'") &&
           lrJs.text.includes("showView('speedreport')"), lrPage.status);
 
 
@@ -9160,21 +9161,20 @@ async function waitForServer(tries = 60) {
           lrContentJson.includes('Lab Report') &&
           (lr.json.labPrograms || []).length === 3, lr.status);
 
-        /* The tier mirror behind the Account page: Access names
-           the Lab Report and stays free of the coaching lines;
-           Training carries both of them. */
+        /* The tier mirror behind the Account page (Phase 1, Nov 27,
+           2026): Lab Training names the Lab Report and the full
+           libraries and stays free of written-for-you programming;
+           Lab Pass carries that. */
         lr = await lrApi(lrCoach, 'GET', '/api/my/membership');
         const tiers = (lr.json && lr.json.tiers) || [];
-        const accessTier = tiers.find(t => t.key === 'access');
         const trainingTier = tiers.find(t => t.key === 'training');
         const passTier = tiers.find(t => t.key === 'pass');
         check('tier lists mirror the rename and the coaching copy',
-          !!accessTier && !!trainingTier && !!passTier &&
-          accessTier.includes.includes('Your Lab Report, updated at every re-test') &&
-          !accessTier.includes.some(x => x.includes('A plan built for you')) &&
-          !accessTier.includes.some(x => x.includes('What you log shapes')) &&
-          trainingTier.includes.includes('A plan built for you, one athlete at a time — not a template everyone follows') &&
-          trainingTier.includes.includes('Your plan changes as you train. What you log shapes what your coach programs next'),
+          !tiers.some(t => t.key === 'access') && !!trainingTier && !!passTier &&
+          trainingTier.includes.includes('Performance tracking and your Lab Report') &&
+          trainingTier.includes.includes('The full training program library') &&
+          !trainingTier.includes.some(x => x.includes('written for you')) &&
+          passTier.includes.includes('Programming written for you, and adjusted as you train'),
           tiers.map(t => t.key));
         check('the membership payload reports v24',
           lr.status === 200, lr.status);
@@ -9259,8 +9259,9 @@ async function waitForServer(tries = 60) {
           ivJs.text.includes('id="invite-grade"') && ivJs.text.includes('id="invite-sport"') &&
           ivJs.text.includes('id="invite-location"') && ivJs.text.includes('id="invite-consent"') &&
           ivJs.text.includes('id="invite-tier"') &&
-          ivJs.text.includes('Lab Access $10/mo') && ivJs.text.includes('Lab Training $49.99/mo') &&
-          ivJs.text.includes('Lab Pass $99/mo') && ivJs.text.includes('Not sure yet') &&
+          !ivJs.text.includes("opt('access'") && ivJs.text.includes('Lab Training $79.99/mo') &&
+          ivJs.text.includes('Lab Pass $150/mo') && ivJs.text.includes('Team Lab $250/mo') &&
+          ivJs.text.includes('Not sure yet') &&
           ivJs.text.includes('id="invite-goal"') && ivJs.text.includes('id="invite-website"') &&
           ivJs.text.includes('name="website"') && ivJs.text.includes('Send Request') &&
           ivJs.text.includes('What happens next') && ivJs.text.includes('Fields marked'),
@@ -9268,30 +9269,34 @@ async function waitForServer(tries = 60) {
         /* ---- v35 site revamp: one Plans section, real routes, honest buttons ---- */
         const lp = ivPage.text;
         const plansSlice = lp.slice(lp.indexOf('id="plans"'), lp.indexOf('id="faq"'));
-        check('v35: the landing has ONE pricing section with the three tiers and locked prices',
+        check('v35 / Phase 1: the landing has ONE pricing section with the approved prices',
           (lp.match(/id="plans"/g) || []).length === 1 &&
           !lp.includes('Compare plans') && !lp.includes('tier-compare') && !lp.includes('Included in every tier') &&
-          plansSlice.includes('Lab Access') && plansSlice.includes('$10 <small>') &&
-          plansSlice.includes('Lab Training') && plansSlice.includes('$49.99 <small>') &&
-          plansSlice.includes('Lab Pass') && plansSlice.includes('$99 <small>') && !lp.includes('$149'),
+          !plansSlice.includes('Lab Access') && !plansSlice.includes('$10 <small>') &&
+          plansSlice.includes('Lab Training') && plansSlice.includes('$79.99 <small>') &&
+          plansSlice.includes('Lab Pass') && plansSlice.includes('$150 <small>') &&
+          plansSlice.includes('Team Lab') && plansSlice.includes('$250 <small>') &&
+          !plansSlice.includes('$49.99') && !plansSlice.includes('$99 <small>'),
           plansSlice.slice(0, 120));
-        check('v35: every plan button asks for an invitation with that plan; no dead buttons',
-          (plansSlice.match(/data-invite-tier="access"/g) || []).length === 1 &&
+        check('v35 / Phase 1: athlete plan buttons ask for an invitation; Team Lab books a consultation; no dead buttons',
+          (plansSlice.match(/data-invite-tier="access"/g) || []).length === 0 &&
           (plansSlice.match(/data-invite-tier="training"/g) || []).length === 1 &&
           (plansSlice.match(/data-invite-tier="pass"/g) || []).length === 1 &&
-          plansSlice.includes('>Request Lab Access<') && plansSlice.includes('>Request Lab Training<') &&
+          plansSlice.includes('>Request Lab Training<') &&
           plansSlice.includes('>Request Lab Pass<') &&
+          plansSlice.includes('data-view="book">Book a Team Lab consultation<') &&
           !lp.includes('data-join-tier') && !/>(Join|Choose) Lab /.test(lp) &&
           !lp.includes('checkout') && !lp.includes('stripe'),
           (plansSlice.match(/data-invite-tier=/g) || []).length);
         /* Homepage redesign: AJ's answers, Nov 17. One parent rule on
            every plan (no longer a Lab Pass perk), live sessions twice a
            month, in-person sessions announced as scheduled. */
-        check('v35: plan lists carry real quantities and a defined in-person line',
-          plansSlice.includes('One form check a week') &&
-          plansSlice.includes('Form checks reviewed first, within 48 hours') &&
-          plansSlice.includes('Live video sessions, twice a month') &&
-          plansSlice.includes('announced to Lab Pass members as they are scheduled') &&
+        check('v35 / Phase 1: plan lists carry AJ\'s real allowances and a defined in-person line',
+          plansSlice.includes('Video form reviews with coaching feedback, up to 7 a week') &&
+          plansSlice.includes('More form reviews, up to 30 a week') &&
+          plansSlice.includes('Live web coaching calls, up to 3 a week, 30 minutes each') &&
+          plansSlice.includes('In person training once a week in Maryland and DC') &&
+          plansSlice.includes('Limited to 50 athletes') &&
           plansSlice.includes("see your own athlete's Lab Report on every plan") &&
           !plansSlice.includes('Parent access to the Lab Report') &&
           !plansSlice.includes('No personalized training'),
@@ -9653,12 +9658,14 @@ async function waitForServer(tries = 60) {
         const expectedDays = fc30DaysBetween(oldLastDate, fc30Today);
         check('v30 fixtures: the aged history really is 14+ days old', expectedDays >= 14, expectedDays);
 
-        /* Alex's history was built at training tier; the coach now
-           sets Lab Access, so the week payload must never carry the
-           form check nudge for him. */
+        /* Alex's history was built at training tier. The old test set
+           him to Lab Access, which had no form checks. That tier was
+           retired on Nov 27, 2026, and every plan now includes form
+           reviews, so the coach cannot set it and Alex stays on Lab
+           Training. */
         fr = await fc30Api(fc30Coach, 'PUT', '/api/access/' + accessM.id, { tier: 'access' });
-        check('v30 fixtures: coach sets the history member to Lab Access',
-          fr.status === 200 && fr.json.membership.tier === 'access', fr.json);
+        check('v30 fixtures: the retired Lab Access tier cannot be set (400)',
+          fr.status === 400, fr.json);
 
         /* Bree also earns the streak (and quiet) nudges after the
            restart: check-ins the last two days, a log 5 days back,
@@ -9691,10 +9698,11 @@ async function waitForServer(tries = 60) {
         check('v30: an unread coach reply suppresses the formcheck nudge',
           fr.status === 200 && fr.json.nudge === null, fr.json && fr.json.nudge);
 
-        /* (e) Lab Access never gets it, even with old history. */
+        /* (e) Every plan now includes form reviews (Phase 1), so the
+           entry member with old history gets the nudge too. */
         fr = await fc30Api(accessM.jar, 'GET', '/api/my/week');
-        check('v30: a Lab Access member never gets the formcheck nudge',
-          fr.status === 200 && fr.json.linked === true && fr.json.nudge === null,
+        check('v30 / Phase 1: an entry-plan member with old history gets the formcheck nudge',
+          fr.status === 200 && fr.json.linked === true && !!fr.json.nudge && fr.json.nudge.kind === 'formcheck',
           fr.json && fr.json.nudge);
 
         /* (f) Streak still wins over formcheck when both apply. */

@@ -1,5 +1,8 @@
 # Stripe Integration TODO — Ruffin Performance
 
+> **Nov 27, 2026 (Master Directive):** the $10 Lab Access tier is retired and no longer sold. New prices are Lab Training $79.99/mo and Lab Pass $150/mo (Team Lab $250/mo per organization is sold by consultation, not checkout). The Price IDs below still carry the OLD prices. Before payments are switched on, create $79.99 and $150 prices in Stripe and set STRIPE_PRICE_LAB_TRAINING and STRIPE_PRICE_LAB_PASS (or update the baked-in IDs). This is billing work and needs AJ's separate go.
+
+
 The single source of truth for the Stripe Checkout integration in this
 app. Current state: the server endpoint `POST /api/checkout/session`
 exists and creates a hosted Stripe Checkout Session by calling the

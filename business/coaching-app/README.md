@@ -86,7 +86,7 @@ written in the repo.
 | `SESSION_SECRET` | Signs login cookies so they can't be faked. | One is made once and kept in `DATA_DIR` |
 | `DOMAIN` | The site's public address, used for payment return links. | A placeholder address |
 | `CONTACT_EMAIL` | Public contact address in the footer and password-help link. | No address is shown |
-| `TRIAL_DAYS` | Length of the free trial shown on the site (1 to 60). | 3 |
+| `TRIAL_DAYS` | Length of the free guided preview shown on the site (1 to 60). | 7 |
 | `CALENDLY_URL` | The Calendly event the booking page shows. | AJ's 30-minute event |
 | `COACH_INVITE_EMAILS` | Emails to invite as assistant coaches at startup (comma-separated). | No one is pre-invited |
 | `RESEND_API_KEY` | Turns on email alerts to AJ (needs `NOTIFY_EMAIL` too). | No emails are sent |
@@ -95,7 +95,7 @@ written in the repo.
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_UPLOAD_PRESET` | Where coach demo videos upload. Public names, not secrets. | AJ's existing account |
 | `STRIPE_SECRET_KEY` | Turns on payments. | Checkout answers "Payments are not configured yet." |
 | `STRIPE_WEBHOOK_SECRET` | Lets Stripe tell the app when a membership changes. | Stripe's messages are refused |
-| `STRIPE_PRICE_LAB_ACCESS`, `STRIPE_PRICE_LAB_TRAINING`, `STRIPE_PRICE_LAB_PASS` | Override the Stripe price for each tier. | The built-in tier prices |
+| `STRIPE_PRICE_LAB_TRAINING`, `STRIPE_PRICE_LAB_PASS` | Override the Stripe price for each tier. The baked-in ones are still the old $49.99 and $99 prices; replace them before payments go on. | The built-in tier prices |
 | `STRIPE_PRICE_ID` | Older single-price setting, kept for compatibility. | A placeholder |
 | `STRIPE_API_BASE`, `RESEND_API_BASE` | Used only by the tests, to point at a pretend Stripe or Resend. | The real services |
 | `SITE_URL` | The public address written into page tags, the sitemap and the robots file. | `https://ruffin-performance.onrender.com` |
@@ -163,6 +163,7 @@ node tests/growth-tests.js           # sign-up funnel and scoreboard
 node tests/security-headers-tests.js # security headers and the bad-request crash fix
 node tests/filming-tests.js          # Filming Tracker
 node tests/risky-areas-tests.js      # the riskiest areas, with a coverage report
+node tests/phase1-membership-tests.js # Phase 1 plans: prices, retired $10 tier, Lab Pass cap of 50
 node tests/store-tests.js            # hosted data store (uses a pretend Upstash)
 node tests/run-tests-store-mode.js   # the big suite again, in hosted-store mode
 ```

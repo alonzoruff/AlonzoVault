@@ -457,16 +457,17 @@ const GROUP_SUBNAV = {
    over recall, never a mysterious empty page. Coaches and signed
    out visitors are never locked. state.membership comes from
    /api/my/membership (see refreshUserData). */
-const TIER_RANK = { access: 1, training: 2, pass: 3 };
-const TIER_NAMES = { access: 'Lab Access', training: 'Lab Training', pass: 'Lab Pass' };
+/* The $10 Lab Access tier was retired on Nov 27, 2026; the server
+   moves any old 'access' record up to Lab Training. */
+const TIER_RANK = { training: 1, pass: 2 };
+const TIER_NAMES = { training: 'Lab Training', pass: 'Lab Pass' };
 /* What each tier adds, in the same plain words the landing tier
    cards use. Display only — the server's entitlements decide what
    actually opens; this list just tells the member what they would
    get, on the locked panel and (later) the account card. */
 const TIER_ADDS = {
-  access: ['Lab Sessions and the Inside the Lab library', 'Your workout log and daily check-in', 'Your Lab Report at every retest'],
-  training: ['Personalized training built for you', 'Program adjustments as you progress', 'Form checks with a coach reply'],
-  pass: ['Live web sessions with your coach', 'The opportunity for in-person sessions'],
+  training: ['The full exercise video library and every training program', 'A recommended training pathway, your log and check-ins', 'Your Lab Report and performance tracking', 'Video form reviews with coaching feedback, up to 7 a week'],
+  pass: ['Programming written for you, and adjusted as you train', 'Live web coaching calls, up to 3 a week, 30 minutes each', 'More form reviews, up to 30 a week', 'In person training once a week in Maryland and DC'],
 };
 const LOCK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 /* Redesign Stage 2 (v26): one empty state and one locked panel for
@@ -494,10 +495,10 @@ document.addEventListener('click', (e) => {
   if (b) showView(b.dataset.goto);
 });
 const VIEW_TIER_NEED = {
-  library: 'access', labprograms: 'access', season: 'access', cards: 'access', drills: 'access', qtr: 'access',
-  speedreport: 'access', log: 'access',
-  videos: 'access', definitions: 'access', exercises: 'access', nutrition: 'access',
-  education: 'access', guide: 'access',
+  library: 'training', labprograms: 'training', season: 'training', cards: 'training', drills: 'training', qtr: 'training',
+  speedreport: 'training', log: 'training',
+  videos: 'training', definitions: 'training', exercises: 'training', nutrition: 'training',
+  education: 'training', guide: 'training',
   livesessions: 'pass',
 };
 function memberTierRank() {
@@ -693,7 +694,7 @@ function showView(name) {
   document.body.classList.toggle('tv-mode', name === 'tv');
   if (name === 'tv') enterTvBoard(); else exitTvBoard();
   if (name === 'weightroom') enterWeightRoom(); else exitWeightRoom();
-  const memberKnownLocked = isAthleteUser() && !!state.membership && !memberHasTier('access');
+  const memberKnownLocked = isAthleteUser() && !!state.membership && !memberHasTier('training');
   if (name === 'home' || name === 'log') {
     if (memberKnownLocked) clearMemberHomeSlots();
     else { renderCheckin(); renderMemberLogs(); }
@@ -8987,7 +8988,7 @@ const EMPTY_CONTENT = {
                   public site reads it from here.
    RP_CONTACT_EMAIL  filled from CONTACT_EMAIL; empty until it is set.
    RP_RESPONSE_WINDOW  how soon Coach AJ answers a request. AJ's call. */
-const RP_TRIAL_DAYS = Math.max(1, parseInt('__TRIAL_DAYS__', 10) || 3);
+const RP_TRIAL_DAYS = Math.max(1, parseInt('__TRIAL_DAYS__', 10) || 7);
 const RP_CONTACT_EMAIL = (e => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : ''))('__CONTACT_EMAIL__');
 const RP_RESPONSE_WINDOW = '2 business days';
 
@@ -9292,7 +9293,7 @@ async function renderMembershipCard() {
   const upgradingHtml = (m.tier && m.status !== 'cancelled' && m.tier !== 'pass')
     ? `<p class="muted" style="margin-bottom:6px">What upgrading adds:</p>
       <ul class="landing-list">
-        ${(TIER_ADDS[m.tier === 'access' ? 'training' : 'pass'] || []).map(i => `<li>${esc(i)}</li>`).join('')}
+        ${(TIER_ADDS.pass || []).map(i => `<li>${esc(i)}</li>`).join('')}
       </ul>
       <p><button class="btn secondary" type="button" data-goto="landing">See membership options</button></p>`
     : '';
@@ -9401,8 +9402,8 @@ async function renderMembershipCard() {
    in the account's history, and the latest change shows on the row
    so the page answers "who changed what, when" at a glance. */
 const ACCESS_TIER_OPTIONS = [
-  ['', 'No tier'], ['access', 'Lab Access · $10/month'],
-  ['training', 'Lab Training · $49.99/month'], ['pass', 'Lab Pass · $99/month'],
+  ['', 'No tier'],
+  ['training', 'Lab Training · $79.99/month'], ['pass', 'Lab Pass · $150/month'],
 ];
 /* A date like "November 23, 2026", in New York time like the rest of
    the app. Empty when the value is missing or not a date. */
@@ -9457,7 +9458,8 @@ async function renderAccess() {
   el.innerHTML = `<div class="card">
     <h2>What each tier opens</h2>
     <p class="muted">The reference for the rows below. The server enforces the gating; this card only explains it.</p>
-    ${[['access', 'Lab Access'], ['training', 'Lab Training'], ['pass', 'Lab Pass']].map(([k, name]) => `<p><strong>${name}</strong></p><ul class="landing-list">${(TIER_ADDS[k] || []).map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}
+    <p class="muted">Lab Pass is limited to 50 active members. Team Lab is sold to organizations through a consultation, so it is not set here.</p>
+    ${[['training', 'Lab Training'], ['pass', 'Lab Pass']].map(([k, name]) => `<p><strong>${name}</strong></p><ul class="landing-list">${(TIER_ADDS[k] || []).map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}
   </div>
   <div class="card">
     <h2>Member access</h2>
@@ -9940,7 +9942,7 @@ function renderInvite() {
   if (!el) return;
   const pre = state.inviteTier;
   state.inviteTier = null;
-  const tier = ['access', 'training', 'pass', 'unsure'].includes(pre) ? pre : 'unsure';
+  const tier = ['training', 'pass', 'team', 'unsure'].includes(pre) ? pre : 'unsure';
   const opt = (v, label) => `<option value="${v}"${v === tier ? ' selected' : ''}>${label}</option>`;
   const R = '<span class="req" aria-hidden="true">*</span>';
   el.innerHTML = `<form class="card invite-form" id="invite-form" novalidate>
@@ -9958,9 +9960,9 @@ function renderInvite() {
     <label>Where do you train? <input type="text" id="invite-location" maxlength="120" placeholder="Town or area"></label>
     <label>Which plan interests you?
       <select id="invite-tier">
-        ${opt('access', 'Lab Access $10/mo')}
-        ${opt('training', 'Lab Training $49.99/mo')}
-        ${opt('pass', 'Lab Pass $99/mo')}
+        ${opt('training', 'Lab Training $79.99/mo')}
+        ${opt('pass', 'Lab Pass $150/mo')}
+        ${opt('team', 'Team Lab $250/mo, for a team or organization')}
         ${opt('unsure', 'Not sure yet')}
       </select>
     </label>
@@ -9979,7 +9981,7 @@ function renderInvite() {
     <button class="btn primary" type="submit" id="invite-send" style="width:auto">Send Request</button>
     <div class="invite-next">
       <p class="ci-label">What happens next</p>
-      <p>I read your request myself and reply by email within ${esc(RP_RESPONSE_WINDOW)}. If the Lab fits, I invite your email. Your first ${RP_TRIAL_DAYS} days are then a free trial at the Lab Access level, with no card. Sending a request needs no account and no payment.</p>
+      <p>I read your request myself and reply by email within ${esc(RP_RESPONSE_WINDOW)}. If the Lab fits, I invite your email. Your first ${RP_TRIAL_DAYS} days are then a free guided preview, a real week of training, with no card. Sending a request needs no account and no payment.</p>
       <p class="muted">Your details are used only to answer this request. <a href="/privacy" data-route="privacy">Privacy</a></p>
     </div>
   </form>`;
@@ -10046,8 +10048,8 @@ function renderInvite() {
 }
 
 const INVITE_TIER_LABELS = {
-  access: 'Lab Access $10/mo', training: 'Lab Training $49.99/mo',
-  pass: 'Lab Pass $99/mo', unsure: 'Not sure yet',
+  access: 'Lab Access (retired $10 plan)', training: 'Lab Training $79.99/mo',
+  pass: 'Lab Pass $150/mo', team: 'Team Lab $250/mo', unsure: 'Not sure yet',
 };
 async function renderInviteRequests() {
   const el = $('#inviterequests-main');
@@ -10324,7 +10326,7 @@ function mxResolveView(name) {
   return MX_ALLOWED.has(name) ? name : 'today';
 }
 function mxLocked() {
-  return isAthleteUser() && !!state.membership && !memberHasTier('access');
+  return isAthleteUser() && !!state.membership && !memberHasTier('training');
 }
 function mxFirstName() {
   const d = state.mxWeek;
@@ -11523,7 +11525,7 @@ async function renderScoreboard() {
   const w = sbState.week;
   const asOf = new Date(d.asOf);
   const asOfText = asOf.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  const tiers = ['access', 'training', 'pass'];
+  const tiers = ['training', 'pass'];
   const fw = d.firstWeek[w];
   const ref = d.referrals[w];
   const cancels = d.cancellations[w];

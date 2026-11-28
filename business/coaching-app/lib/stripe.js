@@ -119,7 +119,7 @@ function isSubscriptionId(v) {
   return typeof v === 'string' && /^sub_[A-Za-z0-9_]{1,200}$/.test(v);
 }
 
-/* priceMap is { access: 'price_...', training: ..., pass: ... },
+/* priceMap is { training: 'price_...', pass: 'price_...' },
    built by the server from its own tier table. */
 function tierForPrice(priceId, priceMap) {
   if (typeof priceId !== 'string' || !priceId || !priceMap) return null;

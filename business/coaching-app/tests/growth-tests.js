@@ -76,7 +76,7 @@ const FUNNEL = ['landing_view', 'portal_preview_open', 'invitation_request_start
       assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(d.weeks.this.start));
       assert.ok(d.weeks.last.end < d.weeks.this.start);
       assert.strictEqual(d.paymentsOn, true);
-      assert.deepStrictEqual(d.prices, { access: 10, training: 49.99, pass: 99 });
+      assert.deepStrictEqual(d.prices, { training: 79.99, pass: 150 });
       assert.deepStrictEqual(d.funnel.map((x) => x.name), FUNNEL);
       assert.strictEqual(d.mrr.this, 0);
       assert.strictEqual(d.requests.this.qualified, 0);
@@ -223,7 +223,7 @@ const FUNNEL = ['landing_view', 'portal_preview_open', 'invitation_request_start
       assert.strictEqual(d.newPaid.this.total, 1);
       assert.strictEqual(d.activePaid.this.training, 1);
       assert.strictEqual(d.activePaid.this.pass, 0);
-      assert.strictEqual(d.mrr.this, 49.99);
+      assert.strictEqual(d.mrr.this, 79.99);
       assert.strictEqual(d.handSetPlans.pass, 1);
       assert.strictEqual(d.conversion.this.paidStarts, 1);
       assert.strictEqual(d.conversion.sinceLaunch.paidStarts, 1, 'invited request email went on to pay');
