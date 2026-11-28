@@ -15,7 +15,7 @@ Environment variables
 |---|---|
 | PORTAL_KEY | Opens the portal for AJ. At least 16 characters. Without it nobody gets in. |
 | LUNA_KEY | Luna sends it in an `x-luna-key` header. Opens her endpoints only. At least 16 characters, and not the same as PORTAL_KEY. |
-| DATA_DIR | Folder for `portal.json`. Default is `./data` next to server.js. |
+| DATA_DIR | Folder for `portal.json` and `entries.json`. Default is `./data` next to server.js. |
 | PORT | Default 3000. Render sets it for you. |
 
 Make keys with `openssl rand -hex 24`. Never put either key in the repo.
@@ -104,11 +104,46 @@ Every call carries `x-luna-key: $LUNA_KEY` and a JSON body where one is needed. 
 
 Quest fields: `land, title, owner (AJ, Luna, Char, Claude), xp (AJ quests, 0 to 100), status (party quests: Moving, Blocked, Waiting on AJ, Done), needs (a quest id), detail, date, end, time, place, opens, due, dueLabel, repeat ("daily"), order`. Unknown fields and impossible combinations come back as plain 400 errors, and a batch that has one bad entry changes nothing.
 
+## Meet entries (`/entries`)
+
+A second page in the portal for filling indoor meet entry slots: one page per meet, a name field per slot, and a filled / total count per event and for the whole meet. AJ opens `/entries` (or `/entries?key=<PORTAL_KEY>` the first time on a phone). Same key and cookie as the portal.
+
+**Saving.** Each name saves to the server as soon as AJ pauses typing or leaves the field, into `entries.json` in `DATA_DIR`. That is a separate file from `portal.json`, written the same way (temp file, rename, `.bak` kept, the server refuses to start if it cannot read the file). Until the server confirms a name, the phone also keeps it, so closing the page while offline loses nothing: the name is sent the next time the page opens. The top bar says "All saved" or how many names are still waiting. If the same slot was changed on another device in the meantime, the save is refused rather than overwriting it, and the field shows what is there now.
+
+**Warnings, never blocks.** A name in more events than the meet allows gets a "Heads up" line at the top and an amber mark on the field, and still saves. Only limits the meet publishes are set. Today that is the Episcopal meets (only 3 athletes may run 2 open distance races, everyone else 1; 1000m, 1600m and 3200m count as open distance) and the Hispanic Games (3 events per athlete). The same name twice in one event also warns.
+
+**Adding a meet.** Add one file to `meets/`, named `<id>.json`, and deploy. Copy an existing file and change it:
+
+    {
+      "id": "spielman-2026-12-12",          lowercase, numbers, hyphens; must match the file name
+      "name": "Jeff Spielman Invitational",
+      "date": "2026-12-12",
+      "dateLabel": "Sat, Dec 12",
+      "place": "Hagerstown Community College, Hagerstown, MD",
+      "entriesClose": "Not published",
+      "slots": 5,                            default entries per event, relays included
+      "source": "/Track/Meets/Meet File - Spielman - Dec 12 1123.md",
+      "rules": [],                           published double limits only (see public/entries-rules.js)
+      "events": [
+        { "id": "g-55m-dash", "name": "Girls 55m Dash", "kind": "run" },
+        { "id": "g-4x200m-relay", "name": "Girls 4x200m Relay", "kind": "relay", "slots": 2 }
+      ]
+    }
+
+`kind` is `run`, `relay` or `field`. `slots` on an event overrides the meet's number. The server checks every meet file when it starts and refuses to start with a plain message if one is wrong, so a typo never shows up as a broken page. To change a slot count later, edit the number and deploy; lowering it never drops a name already typed (extra names show in a "+" row until AJ clears them). Never rename an event id once names are saved against it.
+
+Luna can read entries with her key: `GET /api/luna/entries` and `GET /api/luna/entries/<meet id>`. She cannot change them.
+
+Tests: `node tests/entries-tests.js` (made-up names only).
+
 ## Files
 
     server.js            HTTP, keys, storage, routes
     lib/game.js          the rules (XP, unlocks, dial, bonuses, state for the front end)
     lib/content.js       checks and merging for what Luna edits
     lib/seed.js          starting content, taken from the design file
+    lib/entries.js       meet entries: loading meets/, saving entries.json, routes
+    meets/               one JSON file per meet
     public/              index.html, app.js, styles.css, manifest, icons
     tests/portal-tests.js
+    tests/entries-tests.js

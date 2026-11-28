@@ -1,0 +1,68 @@
+name: Something's broken
+description: Report a problem in one of the apps, in plain words.
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Plain words are perfect, no tech terms needed.
+        Please leave out passwords and any athlete's or student's personal details.
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app?
+      options:
+        - AYG Lab
+        - Sprinter app
+        - Portal
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see? Copy any error message word for word if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can someone make it happen again?
+      description: The taps or clicks, in order. "I'm not sure" is fine too.
+      placeholder: |
+        1. Open the sprinter app on my phone
+        2. Tap Today
+        3. ...
+  - type: dropdown
+    id: device
+    attributes:
+      label: What were you using?
+      multiple: true
+      options:
+        - iPhone
+        - Android phone
+        - iPad or tablet
+        - Computer
+        - Weight room TV
+        - Not sure
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: How much is it getting in the way?
+      options:
+        - Stops people from using the app
+        - Annoying, but there's a way around it
+        - Small thing, no rush
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots (optional)
+      description: Drag a picture into this box if you have one.

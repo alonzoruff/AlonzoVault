@@ -1,0 +1,19 @@
+{
+  "id": "hispanic-games-2027-01-08",
+  "name": "Apple Bank Hispanic Games",
+  "date": "2027-01-08",
+  "dateLabel": "Fri, Jan 8 to Sat, Jan 9",
+  "place": "The Armory, New York, NY",
+  "entriesClose": "Thu, Jan 7 at 9:01 am",
+  "slots": 5,
+  "source": "/Track/Meets/Meet File - Hispanic Games - Jan 8-9 1123.md",
+  "note": "This meet has not published its event list yet. Add events to this file when it does.",
+  "rules": [
+    {
+      "type": "maxEvents",
+      "max": 3,
+      "note": "Meet info: limit of 3 events per athlete."
+    }
+  ],
+  "events": []
+}
