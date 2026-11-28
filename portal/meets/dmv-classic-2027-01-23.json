@@ -1,0 +1,198 @@
+{
+  "id": "dmv-classic-2027-01-23",
+  "name": "The DMV's Indoor High School Classic",
+  "date": "2027-01-23",
+  "dateLabel": "Sat, Jan 23",
+  "place": "Virginia Beach Sports Center, Virginia Beach, VA",
+  "entriesClose": "Not confirmed for 2027",
+  "slots": 5,
+  "source": "/Track/Meets/Meet File - DMV Indoor HS Classic - Jan 23 1123.md",
+  "rules": [],
+  "events": [
+    {
+      "id": "g-shot-put",
+      "name": "Girls Shot Put",
+      "kind": "field"
+    },
+    {
+      "id": "b-shot-put",
+      "name": "Boys Shot Put",
+      "kind": "field"
+    },
+    {
+      "id": "g-long-jump",
+      "name": "Girls Long Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-long-jump",
+      "name": "Boys Long Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-triple-jump",
+      "name": "Girls Triple Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-triple-jump",
+      "name": "Boys Triple Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-pole-vault",
+      "name": "Girls Pole Vault",
+      "kind": "field"
+    },
+    {
+      "id": "b-pole-vault",
+      "name": "Boys Pole Vault",
+      "kind": "field"
+    },
+    {
+      "id": "x-weight-throw",
+      "name": "Weight Throw",
+      "kind": "field"
+    },
+    {
+      "id": "g-high-jump",
+      "name": "Girls High Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-high-jump",
+      "name": "Boys High Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-4x800m-relay",
+      "name": "Girls 4x800m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x800m-relay",
+      "name": "Boys 4x800m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-55m-hurdles-60m-hurdles",
+      "name": "Girls 55m Hurdles / 60m Hurdles",
+      "kind": "run"
+    },
+    {
+      "id": "b-55m-hurdles-60m-hurdles",
+      "name": "Boys 55m Hurdles / 60m Hurdles",
+      "kind": "run"
+    },
+    {
+      "id": "g-55m-dash-60m-dash",
+      "name": "Girls 55m Dash / 60m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-55m-dash-60m-dash",
+      "name": "Boys 55m Dash / 60m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-1600m-run",
+      "name": "Girls 1600m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-1600m-run",
+      "name": "Boys 1600m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-800m-run",
+      "name": "Girls 800m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-800m-run",
+      "name": "Boys 800m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-300m-run",
+      "name": "Girls 300m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-300m-run",
+      "name": "Boys 300m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-200m-run",
+      "name": "Girls 200m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-200m-run",
+      "name": "Boys 200m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-1600m-sprint-medley-relay",
+      "name": "Girls 1600m Sprint Medley Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-1600m-sprint-medley-relay",
+      "name": "Boys 1600m Sprint Medley Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-500m-run",
+      "name": "Girls 500m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-500m-run",
+      "name": "Boys 500m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-4x200m-relay",
+      "name": "Girls 4x200m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x200m-relay",
+      "name": "Boys 4x200m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-1000m-run",
+      "name": "Girls 1000m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-1000m-run",
+      "name": "Boys 1000m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-3200m-run",
+      "name": "Girls 3200m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-3200m-run",
+      "name": "Boys 3200m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-4x400m-relay",
+      "name": "Girls 4x400m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x400m-relay",
+      "name": "Boys 4x400m Relay",
+      "kind": "relay"
+    }
+  ]
+}

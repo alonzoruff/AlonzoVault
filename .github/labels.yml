@@ -1,0 +1,24 @@
+# Proposed labels for AlonzoVault. Nothing here is live yet.
+# These only show up on GitHub once AJ approves them and they're added
+# (by hand under Issues > Labels > New label, or with the commands in the PR).
+# Each label: name, color (hex, no #), and what it means.
+
+- name: design
+  color: F26B1D
+  description: Changes how something looks or feels on screen. Needs phone screenshots or phone check steps.
+
+- name: data
+  color: 1D76DB
+  description: Touches saved data (accounts, workouts, rosters, backups) or how it's stored or moved.
+
+- name: docs
+  color: 0E8A16
+  description: Writing only (guides, notes, READMEs). No change to how the apps work.
+
+- name: blocked
+  color: B60205
+  description: Can't move forward until something else happens. Say what it's waiting on in a comment.
+
+- name: needs-AJ
+  color: FBCA04
+  description: Waiting on AJ to decide, approve or do a step. Take it off once he has.

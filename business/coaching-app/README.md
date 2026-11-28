@@ -69,9 +69,9 @@ is kept in **one file, `db.json`**, inside the folder named by the
   app, and restore one the same way. Download one before any hosting
   change.
 
-A move from Render to Vercel is being planned. If it happens, saved
-data would move from the disk file to a hosted data store. Until then,
-Render is the live home and nothing here changes.
+The app can also run on Vercel. There, saved data lives in a hosted
+Upstash Redis store instead of `db.json` (see "Running on Vercel" below).
+Render stays the live home until AJ gives the final word on the move.
 
 ## Settings (environment variables)
 
@@ -98,11 +98,52 @@ written in the repo.
 | `STRIPE_PRICE_LAB_ACCESS`, `STRIPE_PRICE_LAB_TRAINING`, `STRIPE_PRICE_LAB_PASS` | Override the Stripe price for each tier. | The built-in tier prices |
 | `STRIPE_PRICE_ID` | Older single-price setting, kept for compatibility. | A placeholder |
 | `STRIPE_API_BASE`, `RESEND_API_BASE` | Used only by the tests, to point at a pretend Stripe or Resend. | The real services |
+| `SITE_URL` | The public address written into page tags, the sitemap and the robots file. | `https://ruffin-performance.onrender.com` |
+| `READ_ONLY_MODE` | Set to `1` for a short pause during a move: sign-in and reading work, every change is refused. | Normal (changes allowed) |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL`, `KV_REST_API_TOKEN`) | Turns on the hosted data store (Vercel). | Data stays in `db.json` |
+| `OWNER_SETUP_EMAIL` | On an empty hosted store, the only email allowed to create the first (owner) account. | No one can claim an empty hosted store |
+| `STORE_PREFIX` | Key prefix in the hosted store. | `ayg-lab` |
 
 Payments are switched off on purpose right now: with no Stripe key set,
 checkout answers "Payments are not configured yet." That is expected,
 not a bug. Prices, tiers, and the trial are AJ's decisions and do not
 change in code without his word.
+
+## Running on Vercel (hosted data store)
+
+Render keeps working exactly as above. Vercel has no lasting disk, so on
+Vercel the data lives in a hosted Upstash Redis store instead of `db.json`.
+That mode turns on only when both store settings are present:
+
+- `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL`
+  + `KV_REST_API_TOKEN`, the names Vercel's Upstash integration uses)
+- `SESSION_SECRET` — required in this mode (the API answers 503 without it).
+  Use the same value as Render so nobody is signed out by the move.
+- `OWNER_SETUP_EMAIL` — on an empty store, only this email may create the
+  first (head coach) account. Leave it unset once real data is copied in.
+- `STORE_PREFIX` — optional key prefix (default `ayg-lab`)
+
+In this mode every API request loads the store fresh (or reuses it when
+nothing changed), runs, and saves with a version check, so two saves at
+the same moment can never erase each other: the later one is re-run on
+top of the earlier. Coach emails go out after the save and before the
+reply. See `lib/store.js`.
+
+Vercel project settings: Root Directory `business/coaching-app`, Framework
+"Other", no build command. `vercel.json` sends every path to
+`api/index.js` (the same handler Render runs) and keeps `vercel-static/`
+empty on purpose, so pages still get the brand and address filled in.
+On Vercel, imports are capped at 4 MB (Vercel's request limit is about
+4.5 MB) and big downloads are gzipped.
+
+One-time move of the real data (with Render paused by `READ_ONLY_MODE=1`):
+
+```sh
+UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=... node scripts/copy-to-store.js db.json
+```
+
+It refuses to overwrite a store that already has data (add `--replace` on
+purpose) and prints a count check for every collection.
 
 ## Tests at a glance
 
@@ -119,10 +160,15 @@ node tests/notify-tests.js           # email alerts and booking page
 node tests/access-page-tests.js      # coach's member access page
 node tests/membership-card-tests.js  # member's membership card
 node tests/growth-tests.js           # sign-up funnel and scoreboard
+node tests/security-headers-tests.js # security headers and the bad-request crash fix
+node tests/filming-tests.js          # Filming Tracker
+node tests/risky-areas-tests.js      # the riskiest areas, with a coverage report
+node tests/store-tests.js            # hosted data store (uses a pretend Upstash)
+node tests/run-tests-store-mode.js   # the big suite again, in hosted-store mode
 ```
 
-Each one ends with a line like `2057 passed, 0 failed`. On main on
-Nov 24, 2026 every file passed. `tests/harness.js` is a shared helper,
+Each one ends with a line like `2057 passed, 0 failed`. `npm test` runs
+the big suite, the store tests and the store-mode suite together. `tests/harness.js` is a shared helper,
 not a test to run.
 
 For how a change gets from an idea to the live site, see
@@ -140,11 +186,28 @@ For how a change gets from an idea to the live site, see
   shared sources with `python3 scripts/build-content.py` (the script
   scrubs school identifiers from the two copied markdown files).
 
+## Filming tracker
+
+Coach Hub > Filming Tracker lists every AYG Lab movement (102 from the
+Nov 20 Exercises List, in `content/filming_list.json`) under Mobility,
+Running, and Strengthening. Tap the circle to mark a movement filmed;
+type in its note field and the note saves when you leave the field.
+Statuses and notes save to `db.json` in `DATA_DIR` (keys `filming` and
+`filmingExtras`), the same store every other coach record uses, and
+ride along in the full backup. To add a movement later, use the
+"Add a movement" form at the bottom of the page. Movements you add
+can be removed; the ones from the list stay.
+
 ## Tests
 
 ```sh
-node tests/run-tests.js
+node tests/run-tests.js            # the main suite (Render file mode)
+node tests/store-tests.js          # hosted-store mode and the Vercel entry
+node tests/run-tests-store-mode.js # the main suite again, in hosted-store mode
+npm test                           # all three
 ```
 
 Starts the server on a throwaway port with a temporary `DATA_DIR`,
-exercises the API end to end, and cleans up.
+exercises the API end to end, and cleans up. The smaller files in
+`tests/` (Stripe, notifications, access page, growth, membership card,
+security headers) run the same way, one file at a time.

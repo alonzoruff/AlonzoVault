@@ -5,37 +5,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>__BRAND_NAME__ | __BRAND_TAGLINE__</title>
 <meta name="description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is by invitation during the founding pilot.">
-<link rel="canonical" href="https://ruffin-performance.onrender.com/">
+<link rel="canonical" href="__SITE_URL__/">
 <meta name="robots" content="index, follow">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="__BRAND_NAME__">
 <meta property="og:title" content="__BRAND_NAME__ | __BRAND_TAGLINE__">
 <meta property="og:description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is by invitation during the founding pilot.">
-<meta property="og:url" content="https://ruffin-performance.onrender.com/">
-<meta property="og:image" content="https://ruffin-performance.onrender.com/assets/hero-sprinter.jpg">
+<meta property="og:url" content="__SITE_URL__/">
+<meta property="og:image" content="__SITE_URL__/assets/hero-sprinter.jpg">
 <meta property="og:image:alt" content="__BRAND_NAME__ | __BRAND_TAGLINE__">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="__BRAND_NAME__ | __BRAND_TAGLINE__">
 <meta name="twitter:description" content="__BRAND_NAME__: __BRAND_TAGLINE__. Your program in the app, coach demo videos, testing and progress tracking, and weekly check-ins. Membership is by invitation during the founding pilot.">
-<meta name="twitter:image" content="https://ruffin-performance.onrender.com/assets/hero-sprinter.jpg">
+<meta name="twitter:image" content="__SITE_URL__/assets/hero-sprinter.jpg">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@graph": [
     {
       "@type": "Organization",
-      "@id": "https://ruffin-performance.onrender.com/#organization",
+      "@id": "__SITE_URL__/#organization",
       "name": "__BRAND_NAME__",
-      "url": "https://ruffin-performance.onrender.com/",
-      "logo": "https://ruffin-performance.onrender.com/assets/ayg-lab-logo.jpg",
+      "url": "__SITE_URL__/",
+      "logo": "__SITE_URL__/assets/ayg-lab-logo.jpg",
       "slogan": "Measured speed, not promised speed."
     },
     {
       "@type": "WebSite",
-      "@id": "https://ruffin-performance.onrender.com/#website",
-      "url": "https://ruffin-performance.onrender.com/",
+      "@id": "__SITE_URL__/#website",
+      "url": "__SITE_URL__/",
       "name": "__BRAND_NAME__",
-      "publisher": { "@id": "https://ruffin-performance.onrender.com/#organization" }
+      "publisher": { "@id": "__SITE_URL__/#organization" }
     }
   ]
 }
@@ -564,10 +564,10 @@
         <svg viewBox="0 0 58 34" focusable="false" aria-hidden="true">
           <rect x="40" y="4" width="3" height="26" fill="#ffffff" opacity=".8"/>
           <rect x="2" y="29" width="34" height="3" rx="1.5" fill="#555b64"/>
-          <polygon points="9,29 17,29 15,17 8,19" fill="#c9ccd4"/>
-          <polygon points="8,19 15,17 16,20 9,22" fill="#d7dade"/>
-          <polygon points="20,29 28,29 25,16 18,18" fill="#c9ccd4"/>
-          <polygon points="18,18 25,16 26,19 19,21" fill="#d7dade"/>
+          <polygon class="blk" points="9,29 17,29 15,17 8,19" fill="#ff7a1a"/>
+          <polygon class="blk-top" points="8,19 15,17 16,20 9,22" fill="#ffa25e"/>
+          <polygon class="blk" points="20,29 28,29 25,16 18,18" fill="#ff7a1a"/>
+          <polygon class="blk-top" points="18,18 25,16 26,19 19,21" fill="#ffa25e"/>
         </svg>
       </div>
       <svg class="runner" viewBox="0 0 120 96" focusable="false" aria-hidden="true">
@@ -728,6 +728,7 @@
       <button type="button" class="menu-item" data-view="data">Data <span>Back up the whole team to a file, restore from one, and download spreadsheets</span></button>
       <button type="button" class="menu-item" data-view="devices">Devices <span>ForceDecks, NordBord, and T-APEX: import each device's results file and they land in every athlete's testing history, labeled by device</span></button>
       <button type="button" class="menu-item" data-view="coverage">Demo Coverage <span>The filming map: every drill and test marked. Your video, a placeholder, or still to film</span></button>
+      <button type="button" class="menu-item" data-view="filming">Filming Tracker <span>All 102 AYG Lab movements. Mark each one filmed and keep a note on the take</span></button>
       <button type="button" class="menu-item" data-view="account">Coach accounts &amp; invites <span>Who has coach access: under Account</span></button>
     </div>
   </section>
@@ -745,8 +746,8 @@
         <select id="lib-phase"><option value="">All phases</option></select>
         <select id="lib-cns">
           <option value="">Hard + easy days</option>
-          <option value="high">Hard days (high CNS)</option>
-          <option value="low">Easy days (low CNS)</option>
+          <option value="high">Hard days</option>
+          <option value="low">Easy days</option>
         </select>
       </div>
       <p id="lib-count" class="muted"></p>
@@ -1496,6 +1497,15 @@
     <div class="subnav-slot"></div>
     <p class="view-sub muted">The filming map for a coach video on every movement: each drill and test the demo system covers, marked by whose video is attached. Yours, a placeholder, or none yet. Watch, add, or swap any demo right from its row. Coaches only.</p>
     <div id="coverage-main"></div>
+  </section>
+
+  <!-- FILMING TRACKER (coach) -->
+  <section id="view-filming" class="view">
+    <h1>Filming Tracker</h1>
+    <div class="lane-divider" aria-hidden="true"><div class="lane-strip"></div></div>
+    <div class="subnav-slot"></div>
+    <p class="view-sub muted">Every movement in the AYG Lab library, grouped by Mobility, Running, and Strengthening. Tap the circle when a movement is filmed and jot a note on the take. Coaches only.</p>
+    <div id="filming-main"></div>
   </section>
 </main>
 

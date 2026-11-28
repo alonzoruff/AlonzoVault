@@ -44,6 +44,27 @@
  *                   membership (see processStripeEvent). It needs
  *                   STRIPE_SECRET_KEY too, to look up a new
  *                   subscription's price.
+ *   UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN  (or the same pair
+ *                   named KV_REST_API_URL / KV_REST_API_TOKEN, as Vercel's
+ *                   Upstash integration names them)
+ *                   When BOTH are set, saved data lives in that hosted
+ *                   Upstash Redis store instead of db.json, and every
+ *                   API request loads fresh and saves with a version
+ *                   check (see lib/store.js). For Vercel. When unset,
+ *                   nothing changes: db.json in DATA_DIR, as on Render.
+ *                   In store mode SESSION_SECRET must be set.
+ *   STORE_PREFIX    Optional key prefix inside the store (default ayg-lab).
+ *   OWNER_SETUP_EMAIL  Store mode only. On an empty store, only this
+ *                   email (or comma-separated emails) may register the first (head coach) account,
+ *                   so a stranger cannot claim a fresh store. Unset =
+ *                   no first sign-up at all in store mode (copy the
+ *                   real data in instead). File mode ignores it.
+ *   READ_ONLY_MODE  Set to 1 for a short pause during a move: sign-in
+ *                   still works, but every other change is refused with
+ *                   a calm message and nothing is saved.
+ *   SITE_URL        The public address written into the page tags,
+ *                   sitemap and robots file (default
+ *                   https://ruffin-performance.onrender.com).
  *   COACH_INVITE_EMAILS  Optional comma-separated emails to seed as
  *                   assistant-coach invites at startup. Seeding is
  *                   idempotent and removal-wins: once an email has
@@ -80,7 +101,30 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const stripeLib = require('./lib/stripe');
-const { notifyCoach } = require('./lib/notify');
+const { notifyCoach: sendCoachEmail } = require('./lib/notify');
+const storeLib = require('./lib/store');
+/* Hosted store (Vercel) when its settings are present; otherwise the
+   db.json file exactly as before (Render). */
+const STORE_CFG = storeLib.configFromEnv(process.env, 'ayg-lab');
+const STORE = STORE_CFG ? storeLib.createUpstash(STORE_CFG) : null;
+const READ_ONLY = /^(1|true|yes|on)$/i.test(String(process.env.READ_ONLY_MODE || '').trim());
+/* Vercel caps a request body at about 4.5 MB, so imports stay under
+   4 MB there. Render keeps its larger caps. */
+const ON_VERCEL = !!process.env.VERCEL;
+const BIG_UPLOAD_CAP = ON_VERCEL ? 4 * 1024 * 1024 : 10 * 1024 * 1024;
+const MID_UPLOAD_CAP = ON_VERCEL ? 4 * 1024 * 1024 : 5 * 1024 * 1024;
+const SITE_URL = (() => {
+  const v = String(process.env.SITE_URL || '').trim().replace(/\/+$/, '');
+  return /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(v) ? v : 'https://ruffin-performance.onrender.com';
+})();
+let txns = null; /* set at the bottom in store mode */
+/* Coach emails: on Render they go out right away, without waiting,
+   as before. In store mode they wait until the save is safe and are
+   finished before the reply, so the host cannot cut them off. */
+function notifyCoach(opts) {
+  if (txns && txns.inTransaction()) { txns.defer(() => sendCoachEmail(opts)); return; }
+  sendCoachEmail(opts);
+}
 const LOGO_JPEG = Buffer.from(require('./lib/logo-data'), 'base64');
 /* Absolute link into the app for a notification email. */
 function appLink(viewPath) {
@@ -141,6 +185,10 @@ const CALENDLY_URL = (() => {
 /* ------------------------------------------------------------------ */
 function loadSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  /* Store mode has no lasting disk and many copies of the app, so a
+     made-up key would sign everyone out on every new copy. Requests
+     answer 503 until SESSION_SECRET is set (see the bottom). */
+  if (STORE) return null;
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const f = path.join(DATA_DIR, '.session-secret');
   try {
@@ -333,7 +381,7 @@ function applyMembershipChange(u, fields, actor, action, extra) {
 function tierGate(res, user, need) {
   if (hasTierAccess(user, need)) return true;
   sendJson(res, 403, {
-    error: 'This is part of ' + TIER_INFO[need].name + '. Your membership does not include it right now — see the Account tab for your membership and your options.',
+    error: 'This is part of ' + TIER_INFO[need].name + '. Your membership does not include it right now. The Account tab shows your membership and your options.',
     needsTier: need,
   });
   return false;
@@ -669,10 +717,18 @@ function noteMemberActivity(member, firstWorkout) {
    address is never written anywhere. */
 const PUBLIC_EVENT_LIMIT = 30;
 const publicEventHits = new Map();
-function publicEventAllowed(req) {
+async function publicEventAllowed(req) {
   const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   const key = fwd || (req.socket && req.socket.remoteAddress) || 'unknown';
   const minute = Math.floor(Date.now() / 60000);
+  if (STORE) {
+    /* Many short-lived copies of the app: the count has to be shared.
+       Only a keyed one-way hash of the address is used, and the
+       counter deletes itself after two minutes. */
+    const tag = crypto.createHmac('sha256', SECRET || 'events').update(key).digest('hex').slice(0, 24);
+    try { return (await STORE.hit('ev:' + minute + ':' + tag, 120)) <= PUBLIC_EVENT_LIMIT; }
+    catch (_) { return true; }
+  }
   const hit = publicEventHits.get(key);
   if (!hit || hit.minute !== minute) {
     if (publicEventHits.size > 5000) publicEventHits.clear();
@@ -686,6 +742,9 @@ function publicEventAllowed(req) {
    are written to disk a moment later, several at once. */
 let saveSoonTimer = null;
 function saveDbSoon() {
+  /* Store mode: save with the request, before the reply. A delayed
+     save could be lost when the host freezes the app after replying. */
+  if (STORE) return saveDb();
   if (saveSoonTimer) return;
   saveSoonTimer = setTimeout(() => {
     saveSoonTimer = null;
@@ -710,6 +769,17 @@ function migrate() {
   db.concerns = db.concerns || {};
   db.mediaOverrides = db.mediaOverrides || {};
   db.inventory = Array.isArray(db.inventory) ? db.inventory : [];
+  // Filming tracker (coach-only): { movementId: { filmed, note,
+  // updatedAt } } for the movements in content/filming_list.json
+  // plus the coach's own additions in db.filmingExtras. A store that
+  // has never had the tracker starts with 90/90 Hip Rotations
+  // already marked filmed (shot Nov 20); after that it is left alone.
+  if (!db.filming || typeof db.filming !== 'object' || Array.isArray(db.filming)) {
+    db.filming = {
+      'VID-076': { filmed: true, note: 'Filmed Nov 20 as 90/90 Hip Switches', updatedAt: '2026-11-20T12:00:00.000Z' },
+    };
+  }
+  db.filmingExtras = Array.isArray(db.filmingExtras) ? db.filmingExtras : [];
   // Coach edits to the warm-up cards: { cardId: { sections: [...] } }.
   // Only cards a coach has actually edited appear here; anything else
   // renders the shipped card from public/index.html.
@@ -897,7 +967,19 @@ function migrate() {
     if (!PROFILE_STATUSES.includes(prof.status)) prof.status = 'active';
   }
 }
+/* Store mode: replace the in-memory store with a fresh copy loaded
+   from the hosted store (null = empty), then tidy and seed as a
+   restart would. Called at the start of a request when the version
+   changed. */
+const DB_EMPTY = JSON.stringify(db);
+function setDbFromStore(data) {
+  db = Object.assign(JSON.parse(DB_EMPTY), data && Array.isArray(data.users) ? data : {});
+  migrate();
+  seedCoachInvitesFromEnv();
+  seedCustomWorkouts();
+}
 function loadDb() {
+  if (STORE) { migrate(); return; }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   let raw;
   try {
@@ -918,7 +1000,13 @@ function loadDb() {
   }
   migrate();
 }
+let readOnlyWarned = false;
 function saveDb() {
+  if (READ_ONLY) {
+    if (!readOnlyWarned) { readOnlyWarned = true; console.log('[read-only] READ_ONLY_MODE is on: changes are not saved.'); }
+    return;
+  }
+  if (STORE) { if (txns) txns.markDirty(); return; }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 1), { mode: 0o600 });
@@ -1071,6 +1159,40 @@ function loadVideoLibrary() {
     }
   } catch (_) { /* no video library bundled — that is fine */ }
   return [];
+}
+/* Filming tracker list (content/filming_list.json): every movement
+   in the AYG Lab Exercises List, grouped Mobility / Running /
+   Strengthening. Read once, tolerantly: a missing file means the
+   tracker shows only the coach's own additions. Filmed / not filmed
+   and notes live in db.filming; added movements in db.filmingExtras. */
+const FILMING_CATEGORIES = ['Mobility', 'Running', 'Strengthening'];
+let filmingListCache = null;
+function filmingList() {
+  if (filmingListCache) return filmingListCache;
+  filmingListCache = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'filming_list.json'), 'utf8'));
+    filmingListCache = (parsed && Array.isArray(parsed.movements) ? parsed.movements : [])
+      .filter(m => m && typeof m.id === 'string' && typeof m.movement === 'string'
+        && FILMING_CATEGORIES.includes(m.category))
+      .map(m => ({ id: m.id, movement: m.movement, category: m.category }));
+  } catch (_) { /* no list bundled: additions only */ }
+  return filmingListCache;
+}
+function filmingMovements() {
+  return filmingList().map(m => Object.assign({ custom: false }, m))
+    .concat(db.filmingExtras.map(m => ({ id: m.id, movement: m.movement, category: m.category, custom: true })));
+}
+function filmingPayload() {
+  const items = filmingMovements().map(m => {
+    const s = db.filming[m.id] || {};
+    return Object.assign(m, { filmed: s.filmed === true, note: typeof s.note === 'string' ? s.note : '', updatedAt: s.updatedAt || null });
+  });
+  const categories = FILMING_CATEGORIES.map(name => {
+    const movements = items.filter(i => i.category === name);
+    return { name, total: movements.length, filmed: movements.filter(i => i.filmed).length, movements };
+  });
+  return { categories, total: items.length, filmed: items.filter(i => i.filmed).length };
 }
 /* The Definitions tab glossary (content/glossary.json). Same tolerant
    loading as the video library: a missing or malformed file means an
@@ -1432,7 +1554,7 @@ function validateMeetResultInput(input) {
   const prof = profileById(clean(input.profileId, 80));
   if (!prof) return { status: 404, error: 'Profile not found.' };
   const date = clean(input.date, 10);
-  if (!parseDateStr(date)) return { status: 400, error: 'Date must be YYYY-MM-DD.' };
+  if (!parseDateStr(date)) return { status: 400, error: 'Pick a date.' };
   const meet = clean(input.meet, 80);
   if (!meet) return { status: 400, error: 'Name the meet.' };
   const ev = findMeetEvent(clean(input.event, 30));
@@ -2752,7 +2874,7 @@ function formCheckVideoUrl(raw) {
 function validateFormCheck(body) {
   const videoUrl = formCheckVideoUrl(body.videoUrl);
   if (!videoUrl) {
-    return { error: 'That video link is not an uploaded video — upload your video first, then send the form check.' };
+    return { error: 'That video link is not an uploaded video. Upload your video first, then send the form check.' };
   }
   if (typeof body.note === 'string' && body.note.length > 500) {
     return { error: 'Keep the note to 500 characters or less.' };
@@ -2825,7 +2947,7 @@ function validateIntake(body) {
     return { error: 'Keep your goals to 1000 characters or less.' };
   }
   const goals = clean(body.goals, 1000);
-  if (!goals) return { error: 'Tell us your goals — a sentence or two is fine.' };
+  if (!goals) return { error: 'Tell us your goals. A sentence or two is fine.' };
   let sportsRaw = [];
   if (typeof body.sports === 'string') sportsRaw = body.sports.split(',');
   else if (Array.isArray(body.sports)) sportsRaw = body.sports;
@@ -2851,10 +2973,10 @@ function validateIntake(body) {
   const trainingAge = num(body.trainingAge);
   if (trainingAge === null || !Number.isInteger(trainingAge)
     || trainingAge < 0 || trainingAge > 70) {
-    return { error: 'Training age must be a whole number of years, 0 or more.' };
+    return { error: 'Enter how many years you have been training, as a whole number. Use 0 if you are just starting.' };
   }
   if (typeof body.hasInjury !== 'boolean') {
-    return { error: 'Answer the injury question — yes or no.' };
+    return { error: 'Answer the injury question with yes or no.' };
   }
   if (typeof body.injuryDetail === 'string' && body.injuryDetail.length > 1000) {
     return { error: 'Keep the injury note to 1000 characters or less.' };
@@ -2920,41 +3042,41 @@ function validateMemberLog(body) {
   const today = todayStr();
   const date = body.date !== undefined && body.date !== null && body.date !== ''
     ? clean(body.date, 10) : today;
-  if (!parseDateStr(date)) return { error: 'Date must be YYYY-MM-DD.' };
+  if (!parseDateStr(date)) return { error: 'Pick a date.' };
   if (date > today) return { error: 'You cannot log a workout for a day that has not happened yet.' };
-  if (date < addDaysStr(today, -30)) return { error: 'Logs can only reach back 30 days — ask your coach about anything older.' };
+  if (date < addDaysStr(today, -30)) return { error: 'Logs can only reach back 30 days. Ask your coach about anything older.' };
   const sessionCode = clean(body.sessionCode, 40);
   let title = clean(body.title, 120);
   if (!title && sessionCode) {
     const s = SESSION_BY_ID.get(sessionCode);
     title = s ? s.id + ' · ' + s.name : sessionCode;
   }
-  if (!title) return { error: 'Name the workout — pick the session you ran or write a short title.' };
+  if (!title) return { error: 'Name the workout. Pick the session you ran or write a short title.' };
   if (typeof body.title === 'string' && body.title.length > 120) {
     return { error: 'Keep the title to 120 characters or less.' };
   }
   const status = body.status === undefined || body.status === null || body.status === ''
     ? 'done' : body.status;
   if (status !== 'done' && status !== 'partial') {
-    return { error: 'Status must be done or partial.' };
+    return { error: 'Pick Done or Partial for how much of it you finished.' };
   }
   let rpe = null;
   if (body.rpe !== undefined && body.rpe !== null && body.rpe !== '') {
     rpe = num(body.rpe);
     if (rpe === null || !Number.isInteger(rpe) || rpe < 1 || rpe > 10) {
-      return { error: 'RPE must be a whole number from 1 to 10.' };
+      return { error: 'Pick how hard it was, from 1 to 10.' };
     }
   }
   let durationMin = null;
   if (body.durationMin !== undefined && body.durationMin !== null && body.durationMin !== '') {
     durationMin = num(body.durationMin);
     if (durationMin === null || !Number.isInteger(durationMin) || durationMin < 1 || durationMin > 600) {
-      return { error: 'Duration must be a whole number of minutes, 1 to 600.' };
+      return { error: 'Enter the minutes as a whole number, from 1 to 600.' };
     }
   }
   const entries = [];
   if (body.entries !== undefined && body.entries !== null) {
-    if (!Array.isArray(body.entries)) return { error: 'Exercise rows must be a list.' };
+    if (!Array.isArray(body.entries)) return { error: 'The exercise list did not come through. Please try again.' };
     if (body.entries.length > 40) return { error: 'A log holds at most 40 exercise rows.' };
     for (const e of body.entries) {
       if (!isPlainObj(e)) return { error: 'Each exercise row needs a name.' };
@@ -3007,11 +3129,11 @@ function validateCheckin(body) {
   }
   const soreness = num(body.soreness);
   if (soreness === null || !Number.isInteger(soreness) || soreness < 1 || soreness > 5) {
-    return { error: 'Soreness must be a whole number from 1 to 5.' };
+    return { error: 'Pick your soreness, from 1 to 5.' };
   }
   const energy = num(body.energy);
   if (energy === null || !Number.isInteger(energy) || energy < 1 || energy > 5) {
-    return { error: 'Energy must be a whole number from 1 to 5.' };
+    return { error: 'Pick your energy, from 1 to 5.' };
   }
   if (body.painText !== undefined && body.painText !== null && typeof body.painText !== 'string') {
     return { error: 'Say what hurts in words.' };
@@ -3020,7 +3142,7 @@ function validateCheckin(body) {
     return { error: 'Keep the pain note to 240 characters or less.' };
   }
   if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') {
-    return { error: 'The note must be text.' };
+    return { error: 'The note did not come through. Please type it again.' };
   }
   if (typeof body.note === 'string' && body.note.length > 500) {
     return { error: 'Keep the note to 500 characters or less.' };
@@ -3052,7 +3174,7 @@ function validateCheckin(body) {
     if (body.painLevel !== undefined && body.painLevel !== null && body.painLevel !== '') {
       const lv = num(body.painLevel);
       if (lv === null || !Number.isInteger(lv) || lv < 0 || lv > 10) {
-        return { error: 'Pain level must be a whole number from 0 to 10.' };
+        return { error: 'Pick a pain level from 0 to 10.' };
       }
       painLevel = lv;
     }
@@ -3924,14 +4046,14 @@ const BACKUP_ARRAY_KEYS = {
   meets: 'id', meetEntries: 'id', schoolRecords: 'id', goals: 'id',
   customWorkouts: 'id', programs: 'id', programApplications: 'id',
   announcements: 'id', memberLogs: 'id', formChecks: 'id',
-  liveSessions: 'id', liveRequests: 'id',
+  liveSessions: 'id', liveRequests: 'id', filmingExtras: 'id',
 };
 /* Keyed-object collections: these merge leaf by leaf (see
    mergeLeaves), so a restore touches only the paths it names. */
 const BACKUP_OBJECT_KEYS = [
   'overrides', 'completions', 'testResults', 'weekly', 'concerns',
   'mediaOverrides', 'warmupCardEdits', 'athleteLinks', 'checkins',
-  'attendance', 'coachNotes', 'floorProgress',
+  'attendance', 'coachNotes', 'floorProgress', 'filming',
 ];
 function buildBackupData() {
   return {
@@ -3953,6 +4075,7 @@ function buildBackupData() {
     announcements: db.announcements, memberLogs: db.memberLogs,
     formChecks: db.formChecks,
     floorProgress: db.floorProgress,
+    filming: db.filming, filmingExtras: db.filmingExtras,
     liveSessions: db.liveSessions, liveRequests: db.liveRequests,
     /* Membership state rides along WITHOUT the accounts
        themselves (a backup never carries logins or password
@@ -4846,7 +4969,7 @@ async function handleApi(req, res, url) {
     const viewer = readSession(req);
     if (viewer && viewer.role !== 'coach' && !effectiveTier(viewer)) {
       return sendJson(res, 403, {
-        error: 'The Lab content needs a membership. Your account does not have an active tier right now — see the Account tab for your membership and your options.',
+        error: 'The Lab content needs a membership. Your account does not have an active membership right now. The Account tab shows your membership and your options.',
         needsTier: 'access',
       });
     }
@@ -5178,7 +5301,7 @@ async function handleApi(req, res, url) {
     const name = clean(body.name, 40);
     if (!PUBLIC_FUNNEL_EVENTS.includes(name)) return sendJson(res, 400, { error: 'Unknown event.' });
     if (readSession(req)) return sendJson(res, 200, { ok: true, counted: false });
-    if (!publicEventAllowed(req)) return sendJson(res, 429, { error: 'Too many events. Try again in a minute.' });
+    if (!(await publicEventAllowed(req))) return sendJson(res, 429, { error: 'Too many events. Try again in a minute.' });
     const pagePath = clean(body.page, 60);
     const fields = { page: /^\/[a-z0-9\-/]*$/.test(pagePath) ? pagePath : '/' };
     if (name === 'portal_preview_open') {
@@ -5226,6 +5349,16 @@ async function handleApi(req, res, url) {
       return sendJson(res, 409, { error: 'An account with that email already exists. Try logging in.' });
     }
     const firstAccount = db.users.length === 0;
+    /* A brand-new hosted store is empty, and the first account owns
+       it. In store mode only OWNER_SETUP_EMAIL may claim it, so a
+       stranger cannot get there first. Render (file mode) is unchanged. */
+    if (firstAccount && STORE) {
+      const setup = String(process.env.OWNER_SETUP_EMAIL || '').toLowerCase()
+        .split(',').map(x => x.trim()).filter(Boolean);
+      if (!setup.includes(email)) {
+        return sendJson(res, 403, { error: 'This app is being set up and is not open for sign-up yet.' });
+      }
+    }
     // Invite-only pilot: after the first account (the owner), an
     // email can register only if the owner invited it — onto the
     // coach list (coach access) or the member list (member access).
@@ -5300,7 +5433,7 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/me' && req.method === 'GET') {
     const me = readSession(req);
-    if (!me) return sendJson(res, 401, { error: 'not logged in' });
+    if (!me) return sendJson(res, 401, { error: 'Please log in.' });
     return sendJson(res, 200, publicUser(me));
   }
 
@@ -5421,11 +5554,11 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const date = clean(body.date, 10);
     if (!parseDateStr(date)) {
-      return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      return sendJson(res, 400, { error: 'Pick a date.' });
     }
     const sessionId = clean(body.sessionId, 20);
     if (sessionId && !SESSION_IDS.has(sessionId)) {
-      return sendJson(res, 400, { error: 'Unknown session code.' });
+      return sendJson(res, 400, { error: "That session code isn't in the plan. Check it, or leave it blank." });
     }
     let feel = parseInt(body.feel, 10);
     if (Number.isNaN(feel) || feel < 1 || feel > 5) feel = null;
@@ -5450,7 +5583,7 @@ async function handleApi(req, res, url) {
     const id = decodeURIComponent(p.slice('/api/logs/'.length));
     const list = db.logs[user.id] || [];
     const next = list.filter(e => e.id !== id);
-    if (next.length === list.length) return sendJson(res, 404, { error: 'Entry not found.' });
+    if (next.length === list.length) return sendJson(res, 404, { error: 'That entry is gone. It may already be deleted.' });
     db.logs[user.id] = next;
     saveDb();
     return sendJson(res, 200, { ok: true });
@@ -5532,7 +5665,7 @@ async function handleApi(req, res, url) {
     }
     const body = await readBody(req);
     const date = body.date !== undefined ? clean(body.date, 10) : todayStr();
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (date > todayStr()) return sendJson(res, 400, { error: 'You cannot check in for a day that has not happened yet.' });
     const v = validateCheckin(body);
     if (v.error) return sendJson(res, 400, { error: v.error });
@@ -5669,7 +5802,7 @@ async function handleApi(req, res, url) {
     }
     const logId = decodeURIComponent(myLogMatch[1]);
     const idx = db.memberLogs.findIndex(l => l.id === logId && l.athleteId === prof.id);
-    if (idx < 0) return sendJson(res, 404, { error: 'Log not found.' });
+    if (idx < 0) return sendJson(res, 404, { error: 'That workout log is gone. It may already be deleted.' });
     if (req.method === 'DELETE') {
       db.memberLogs.splice(idx, 1);
       saveDb();
@@ -6838,7 +6971,7 @@ async function handleApi(req, res, url) {
     const groupId = clean(body.groupId, 80);
     const date = clean(body.date, 10);
     if (!groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const key = groupId + '|' + date;
     if (body.sessionId === null || body.sessionId === '') {
       delete db.overrides[key];
@@ -6846,7 +6979,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, { ok: true, cleared: true, assignment: resolveAssignment(groupId, date) });
     }
     const sessionId = clean(body.sessionId, 20);
-    if (!SESSION_IDS.has(sessionId)) return sendJson(res, 400, { error: 'Unknown session code.' });
+    if (!SESSION_IDS.has(sessionId)) return sendJson(res, 400, { error: "That session code isn't in the plan. Check it, or leave it blank." });
     db.overrides[key] = { sessionId, note: clean(body.note, 300), by: user.id, at: new Date().toISOString() };
     saveDb();
     return sendJson(res, 200, { ok: true, assignment: resolveAssignment(groupId, date) });
@@ -6857,7 +6990,7 @@ async function handleApi(req, res, url) {
     const prof = profileById(clean(body.profileId, 80));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const date = clean(body.date || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const key = prof.id + '|' + date;
     if (body.completed === false) {
       delete db.completions[key];
@@ -6867,7 +7000,7 @@ async function handleApi(req, res, url) {
     if (!prof.groupId) return sendJson(res, 400, { error: 'That athlete is not in a group, so there is no assignment to complete.' });
     const a = resolveAssignment(prof.groupId, date);
     if (!a.sessionId && a.isOff) {
-      return sendJson(res, 400, { error: 'That day is an off day in the plan — there is no session to mark complete.' });
+      return sendJson(res, 400, { error: 'That day is an off day in the plan, so there is no session to mark complete.' });
     }
     let feel = parseInt(body.feel, 10);
     if (Number.isNaN(feel) || feel < 1 || feel > 5) feel = null;
@@ -7021,7 +7154,7 @@ async function handleApi(req, res, url) {
   }
   if (p === '/api/attendance' && req.method === 'GET') {
     const date = clean(q.get('date') || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const marks = db.attendance[date] || {};
     const blockFor = (g) => {
       const members = db.profiles.filter(pr => !pr.archived && (g ? pr.groupId === g.id : !pr.groupId));
@@ -7047,7 +7180,7 @@ async function handleApi(req, res, url) {
   const attRoute = p.match(/^\/api\/attendance\/([^/]+)\/([^/]+)$/);
   if (attRoute && req.method === 'POST' && attRoute[2] === 'mark-all-present') {
     const date = attRoute[1];
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     db.attendance[date] = db.attendance[date] || {};
     let marked = 0, skipped = 0;
     for (const pr of db.profiles) {
@@ -7061,7 +7194,7 @@ async function handleApi(req, res, url) {
   }
   if (attRoute && req.method === 'PUT') {
     const date = attRoute[1];
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const prof = profileById(decodeURIComponent(attRoute[2]));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const body = await readBody(req);
@@ -7075,7 +7208,7 @@ async function handleApi(req, res, url) {
     }
     const status = clean(body.status, 20);
     if (!ATTENDANCE_STATUSES.includes(status)) {
-      return sendJson(res, 400, { error: 'Status must be present, late, excused, or absent — or null to clear.' });
+      return sendJson(res, 400, { error: 'Pick present, late, excused or absent, or clear the mark.' });
     }
     db.attendance[date] = db.attendance[date] || {};
     const rec = { status, updatedAt: new Date().toISOString(), updatedBy: user.id };
@@ -7284,7 +7417,7 @@ async function handleApi(req, res, url) {
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const logId = decodeURIComponent(amsLogMatch[2]);
     const idx = db.memberLogs.findIndex(l => l.id === logId && l.athleteId === prof.id);
-    if (idx < 0) return sendJson(res, 404, { error: 'Log not found.' });
+    if (idx < 0) return sendJson(res, 404, { error: 'That workout log is gone. It may already be deleted.' });
     db.memberLogs.splice(idx, 1);
     saveDb();
     return sendJson(res, 200, { ok: true });
@@ -7361,7 +7494,7 @@ async function handleApi(req, res, url) {
     if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
     let body;
     try {
-      body = await readJsonBody(req, 5 * 1024 * 1024);
+      body = await readJsonBody(req, MID_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That file is too large — device exports over 5 MB are not accepted.' });
@@ -7383,7 +7516,7 @@ async function handleApi(req, res, url) {
     if (!device) return sendJson(res, 404, { error: 'Unknown device.' });
     let body;
     try {
-      body = await readJsonBody(req, 5 * 1024 * 1024);
+      body = await readJsonBody(req, MID_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That import is too large.' });
@@ -7430,7 +7563,7 @@ async function handleApi(req, res, url) {
     const prof = profileById(clean(body.profileId, 80));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const date = clean(body.date, 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const metrics = {};
     for (const m of TAPEX_METRICS) {
       const raw = body[m.field];
@@ -7501,7 +7634,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/import/backup' && req.method === 'POST') {
     let body;
     try {
-      body = await readJsonBody(req, 10 * 1024 * 1024);
+      body = await readJsonBody(req, BIG_UPLOAD_CAP);
     } catch (err) {
       if (err && err.status === 413) {
         return sendJson(res, 413, { error: 'That file is too large — backups over 10 MB are not accepted.' });
@@ -7716,7 +7849,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const date = clean(body.date, 10);
     const title = clean(body.title, 80);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (!title) return sendJson(res, 400, { error: 'Give the test day a title.' });
     const keys = Array.isArray(body.testKeys) ? body.testKeys.map(k => clean(k, 40)).filter(Boolean) : [];
     if (!keys.length) return sendJson(res, 400, { error: 'Pick at least one test.' });
@@ -8141,7 +8274,7 @@ async function handleApi(req, res, url) {
     }
     if (body.date !== undefined) {
       const d = clean(body.date, 10);
-      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Pick a date.' });
       next.date = d;
     }
     if (body.meet !== undefined) {
@@ -8398,7 +8531,7 @@ async function handleApi(req, res, url) {
         next.date = '';
       } else {
         const d = clean(body.date, 10);
-        if (!parseDateStr(d)) return { error: 'Date must be YYYY-MM-DD.', status: 400 };
+        if (!parseDateStr(d)) return { error: 'Pick a date.', status: 400 };
         next.date = d;
       }
     }
@@ -8480,7 +8613,7 @@ async function handleApi(req, res, url) {
     const name = clean(body.name, 80);
     if (!name) return sendJson(res, 400, { error: 'Name the meet.' });
     const date = clean(body.date, 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (db.meets.some(x => x.name === name && x.date === date)) {
       return sendJson(res, 409, { error: 'A meet with that name and date already exists.' });
     }
@@ -8519,7 +8652,7 @@ async function handleApi(req, res, url) {
     }
     if (body.date !== undefined) {
       const d = clean(body.date, 10);
-      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Pick a date.' });
       next.date = d;
     }
     if (body.location !== undefined) next.location = clean(body.location, 80);
@@ -8571,7 +8704,7 @@ async function handleApi(req, res, url) {
     const entryId = decodeURIComponent(meetEntryMatch[2]);
     if (!meetById(meetId)) return sendJson(res, 404, { error: 'Meet not found.' });
     if (!db.meetEntries.some(e => e.id === entryId && e.meetId === meetId)) {
-      return sendJson(res, 404, { error: 'Entry not found.' });
+      return sendJson(res, 404, { error: 'That entry is gone. It may already be deleted.' });
     }
     db.meetEntries = db.meetEntries.filter(e => e.id !== entryId);
     saveDb();
@@ -9298,6 +9431,70 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
+  /* ---------- filming tracker (coach-only) ----------
+     Every AYG Lab movement with a filmed / not filmed status and a
+     note. Statuses save to db.filming through saveDb like every
+     other coach record, so they survive a restart. */
+  if (p === '/api/filming' && req.method === 'GET') {
+    return sendJson(res, 200, filmingPayload());
+  }
+  if (p === '/api/filming' && req.method === 'POST') {
+    const body = await readBody(req);
+    const movement = typeof body.movement === 'string' ? body.movement.trim().replace(/\s+/g, ' ') : '';
+    if (!movement) return sendJson(res, 400, { error: 'Give the movement a name.' });
+    if (movement.length > 120) return sendJson(res, 400, { error: 'Keep the movement name under 120 characters.' });
+    if (!FILMING_CATEGORIES.includes(body.category)) {
+      return sendJson(res, 400, { error: 'Pick Mobility, Running, or Strengthening.' });
+    }
+    if (filmingMovements().some(m => m.movement.toLowerCase() === movement.toLowerCase())) {
+      return sendJson(res, 409, { error: 'That movement is already on the list.' });
+    }
+    const nums = db.filmingExtras.map(m => parseInt(String(m.id).replace('NEW-', ''), 10)).filter(n => n > 0);
+    const id = 'NEW-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+    const item = { id, movement, category: body.category, createdAt: new Date().toISOString() };
+    db.filmingExtras.push(item);
+    saveDb();
+    return sendJson(res, 201, { item });
+  }
+  const filmingMatch = p.match(/^\/api\/filming\/([^/]+)$/);
+  if (filmingMatch && req.method === 'PUT') {
+    const id = decodeURIComponent(filmingMatch[1]);
+    if (!filmingMovements().some(m => m.id === id)) return sendJson(res, 404, { error: 'Movement not found.' });
+    const body = await readBody(req);
+    if (body.filmed !== undefined && typeof body.filmed !== 'boolean') {
+      return sendJson(res, 400, { error: 'filmed must be true or false.' });
+    }
+    if (body.note !== undefined && typeof body.note !== 'string') {
+      return sendJson(res, 400, { error: 'The note must be text.' });
+    }
+    if (body.filmed === undefined && body.note === undefined) {
+      return sendJson(res, 400, { error: 'Nothing to change.' });
+    }
+    const note = body.note === undefined ? undefined : body.note.trim();
+    if (note !== undefined && note.length > 500) return sendJson(res, 400, { error: 'Keep the note under 500 characters.' });
+    const cur = db.filming[id] || { filmed: false, note: '' };
+    const next = {
+      filmed: body.filmed === undefined ? cur.filmed === true : body.filmed,
+      note: note === undefined ? (cur.note || '') : note,
+      updatedAt: new Date().toISOString(),
+    };
+    db.filming[id] = next;
+    saveDb();
+    return sendJson(res, 200, { id, filmed: next.filmed, note: next.note, updatedAt: next.updatedAt });
+  }
+  if (filmingMatch && req.method === 'DELETE') {
+    const id = decodeURIComponent(filmingMatch[1]);
+    if (!db.filmingExtras.some(m => m.id === id)) {
+      const listed = filmingList().some(m => m.id === id);
+      return sendJson(res, listed ? 400 : 404,
+        { error: listed ? 'Movements from the exercises list stay on the tracker.' : 'Movement not found.' });
+    }
+    db.filmingExtras = db.filmingExtras.filter(m => m.id !== id);
+    delete db.filming[id];
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+
   /* ---------- custom workouts (coach-built, for runner mode) ------
      Coach-only like everything in this section: athletes get a 403
      on read and write alike. Runner mode itself is a client-side
@@ -9403,7 +9600,7 @@ async function handleApi(req, res, url) {
      complete stays with POST /api/completions, unchanged. */
   if (p === '/api/weight-room' && req.method === 'GET') {
     const date = clean(q.get('date') || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     let groupId = null;
     const gRaw = q.get('groupId');
     if (gRaw) {
@@ -9457,7 +9654,7 @@ async function handleApi(req, res, url) {
     const prof = profileById(clean(body.profileId, 80));
     if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
     const date = clean(body.date || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const workoutKey = clean(body.workoutKey, 120);
     const sep = workoutKey.indexOf(':');
     const kind = sep > 0 ? workoutKey.slice(0, sep) : '';
@@ -9467,7 +9664,7 @@ async function handleApi(req, res, url) {
         return sendJson(res, 404, { error: 'Custom workout not found.' });
       }
     } else if (kind === 'session') {
-      if (!SESSION_IDS.has(ref)) return sendJson(res, 400, { error: 'Unknown session code.' });
+      if (!SESSION_IDS.has(ref)) return sendJson(res, 400, { error: "That session code isn't in the plan. Check it, or leave it blank." });
     } else {
       return sendJson(res, 400, { error: 'workoutKey must name a session code or a custom workout.' });
     }
@@ -9680,7 +9877,7 @@ async function handleApi(req, res, url) {
   }
 
   void coachOnly;
-  return sendJson(res, 404, { error: 'not found' });
+  return sendJson(res, 404, { error: 'That part of the app has changed. Refresh the page to get the latest version.' });
 }
 
 /* ------------------------------------------------------------------ */
@@ -9697,12 +9894,16 @@ const MIME = {
   '.webmanifest': 'application/manifest+json',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
 };
 const SHELL_NO_CACHE_PATHS = new Set(['/', '/index.html', '/app.js', '/styles.css', '/sw.js']);
 /* Brand tokens in the shell files (index.html, app.js, manifest,
    sw.js) are filled from the BRAND config at serve time, so the
    business name lives in exactly one place: the BRAND block above. */
-const BRAND_SUBSTITUTABLE = new Set(['.html', '.js', '.json', '.css']);
+const BRAND_SUBSTITUTABLE = new Set(['.html', '.js', '.json', '.css', '.xml', '.txt']);
 function applyBrand(text) {
   return text
     .replaceAll('__BRAND_NAME__', BRAND.name)
@@ -9712,7 +9913,8 @@ function applyBrand(text) {
     .replaceAll('__BRAND_CACHE__', BRAND.cache)
     .replaceAll('__CALENDLY_URL__', CALENDLY_URL)
     .replaceAll('__TRIAL_DAYS__', String(TRIAL_DAYS))
-    .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL);
+    .replaceAll('__CONTACT_EMAIL__', CONTACT_EMAIL)
+    .replaceAll('__SITE_URL__', SITE_URL);
 }
 function serveStatic(req, res, url) {
   if (url.pathname === '/assets/ayg-lab-logo.jpg') {
@@ -9744,23 +9946,98 @@ function serveStatic(req, res, url) {
   });
 }
 
-seedCoachInvitesFromEnv();
-seedCustomWorkouts();
+if (!STORE) {
+  seedCoachInvitesFromEnv();
+  seedCustomWorkouts();
+}
 
-const server = http.createServer((req, res) => {
+/* Read-only pause for a move: reads and sign-in work, changes do not. */
+const READ_ONLY_ALLOWED = new Set(['/api/login', '/api/logout']);
+function readOnlyBlocked(req, url) {
+  return READ_ONLY && req.method !== 'GET' && req.method !== 'HEAD'
+    && !READ_ONLY_ALLOWED.has(url.pathname);
+}
+
+function handleApiRequest(req, res) {
   const url = new URL(req.url, 'http://localhost');
-  if (url.pathname.startsWith('/api/')) {
-    handleApi(req, res, url).catch(() => {
-      // The socket may already be gone (e.g., an oversized body was
-      // destroyed mid-read) — never let the error reply itself throw.
-      try { if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' }); } catch (_) { /* gone */ }
-    });
-  } else {
-    serveStatic(req, res, url);
+  if (readOnlyBlocked(req, url)) {
+    return sendJson(res, 503, { error: BRAND.name + ' is paused for a few minutes while it moves. Your data is safe. Please try again shortly.' });
   }
-});
+  return handleApi(req, res, url).catch(() => {
+    // The socket may already be gone (e.g., an oversized body was
+    // destroyed mid-read) — never let the error reply itself throw.
+    try { if (!res.headersSent) sendJson(res, 400, { error: 'Something went wrong with that request. Please try again.' }); } catch (_) { /* gone */ }
+  });
+}
 
-server.listen(PORT, () => {
-  console.log(`${BRAND.name} (${BRAND.tagline}) running at http://localhost:${PORT}`);
-  console.log(`Content loaded: ${CONTENT.sessions.length} sessions, ${CONTENT.drills.length} drills, ${CONTENT.weeks.length} weeks.`);
-});
+if (STORE) {
+  txns = storeLib.createTransactions(STORE, {
+    setData: setDbFromStore,
+    getData: () => db,
+    handle: handleApiRequest,
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Security headers (sent on every response)                           */
+/* ------------------------------------------------------------------ */
+/* None of these changes what a member sees or how sign-in works. They
+   tell the browser: never guess a file's type (nosniff); never let
+   another website show this app inside a frame, which is how
+   "clickjacking" tricks work (X-Frame-Options + frame-ancestors);
+   keep using HTTPS for this site (HSTS, only sent over HTTPS); share
+   only the site name, never the page path or a booking link, with
+   other sites (Referrer-Policy); and nothing here may use the camera,
+   microphone, or location. API answers hold member data, so the
+   browser and any shared cache must not store them (no-store); a
+   handler that sets its own Cache-Control still wins, because its
+   writeHead headers replace these defaults. */
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Content-Security-Policy': "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+function setSecurityHeaders(req, res, isApi) {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
+  const isHttps = req.headers['x-forwarded-proto'] === 'https' || !!(req.socket && req.socket.encrypted);
+  if (isHttps) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+  if (isApi) res.setHeader('Cache-Control', 'no-store');
+}
+
+/* One request handler for both hosts: Render calls it through the
+   server below; Vercel calls it from api/index.js. */
+function handler(req, res) {
+  /* A request line the URL parser rejects (for example "GET //%")
+     used to throw here and take the whole server down. Answer 400
+     instead; no real browser request looks like this. */
+  let url;
+  try {
+    url = new URL(req.url, 'http://localhost');
+  } catch (_) {
+    setSecurityHeaders(req, res, false);
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('bad request');
+  }
+  setSecurityHeaders(req, res, url.pathname.startsWith('/api/'));
+  if (url.pathname.startsWith('/api/')) {
+    if (STORE && !SECRET) {
+      console.error('[setup] SESSION_SECRET is not set: sign-in cannot work until it is.');
+      return sendJson(res, 503, { error: BRAND.name + ' is not finished setting up yet. Please try again later.' });
+    }
+    return STORE ? txns.run(req, res) : handleApiRequest(req, res);
+  }
+  serveStatic(req, res, url);
+}
+
+module.exports = { handler };
+
+if (require.main === module) {
+  const server = http.createServer(handler);
+  server.listen(PORT, () => {
+    console.log(`${BRAND.name} (${BRAND.tagline}) running at http://localhost:${PORT}`);
+    console.log(`Content loaded: ${CONTENT.sessions.length} sessions, ${CONTENT.drills.length} drills, ${CONTENT.weeks.length} weeks.`);
+    if (STORE) console.log('Data store: hosted (' + STORE.prefix + ')');
+  });
+}

@@ -223,6 +223,9 @@ label { display: block; font-size: 14px; font-weight: 600; margin-top: 6px; }
 .filters input[type="search"] { margin-top: 0; }
 .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .filter-row select, .filter-row .btn { flex: 1 1 140px; width: auto; }
+/* A select with a long option ('Week 16 · 2027-02-08 · Mini-peak taper')
+   would not shrink below that option's width and pushed the page sideways. */
+.filter-row select { min-width: 0; }
 .session-row {
   width: 100%; text-align: left; display: flex; align-items: center; gap: 12px; cursor: pointer;
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
@@ -251,7 +254,11 @@ label { display: block; font-size: 14px; font-weight: 600; margin-top: 6px; }
 .day-card .plan { margin: 4px 0; font-size: 15px; }
 .day-card .warmup, .day-card .swap-note { font-size: 13px; color: var(--muted); }
 .day-card select { margin-bottom: 0; }
-.code-link { color: var(--red-dark); font-weight: 700; text-decoration: none; border-bottom: 1px dotted var(--red); cursor: pointer; }
+.code-link { color: var(--red-dark); font-weight: 700; text-decoration: underline dotted var(--red); text-underline-offset: 3px; cursor: pointer; }
+/* Workout code links are the main way into a workout from the day cards.
+   Vertical padding on an inline link grows the tap area to about 44px
+   without moving the text around it. */
+.code-link { padding: 12px 0; }
 .flag {
   background: #fff4e5; border: 1px solid #f0d9a8; color: #7a5200;
   border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 0 0 12px;
@@ -1027,6 +1034,10 @@ details.card summary { cursor: pointer; }
   gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px solid var(--line);
 }
 .roster-row:last-child { border-bottom: none; }
+/* Long school emails and pasted links do not break at '.' or '@', so
+   they ran past the card and made the whole page scroll sideways. */
+main p { overflow-wrap: break-word; }
+.roster-row > span, .contact-link { overflow-wrap: anywhere; min-width: 0; }
 .roster-actions { display: inline-flex; gap: 6px; }
 .roster-card details { margin-top: 8px; }
 .check-line { display: flex; align-items: center; gap: 8px; font-weight: 500; min-height: 44px; padding: 6px 0; }
@@ -1493,6 +1504,9 @@ body.tv-awake .tv-bottom, .tv-bottom:focus-within { opacity: 1; transform: none;
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; flex: none; }
 .grid-table input.grid-in { width: 78px; padding: 6px 8px; }
+/* Number, phone and link fields below 16px make iPhones zoom in on tap.
+   Font size only, so the fixed widths above stay. */
+input[type="number"], input[type="tel"], input[type="url"] { font-size: 16px; }
 .grid-table input.grid-r { width: 62px; margin-left: 4px; }
 .grid-table td.cell-error { background: var(--accent-soft-bg); }
 .grid-table td.cell-error input { border-color: var(--red); }
@@ -1848,7 +1862,11 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .lib-path-steps { list-style: none; padding: 0; margin: 12px 0 0; }
 .lib-path-step { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); }
 .lib-path-step .btn { margin-left: auto; flex-shrink: 0; }
-.lib-path-check { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; accent-color: var(--red); }
+.lib-path-check { width: 24px; height: 24px; margin: 0; flex-shrink: 0; accent-color: var(--red); }
+/* The label around the checkbox is the tap area: 44px square, pulled
+   into the row's padding so the layout does not move. */
+.lib-path-hit { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  min-width: 44px; min-height: 44px; margin: -10px -6px -10px -10px; cursor: pointer; }
 .lib-path-num { font-weight: 700; color: var(--red); min-width: 20px; text-align: center; }
 .lib-path-step-main { display: flex; flex-direction: column; gap: 1px; }
 .lib-path-step.done .lib-path-step-main strong { text-decoration: line-through; color: var(--muted); }
@@ -1860,7 +1878,8 @@ body.tv-mode :focus-visible, .runner-overlay :focus-visible { outline-color: var
 .term-pop { background: none; border: none; border-bottom: 2px dotted var(--red); color: inherit;
   font: inherit; padding: 0; cursor: pointer; }
 .term-popover { position: fixed; z-index: 1200; background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; box-shadow: var(--shadow-pop); padding: 14px; }
+  border-radius: 12px; box-shadow: var(--shadow-pop); padding: 14px;
+  max-height: calc(100vh - 24px); overflow-y: auto; }
 .term-popover p { line-height: 1.5; }
 .term-pop-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 body.tv-mode .term-popover { display: none; }
@@ -2395,7 +2414,7 @@ body.tv-mode {
 .ch-run .run-today-btn { width: 100%; }
 .hub-label { margin: 16px 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .ch-back {
-  display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 4px 0; margin: 0 0 4px;
+  display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 4px 0; margin: 0 0 4px;
   background: none; border: none; cursor: pointer; color: var(--red-dark); font-size: 14.5px; font-weight: 700;
 }
 
@@ -2466,7 +2485,7 @@ body.on-welcome #app { max-width: none; padding: 0; margin: 0; }
 
 .ch-roster { padding-bottom: 8px; }
 .lvl-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
-.lvl-filter { min-height: 36px; padding: 4px 12px; font-size: 13.5px; cursor: pointer; }
+.lvl-filter { min-height: 44px; padding: 4px 12px; font-size: 13.5px; cursor: pointer; }
 .lvl-filter b { font-variant-numeric: tabular-nums; }
 .lvl-filter.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
 .lvl-filter:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
@@ -2488,12 +2507,12 @@ body.on-welcome #app { max-width: none; padding: 0; margin: 0; }
 .ch-roster-contact { display: flex; gap: 6px; flex: none; }
 .icon-link {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line);
+  width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--surface); color: var(--ink); text-decoration: none; font-size: 17px;
 }
 .icon-link:hover { background: var(--surface-2); }
 .roster-meta { margin: 4px 0; font-size: 13.5px; }
-.contact-link { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; margin-right: 10px; }
+.contact-link { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; margin-right: 10px; display: inline-block; padding: 10px 0; }
 @media (max-width: 420px) {
   .ch-roster-row .lvl { min-width: 0; padding: 2px 7px; }
 }
@@ -2513,7 +2532,7 @@ body.ct-wide main, body.ct-wide .topbar-inner, body.ct-wide .mainnav, body.ct-wi
 .ct-asof { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ct-home-link { min-height: 48px; }
 .ct-textbtn {
-  background: none; border: 0; padding: 6px 4px; min-height: 36px; cursor: pointer;
+  background: none; border: 0; padding: 6px 4px; min-height: 44px; cursor: pointer;
   color: var(--red-dark); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px;
 }
 .ct-textbtn:focus-visible, .ct-gchip:focus-visible, .ct-day:focus-visible, .ct-daystep:focus-visible,
@@ -2767,3 +2786,6 @@ body.ct-sheet-open { overflow: hidden; }
 .todo-today { border: 2px solid var(--red); }
 .todo-steps { padding-left: 1.2em; margin: 0; }
 .todo-steps li { margin: .6em 0; }
+/* v69: What to do today, when the coach has published today's workout */
+.todo-published .todo-from-coach { margin: -.3em 0 .4em; }
+.todo-plan-title { font-weight: 700; }

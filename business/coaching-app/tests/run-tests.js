@@ -2695,9 +2695,30 @@ async function main() {
     !/\[data-theme="silverline"\] \{[^}]*--high:/.test(themeBlocks) &&
     !/\[data-theme="carbon"\] \{[^}]*--high:/.test(themeBlocks) &&
     themeBlocks.includes('--high: #b23b2e') && themeBlocks.includes('--low: #2a7340'));
-  check('TV board pins the Silverline tokens regardless of device theme',
-    /body\.tv-mode \{[^}]*--red: #c9ccd4/.test(stylesCss.text) &&
+  check('TV board pins the AYG Lab orange tokens regardless of device theme',
+    /body\.tv-mode \{[^}]*--red: #ff7a1a/.test(stylesCss.text) &&
     /body\.tv-mode \{[^}]*--radius: 14px/.test(stylesCss.text));
+  check('TV board pins the AYG Lab rooms and re-declares the accent aliases',
+    /body\.tv-mode \{[^}]*--bg: #04070c/.test(stylesCss.text) &&
+    /body\.tv-mode \{[^}]*--accent: var\(--red\)/.test(stylesCss.text) &&
+    /body\.tv-mode \{[^}]*--accent-ink: #1a0d02/.test(stylesCss.text) &&
+    /\.btn\.tv-exit \{[^}]*color: var\(--accent-ink\)/.test(stylesCss.text));
+  {
+    /* The silver accent (201, 204, 212) may live only in the Silverline
+       token definitions, never hard-coded into a screen's own rules. */
+    const noThemeBlocks = stylesCss.text
+      .replace(/:root \{[^}]*\}/, '')
+      .replace(/\[data-theme="silverline"\] \{[^}]*\}/, '');
+    check('no hard-coded silver accent outside the Silverline tokens',
+      !/rgba\(201, ?204, ?212/.test(noThemeBlocks) && !noThemeBlocks.includes('#d7dae0'));
+  }
+  check('Today hero runner: drive leg and starting blocks carry the brand orange',
+    stylesCss.text.includes('.runner .leg-far line { stroke: var(--red); }') &&
+    stylesCss.text.includes('.hero .blk { fill: var(--red); }') &&
+    /\.streak \{ stroke: var\(--red\)/.test(stylesCss.text));
+  check('charts lead with Accelerate Your Game orange, no old red or silver series',
+    appJs.text.includes("const CHART_COLORS = ['#ff7a1a', '#6fe3f7'") &&
+    !appJs.text.includes("color: '#cc0033'") && !appJs.text.includes("color: '#c9ccd4'"));
   check('app JS owns the theme list with all three looks',
     appJs.text.includes('const THEMES = [') &&
     appJs.text.includes("id: 'silverline', name: 'Silverline'") &&
@@ -5815,9 +5836,9 @@ async function main() {
     !pageHtml.text.includes('SPEED · POWER · DATA') &&
     pageHtml.text.includes('data-invite-tier='));
 
-  check('landing photo hero and silver accent stay scoped to the landing',
+  check('landing photo hero and orange accent stay scoped to the landing',
     stylesCss.text.includes("url('/assets/hero-sprinter.jpg')") &&
-    stylesCss.text.includes('--landing-accent: #e4e6eb') &&
+    stylesCss.text.includes('--landing-accent: var(--red)') &&
     stylesCss.text.includes('.landing-hero .landing-cta'));
 
 

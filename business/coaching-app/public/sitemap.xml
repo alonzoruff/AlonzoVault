@@ -1,47 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://ruffin-performance.onrender.com/</loc>
+    <loc>__SITE_URL__/</loc>
     <lastmod>2026-11-17</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/programs</loc>
+    <loc>__SITE_URL__/programs</loc>
     <lastmod>2026-11-17</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/plans</loc>
+    <loc>__SITE_URL__/plans</loc>
     <lastmod>2026-11-13</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/how-it-works</loc>
+    <loc>__SITE_URL__/how-it-works</loc>
     <lastmod>2026-11-13</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/faq</loc>
+    <loc>__SITE_URL__/faq</loc>
     <lastmod>2026-11-13</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/about</loc>
+    <loc>__SITE_URL__/about</loc>
     <lastmod>2026-11-13</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/contact</loc>
+    <loc>__SITE_URL__/contact</loc>
     <lastmod>2026-11-17</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/request-invitation</loc>
+    <loc>__SITE_URL__/request-invitation</loc>
     <lastmod>2026-11-13</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/book-a-lab-talk</loc>
+    <loc>__SITE_URL__/book-a-lab-talk</loc>
     <lastmod>2026-11-13</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/privacy</loc>
+    <loc>__SITE_URL__/privacy</loc>
     <lastmod>2026-11-13</lastmod>
   </url>
   <url>
-    <loc>https://ruffin-performance.onrender.com/terms</loc>
+    <loc>__SITE_URL__/terms</loc>
     <lastmod>2026-11-13</lastmod>
   </url>
 </urlset>
