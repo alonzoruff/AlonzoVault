@@ -3754,12 +3754,23 @@ async function main() {
   r = await api(coach, 'GET', '/api/attendance/summary?from=banana&to=2026-03-01');
   check('attendance summary: a malformed custom window is 400', r.status === 400, r.status);
 
-  /* Last-30-days window edges: today counts, 30 days ago does not. */
-  const attPad2 = (n) => String(n).padStart(2, '0');
-  const dstrOf = (d) => d.getFullYear() + '-' + attPad2(d.getMonth() + 1) + '-' + attPad2(d.getDate());
-  const attNow = new Date();
-  const todayS2 = dstrOf(attNow);
-  const oldS = dstrOf(new Date(attNow.getFullYear(), attNow.getMonth(), attNow.getDate() - 30));
+  /* Last-30-days window edges: today counts, 30 days ago does not.
+     "Today" is the server's own today (New York calendar day), read
+     from the summary itself, never the test machine's local clock:
+     between 7 PM and midnight New York time the machine's UTC date is
+     already tomorrow, which used to mark "today" outside the window
+     and "30 days ago" inside it. Day math runs on UTC calendar dates
+     so a daylight-saving change can never shift it by a day. */
+  const attShift = (ds, n) => {
+    const [y, m, d] = ds.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  };
+  r = await api(coach, 'GET', '/api/attendance/summary');
+  const todayS2 = r.json.today;
+  const oldS = attShift(todayS2, -30);
+  check('attendance summary: last30 runs the 30 days ending on the server today',
+    !!r.json.windows && r.json.windows.last30.to === todayS2 &&
+    r.json.windows.last30.from === attShift(todayS2, -29), r.json.windows);
   await api(coach, 'PUT', '/api/attendance/' + todayS2 + '/' + annaA, { status: 'present' });
   await api(coach, 'PUT', '/api/attendance/' + oldS + '/' + annaA, { status: 'absent' });
   r = await api(coach, 'GET', '/api/attendance/summary');

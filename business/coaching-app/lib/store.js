@@ -140,6 +140,14 @@ function createUpstash(cfg, fetchImpl) {
       if (n === 1) await command(['EXPIRE', k, String(ttlSeconds)]);
       return n;
     },
+    /* Read one of those counters without adding to it (0 if gone). */
+    async peekHit(key) {
+      return toVersion(await command(['GET', cfg.prefix + ':hit:' + key]));
+    },
+    /* Remove one of those counters at once. */
+    async clearHit(key) {
+      await command(['DEL', cfg.prefix + ':hit:' + key]);
+    },
   };
 }
 

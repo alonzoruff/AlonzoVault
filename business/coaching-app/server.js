@@ -200,6 +200,11 @@ function loadSecret() {
   return s;
 }
 const SECRET = loadSecret();
+/* The limit on password guesses (see lib/guess-limit.js): 5 wrong
+   passwords for one email pauses its sign-in for 15 minutes. */
+const guessLimitLib = require('./lib/guess-limit');
+const guessLimit = guessLimitLib.createGuessLimit({ store: STORE, secret: SECRET });
+const LOCKED_MSG = 'Too many wrong passwords. For safety, sign-in for this email is paused for 15 minutes. Please wait and try again, or ask Coach AJ for help.';
 
 /* ------------------------------------------------------------------ */
 /* Tiny JSON file store                                                */
@@ -1090,9 +1095,16 @@ function checkPassword(password, stored) {
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
-function signSession(userId) {
+/* Each sign-in cookie carries the account's sign-in number (sv).
+   "Sign out everywhere" and a password change raise that number, so
+   every cookie made before then stops working on every device at
+   once. Accounts that never used either have number 0, and cookies
+   made before this existed (no sv) count as 0, so nobody is signed
+   out by this change itself. */
+function signSession(user) {
   const payload = Buffer.from(JSON.stringify({
-    uid: userId,
+    uid: user.id,
+    sv: user.sessionVersion || 0,
     exp: Date.now() + SESSION_DAYS * 24 * 3600 * 1000,
   })).toString('base64url');
   const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
@@ -1115,7 +1127,10 @@ function readSession(req) {
     try {
       const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
       if (!data.uid || !data.exp || data.exp < Date.now()) return null;
-      return db.users.find(u => u.id === data.uid) || null;
+      const u = db.users.find(x => x.id === data.uid) || null;
+      if (!u) return null;
+      if ((Number(data.sv) || 0) !== (u.sessionVersion || 0)) return null;
+      return u;
     } catch (_) { return null; }
   }
   return null;
@@ -5411,19 +5426,28 @@ async function handleApi(req, res, url) {
       });
     }
     return sendJson(res, 201, publicUser(user),
-      { 'Set-Cookie': sessionCookie(req, signSession(user.id), SESSION_DAYS * 24 * 3600) });
+      { 'Set-Cookie': sessionCookie(req, signSession(user), SESSION_DAYS * 24 * 3600) });
   }
 
   if (p === '/api/login' && req.method === 'POST') {
     const body = await readBody(req);
     const email = clean(body.email, 200).toLowerCase();
     const password = typeof body.password === 'string' ? body.password : '';
+    const address = guessLimitLib.requestAddress(req);
+    /* Paused after too many wrong passwords: turned away before the
+       password is even checked, so a guesser learns nothing. The same
+       answer is given whether or not the email has an account. */
+    if (email && await guessLimit.isLocked(email, address)) {
+      return sendJson(res, 429, { error: LOCKED_MSG });
+    }
     const user = db.users.find(u => u.email === email);
     if (!user || !checkPassword(password, user.passHash)) {
+      if (email) await guessLimit.recordFailure(email, address);
       return sendJson(res, 401, { error: 'Email or password did not match.' });
     }
+    await guessLimit.recordSuccess(email);
     return sendJson(res, 200, publicUser(user),
-      { 'Set-Cookie': sessionCookie(req, signSession(user.id), SESSION_DAYS * 24 * 3600) });
+      { 'Set-Cookie': sessionCookie(req, signSession(user), SESSION_DAYS * 24 * 3600) });
   }
 
   if (p === '/api/logout' && req.method === 'POST') {
@@ -5440,6 +5464,53 @@ async function handleApi(req, res, url) {
   /* Everything below requires a login. */
   const user = readSession(req);
   if (!user) return sendJson(res, 401, { error: 'Please log in first.' });
+
+  /* ---------- sign-in and security (any signed-in account) ----------
+     Change password: the current password must match (wrong guesses
+     here count toward the same 15-minute pause as the sign-in page).
+     The new one follows the sign-up rule (8 or more characters).
+     Changing it signs the account out on every other device; this
+     device gets a fresh cookie and stays signed in.
+     Sign out everywhere: ends every sign-in for this account on every
+     device, this one included. The account and its data are untouched. */
+  if (p === '/api/account/password' && req.method === 'POST') {
+    let body;
+    try { body = await readBody(req); } catch (_) { return sendJson(res, 400, { error: 'Bad request body.' }); }
+    body = body && typeof body === 'object' ? body : {};
+    const current = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+    const next = typeof body.newPassword === 'string' ? body.newPassword : '';
+    const address = guessLimitLib.requestAddress(req);
+    if (await guessLimit.isLocked(user.email, address)) {
+      return sendJson(res, 429, { error: LOCKED_MSG });
+    }
+    if (!current || !checkPassword(current, user.passHash)) {
+      await guessLimit.recordFailure(user.email, address);
+      return sendJson(res, 400, { error: 'Your current password did not match. Please try again.' });
+    }
+    if (next.length < 8) {
+      return sendJson(res, 400, { error: 'Your new password must be at least 8 characters.' });
+    }
+    if (next.length > 200) {
+      return sendJson(res, 400, { error: 'Your new password is too long. Please keep it under 200 characters.' });
+    }
+    if (next === current) {
+      return sendJson(res, 400, { error: 'Your new password must be different from your current one.' });
+    }
+    await guessLimit.recordSuccess(user.email);
+    user.passHash = hashPassword(next);
+    user.sessionVersion = (user.sessionVersion || 0) + 1;
+    user.passwordChangedAt = new Date().toISOString();
+    saveDb();
+    return sendJson(res, 200, { ok: true },
+      { 'Set-Cookie': sessionCookie(req, signSession(user), SESSION_DAYS * 24 * 3600) });
+  }
+
+  if (p === '/api/account/sign-out-everywhere' && req.method === 'POST') {
+    user.sessionVersion = (user.sessionVersion || 0) + 1;
+    saveDb();
+    return sendJson(res, 200, { ok: true },
+      { 'Set-Cookie': sessionCookie(req, '', 0) });
+  }
 
   /* ---------- owner scoreboard (v40) ----------
      The head coach's account only. Assistant coaches and members get

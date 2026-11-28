@@ -11,6 +11,6 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/run-tests.js && node tests/store-tests.js && node tests/run-tests-store-mode.js"
+    "test": "node tests/run-tests.js && node tests/store-tests.js && node tests/run-tests-store-mode.js && node tests/sign-in-protection-tests.js"
   }
 }
