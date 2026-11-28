@@ -161,12 +161,13 @@ const BRAND = {
 /* The public booking page embeds Coach AJ's Calendly 30-minute
    event. Calendly emails him (and the visitor) on every booking.
    Override with CALENDLY_URL; it must be a calendly.com link. */
-/* The free trial length, in days, shown everywhere on the public
-   site from this one value. AJ's call: set TRIAL_DAYS on the service
-   to change it. 3 matches what the site said before. */
+/* The free preview length, in days, shown everywhere on the public
+   site from this one value. AJ's call (Master Directive, Nov 27,
+   2026): the old 3-day trial becomes a seven-day guided preview with
+   no card. Set TRIAL_DAYS on the service only to override it. */
 const TRIAL_DAYS = (() => {
   const n = parseInt(process.env.TRIAL_DAYS, 10);
-  return Number.isInteger(n) && n >= 1 && n <= 60 ? n : 3;
+  return Number.isInteger(n) && n >= 1 && n <= 60 ? n : 7;
 })();
 /* The public contact address for the footer and the password-help
    link. Left empty (the site then shows no address) until CONTACT_EMAIL
@@ -253,34 +254,64 @@ const PROFILE_STATUSES = ['active', 'injured', 'inactive'];
    everything below it. Prices here are display values for the
    account and Access pages; the checkout resolves its own Stripe
    Price IDs from CHECKOUT_TIERS below and the two must agree. */
-const MEMBERSHIP_TIERS = ['access', 'training', 'pass'];
+const MEMBERSHIP_TIERS = ['training', 'pass'];
+/* The $10 Lab Access tier was retired by AJ on Nov 27, 2026 (Master
+   Directive). An account or backup that still says 'access' is moved
+   UP to Lab Training when it loads, never down, so nobody loses
+   anything. TIER_INFO keeps a retired entry so old history lines and
+   invitation requests still read with a name. */
+const RETIRED_TIERS = { access: 'training' };
+function currentTier(t) { return Object.prototype.hasOwnProperty.call(RETIRED_TIERS, t) ? RETIRED_TIERS[t] : t; }
+/* Lab Pass is capacity-controlled (AJ, Nov 27, 2026): at most 50
+   active Lab Pass members at once, so the tier with the most of
+   Coach AJ's time cannot oversell it. */
+const LAB_PASS_CAPACITY = 50;
+function labPassCount(exceptUserId) {
+  return db.users.filter(u => u.role !== 'coach' && u.id !== exceptUserId && effectiveTier(u) === 'pass').length;
+}
+function labPassFull(exceptUserId) { return labPassCount(exceptUserId) >= LAB_PASS_CAPACITY; }
+const LAB_PASS_FULL_MESSAGE = 'Lab Pass is full right now. It is limited to ' + LAB_PASS_CAPACITY + ' athletes so every member gets real time with Coach AJ.';
 /* The This Week nudge kinds (v35 snooze): the fixed priority order
    the week payload evaluates them in — streak, then quiet, then
    formcheck. A member can snooze each kind for 7 days at a time. */
 const NUDGE_KINDS = ['streak', 'quiet', 'formcheck'];
+/* Prices approved by AJ in the Master Directive (Nov 27, 2026).
+   Display values only: the Stripe prices are aligned separately, when
+   billing work is authorized. */
 const TIER_INFO = {
-  access: { name: 'Lab Access', price: 10, priceLabel: '$10/month' },
-  training: { name: 'Lab Training', price: 49.99, priceLabel: '$49.99/month' },
-  pass: { name: 'Lab Pass', price: 99, priceLabel: '$99/month' },
+  access: { name: 'Lab Access (retired)', price: 10, priceLabel: '$10/month', retired: true },
+  training: { name: 'Lab Training', price: 79.99, priceLabel: '$79.99/month' },
+  pass: { name: 'Lab Pass', price: 150, priceLabel: '$150/month' },
 };
+/* Team Lab is sold to organizations through a consultation, not as
+   a member tier: it is not in MEMBERSHIP_TIERS and has no checkout.
+   AJ's rulings (Nov 27, 2026): no roster limit, 5 coach accounts per
+   organization, a private workspace for each organization. */
+const TEAM_LAB_INFO = {
+  name: 'Team Lab', price: 250, priceLabel: '$250/month per organization',
+  coachAccounts: 5, enrollment: 'consultation',
+};
+/* Both individual tiers get the full exercise and program libraries
+   (Master Directive). Service allowances are AJ's rulings of Nov 27,
+   2026: form reviews 7 a week on Lab Training and 30 a week on Lab
+   Pass; live web calls up to 30 minutes, up to 3 a week; in person
+   once a week. */
 const TIER_INCLUDES = {
-  access: [
-    'The Lab portal and the training library (Lab Sessions)',
-    'Inside the Lab technique and coaching videos',
-    'Learn content: definitions, the exercise library, nutrition, and coach education',
-    'Your Lab Report, updated at every re-test',
-    'Workout log and daily check-in',
-    'This Week: your training week at a glance',
-  ],
   training: [
-    'A plan built for you, one athlete at a time — not a template everyone follows',
-    'Your plan changes as you train. What you log shapes what your coach programs next',
-    'Form checks with replies from your coach',
+    'The full exercise video library',
+    'The full training program library',
+    'A recommended training pathway to follow',
+    'Performance tracking and your Lab Report',
+    'Workout log, daily check-in and a weekly check-in',
+    'Video form reviews with coaching feedback, up to 7 a week',
     'Your lifting loads, worked out from your own maxes',
   ],
   pass: [
-    'Live web sessions with your coach',
-    'The opportunity for in-person sessions',
+    'Programming written for you, and adjusted as you train',
+    'Live web coaching calls, up to 3 a week, 30 minutes each',
+    'More form reviews, up to 30 a week',
+    'Individual performance analysis',
+    'In person training once a week in Maryland and DC',
   ],
 };
 function tierIncludes(tier) {
@@ -518,7 +549,7 @@ function ownerScoreboard() {
     return !!d && d >= W[w].start && d <= W[w].end;
   };
   const dateIn = (w, d) => !!d && d >= W[w].start && d <= W[w].end;
-  const tierZero = () => ({ access: 0, training: 0, pass: 0, total: 0 });
+  const tierZero = () => ({ training: 0, pass: 0, total: 0 });
   const money = (n) => Math.round(n * 100) / 100;
   const members = db.users.filter(u => u.role === 'athlete');
   const replays = new Map(members.map(u => [u.id, membershipReplay(u.membershipHistory)]));
@@ -936,6 +967,7 @@ function migrate() {
     // paid access), status active, no Stripe binding, no history.
     // The webhook stage fills the Stripe ids later — nothing here
     // ever invents a tier for an existing account.
+    u.tier = currentTier(u.tier);
     if (!MEMBERSHIP_TIERS.includes(u.tier)) u.tier = null;
     if (u.membershipStatus !== 'cancelled') u.membershipStatus = 'active';
     if (typeof u.tierUpdatedAt !== 'string' || !u.tierUpdatedAt) u.tierUpdatedAt = null;
@@ -4214,7 +4246,7 @@ function mergeBackupData(data) {
          before. */
       if (target.stripeSubscriptionId) continue;
       const next = {
-        tier: MEMBERSHIP_TIERS.includes(rec.tier) ? rec.tier : null,
+        tier: MEMBERSHIP_TIERS.includes(currentTier(rec.tier)) ? currentTier(rec.tier) : null,
         membershipStatus: rec.membershipStatus === 'cancelled' ? 'cancelled' : 'active',
         tierUpdatedAt: typeof rec.tierUpdatedAt === 'string' && rec.tierUpdatedAt ? rec.tierUpdatedAt : null,
         stripeCustomerId: typeof rec.stripeCustomerId === 'string' && rec.stripeCustomerId ? rec.stripeCustomerId : null,
@@ -4371,8 +4403,12 @@ const STRIPE_API_BASE = process.env.STRIPE_API_BASE || 'https://api.stripe.com';
    ID from the client is never accepted. A request that names no tier
    keeps the original single-price behavior: STRIPE_PRICE_ID, or the
    documented placeholder while that is unset. */
+/* The retired $10 Lab Access tier is no longer sold (Nov 27, 2026).
+   NOTE for the billing step: the two Price IDs below still carry the
+   old $49.99 and $99 prices in Stripe. They must be replaced with
+   $79.99 and $150 prices before payments are switched on; until then
+   no button in the app opens checkout (invite-only). */
 const CHECKOUT_TIERS = {
-  access: { env: 'STRIPE_PRICE_LAB_ACCESS', price: 'price_1UWTZpAelNSvNtsvHAVExdYX' },
   training: { env: 'STRIPE_PRICE_LAB_TRAINING', price: 'price_1UWSwJAelNSvNtsvz0ctLK9z' },
   pass: { env: 'STRIPE_PRICE_LAB_PASS', price: 'price_1UWSwiAelNSvNtsv5R2KyEu0' },
 };
@@ -4827,7 +4863,7 @@ const INVITE_REQUEST_TRANSITIONS = {
   invited: ['pending'],
   declined: ['pending'],
 };
-const INVITE_REQUEST_TIERS = ['access', 'training', 'pass', 'unsure'];
+const INVITE_REQUEST_TIERS = ['training', 'pass', 'team', 'unsure'];
 const INVITE_REQUEST_PENDING_CAP = 2;
 function coachInviteRequestView(r) {
   return {
@@ -4970,7 +5006,7 @@ async function handleApi(req, res, url) {
     if (viewer && viewer.role !== 'coach' && !effectiveTier(viewer)) {
       return sendJson(res, 403, {
         error: 'The Lab content needs a membership. Your account does not have an active membership right now. The Account tab shows your membership and your options.',
-        needsTier: 'access',
+        needsTier: 'training',
       });
     }
     /* The three Lab programs are member content. Signed-out reads
@@ -4987,7 +5023,7 @@ async function handleApi(req, res, url) {
 
   /* Membership checkout: creates a hosted Stripe Checkout Session
      and answers with its URL. The body may name one of the Lab tiers
-     ({ tier: 'access' | 'training' | 'pass' }) and the server picks
+     ({ tier: 'training' | 'pass' }) and the server picks
      that tier's price; an unknown tier is rejected with 400 before
      any Stripe call, and a body with no tier keeps the original
      STRIPE_PRICE_ID behavior. Inert by design until the host has
@@ -5011,6 +5047,12 @@ async function handleApi(req, res, url) {
     if (tier === '') {
       price = process.env.STRIPE_PRICE_ID || 'price_...';
     } else if (Object.prototype.hasOwnProperty.call(CHECKOUT_TIERS, tier)) {
+      /* Lab Pass is capped at LAB_PASS_CAPACITY. Checkout only
+         refuses here when it is full; it never charges anything new. */
+      const viewerId = (readSession(req) || {}).id;
+      if (tier === 'pass' && labPassFull(viewerId)) {
+        return sendJson(res, 409, { error: LAB_PASS_FULL_MESSAGE, full: true });
+      }
       price = checkoutPriceForTier(tier);
     } else {
       return sendJson(res, 400, { error: 'Unknown tier.' });
@@ -5231,7 +5273,7 @@ async function handleApi(req, res, url) {
     }
     let tierInterest = 'unsure';
     if (body.tierInterest !== undefined && body.tierInterest !== null && body.tierInterest !== '') {
-      tierInterest = clean(body.tierInterest, 20);
+      tierInterest = currentTier(clean(body.tierInterest, 20));
       if (!INVITE_REQUEST_TIERS.includes(tierInterest)) {
         return sendJson(res, 400, { error: 'Please pick the membership that interests you.' });
       }
@@ -5474,6 +5516,8 @@ async function handleApi(req, res, url) {
         key: t, name: TIER_INFO[t].name, price: TIER_INFO[t].price,
         priceLabel: TIER_INFO[t].priceLabel, includes: tierIncludes(t),
       })),
+      teamLab: TEAM_LAB_INFO,
+      labPass: { capacity: LAB_PASS_CAPACITY, full: labPassFull(user.id) },
     });
   }
 
@@ -5622,7 +5666,7 @@ async function handleApi(req, res, url) {
      request, so writing (or reading) anyone else's check-in is
      impossible by construction. */
   if (p === '/api/checkin/today' && req.method === 'GET') {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     const date = todayStr();
     if (!prof) return sendJson(res, 200, { linked: false, date, checkin: null });
@@ -5635,7 +5679,7 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/checkin/mine' && req.method === 'GET') {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (!prof) return sendJson(res, 200, { linked: false, entries: [], streak: 0 });
     const entries = Object.values(db.checkins[prof.id] || {})
@@ -5649,7 +5693,7 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/checkin' && req.method === 'POST') {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (prof && prof.archived) {
       return sendJson(res, 403, {
@@ -5741,7 +5785,7 @@ async function handleApi(req, res, url) {
      never write here; their read + delete-for-moderation path is
      the AMS endpoint below the coach gate. */
   if (p === '/api/my/logs' && req.method === 'GET') {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     const today = todayStr();
     if (!prof) {
@@ -5761,7 +5805,7 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/my/logs' && req.method === 'POST') {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (prof && prof.archived) {
       return sendJson(res, 403, {
@@ -5792,7 +5836,7 @@ async function handleApi(req, res, url) {
 
   const myLogMatch = p.match(/^\/api\/my\/logs\/([^/]+)$/);
   if (myLogMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (!prof) {
       return sendJson(res, 403, {
@@ -5921,7 +5965,7 @@ async function handleApi(req, res, url) {
      payload goes to the TV board, the leaderboard, or any public
      surface: it is served only here, to the linked member. */
   if (p === '/api/my/speed-report' && req.method === 'GET') {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (!prof) {
       return sendJson(res, 403, {
@@ -6069,14 +6113,14 @@ async function handleApi(req, res, url) {
      window (?days 7 to 90, default 28). Bound to the caller's linked
      profile, never to a profile named in the request. */
   if (p === '/api/my/insights' && req.method === 'GET') {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (!prof) return sendJson(res, 200, { linked: false });
     return sendJson(res, 200, insightsFor(prof, q.get('days')));
   }
 
   if (p === '/api/my/week' && req.method === 'GET') {
-    if (!tierGate(res, user, 'access')) return;
+    if (!tierGate(res, user, 'training')) return;
     const prof = linkedProfileFor(user);
     if (!prof) return sendJson(res, 200, { linked: false });
     const today = todayStr();
@@ -6384,6 +6428,9 @@ async function handleApi(req, res, url) {
       const t = body.tier === 'none' ? null : body.tier;
       if (t !== null && !MEMBERSHIP_TIERS.includes(t)) {
         return sendJson(res, 400, { error: 'Unknown tier.' });
+      }
+      if (t === 'pass' && effectiveTier(target) !== 'pass' && labPassFull(target.id)) {
+        return sendJson(res, 409, { error: LAB_PASS_FULL_MESSAGE, full: true });
       }
       fields.tier = t;
     }

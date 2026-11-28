@@ -220,7 +220,7 @@ async function httpTests() {
 
     await test('1a: signed-out checkout keeps the original parameters (no identity keys)', async () => {
       const before = fake.seen.length;
-      const r = await checkout(undefined, { tier: 'access' });
+      const r = await checkout(undefined, { tier: 'training' });
       assert.strictEqual(r.status, 200);
       const sent = fake.seen[before].form;
       for (const k of IDENTITY_KEYS) assert.ok(!(k in sent), 'unexpected ' + k);
@@ -244,14 +244,14 @@ async function httpTests() {
     });
     await test('1a: identity comes from the session, never from the request body', async () => {
       const before = fake.seen.length;
-      await checkout(memberCookie, { tier: 'access', client_reference_id: 'someone-else', userId: 'someone-else', email: 'x@example.test' });
+      await checkout(memberCookie, { tier: 'training', client_reference_id: 'someone-else', userId: 'someone-else', email: 'x@example.test' });
       const sent = fake.seen[before].form;
       assert.strictEqual(sent.client_reference_id, memberId);
       assert.strictEqual(sent.customer_email, memberEmail);
     });
     await test('1a: a coach checkout carries no identity', async () => {
       const before = fake.seen.length;
-      const r = await checkout(ownerCookie, { tier: 'access' });
+      const r = await checkout(ownerCookie, { tier: 'training' });
       assert.strictEqual(r.status, 200);
       for (const k of IDENTITY_KEYS) assert.ok(!(k in fake.seen[before].form), 'unexpected ' + k);
     });
@@ -324,7 +324,7 @@ async function httpTests() {
       assert.strictEqual(r.status, 503);
     });
     await test('1b: with no STRIPE_SECRET_KEY checkout is still inert (503)', async () => {
-      const r = await api(noSecretApp, 'POST', '/api/checkout/session', { tier: 'access' });
+      const r = await api(noSecretApp, 'POST', '/api/checkout/session', { tier: 'training' });
       assert.strictEqual(r.status, 503);
     });
     await test('1b: other methods on the webhook path do not become a free read', async () => {

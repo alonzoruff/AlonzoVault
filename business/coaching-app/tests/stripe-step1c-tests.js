@@ -36,13 +36,13 @@ async function guardTests() {
     const checkout = (cookie, body) => H.api(app, 'POST', '/api/checkout/session', body, cookie);
 
     await test('a member with no subscription can start checkout', async () => {
-      const r = await checkout(memberCookie, { tier: 'access' });
+      const r = await checkout(memberCookie, { tier: 'training' });
       assert.strictEqual(r.status, 200);
     });
 
     await app.restart((d) => {
       const u = d.users.find((x) => x.email === email);
-      u.tier = 'access'; u.membershipStatus = 'active';
+      u.tier = 'training'; u.membershipStatus = 'active';
       u.stripeCustomerId = 'cus_test_1'; u.stripeSubscriptionId = 'sub_test_1';
     });
 
@@ -59,8 +59,8 @@ async function guardTests() {
       assert.strictEqual(fake.seen.length, before);
     });
     await test('signed-out and coach checkouts are untouched by the guard', async () => {
-      assert.strictEqual((await checkout(undefined, { tier: 'access' })).status, 200);
-      assert.strictEqual((await checkout(ownerCookie, { tier: 'access' })).status, 200);
+      assert.strictEqual((await checkout(undefined, { tier: 'training' })).status, 200);
+      assert.strictEqual((await checkout(ownerCookie, { tier: 'training' })).status, 200);
     });
 
     await app.restart((d) => {
@@ -89,9 +89,9 @@ async function restoreTests() {
     const idOf = (e) => app.userByEmail(e).id;
     const setTier = (e, tier) => H.api(app, 'PUT', '/api/access/' + idOf(e), { tier }, ownerCookie);
 
-    // Both members hold Lab Access when the backup is taken.
-    assert.strictEqual((await setTier(e1, 'access')).status, 200);
-    assert.strictEqual((await setTier(e2, 'access')).status, 200);
+    // Both members hold Lab Training when the backup is taken.
+    assert.strictEqual((await setTier(e1, 'training')).status, 200);
+    assert.strictEqual((await setTier(e2, 'training')).status, 200);
     const exp = await fetch(app.base + '/api/export/backup', { headers: { cookie: ownerCookie } });
     assert.strictEqual(exp.status, 200);
     const backupText = await exp.text();
@@ -103,7 +103,7 @@ async function restoreTests() {
       u.stripeCustomerId = 'cus_test_1'; u.stripeSubscriptionId = 'sub_test_1';
       u.membershipHistory.push({ at: '2026-01-01T00:00:00.000Z', by: 'stripe', byEmail: null, action: 'subscribe', tier: 'pass', status: 'active' });
     });
-    assert.strictEqual((await setTier(e2, 'training')).status, 200);
+    assert.strictEqual((await setTier(e2, 'pass')).status, 200);
     const stripeOwnedBefore = JSON.stringify(app.userByEmail(e1));
 
     const imp = await fetch(app.base + '/api/import/backup', {
@@ -119,7 +119,7 @@ async function restoreTests() {
       assert.strictEqual(u.stripeCustomerId, 'cus_test_1');
     });
     await test('restore still rolls back an account with no subscription (as before)', async () => {
-      assert.strictEqual(app.userByEmail(e2).tier, 'access');
+      assert.strictEqual(app.userByEmail(e2).tier, 'training');
     });
   } finally { app.stop(); fake.server.close(); }
 }
@@ -162,7 +162,7 @@ async function libTests() {
     assert.strictEqual(L.periodEndSeconds({ current_period_end: 5 }), 5);
     assert.strictEqual(L.periodEndSeconds({ items: { data: [{ current_period_end: 7 }] } }), 7);
     assert.strictEqual(L.periodEndSeconds({}), null);
-    const f = L.subscriptionFacts({ id: 'sub_f2', cancel_at_period_end: true, items: { data: [{ price: { id: H.PRICE.access }, current_period_end: 1900000000 }] } }, H.PRICE);
+    const f = L.subscriptionFacts({ id: 'sub_f2', cancel_at_period_end: true, items: { data: [{ price: { id: H.PRICE.training }, current_period_end: 1900000000 }] } }, H.PRICE);
     assert.strictEqual(f.cancelAt, new Date(1900000000 * 1000).toISOString());
   });
   await test('facts helpers survive garbage without throwing', () => {
@@ -263,10 +263,10 @@ async function webhookTests() {
 
     /* -- who paid: matching rules -------------------------------------- */
     await test('the tier comes from the price, not from metadata on the event', async () => {
-      fake.subs.sub_b1 = H.makeSub('sub_b1', { price: H.PRICE.access, customer: 'cus_b' });
+      fake.subs.sub_b1 = H.makeSub('sub_b1', { price: H.PRICE.training, customer: 'cus_b' });
       const r = await H.sendEvent(app, checkoutEvt({ ref: ids.b, sub: 'sub_b1', cust: 'cus_b', meta: { tier: 'pass' } }));
       assert.strictEqual(r.status, 200);
-      assert.strictEqual(acct('b').tier, 'access');
+      assert.strictEqual(acct('b').tier, 'training');
     });
     await test('email is the fallback when no account id is present (exactly one match)', async () => {
       fake.subs.sub_c1 = H.makeSub('sub_c1', { price: H.PRICE.pass, customer: 'cus_c' });
@@ -276,7 +276,7 @@ async function webhookTests() {
       assert.strictEqual(acct('c').stripeSubscriptionId, 'sub_c1');
     });
     await test('no matching account: 200, nothing written, and the event can come again', async () => {
-      fake.subs.sub_x1 = H.makeSub('sub_x1', { price: H.PRICE.access });
+      fake.subs.sub_x1 = H.makeSub('sub_x1', { price: H.PRICE.training });
       const before = app.dbText();
       const r = await H.sendEvent(app, checkoutEvt({ ref: 'no-such-user', sub: 'sub_x1', email: 'nobody@example.test' }));
       assert.strictEqual(r.status, 200);
@@ -300,10 +300,10 @@ async function webhookTests() {
       assert.strictEqual(app.dbText(), before);
     });
     await test('a no-card trial session (no_payment_required, trialing) is accepted', async () => {
-      fake.subs.sub_d1 = H.makeSub('sub_d1', { price: H.PRICE.access, status: 'trialing', customer: 'cus_d' });
+      fake.subs.sub_d1 = H.makeSub('sub_d1', { price: H.PRICE.training, status: 'trialing', customer: 'cus_d' });
       const r = await H.sendEvent(app, checkoutEvt({ ref: ids.d, sub: 'sub_d1', cust: 'cus_d', pay: 'no_payment_required' }));
       assert.strictEqual(r.status, 200);
-      assert.strictEqual(acct('d').tier, 'access');
+      assert.strictEqual(acct('d').tier, 'training');
       assert.strictEqual(acct('d').membershipStatus, 'active');
     });
 
@@ -318,28 +318,28 @@ async function webhookTests() {
     await test('Stripe wins over a coach change; both are in the history', async () => {
       await new Promise((r) => setTimeout(r, 5));
       const sinceBefore = acct('a').tierUpdatedAt;
-      assert.strictEqual((await H.api(app, 'PUT', '/api/access/' + ids.a, { tier: 'access' }, ownerCookie)).status, 200);
+      assert.strictEqual((await H.api(app, 'PUT', '/api/access/' + ids.a, { tier: 'training' }, ownerCookie)).status, 200);
       assert.strictEqual(last('a').by, 'coach');
       assert.notStrictEqual(acct('a').tierUpdatedAt, sinceBefore, 'a coach tier change still moves the since date');
-      fake.subs.sub_a1 = H.makeSub('sub_a1', { price: H.PRICE.training, userId: ids.a, customer: 'cus_a' });
+      fake.subs.sub_a1 = H.makeSub('sub_a1', { price: H.PRICE.pass, userId: ids.a, customer: 'cus_a' });
       assert.strictEqual((await H.sendEvent(app, subEvt('customer.subscription.updated', fake.subs.sub_a1))).status, 200);
-      assert.strictEqual(acct('a').tier, 'training');
+      assert.strictEqual(acct('a').tier, 'pass');
       const by = acct('a').membershipHistory.map((h) => h.by);
       assert.deepStrictEqual(by.slice(-2), ['coach', 'stripe']);
     });
     await test('past_due keeps access and writes no history while Stripe retries the card', async () => {
       const histLen = acct('b').membershipHistory.length;
-      const sub = H.makeSub('sub_b1', { price: H.PRICE.access, status: 'past_due', customer: 'cus_b' });
+      const sub = H.makeSub('sub_b1', { price: H.PRICE.training, status: 'past_due', customer: 'cus_b' });
       assert.strictEqual((await H.sendEvent(app, subEvt('customer.subscription.updated', sub))).status, 200);
       assert.strictEqual(acct('b').membershipStatus, 'active');
       assert.strictEqual(acct('b').membershipHistory.length, histLen);
     });
     await test('a scheduled cancel (cancel at period end) is stored, with no change to access', async () => {
-      const sub = H.makeSub('sub_b1', { price: H.PRICE.access, cancelAtPeriodEnd: true, periodEnd: 1900000000, customer: 'cus_b' });
+      const sub = H.makeSub('sub_b1', { price: H.PRICE.training, cancelAtPeriodEnd: true, periodEnd: 1900000000, customer: 'cus_b' });
       assert.strictEqual((await H.sendEvent(app, subEvt('customer.subscription.updated', sub))).status, 200);
       assert.strictEqual(acct('b').stripeCancelAt, new Date(1900000000 * 1000).toISOString());
       assert.strictEqual(acct('b').membershipStatus, 'active');
-      const resumed = H.makeSub('sub_b1', { price: H.PRICE.access, customer: 'cus_b' });
+      const resumed = H.makeSub('sub_b1', { price: H.PRICE.training, customer: 'cus_b' });
       assert.strictEqual((await H.sendEvent(app, subEvt('customer.subscription.updated', resumed))).status, 200);
       assert.strictEqual(acct('b').stripeCancelAt, null);
     });
@@ -388,7 +388,7 @@ async function webhookTests() {
     });
     await test('a second live subscription never overwrites the first; the coach sees it in the history', async () => {
       const sinceBefore2 = acct('a').tierUpdatedAt;
-      fake.subs.sub_a3 = H.makeSub('sub_a3', { price: H.PRICE.access, userId: ids.a, customer: 'cus_a' });
+      fake.subs.sub_a3 = H.makeSub('sub_a3', { price: H.PRICE.training, userId: ids.a, customer: 'cus_a' });
       const r = await H.sendEvent(app, checkoutEvt({ ref: ids.a, sub: 'sub_a3', cust: 'cus_a' }));
       assert.strictEqual(r.status, 200);
       assert.strictEqual(acct('a').stripeSubscriptionId, 'sub_a2');
@@ -454,7 +454,7 @@ async function webhookTests() {
     });
     await test('the event memory is capped (oldest dropped first)', async () => {
       await app.restart((d) => { d.stripeEvents = Array.from({ length: 1000 }, (_, i) => ({ id: 'evt_old_' + i, at: '2026-01-01T00:00:00.000Z' })); });
-      fake.subs.sub_k1 = H.makeSub('sub_k1', { price: H.PRICE.access, status: 'trialing', userId: ids.c, customer: 'cus_k' });
+      fake.subs.sub_k1 = H.makeSub('sub_k1', { price: H.PRICE.training, status: 'trialing', userId: ids.c, customer: 'cus_k' });
       const r = await H.sendEvent(app, subEvt('customer.subscription.created', fake.subs.sub_k1, { id: 'evt_cap_new' }));
       assert.strictEqual(r.status, 200);
       const ev = app.db().stripeEvents;
@@ -465,7 +465,7 @@ async function webhookTests() {
     await test('a signed-up-again member via subscription.created is bound by the user id on the subscription', async () => {
       assert.strictEqual(acct('c').stripeSubscriptionId, 'sub_k1');
       assert.strictEqual(acct('c').membershipStatus, 'active');
-      assert.strictEqual(acct('c').tier, 'access');
+      assert.strictEqual(acct('c').tier, 'training');
     });
     await test('the coach Access page lists the stripe actor with no client change', async () => {
       const r = await H.api(app, 'GET', '/api/access', undefined, ownerCookie);
