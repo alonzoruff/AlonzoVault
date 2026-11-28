@@ -1,0 +1,193 @@
+{
+  "id": "ocean-breeze-2027-02-27",
+  "name": "Ocean Breeze Elite Invitational",
+  "date": "2027-02-27",
+  "dateLabel": "Sat, Feb 27",
+  "place": "Ocean Breeze Athletic Complex, Staten Island, NY",
+  "entriesClose": "Not confirmed (sources conflict)",
+  "slots": 5,
+  "source": "/Track/Meets/Meet File - Ocean Breeze Elite Grand Prix - Feb 27 1123.md",
+  "rules": [],
+  "events": [
+    {
+      "id": "g-shot-put",
+      "name": "Girls Shot Put",
+      "kind": "field"
+    },
+    {
+      "id": "b-shot-put",
+      "name": "Boys Shot Put",
+      "kind": "field"
+    },
+    {
+      "id": "g-long-jump",
+      "name": "Girls Long Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-long-jump",
+      "name": "Boys Long Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-triple-jump",
+      "name": "Girls Triple Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-triple-jump",
+      "name": "Boys Triple Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-pole-vault",
+      "name": "Girls Pole Vault",
+      "kind": "field"
+    },
+    {
+      "id": "b-pole-vault",
+      "name": "Boys Pole Vault",
+      "kind": "field"
+    },
+    {
+      "id": "g-high-jump",
+      "name": "Girls High Jump",
+      "kind": "field"
+    },
+    {
+      "id": "b-high-jump",
+      "name": "Boys High Jump",
+      "kind": "field"
+    },
+    {
+      "id": "g-weight-throw",
+      "name": "Girls Weight Throw",
+      "kind": "field"
+    },
+    {
+      "id": "b-weight-throw",
+      "name": "Boys Weight Throw",
+      "kind": "field"
+    },
+    {
+      "id": "g-60m-dash",
+      "name": "Girls 60m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-60m-dash",
+      "name": "Boys 60m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-60m-hurdles",
+      "name": "Girls 60m Hurdles",
+      "kind": "run"
+    },
+    {
+      "id": "b-60m-hurdles",
+      "name": "Boys 60m Hurdles",
+      "kind": "run"
+    },
+    {
+      "id": "g-300m-dash",
+      "name": "Girls 300m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-300m-dash",
+      "name": "Boys 300m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-400m-dash",
+      "name": "Girls 400m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "b-400m-dash",
+      "name": "Boys 400m Dash",
+      "kind": "run"
+    },
+    {
+      "id": "g-800m-run",
+      "name": "Girls 800m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-800m-run",
+      "name": "Boys 800m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-1000m-run",
+      "name": "Girls 1000m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-1000m-run",
+      "name": "Boys 1000m Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-1-mile-run",
+      "name": "Girls 1 Mile Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-1-mile-run",
+      "name": "Boys 1 Mile Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-3000m-run",
+      "name": "Girls 3000m Run",
+      "kind": "run"
+    },
+    {
+      "id": "b-two-mile-run",
+      "name": "Boys Two Mile Run",
+      "kind": "run"
+    },
+    {
+      "id": "g-4x800m-relay",
+      "name": "Girls 4x800m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x800m-relay",
+      "name": "Boys 4x800m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-distance-medley-relay",
+      "name": "Girls Distance Medley Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-distance-medley-relay",
+      "name": "Boys Distance Medley Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-4x400m-relay",
+      "name": "Girls 4x400m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x400m-relay",
+      "name": "Boys 4x400m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "g-4x200m-relay",
+      "name": "Girls 4x200m Relay",
+      "kind": "relay"
+    },
+    {
+      "id": "b-4x200m-relay",
+      "name": "Boys 4x200m Relay",
+      "kind": "relay"
+    }
+  ]
+}
