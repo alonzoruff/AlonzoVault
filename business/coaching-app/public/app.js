@@ -10887,6 +10887,7 @@ async function mxRenderTraining() {
     <h2 class="mx-section-title">Train and learn</h2>
     <div class="mx-tools">
       ${mxToolHtml('log', 'pen', 'My log', 'Your workouts, form checks and check-ins')}
+      ${mxToolHtml('applehealth', 'bolt', 'Apple Health', 'Connect your iPhone: steps, gait, speed and calories')}
       ${mxToolHtml('library', 'list', 'Workout library', 'Every session, by type and distance')}
       ${mxToolHtml('videos', 'video', 'Demo videos', 'Watch how each drill and lift is done')}
       ${mxToolHtml('exercises', 'book', 'Exercise library', 'Movements with cues and sources')}
@@ -11774,3 +11775,7 @@ async function renderAthleteHealth(memberId) {
   </ul></div>`;
   el.querySelectorAll('[data-ah-member]').forEach(b => b.addEventListener('click', () => renderAthleteHealth(b.dataset.ahMember)));
 }
+
+/* Apple Health opens from Training in the member app too. */
+MX_ALLOWED.add('applehealth');
+MX_PARENT.applehealth = 'training';
