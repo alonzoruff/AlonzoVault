@@ -232,6 +232,7 @@ let db = {
   announcements: [],
   memberLogs: [],
   formChecks: [],
+  sprintAnalyses: [],
   floorProgress: {},
   liveSessions: [],
   liveRequests: [],
@@ -924,6 +925,9 @@ function migrate() {
   // note, context, status ('pending'|'replied'), reply, createdAt,
   // updatedAt } — a member submits a video for a coach to review.
   db.formChecks = Array.isArray(db.formChecks) ? db.formChecks : [];
+  // Sprint Biomechanics reports a member saved from the analysis
+  // tool: { id, userId, email, athleteName, report, status, ... }.
+  db.sprintAnalyses = Array.isArray(db.sprintAnalyses) ? db.sprintAnalyses : [];
   // Lab Pass live sessions (coach-posted: title, date/time, join
   // link, note) and the in-person requests members file from that
   // view ({ id, userId, email, profileId, profileName, createdAt }).
@@ -2847,6 +2851,99 @@ function memberLogSummaryFor(profileId, today) {
    gate: submissions are always accepted, and weekCount simply says
    how many a member has sent in the current Mon-Sun week so the
    member sees the rhythm and the coach can prioritize by eye. */
+/* ------------------------------------------------------------------ */
+/* Sprint Biomechanics reports (Nov 28)                                */
+/* ------------------------------------------------------------------ */
+/* The analysis itself runs in the member's browser (the video never
+   leaves the phone). What reaches the server is the finished report:
+   angles, step data, faults, cues and notes. It is stored against the
+   member's account, listed in their report history, and shown to
+   coaches for review, the same shape as a form check. Pictures are
+   not kept: any data: URL in the payload (key-frame snapshots) is
+   dropped so the store stays small. Reports count against a weekly
+   allowance that matches form reviews: Lab Training 7, Lab Pass 30,
+   coaches unlimited. */
+const SPRINT_WEEKLY_LIMIT = { training: 7, pass: 30 };
+const SPRINT_MAX_BYTES = 64 * 1024;
+function cleanReportValue(v, depth) {
+  if (v === null || typeof v === 'boolean') return v;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    if (/^\s*data:/i.test(v)) return undefined;
+    return v.slice(0, 2000);
+  }
+  if (depth >= 6) return undefined;
+  if (Array.isArray(v)) {
+    return v.slice(0, 60).map(x => cleanReportValue(x, depth + 1)).filter(x => x !== undefined);
+  }
+  if (typeof v === 'object') {
+    const out = {};
+    for (const k of Object.keys(v).slice(0, 80)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      const c = cleanReportValue(v[k], depth + 1);
+      if (c !== undefined) out[String(k).slice(0, 60)] = c;
+    }
+    return out;
+  }
+  return undefined;
+}
+function sprintReportName(report, user) {
+  const r = report || {};
+  const pick = (...vals) => vals.find(x => typeof x === 'string' && x.trim());
+  const athlete = (r.athlete && typeof r.athlete === 'object') ? r.athlete : {};
+  const meta = (r.meta && typeof r.meta === 'object') ? r.meta : {};
+  const n = pick(athlete.name, r.athleteName, meta.athleteName, meta.athlete, typeof r.athlete === 'string' ? r.athlete : '');
+  return n ? clean(n, 80) : (user.name || user.email);
+}
+function sprintWeekCount(userId, today) {
+  const mon = mondayOf(today);
+  const sun = mon ? addDaysStr(mon, 6) : today;
+  let n = 0;
+  for (const r of db.sprintAnalyses) {
+    if (r.userId !== userId) continue;
+    const d = new Date(r.createdAt);
+    const day = Number.isNaN(d.getTime()) ? '' : NY_TODAY_FMT.format(d);
+    if (day && day >= mon && day <= sun) n++;
+  }
+  return n;
+}
+function sprintWeekLimit(user) {
+  if (user.role === 'coach') return null;
+  return SPRINT_WEEKLY_LIMIT[effectiveTier(user)] || 0;
+}
+function publicSprintAnalysis(r, full) {
+  const out = {
+    id: r.id, athleteName: r.athleteName || '', email: r.email || '',
+    status: r.status === 'reviewed' ? 'reviewed' : 'new',
+    coachNote: r.coachNote || '', reviewedAt: r.reviewedAt || null,
+    createdAt: r.createdAt,
+  };
+  if (full) out.report = r.report || {};
+  return out;
+}
+/* The tool page is served from public/sprint-analysis.html, but only
+   through /sprint-analysis, after the sign-in and plan check below;
+   the static server refuses the .html path directly. */
+const SPRINT_TOOL_FILE = path.join(PUBLIC_DIR, 'sprint-analysis.html');
+function sprintNoticePage(title, body) {
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>' + title + '</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:48px 20px;background:#0f1115;color:#f2f2f2}'
+    + 'main{max-width:440px;margin:0 auto}a{color:#fff;font-weight:600}</style></head><body><main><h1>' + title + '</h1><p>' + body
+    + '</p><p><a href="/">Back to the Lab</a></p></main></body></html>';
+}
+function sendSprintToolPage(req, res) {
+  const user = readSession(req);
+  const html = (status, text) => { res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(text); };
+  if (!user) return html(401, sprintNoticePage('Sign in first', 'The Sprint Analysis tool is for Lab members. Sign in, then open it from Train.'));
+  if (!hasTierAccess(user, 'training')) {
+    return html(403, sprintNoticePage('Part of Lab Training', 'Sprint Analysis is part of Lab Training and Lab Pass. The Account tab shows your membership and your options.'));
+  }
+  fs.readFile(SPRINT_TOOL_FILE, (err, data) => {
+    if (err) return html(200, sprintNoticePage('Almost ready', 'The analysis tool is being added. Reports you save will show up under Train, Sprint Reports.'));
+    html(200, data.toString('utf8'));
+  });
+}
+
 function publicFormCheck(fc) {
   const reply = (fc.reply && typeof fc.reply === 'object' && !Array.isArray(fc.reply))
     ? { text: fc.reply.text || '', at: fc.reply.at || null } : null;
@@ -4995,6 +5092,11 @@ async function handleApi(req, res, url) {
   const p = url.pathname;
   const q = url.searchParams;
 
+  /* The Sprint Analysis tool page (signed-in members with a plan). */
+  if (p === '/api/sprint-analysis/page' && req.method === 'GET') {
+    return sendSprintToolPage(req, res);
+  }
+
   if (p === '/api/content' && req.method === 'GET') {
     /* The content payload IS the library, the videos, and the
        learn content, so it sits behind the tier gate for members:
@@ -6048,6 +6150,65 @@ async function handleApi(req, res, url) {
       ok: true, formCheck: publicFormCheck(fc),
       weekCount: formCheckWeekCount(prof.id, todayStr()),
     });
+  }
+
+  /* ---------- Sprint Biomechanics reports (member) ----------
+     A member saves a finished analysis from the tool; it lands in
+     their own report history and in the coach review list. */
+  if (p === '/api/reports/sprint-analysis' && req.method === 'POST') {
+    if (!tierGate(res, user, 'training')) return;
+    const limit = sprintWeekLimit(user);
+    const today = todayStr();
+    if (limit !== null && sprintWeekCount(user.id, today) >= limit) {
+      return sendJson(res, 429, {
+        error: 'You have saved ' + limit + ' sprint analyses this week, which is your plan\'s weekly amount. It resets Monday.',
+        weekLimit: limit,
+      });
+    }
+    const body = await readBody(req);
+    const raw = isPlainObj(body.report) ? body.report : body;
+    const report = cleanReportValue(raw, 0) || {};
+    if (!Object.keys(report).length) return sendJson(res, 400, { error: 'That report is empty. Run an analysis first, then save it.' });
+    if (Buffer.byteLength(JSON.stringify(report)) > SPRINT_MAX_BYTES) {
+      return sendJson(res, 413, { error: 'That report is too large to save. Remove some notes and try again.' });
+    }
+    const now = new Date().toISOString();
+    const rec = {
+      id: crypto.randomUUID(), userId: user.id, email: user.email,
+      athleteName: sprintReportName(report, user), report,
+      status: 'new', coachNote: '', reviewedAt: null, reviewedBy: null,
+      createdAt: now, updatedAt: now,
+    };
+    db.sprintAnalyses.push(rec);
+    saveDb();
+    if (user.role !== 'coach') {
+      notifyCoach({
+        subject: 'New sprint analysis from ' + rec.athleteName,
+        intro: rec.athleteName + ' saved a sprint analysis. Review it under Coach Hub > Sprint Analyses.',
+        fields: [['Athlete', rec.athleteName], ['Email', user.email]],
+        link: appLink('/'), replyTo: user.email,
+      });
+    }
+    return sendJson(res, 201, {
+      ok: true, report: publicSprintAnalysis(rec, false),
+      weekCount: sprintWeekCount(user.id, today), weekLimit: limit,
+    });
+  }
+  if (p === '/api/my/sprint-analyses' && req.method === 'GET') {
+    if (!tierGate(res, user, 'training')) return;
+    const mine = db.sprintAnalyses.filter(r => r.userId === user.id)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(r => publicSprintAnalysis(r, false));
+    return sendJson(res, 200, {
+      reports: mine, weekCount: sprintWeekCount(user.id, todayStr()), weekLimit: sprintWeekLimit(user),
+    });
+  }
+  const mySprintMatch = p.match(/^\/api\/my\/sprint-analyses\/([^/]+)$/);
+  if (mySprintMatch && req.method === 'GET') {
+    if (!tierGate(res, user, 'training')) return;
+    const r = db.sprintAnalyses.find(x => x.id === decodeURIComponent(mySprintMatch[1]) && x.userId === user.id);
+    if (!r) return sendJson(res, 404, { error: 'That report was not found.' });
+    return sendJson(res, 200, { report: publicSprintAnalysis(r, true) });
   }
 
   const myFormCheckSeenMatch = p.match(/^\/api\/my\/form-checks\/([^/]+)\/seen$/);
@@ -7478,6 +7639,34 @@ async function handleApi(req, res, url) {
      posting again) and can delete a request for moderation — the
      member-log moderation precedent — but a coach never creates a
      form check: the request is the member's own. */
+  /* ---------- Sprint Biomechanics reports (coach review) ---------- */
+  if (p === '/api/sprint-analyses' && req.method === 'GET') {
+    const all = db.sprintAnalyses.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    return sendJson(res, 200, {
+      reports: all.map(r => publicSprintAnalysis(r, false)),
+      counts: { total: all.length, new: all.filter(r => r.status !== 'reviewed').length, reviewed: all.filter(r => r.status === 'reviewed').length },
+    });
+  }
+  const coachSprintMatch = p.match(/^\/api\/sprint-analyses\/([^/]+)$/);
+  if (coachSprintMatch && req.method === 'GET') {
+    const r = db.sprintAnalyses.find(x => x.id === decodeURIComponent(coachSprintMatch[1]));
+    if (!r) return sendJson(res, 404, { error: 'That report was not found.' });
+    return sendJson(res, 200, { report: publicSprintAnalysis(r, true) });
+  }
+  const coachSprintReview = p.match(/^\/api\/sprint-analyses\/([^/]+)\/review$/);
+  if (coachSprintReview && req.method === 'POST') {
+    const r = db.sprintAnalyses.find(x => x.id === decodeURIComponent(coachSprintReview[1]));
+    if (!r) return sendJson(res, 404, { error: 'That report was not found.' });
+    const body = await readBody(req);
+    r.coachNote = clean(body.note, 2000);
+    r.status = 'reviewed';
+    r.reviewedAt = new Date().toISOString();
+    r.reviewedBy = user.email;
+    r.updatedAt = r.reviewedAt;
+    saveDb();
+    return sendJson(res, 200, { ok: true, report: publicSprintAnalysis(r, false) });
+  }
+
   if (p === '/api/form-checks' && req.method === 'GET') {
     const today = todayStr();
     const queue = db.formChecks.slice()
@@ -10066,6 +10255,14 @@ function handler(req, res) {
     setSecurityHeaders(req, res, false);
     res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('bad request');
+  }
+  if (url.pathname === '/sprint-analysis' || url.pathname === '/sprint-analysis/') {
+    req.url = '/api/sprint-analysis/page';
+    url = new URL(req.url, 'http://localhost');
+  } else if (url.pathname.toLowerCase() === '/sprint-analysis.html') {
+    setSecurityHeaders(req, res, false);
+    res.writeHead(302, { Location: '/sprint-analysis' });
+    return res.end();
   }
   setSecurityHeaders(req, res, url.pathname.startsWith('/api/'));
   if (url.pathname.startsWith('/api/')) {

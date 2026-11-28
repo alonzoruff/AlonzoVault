@@ -157,6 +157,7 @@ node tests/stripe-step1-tests.js     # payments, part 1
 node tests/stripe-step1c-tests.js    # payments, part 2
 node tests/stripe-step1d-tests.js    # payments, cancelling
 node tests/notify-tests.js           # email alerts and booking page
+node tests/sprint-analysis-tests.js # Sprint Analysis: sign-in and plan gate, 7/30 a week, reports saved, coach review
 node tests/access-page-tests.js      # coach's member access page
 node tests/membership-card-tests.js  # member's membership card
 node tests/growth-tests.js           # sign-up funnel and scoreboard

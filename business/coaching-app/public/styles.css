@@ -302,6 +302,18 @@ input[type="checkbox"], input[type="radio"] {
 .badge.high { background: var(--high-bg); color: var(--high); }
 .badge.low { background: var(--low-bg); color: var(--low); }
 .badge.plain { background: var(--chip-bg); color: var(--chip-ink); }
+/* Sprint Analysis report lists (member and coach) */
+.badge.sprint-new { background: var(--chip-bg); color: var(--chip-ink); }
+.badge.sprint-reviewed { background: #1f3a2a; color: #b9f0cc; }
+.sprint-row .linkish { background: none; border: 0; padding: 6px 0; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; min-height: 44px; }
+.sprint-detail { margin: 6px 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--chip-bg); overflow-x: auto; }
+.sprint-dl { margin: 0; }
+.sprint-dl dt { color: var(--chip-ink); opacity: .75; font-size: .85em; margin-top: 8px; }
+.sprint-dl dt:first-child { margin-top: 0; }
+.sprint-dl dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.sprint-dl dd > .sprint-dl, .sprint-dl dd > .sprint-list { padding-left: 12px; border-left: 2px solid rgba(255,255,255,.12); }
+.sprint-list { margin: 0; padding-left: 18px; }
+.sprint-note { margin: 6px 0; }
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 14px; }
 .detail-grid dt { color: var(--muted); }
 .detail-grid dd { margin: 0; font-weight: 600; }
