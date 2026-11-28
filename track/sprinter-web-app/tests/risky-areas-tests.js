@@ -761,7 +761,8 @@ async function main() {
         assert.strictEqual((await call(app, 'POST', '/api/devices/forcedecks/commit', undefined, owner, { raw: 'nope' })).status, 400);
         const notReal = await commit({ rows: [{ profileId: 'p-ana', metrics: { RSI: 1 } }], sessionDate: '2026-02-30' });
         assert.strictEqual(notReal.status, 400);
-        assert.ok(/not a real date/.test(notReal.json.error));
+        // PR 35 reworded this message in plain words ("Pick the testing date.").
+        assert.ok(/Pick the testing date/.test(notReal.json.error));
         const future = await commit({ rows: [{ profileId: 'p-ana', metrics: { RSI: 1 } }], sessionDate: '2999-01-01' });
         assert.strictEqual(future.status, 400);
         assert.ok(/in the future/.test(future.json.error));
