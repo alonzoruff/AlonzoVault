@@ -24,6 +24,9 @@ const state = {
   exEquipment: 'All',
   exTags: [],
   coverageFilter: 'all',
+  filmFilter: 'all',
+  filmQ: '',
+  filmData: null,
   invItems: [],
   invCat: '',
   invQ: '',
@@ -418,14 +421,14 @@ const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
   library: 'train', labprograms: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub', inviterequests: 'coachhub', scoreboard: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', filming: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub', inviterequests: 'coachhub', scoreboard: 'coachhub',
   livesessions: 'train',
   book: 'landing', invite: 'landing',
 };
 const GROUP_SUBNAV = {
   train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['scoreboard', 'Scoreboard'], ['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage']],
+  coachhub: [['scoreboard', 'Scoreboard'], ['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage'], ['filming', 'Filming Tracker']],
 };
 /* ---------------- membership tiers (v14) ----------------
    The nav mirror of the server's entitlement rules. The server is
@@ -716,6 +719,7 @@ function showView(name) {
   if (name === 'data') renderData();
   if (name === 'devices') renderDevices();
   if (name === 'coverage') renderCoverage();
+  if (name === 'filming') renderFilming();
   if (name === 'exercises') renderExercises();
   syncBackHome(name);
   mxAfterShow(name);
@@ -7711,6 +7715,172 @@ async function renderCoverage() {
     state.coverageFilter = b.dataset.covfilter;
     renderCoverage();
   }));
+}
+
+/* ---------------- filming tracker ----------------
+   Every AYG Lab movement (content/filming_list.json plus the
+   coach's own additions), grouped Mobility / Running /
+   Strengthening, each with a filmed / not filmed status and a
+   note. Tapping the circle saves at once; a note saves when the
+   field loses focus. Both go to /api/filming/:id, which writes
+   db.filming, so they survive a restart. */
+const FILM_FILTERS = [['all', 'All'], ['todo', 'To film'], ['done', 'Filmed']];
+function filmItems() {
+  const d = state.filmData;
+  return d ? d.categories.reduce((a, c) => a.concat(c.movements), []) : [];
+}
+function filmCounts() {
+  const items = filmItems();
+  const done = items.filter(i => i.filmed).length;
+  return { all: items.length, done, todo: items.length - done };
+}
+function filmRowHtml(m) {
+  const label = m.filmed ? 'Filmed' : 'Not filmed';
+  return `
+    <div class="film-row ${m.filmed ? 'is-filmed' : ''}" data-film-row="${esc(m.id)}">
+      <button type="button" class="film-toggle" data-film-toggle="${esc(m.id)}" aria-pressed="${m.filmed}"
+        aria-label="${esc(m.movement)}: ${label}. Tap to change"><span aria-hidden="true">✓</span></button>
+      <div class="film-body">
+        <div class="film-name"><strong>${esc(m.movement)}</strong></div>
+        <div class="film-sub"><span class="film-status">${label}</span><span class="film-meta" data-film-meta="${esc(m.id)}">${esc(m.id)}${m.custom ? ' · added by you' : ''}</span>${m.custom
+          ? `<button type="button" class="film-remove" data-film-remove="${esc(m.id)}">Remove</button>` : ''}</div>
+        <input type="text" class="film-note" data-film-note="${esc(m.id)}" maxlength="500"
+          value="${esc(m.note)}" placeholder="Add a note" aria-label="Note for ${esc(m.movement)}">
+      </div>
+    </div>`;
+}
+function renderFilmingSummary() {
+  const box = $('#film-summary');
+  if (!box) return;
+  const c = filmCounts();
+  const pct = c.all ? Math.round((c.done / c.all) * 100) : 0;
+  box.innerHTML = `
+    <p class="film-total"><strong>${c.done} of ${c.all} filmed</strong> · ${c.todo} to go</p>
+    <div class="film-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${c.all}" aria-valuenow="${c.done}" aria-label="Movements filmed"><span style="width:${pct}%"></span></div>`;
+  const chips = $('#film-chips');
+  if (chips) {
+    chips.innerHTML = FILM_FILTERS.map(([v, label]) =>
+      `<button type="button" class="chip ${state.filmFilter === v ? 'active' : ''}" data-film-filter="${v}">${label} (${c[v]})</button>`).join('');
+    chips.querySelectorAll('[data-film-filter]').forEach(b => b.addEventListener('click', () => {
+      state.filmFilter = b.dataset.filmFilter;
+      renderFilmingSummary();
+      renderFilmingList();
+    }));
+  }
+}
+function renderFilmingList() {
+  const list = $('#film-list');
+  if (!list || !state.filmData) return;
+  const q = state.filmQ.trim().toLowerCase();
+  const keep = (m) => (state.filmFilter === 'all' || (state.filmFilter === 'done') === m.filmed)
+    && (!q || m.movement.toLowerCase().includes(q) || m.note.toLowerCase().includes(q) || m.id.toLowerCase().includes(q));
+  const sections = state.filmData.categories.map(cat => {
+    const shown = cat.movements.filter(keep);
+    if (!shown.length) return '';
+    const done = cat.movements.filter(m => m.filmed).length;
+    return `
+      <section class="card film-cat">
+        <h2>${esc(cat.name)} <span class="film-cat-count" data-film-cat="${esc(cat.name)}">${done} of ${cat.movements.length} filmed</span></h2>
+        ${shown.map(filmRowHtml).join('')}
+      </section>`;
+  }).join('');
+  list.innerHTML = sections || '<p class="muted">Nothing matches. Try All, or clear the search.</p>';
+  list.querySelectorAll('[data-film-toggle]').forEach(b => b.addEventListener('click', () => toggleFilmed(b.dataset.filmToggle)));
+  list.querySelectorAll('[data-film-note]').forEach(inp => inp.addEventListener('change', () => saveFilmNote(inp.dataset.filmNote, inp.value)));
+  list.querySelectorAll('[data-film-remove]').forEach(b => b.addEventListener('click', async () => {
+    const m = filmItems().find(i => i.id === b.dataset.filmRemove);
+    if (!confirm('Remove "' + (m ? m.movement : 'this movement') + '" from the tracker?')) return;
+    try { await apiDel('/api/filming/' + encodeURIComponent(b.dataset.filmRemove)); renderFilming(); }
+    catch (err) { alert(err.message); }
+  }));
+}
+function setFilmMeta(id, text) {
+  const meta = document.querySelector(`[data-film-meta="${CSS.escape(id)}"]`);
+  const m = filmItems().find(i => i.id === id);
+  if (meta && m) meta.textContent = m.id + (m.custom ? ' · added by you' : '') + (text ? ' · ' + text : '');
+}
+function paintFilmRow(m) {
+  const row = document.querySelector(`[data-film-row="${CSS.escape(m.id)}"]`);
+  if (!row) return;
+  const label = m.filmed ? 'Filmed' : 'Not filmed';
+  row.classList.toggle('is-filmed', m.filmed);
+  const btn = row.querySelector('.film-toggle');
+  btn.setAttribute('aria-pressed', String(m.filmed));
+  btn.setAttribute('aria-label', m.movement + ': ' + label + '. Tap to change');
+  row.querySelector('.film-status').textContent = label;
+  const cat = state.filmData.categories.find(c => c.name === m.category);
+  const count = cat && document.querySelector(`[data-film-cat="${CSS.escape(cat.name)}"]`);
+  if (count) count.textContent = cat.movements.filter(x => x.filmed).length + ' of ' + cat.movements.length + ' filmed';
+  renderFilmingSummary();
+}
+async function toggleFilmed(id) {
+  const m = filmItems().find(i => i.id === id);
+  if (!m) return;
+  m.filmed = !m.filmed;
+  paintFilmRow(m);
+  setFilmMeta(id, 'saving…');
+  try {
+    const r = await apiPut('/api/filming/' + encodeURIComponent(id), { filmed: m.filmed });
+    m.filmed = r.filmed;
+    paintFilmRow(m);
+    setFilmMeta(id, 'saved');
+  } catch (err) {
+    m.filmed = !m.filmed;
+    paintFilmRow(m);
+    setFilmMeta(id, 'not saved, try again');
+  }
+}
+async function saveFilmNote(id, value) {
+  const m = filmItems().find(i => i.id === id);
+  if (!m) return;
+  setFilmMeta(id, 'saving…');
+  try {
+    const r = await apiPut('/api/filming/' + encodeURIComponent(id), { note: value });
+    m.note = r.note;
+    setFilmMeta(id, 'note saved');
+  } catch (err) {
+    setFilmMeta(id, 'note not saved: ' + err.message);
+  }
+}
+async function renderFilming() {
+  const main = $('#filming-main');
+  if (!main) return;
+  if (!isCoachUser()) { gateHtml(main, 'The filming tracker lives here.'); return; }
+  try {
+    state.filmData = await api('/api/filming');
+  } catch (err) {
+    main.innerHTML = `<p class="error">Could not load the filming tracker: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (!FILM_FILTERS.some(([v]) => v === state.filmFilter)) state.filmFilter = 'all';
+  const catOpts = state.filmData.categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+  main.innerHTML = `
+    <div class="card" id="film-summary"></div>
+    <div class="chip-row" id="film-chips"></div>
+    <label class="film-search">Search <input type="search" id="film-q" value="${esc(state.filmQ)}" placeholder="Movement, note, or VID number"></label>
+    <div id="film-list"></div>
+    <form class="card" id="film-add">
+      <h2>Add a movement</h2>
+      <p class="muted">For anything new to film that is not on the list yet. It joins its category as not filmed.</p>
+      <label>Movement <input type="text" id="film-add-name" required maxlength="120" placeholder="e.g. Banded Ankle Mobilization"></label>
+      <label>Category <select id="film-add-cat">${catOpts}</select></label>
+      <button class="btn primary" type="submit">Add movement</button>
+      <p class="error" id="film-add-err"></p>
+    </form>`;
+  renderFilmingSummary();
+  renderFilmingList();
+  $('#film-q').addEventListener('input', (e) => {
+    state.filmQ = e.target.value;
+    clearTimeout(state._filmT);
+    state._filmT = setTimeout(renderFilmingList, 200);
+  });
+  $('#film-add').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost('/api/filming', { movement: $('#film-add-name').value, category: $('#film-add-cat').value });
+      renderFilming();
+    } catch (err) { $('#film-add-err').textContent = err.message; }
+  });
 }
 
 async function renderData() {

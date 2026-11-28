@@ -87,6 +87,18 @@ purpose) and prints a count check for every collection.
   shared sources with `python3 scripts/build-content.py` (the script
   scrubs school identifiers from the two copied markdown files).
 
+## Filming tracker
+
+Coach Hub > Filming Tracker lists every AYG Lab movement (102 from the
+Nov 20 Exercises List, in `content/filming_list.json`) under Mobility,
+Running, and Strengthening. Tap the circle to mark a movement filmed;
+type in its note field and the note saves when you leave the field.
+Statuses and notes save to `db.json` in `DATA_DIR` (keys `filming` and
+`filmingExtras`), the same store every other coach record uses, and
+ride along in the full backup. To add a movement later, use the
+"Add a movement" form at the bottom of the page. Movements you add
+can be removed; the ones from the list stay.
+
 ## Tests
 
 ```sh

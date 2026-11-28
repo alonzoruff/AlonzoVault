@@ -1,0 +1,520 @@
+{
+ "source": "AYG Lab Exercises List (Nov 20, 2026), built from content/video_library.json",
+ "categories": [
+  "Mobility",
+  "Running",
+  "Strengthening"
+ ],
+ "movements": [
+  {
+   "id": "VID-003",
+   "movement": "Forward leg swings",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-004",
+   "movement": "Lateral leg swings",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-005",
+   "movement": "Walking knee hugs",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-006",
+   "movement": "Walking quad pulls",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-007",
+   "movement": "Walking lunges with twist",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-008",
+   "movement": "Inchworms",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-015",
+   "movement": "Hip circles",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-018",
+   "movement": "Hurdle mobility warm-up (walk-overs)",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-076",
+   "movement": "90/90 Hip Rotations",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-077",
+   "movement": "Hip Flexor Stretch & Mobility",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-078",
+   "movement": "Pigeon / Figure-4 Stretch",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-081",
+   "movement": "Adductor Rockbacks",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-084",
+   "movement": "Hip CARs",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-085",
+   "movement": "Couch Stretch",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-086",
+   "movement": "Fire Hydrants",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-089",
+   "movement": "Deep Squat Mobility",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-090",
+   "movement": "Hip Internal / External Rotation Work",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-096",
+   "movement": "Post-practice mobility flow (hips)",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-097",
+   "movement": "Foam rolling routine",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-098",
+   "movement": "Hip and ankle mobility flow",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-099",
+   "movement": "Breathing / downshift routine (90/90 breathing)",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-100",
+   "movement": "Static stretch routine for runners",
+   "category": "Mobility"
+  },
+  {
+   "id": "VID-001",
+   "movement": "Jog 800m + progressive strides",
+   "category": "Running"
+  },
+  {
+   "id": "VID-002",
+   "movement": "Skipping series",
+   "category": "Running"
+  },
+  {
+   "id": "VID-009",
+   "movement": "A-skips",
+   "category": "Running"
+  },
+  {
+   "id": "VID-010",
+   "movement": "B-skips",
+   "category": "Running"
+  },
+  {
+   "id": "VID-011",
+   "movement": "High knees",
+   "category": "Running"
+  },
+  {
+   "id": "VID-012",
+   "movement": "Butt kicks",
+   "category": "Running"
+  },
+  {
+   "id": "VID-013",
+   "movement": "Straight-leg bounds",
+   "category": "Running"
+  },
+  {
+   "id": "VID-014",
+   "movement": "Karaoke (grapevine)",
+   "category": "Running"
+  },
+  {
+   "id": "VID-016",
+   "movement": "Ankle dribbles",
+   "category": "Running"
+  },
+  {
+   "id": "VID-017",
+   "movement": "Complete dynamic warm-up routine",
+   "category": "Running"
+  },
+  {
+   "id": "VID-020",
+   "movement": "Elite sprint warm-up (pre-meet model)",
+   "category": "Running"
+  },
+  {
+   "id": "VID-046",
+   "movement": "Block Start Drills Progression",
+   "category": "Running"
+  },
+  {
+   "id": "VID-047",
+   "movement": "Block Start Execution / Block Blast",
+   "category": "Running"
+  },
+  {
+   "id": "VID-048",
+   "movement": "Block Starts & Acceleration Mechanics",
+   "category": "Running"
+  },
+  {
+   "id": "VID-049",
+   "movement": "Falling Starts",
+   "category": "Running"
+  },
+  {
+   "id": "VID-050",
+   "movement": "Acceleration Mechanics",
+   "category": "Running"
+  },
+  {
+   "id": "VID-051",
+   "movement": "Wicket / Mini-Hurdle Runs",
+   "category": "Running"
+  },
+  {
+   "id": "VID-052",
+   "movement": "Wicket Runs for Max Velocity",
+   "category": "Running"
+  },
+  {
+   "id": "VID-053",
+   "movement": "Wicket Setup & Execution",
+   "category": "Running"
+  },
+  {
+   "id": "VID-054",
+   "movement": "Wicket Drills (Feed the Cats)",
+   "category": "Running"
+  },
+  {
+   "id": "VID-055",
+   "movement": "Front-Side Mechanics Drills",
+   "category": "Running"
+  },
+  {
+   "id": "VID-056",
+   "movement": "Max-Velocity Mechanics & Posture",
+   "category": "Running"
+  },
+  {
+   "id": "VID-057",
+   "movement": "Foot Strike / Ankle Stiffness Cues",
+   "category": "Running"
+  },
+  {
+   "id": "VID-058",
+   "movement": "Resisted Sprints (Sled / Load-Velocity)",
+   "category": "Running"
+  },
+  {
+   "id": "VID-059",
+   "movement": "Wall Drills - Sprint / Switches",
+   "category": "Running"
+  },
+  {
+   "id": "VID-060",
+   "movement": "Wall Drills - Posture / Piston Hold",
+   "category": "Running"
+  },
+  {
+   "id": "VID-061",
+   "movement": "Sprint Mechanics Drills / Common Fault Fixes",
+   "category": "Running"
+  },
+  {
+   "id": "VID-062",
+   "movement": "Arm Action",
+   "category": "Running"
+  },
+  {
+   "id": "VID-063",
+   "movement": "Curve Running",
+   "category": "Running"
+  },
+  {
+   "id": "VID-064",
+   "movement": "200m Curve-to-Straight Execution",
+   "category": "Running"
+  },
+  {
+   "id": "VID-065",
+   "movement": "Relay Exchange Basics",
+   "category": "Running"
+  },
+  {
+   "id": "VID-066",
+   "movement": "Pogo Hops",
+   "category": "Running"
+  },
+  {
+   "id": "VID-067",
+   "movement": "Countermovement Jump",
+   "category": "Running"
+  },
+  {
+   "id": "VID-068",
+   "movement": "Box Jumps",
+   "category": "Running"
+  },
+  {
+   "id": "VID-069",
+   "movement": "Hurdle Hops",
+   "category": "Running"
+  },
+  {
+   "id": "VID-070",
+   "movement": "Single-Leg Hops",
+   "category": "Running"
+  },
+  {
+   "id": "VID-071",
+   "movement": "Alternating Bounds",
+   "category": "Running"
+  },
+  {
+   "id": "VID-072",
+   "movement": "Depth Jumps & Plyometric Progressions (Safety)",
+   "category": "Running"
+  },
+  {
+   "id": "VID-073",
+   "movement": "Medicine Ball Throws (Power)",
+   "category": "Running"
+  },
+  {
+   "id": "VID-074",
+   "movement": "Tuck Jumps",
+   "category": "Running"
+  },
+  {
+   "id": "VID-075",
+   "movement": "Jump Rope for Sprinters",
+   "category": "Running"
+  },
+  {
+   "id": "VID-019",
+   "movement": "Mini-band glute activation (clamshells)",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-101",
+   "movement": "Bodyweight Squat",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-102",
+   "movement": "Mini-Band Lateral Walks",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-079",
+   "movement": "Hip Airplane",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-080",
+   "movement": "Glute Med Work — Banded Clamshell",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-082",
+   "movement": "Copenhagen Plank",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-083",
+   "movement": "Cossack Squat",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-087",
+   "movement": "Single-Leg Glute Bridge Progressions",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-088",
+   "movement": "Banded Hip Flexor March (Psoas March)",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-021",
+   "movement": "Back Squat",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-022",
+   "movement": "Hang Clean",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-023",
+   "movement": "Power Clean",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-024",
+   "movement": "Bench Press",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-025",
+   "movement": "Trap Bar Deadlift",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-026",
+   "movement": "Vertical Jump",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-027",
+   "movement": "Broad Jump",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-028",
+   "movement": "Pull-ups",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-029",
+   "movement": "Front Squat",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-030",
+   "movement": "Romanian Deadlift",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-031",
+   "movement": "Conventional Deadlift",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-032",
+   "movement": "Hang Power Snatch",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-033",
+   "movement": "Push Press",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-034",
+   "movement": "Bulgarian Split Squat",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-035",
+   "movement": "Walking Lunge",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-036",
+   "movement": "Step-Up",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-037",
+   "movement": "Hip Thrust",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-038",
+   "movement": "Nordic Hamstring Curl",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-039",
+   "movement": "Single-Leg Romanian Deadlift",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-040",
+   "movement": "Bent-Over Row",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-041",
+   "movement": "Incline Bench Press",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-042",
+   "movement": "Overhead Press",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-043",
+   "movement": "Single-Leg Calf Raise",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-044",
+   "movement": "Clean Pull",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-045",
+   "movement": "Good Morning",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-091",
+   "movement": "Dead Bug",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-092",
+   "movement": "Pallof Press",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-093",
+   "movement": "Side Plank Progressions",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-094",
+   "movement": "McGill Curl-Up",
+   "category": "Strengthening"
+  },
+  {
+   "id": "VID-095",
+   "movement": "Suitcase Carry",
+   "category": "Strengthening"
+  }
+ ]
+}
