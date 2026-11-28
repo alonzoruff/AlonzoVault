@@ -452,6 +452,24 @@ async function main() {
   check('home has a What to do today card with warm-up, run and log steps',
     appJs.text.includes('todo-today') && appJs.text.includes('todo-warmup') &&
     appJs.text.includes('todo-log') && appJs.text.includes('What to do today'));
+  /* v69 fix: the athlete's published workout card was blank on first
+     load (it only rendered when Today was re-opened), and What to do
+     today ignored the published workout. */
+  const fnBody = (name) => { const i = appJs.text.indexOf('function ' + name + '('); return i < 0 ? '' : appJs.text.slice(i, appJs.text.indexOf('\n}\n', i)); };
+  check('v69: the published workout loads on every auth change, first load included',
+    /renderHome\(\);[\s\S]{0,200}renderMyPlan\(\);/.test(fnBody('syncAuthUi')));
+  check('v69: renderMyPlan keeps the plan in state and repaints What to do today',
+    fnBody('renderMyPlan').includes('state.myPlan = p') && fnBody('renderMyPlan').includes('paintTodoCard()') &&
+    fnBody('renderMyPlan').includes('seq !== renderMyPlan.seq'));
+  check('v69: renderMyPlan clears the kept plan when no athlete is signed in',
+    fnBody('renderMyPlan').includes('state.myPlan = null'));
+  check('v69: What to do today runs the published session, from the published plan',
+    fnBody('todoCardHtml').includes('state.myPlan') && fnBody('todoCardHtml').includes('plan.sessionId') &&
+    fnBody('todoCardHtml').includes('data-run-today="${esc(ps.id)}"') && fnBody('todoCardHtml').includes('todo-published'));
+  check('v69: a coach never gets the athlete published-plan version of the card',
+    fnBody('todoCardHtml').includes('!isCoachUser() && state.user && state.myPlan'));
+  check('v69: renderHome paints the card through paintTodoCard (one wiring path)',
+    fnBody('renderHome').includes('paintTodoCard();') && !fnBody('renderHome').includes('todayCardHtml'));
   const idxHtml = await apiText(null, '/');
   check('What to do today card sits above practice plan, check-in and announcements',
     idxHtml.text.indexOf('id="todo-slot"') > 0 && idxHtml.text.indexOf('id="todo-slot"') < idxHtml.text.indexOf('id="my-plan-slot"') &&
@@ -459,8 +477,8 @@ async function main() {
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v68 (What to do today card)',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v68"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v69 (athlete published workout fix)',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v69"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2385,16 +2403,16 @@ async function main() {
      the update toast, and the version stamp all stay. The Floodlight
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
-    appJs.text.includes("const APP_VERSION = 'v66'") &&
-    swJs.text.includes("sprinter-app-v68"));
+    appJs.text.includes("const APP_VERSION = 'v69'") &&
+    swJs.text.includes("sprinter-app-v69"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
     appJs.text.includes('swa-app-updated') &&
     appJs.text.includes('Updated to the latest version'));
   check('version stamp ships in the shell and the account view',
-    pageHtml.text.includes('data-app-version="v66"') &&
-    pageHtml.text.includes('Sprinter Workout App · v66') &&
+    pageHtml.text.includes('data-app-version="v69"') &&
+    pageHtml.text.includes('Sprinter Workout App · v69') &&
     appJs.text.includes('appVersionHtml'));
 
   /* ---------------- Themes (v59) ----------------
@@ -8418,7 +8436,7 @@ async function waitForServer(tries = 60) {
     r = await api(c2, 'POST', '/api/plans/' + plan.id + '/revise', { rev: plan.rev });
     check('v65: a change to a published workout starts a new draft version', r.status === 201 && r.json.plan.pendingRevision && r.json.plan.pendingRevision.version === 2 && r.json.plan.status === 'published', r.json);
     plan = r.json.plan;
-    r = await api(c2, 'PUT', '/api/plans/' + plan.id, { rev: plan.rev, location: 'Gym' });
+    r = await api(c2, 'PUT', '/api/plans/' + plan.id, { rev: plan.rev, location: 'Gym', sessionId: 'SE-02' });
     plan = r.json.plan;
     r = await api(veeCookie, 'GET', '/api/my/plan');
     check('v65: athletes keep the published version while a revision is a draft', r.json.plan && r.json.plan.location === 'Main track', r.json.plan);
@@ -8437,6 +8455,8 @@ async function waitForServer(tries = 60) {
     check('v65: the athlete sees the new version and the change note',
       r.json.plan && r.json.plan.location === 'Gym' && r.json.plan.status === 'updated' &&
       r.json.plan.changeNotice && r.json.plan.changeNotice.summary === 'Moved to the gym because of rain', r.json.plan);
+    check('v69: the athlete payload carries the published session code that What to do today starts',
+      r.json.plan && r.json.plan.sessionId === 'SE-02' && !!r.json.plan.sessionName, r.json.plan);
     check('v65: version history keeps every version and every step',
       plan.history.length === 2 && plan.history[1].status === 'superseded' &&
       plan.history[0].log.map(e => e.to).join(',') === 'draft,review,approved,published', plan.history);
