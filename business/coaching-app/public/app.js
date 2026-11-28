@@ -1874,9 +1874,10 @@ function renderAccount() {
           <p class="muted">${forgot}</p>
         </form>
         <form id="register-form" role="tabpanel" aria-labelledby="acct-tab-register" hidden>
-          <p class="muted">Create your account with the exact email I invited. It is how I link you to your daily check-in and your numbers.</p>
+          <p class="muted">Create your account with the exact email I invited. It is how I link you to your daily check-in and your numbers. Have a code from Coach AJ instead of an invite? Type it below.</p>
           <label>Email <input type="email" id="rg-email" required autocomplete="email"></label>
           <label>Password (8+ characters) <input type="password" id="rg-pass" required autocomplete="new-password" minlength="8"></label>
+          <label>Code from Coach AJ (optional) <input type="text" id="rg-code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="60"></label>
           <button class="btn primary" type="submit">Create account</button>
           <p class="error" id="rg-err" role="alert"></p>
         </form>
@@ -1905,7 +1906,9 @@ function renderAccount() {
     $('#register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        state.user = await apiPost('/api/register', { email: $('#rg-email').value, password: $('#rg-pass').value });
+        const regBody = { email: $('#rg-email').value, password: $('#rg-pass').value };
+        if ($('#rg-code') && $('#rg-code').value.trim()) regBody.code = $('#rg-code').value.trim();
+        state.user = await apiPost('/api/register', regBody);
         await refreshUserData(); syncAuthUi(); showView(state.user.role === 'coach' ? 'coachhub' : 'home');
       } catch (err) { $('#rg-err').textContent = err.message; }
     });
@@ -9422,6 +9425,7 @@ async function renderAccess() {
   let data;
   try { data = await api('/api/access'); }
   catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  setTimeout(renderFoundingCodeCard, 0);
   const members = data.members || [];
   const rowHtml = (mb) => {
     const last = (mb.history || [])[mb.history.length - 1];
@@ -11646,4 +11650,22 @@ async function renderScoreboard() {
   }));
   const rf = el.querySelector('[data-sb-refresh]');
   if (rf) rf.addEventListener('click', () => renderScoreboard());
+}
+
+/* Founding code (Nov 28, 2026): status and the redemption log on the
+   coach Access page. The code word itself is never sent to the page. */
+async function renderFoundingCodeCard() {
+  const el = $('#access-main');
+  if (!el || $('#founding-code-card')) return;
+  let d;
+  try { d = await api('/api/founding-code'); } catch (_) { return; }
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'founding-code-card';
+  card.innerHTML = `<h2>Founding code</h2>
+    <p>${d.enabled ? '<span class="badge low">On</span> Anyone with the code can create an account and starts on Lab Pass, free.' : '<span class="badge plain">Off</span> The code is turned off. Set FOUNDING_CODE on the host to turn it on.'}</p>
+    <p class="muted">Lab Pass: ${esc(String(d.labPass.active))} of ${esc(String(d.labPass.capacity))} spots used, founding members included. To change or turn off the code, change FOUNDING_CODE on the host; no code change needed.</p>
+    <h3>${d.count} ${d.count === 1 ? 'redemption' : 'redemptions'}</h3>
+    ${d.count ? `<ul class="code-redemptions">${d.redemptions.map(r => `<li>${esc(r.email)} · ${esc(fmtDate(new Date(r.at)))}</li>`).join('')}</ul>` : '<p class="muted">No one has used it yet.</p>'}`;
+  el.prepend(card);
 }
