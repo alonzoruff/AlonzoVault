@@ -3732,6 +3732,7 @@ const EVENT_GROUP_CODES = {
   multis: 'Multis', multi: 'Multis', everything: 'Multis',
   distance: 'Distance', md: 'Distance', d: 'Distance',
   throws: 'Throws', throw: 'Throws',
+  manager: 'Manager', managers: 'Manager', 'team manager': 'Manager',
 };
 const cleanEventGroups = (v) => {
   const raw = Array.isArray(v) ? v : String(v == null ? '' : v).split(/[,;/]+/);
@@ -3786,8 +3787,9 @@ const rosterHeaderMap = (cells) => {
   const h = cells.map(c => String(c || '').trim().toLowerCase());
   const find = (re, not) => h.findIndex(x => re.test(x) && !(not && not.test(x)));
   const map = {
-    first: find(/^first\s*name/),
-    last: find(/^last\s*name/),
+    // "First Name", or "Athlete's First Name" on the team roster form.
+    first: find(/^(athlete['\u2019]?s?\s+)?first\s*name/),
+    last: find(/^(athlete['\u2019]?s?\s+)?last\s*name/),
     name: find(/^(athlete\s*)?name$/),
     level: find(/^(classification|level|team\s*level|team)\b/),
     groups: find(/^event\s*groups?\b/),
@@ -3796,6 +3798,9 @@ const rosterHeaderMap = (cells) => {
     phone: find(/(cell|phone|mobile)/),
   };
   if (map.email < 0) map.email = find(/^(athlete\s*)?e-?mail(\s*address)?\b/);
+  // A plain "Class" header (the Final Roster tab) also means level;
+  // "Class of 2027" or "Class year" does not.
+  if (map.level < 0) map.level = find(/^class$/);
   const hasName = (map.first >= 0 && map.last >= 0) || map.name >= 0;
   const hasField = map.level >= 0 || map.groups >= 0 || map.email >= 0 || map.phone >= 0;
   return hasName && hasField ? map : null;
@@ -4624,6 +4629,12 @@ async function handleApi(req, res, url) {
           if (ph === null) notes.push('phone not saved (does not look like a phone number)');
           const existing = db.profiles.find(pr => !pr.archived && nameKey(pr.firstName, pr.lastName) === key)
             || db.profiles.find(pr => nameKey(pr.firstName, pr.lastName) === key);
+          // Team managers are listed on the roster sheet but are not
+          // athletes, so they are never added (or changed) by an import.
+          if (groups.length && groups.every(g => g === 'Manager')) {
+            report.skipped.push({ line: lineNo, text: label, reason: 'Team manager, not added as an athlete.' });
+            continue;
+          }
           if (addsAthletes && !groups.length && !existing) {
             report.skipped.push({ line: lineNo, text: label, reason: 'No event group listed, so not added.' });
             continue;

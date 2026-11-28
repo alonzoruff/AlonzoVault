@@ -449,11 +449,18 @@ async function main() {
   check('app JS has the dismissible Start here strip (localStorage)',
     appJs.text.includes('start-strip') && appJs.text.includes('swa-start-here') &&
     appJs.text.includes('start-dismiss'));
+  check('home has a What to do today card with warm-up, run and log steps',
+    appJs.text.includes('todo-today') && appJs.text.includes('todo-warmup') &&
+    appJs.text.includes('todo-log') && appJs.text.includes('What to do today'));
+  const idxHtml = await apiText(null, '/');
+  check('What to do today card sits above practice plan, check-in and announcements',
+    idxHtml.text.indexOf('id="todo-slot"') > 0 && idxHtml.text.indexOf('id="todo-slot"') < idxHtml.text.indexOf('id="my-plan-slot"') &&
+    idxHtml.text.indexOf('id="my-plan-slot"') < idxHtml.text.indexOf('id="announce-slot"') && appJs.text.includes('todo-coach'));
   check('app JS surfaces today\'s warm-up card on the home view',
     appJs.text.includes('home-warmup-card') && appJs.text.includes('WARMUP_CARD_FOR'));
   const swJs = await apiText(null, '/sw.js');
-  check('service worker cache is bumped to v66 (TV board)',
-    swJs.status === 200 && swJs.text.includes("sprinter-app-v66"), swJs.text.slice(0, 80));
+  check('service worker cache is bumped to v68 (What to do today card)',
+    swJs.status === 200 && swJs.text.includes("sprinter-app-v68"), swJs.text.slice(0, 80));
   check('service worker navigations go network-first (rollback: shell no longer carries fonts.css)',
     !swJs.text.includes('/fonts.css') && swJs.text.includes('networkFirstNavigation') &&
     swJs.text.includes("request.mode === 'navigate'"));
@@ -2379,7 +2386,7 @@ async function main() {
      hero / poster / theme from that commit are rolled back below. */
   check('app version constant is pinned to the SW version',
     appJs.text.includes("const APP_VERSION = 'v66'") &&
-    swJs.text.includes("sprinter-app-v66"));
+    swJs.text.includes("sprinter-app-v68"));
   check('update loop reloads once on controllerchange and toasts after reload',
     appJs.text.includes('hadServiceWorkerController') &&
     appJs.text.includes('controllerchange') &&
@@ -8150,6 +8157,52 @@ async function waitForServer(tries = 60) {
     // The old pipe format still works unchanged.
     r = await api(coach, 'POST', '/api/profiles/import', { text: 'Pipe, Still | 100/200 | sprinter |' });
     check('v64: the pipe-line import format still works', r.status === 200 && r.json.report.created === 1, r.json);
+  }
+
+  /* ---------------- v66.1: Final Roster tab as it is ----------------
+     The tab heads its level column "Class" and lists team managers with
+     "Manager" as their event group. Made-up names only. */
+  {
+    const classTab = [
+      'First Name,Last Name,Class,Event Group',
+      'Corin,Dashwell,Var B,"SS, LJ"',
+      'Tamsin,Hopwood,JV,Hurdles',
+      'Pell,Organizer,,Manager',
+      'Quinby,Clipboard,,Managers',
+    ].join('\n');
+    let r = await api(coach, 'POST', '/api/profiles/import', { text: classTab });
+    const rep = r.json && r.json.report;
+    check('v66.1: a "Class" header is read as the team level',
+      r.status === 200 && rep.created === 2, r.json);
+    r = await api(coach, 'GET', '/api/profiles');
+    const cd = r.json.profiles.find(pr => pr.name === 'Corin Dashwell');
+    const th = r.json.profiles.find(pr => pr.name === 'Tamsin Hopwood');
+    check('v66.1: levels from the Class column land on each athlete',
+      cd && cd.level === 'varsity-b' && th && th.level === 'jv', [cd, th]);
+    check('v66.1: team managers are skipped, not added as athletes',
+      !r.json.profiles.some(pr => pr.name === 'Pell Organizer' || pr.name === 'Quinby Clipboard') &&
+      rep.skipped.filter(s => /manager/i.test(s.reason)).length === 2, rep);
+    // "Class of 2027" is a grad year, never the team level.
+    r = await api(coach, 'POST', '/api/profiles/import', { text: 'First Name,Last Name,Class of 2027,Event Group\nVale,Yearling,yes,SS' });
+    r = await api(coach, 'GET', '/api/profiles');
+    const vy = r.json.profiles.find(pr => pr.name === 'Vale Yearling');
+    check('v66.1: a "Class of 2027" column is not taken as the level', vy && !vy.level, vy);
+    // The team roster form heads its name columns "Athlete's First Name"
+    // and only fills in contacts for athletes already on the roster.
+    const formCsv = [
+      'Timestamp,Email Address,Athlete\'s First Name,Athlete\'s Last Name,Athlete\'s Best Email,Athlete\'s Cell Number,1st Parent\'s/Guardian\'s Email ,Do you currently have any food allergies?',
+      '11/20/2026 10:00:00,signin@example.com,Corin,Dashwell,corin.d@example.com,(555) 010-3333,parent@example.com,none',
+      '11/20/2026 10:05:00,other@example.com,Newbie,Notonroster,newbie@example.com,5550104444,p2@example.com,none',
+    ].join('\n');
+    r = await api(coach, 'POST', '/api/profiles/import', { text: formCsv });
+    const frep = r.json && r.json.report;
+    r = await api(coach, 'GET', '/api/profiles');
+    const cd2 = r.json.profiles.find(pr => pr.name === 'Corin Dashwell');
+    check('v66.1: the roster form\'s "Athlete\'s First Name" columns fill in contacts',
+      frep && frep.updated === 1 && cd2 && cd2.email === 'corin.d@example.com' && cd2.phone === '555-010-3333', [frep, cd2]);
+    check('v66.1: the roster form adds no one new and stores no parent email or health answer',
+      !r.json.profiles.some(pr => pr.name === 'Newbie Notonroster') &&
+      !JSON.stringify(r.json.profiles).includes('parent@example.com'), frep);
   }
 
   /* ---------------- v65: Coach Today + staff handoffs ----------------
