@@ -164,6 +164,7 @@ node tests/security-headers-tests.js # security headers and the bad-request cras
 node tests/filming-tests.js          # Filming Tracker
 node tests/risky-areas-tests.js      # the riskiest areas, with a coverage report
 node tests/phase1-membership-tests.js # Phase 1 plans: prices, retired $10 tier, Lab Pass cap of 50
+node tests/apple-health-tests.js     # Apple Health: connection keys, ingest, member and coach views
 node tests/store-tests.js            # hosted data store (uses a pretend Upstash)
 node tests/run-tests-store-mode.js   # the big suite again, in hosted-store mode
 ```

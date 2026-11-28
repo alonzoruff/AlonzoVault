@@ -437,16 +437,16 @@ function md(src) {
    listener below routes them all. */
 const VIEW_AREA = {
   landing: 'landing', home: 'home', train: 'train', learn: 'learn', log: 'log', account: 'account', coachhub: 'coachhub',
-  library: 'train', labprograms: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train',
+  library: 'train', labprograms: 'train', season: 'train', cards: 'train', drills: 'train', qtr: 'train', records: 'train', leaderboard: 'train', speedreport: 'train', applehealth: 'train',
   videos: 'learn', definitions: 'learn', exercises: 'learn', nutrition: 'learn', education: 'learn', guide: 'learn',
-  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', filming: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub', inviterequests: 'coachhub', scoreboard: 'coachhub',
+  coach: 'coachhub', groups: 'coachhub', testing: 'coachhub', top: 'coachhub', health: 'coachhub', inventory: 'coachhub', tv: 'coachhub', meets: 'coachhub', meetday: 'coachhub', goals: 'coachhub', reports: 'coachhub', digest: 'coachhub', custom: 'coachhub', attendance: 'coachhub', ams: 'coachhub', formcheckqueue: 'coachhub', programs: 'coachhub', calendar: 'coachhub', announce: 'coachhub', data: 'coachhub', devices: 'coachhub', coverage: 'coachhub', filming: 'coachhub', weightroom: 'coachhub', access: 'coachhub', bookings: 'coachhub', inviterequests: 'coachhub', scoreboard: 'coachhub', athletehealth: 'coachhub',
   livesessions: 'train',
   book: 'landing', invite: 'landing',
 };
 const GROUP_SUBNAV = {
-  train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
+  train: [['library', 'Workouts'], ['labprograms', 'Programs'], ['season', 'Season Plan'], ['cards', 'Warm-Up Cards'], ['records', 'Club Records'], ['leaderboard', 'Leaderboard'], ['speedreport', 'Lab Report'], ['applehealth', 'Apple Health'], ['livesessions', 'Live Sessions'], ['drills', 'Warm-Up Drills'], ['qtr', '400m Training']],
   learn: [['videos', 'Videos'], ['definitions', 'Definitions'], ['exercises', 'Exercise Library'], ['nutrition', 'Nutrition'], ['education', 'Coach Education'], ['guide', 'How to use this app']],
-  coachhub: [['scoreboard', 'Scoreboard'], ['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage'], ['filming', 'Filming Tracker']],
+  coachhub: [['scoreboard', 'Scoreboard'], ['coach', "Today's Checklist"], ['attendance', 'Attendance'], ['meetday', 'Meet Day'], ['tv', 'TV Board'], ['weightroom', 'Weight Room'], ['groups', 'Roster & Groups'], ['ams', 'AMS'], ['testing', 'Testing'], ['top', 'Top Athletes'], ['meets', 'Meet Results'], ['goals', 'Goals'], ['reports', 'Reports'], ['digest', 'Digest'], ['health', 'Aches & Pains'], ['athletehealth', 'Apple Health'], ['inviterequests', 'Invitation Requests'], ['formcheckqueue', 'Form Checks'], ['bookings', 'Bookings'], ['custom', 'Custom Workouts'], ['programs', 'Programs'], ['calendar', 'Calendar'], ['announce', 'Announcements'], ['access', 'Access'], ['inventory', 'Inventory'], ['data', 'Data'], ['devices', 'Devices'], ['coverage', 'Demo Coverage'], ['filming', 'Filming Tracker']],
 };
 /* ---------------- membership tiers (v14) ----------------
    The nav mirror of the server's entitlement rules. The server is
@@ -496,7 +496,7 @@ document.addEventListener('click', (e) => {
 });
 const VIEW_TIER_NEED = {
   library: 'training', labprograms: 'training', season: 'training', cards: 'training', drills: 'training', qtr: 'training',
-  speedreport: 'training', log: 'training',
+  speedreport: 'training', applehealth: 'training', log: 'training',
   videos: 'training', definitions: 'training', exercises: 'training', nutrition: 'training',
   education: 'training', guide: 'training',
   livesessions: 'pass',
@@ -739,6 +739,8 @@ function showView(name) {
   if (name === 'devices') renderDevices();
   if (name === 'coverage') renderCoverage();
   if (name === 'filming') renderFilming();
+  if (name === 'applehealth') renderAppleHealth();
+  if (name === 'athletehealth') renderAthleteHealth();
   if (name === 'exercises') renderExercises();
   syncBackHome(name);
   mxAfterShow(name);
@@ -11646,4 +11648,122 @@ async function renderScoreboard() {
   }));
   const rf = el.querySelector('[data-sb-refresh]');
   if (rf) rf.addEventListener('click', () => renderScoreboard());
+}
+
+/* ---------------- Apple Health (Nov 28, 2026) ----------------
+   The member's own page: connection state, a one-time connection key
+   for the iPhone Shortcut, and the days and workouts it has sent. The
+   coach page lists every connected account. Health numbers are only
+   ever fetched by the signed-in member or a coach. */
+function healthMins(m) {
+  if (m === undefined || m === null) return '—';
+  const h = Math.floor(m / 60), r = Math.round(m % 60);
+  return h ? h + 'h ' + r + 'm' : r + 'm';
+}
+function healthVal(v, unit) { return v === undefined || v === null ? '—' : esc(String(v)) + (unit ? ' ' + unit : ''); }
+function healthWhen(iso) {
+  if (!iso) return 'never';
+  const d = new Date(iso);
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+function healthDay(d) {
+  const t = new Date(d + 'T12:00:00');
+  return t.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function healthDaysTable(days) {
+  if (!days.length) return '<p class="muted">Nothing synced yet. Run the AYG Lab Health shortcut on your iPhone, then come back here.</p>';
+  return `<div class="sb-table-wrap"><table class="sb-table"><thead><tr><th>Day</th><th>Steps</th><th>Sleep</th><th>Resting HR</th><th>HRV</th></tr></thead><tbody>
+    ${days.map(d => `<tr><td>${esc(healthDay(d.date))}</td><td>${d.steps === undefined ? '—' : esc(Number(d.steps).toLocaleString())}</td><td>${healthMins(d.sleepMinutes)}</td><td>${healthVal(d.restingHeartRate, 'bpm')}</td><td>${healthVal(d.hrv, 'ms')}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+function healthWorkoutsList(ws) {
+  if (!ws.length) return '<p class="muted">No workouts synced yet.</p>';
+  return `<ul class="health-workouts">${ws.map(w => `<li><strong>${esc(w.type)}</strong> · ${esc(new Date(w.start).toLocaleDateString([], { month: 'short', day: 'numeric' }))}${w.durationMinutes !== undefined ? ' · ' + esc(String(Math.round(w.durationMinutes))) + ' min' : ''}${w.distanceMeters !== undefined ? ' · ' + esc((w.distanceMeters / 1000).toFixed(2)) + ' km' : ''}${w.energyKcal !== undefined ? ' · ' + esc(String(Math.round(w.energyKcal))) + ' kcal' : ''}</li>`).join('')}</ul>`;
+}
+async function renderAppleHealth() {
+  const el = $('#applehealth-main');
+  if (!el) return;
+  let d;
+  try { d = await api('/api/my/health'); } catch (err) {
+    el.innerHTML = `<div class="card"><p class="error">Could not load Apple Health: ${esc(err.message)}</p></div>`;
+    return;
+  }
+  const status = d.connected
+    ? `<p><span class="badge health-ok">Connected</span> Key made ${esc(healthWhen(d.keyCreatedAt))}. Last sync: ${esc(healthWhen(d.lastSyncAt))}.</p>`
+    : `<p><span class="badge health-off">Not connected</span> Make a connection key, then add it to the AYG Lab Health shortcut on your iPhone.</p>`;
+  el.innerHTML = `
+    <div class="card">
+      <h2>Connection</h2>
+      ${status}
+      <div id="health-key-box"></div>
+      <div class="btn-row">
+        <button class="btn" id="health-make-key" type="button">${d.connected ? 'Make a new key' : 'Make a connection key'}</button>
+        ${d.connected ? '<button class="btn secondary" id="health-disconnect" type="button">Disconnect</button>' : ''}
+      </div>
+      <details class="health-steps"><summary>How to connect your iPhone</summary>
+        <ol>
+          <li>Tap <strong>Make a connection key</strong> and copy it.</li>
+          <li>On your iPhone, open the <strong>AYG Lab Health</strong> shortcut your coach shared and paste the key where it asks.</li>
+          <li>Run it once and allow it to read Health when your iPhone asks.</li>
+          <li>Come back here: today's numbers show up within a few seconds.</li>
+        </ol>
+        <p class="muted">Steps, sleep, resting heart rate, HRV and workouts are the only things it sends. Only you and your coaches can see them.</p>
+      </details>
+    </div>
+    <div class="card"><h2>Last 30 days</h2>${healthDaysTable(d.days)}</div>
+    <div class="card"><h2>Recent workouts</h2>${healthWorkoutsList(d.workouts)}</div>
+    <div class="card"><h2>Your data</h2><p class="muted">Delete everything Apple Health has sent here. Your phone keeps its own copy.</p>
+      <button class="btn secondary" id="health-delete" type="button">Delete my Apple Health data</button></div>`;
+  $('#health-make-key').addEventListener('click', async () => {
+    if (d.connected && !confirm('A new key stops the old one. Paste the new key into the shortcut on your iPhone afterward. Continue?')) return;
+    try {
+      const r = await apiPost('/api/my/health/key', {});
+      $('#health-key-box').innerHTML = `<p><strong>Your connection key</strong> (shown once, copy it now):</p>
+        <p><code class="health-key" id="health-key-text">${esc(r.key)}</code></p>
+        <button class="btn secondary" id="health-copy" type="button">Copy key</button>`;
+      $('#health-copy').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(r.key); $('#health-copy').textContent = 'Copied'; } catch (_) { $('#health-copy').textContent = 'Select the key and copy it'; }
+      });
+    } catch (err) { $('#health-key-box').innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+  });
+  const dc = $('#health-disconnect');
+  if (dc) dc.addEventListener('click', async () => {
+    if (!confirm('Disconnect your iPhone? The shortcut stops working until you make a new key. Your synced data stays.')) return;
+    try { await apiDel('/api/my/health/key'); renderAppleHealth(); } catch (err) { alert(err.message); }
+  });
+  $('#health-delete').addEventListener('click', async () => {
+    if (!confirm('Delete all Apple Health data saved in AYG Lab? This cannot be undone.')) return;
+    try { await apiDel('/api/my/health/data'); renderAppleHealth(); } catch (err) { alert(err.message); }
+  });
+}
+async function renderAthleteHealth(memberId) {
+  const el = $('#athletehealth-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'Athletes\' Apple Health data lives here.'); return; }
+  if (memberId) {
+    let d;
+    try { d = await api('/api/health/members/' + encodeURIComponent(memberId)); } catch (err) {
+      el.innerHTML = `<p class="error">Could not load: ${esc(err.message)}</p>`; return;
+    }
+    el.innerHTML = `<button class="btn secondary" id="ah-back" type="button">Back to all athletes</button>
+      <div class="card"><h2>${esc(d.email)}</h2><p>${d.connected ? '<span class="badge health-ok">Connected</span>' : '<span class="badge health-off">Not connected</span>'} Last sync: ${esc(healthWhen(d.lastSyncAt))}</p></div>
+      <div class="card"><h2>Last 60 days</h2>${healthDaysTable(d.days)}</div>
+      <div class="card"><h2>Recent workouts</h2>${healthWorkoutsList(d.workouts)}</div>`;
+    $('#ah-back').addEventListener('click', () => renderAthleteHealth());
+    return;
+  }
+  let d;
+  try { d = await api('/api/health/members'); } catch (err) {
+    el.innerHTML = `<p class="error">Could not load: ${esc(err.message)}</p>`; return;
+  }
+  if (!d.members.length) {
+    el.innerHTML = '<div class="card"><p class="muted">No one has connected Apple Health yet. Members connect from Train → Apple Health.</p></div>';
+    return;
+  }
+  el.innerHTML = `<div class="card"><h2>${d.members.length} connected</h2><ul class="health-members">
+    ${d.members.map(m => { const l = m.latest || {}; return `<li><button class="linkish" type="button" data-ah-member="${esc(m.id)}">${esc(m.email)}</button>${m.connected ? '' : ' <span class="muted">(disconnected)</span>'}
+      <div class="muted">Last sync ${esc(healthWhen(m.lastSyncAt))}</div>
+      <div>${l.steps === undefined ? '' : esc(Number(l.steps).toLocaleString()) + ' steps · '}Sleep ${healthMins(l.sleepMinutes)} · RHR ${healthVal(l.restingHeartRate)} · HRV ${healthVal(l.hrv)} · ${esc(String(m.workouts7))} ${m.workouts7 === 1 ? 'workout' : 'workouts'} this week</div></li>`; }).join('')}
+  </ul></div>`;
+  el.querySelectorAll('[data-ah-member]').forEach(b => b.addEventListener('click', () => renderAthleteHealth(b.dataset.ahMember)));
 }

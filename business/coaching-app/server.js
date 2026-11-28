@@ -238,6 +238,7 @@ let db = {
   bookings: [],
   bookingSettings: null,
   inviteRequests: [],
+  health: {},
   stripeEvents: [],
   events: [],
   eventsStartedAt: null,
@@ -950,6 +951,11 @@ function migrate() {
   // goal, status, createdAt, updatedAt }. Like bookings, invite
   // requests deliberately do NOT ride along in backups.
   db.inviteRequests = Array.isArray(db.inviteRequests) ? db.inviteRequests : [];
+  // Apple Health (Nov 28, 2026): { [userId]: { days: { 'YYYY-MM-DD':
+  // { steps, sleepMinutes, restingHeartRate, hrv, updatedAt } },
+  // workouts: [...], lastSyncAt } }. Personal health data: never in
+  // backups, never on a public page.
+  db.health = (db.health && typeof db.health === 'object' && !Array.isArray(db.health)) ? db.health : {};
   // Funnel events (v40): what happened and when, for the owner
   // scoreboard. Each is { id, name, at } plus, where the app already
   // has one, a member or request id and a short detail (tier,
@@ -4991,6 +4997,118 @@ function validateLiveSession(body) {
   return { fields: { title, startsAt, joinLink, note } };
 }
 
+/* ---------- Apple Health (Nov 28, 2026) ----------
+   No native app: an Apple Shortcut on the member's iPhone reads their
+   Health samples and posts them to /api/health/ingest with the
+   member's own connection key (Authorization: Bearer <key>). The key
+   is shown once when created; only its SHA-256 hash is stored, so a
+   leaked database never reveals a working key. Deleting or rotating
+   the key disconnects the old phone at once. */
+const HEALTH_KEY_PREFIX = 'aygh_';
+const HEALTH_MAX_DAYS = 400;
+const HEALTH_MAX_WORKOUTS = 500;
+function healthKeyHash(key) { return crypto.createHash('sha256').update(String(key)).digest('hex'); }
+function userForHealthKey(req) {
+  const h = String(req.headers.authorization || '');
+  const m = /^Bearer\s+(\S+)$/i.exec(h);
+  if (!m || !m[1].startsWith(HEALTH_KEY_PREFIX) || m[1].length > 200) return null;
+  const want = Buffer.from(healthKeyHash(m[1]), 'hex');
+  for (const u of db.users) {
+    if (!u.healthKeyHash) continue;
+    const got = Buffer.from(u.healthKeyHash, 'hex');
+    if (got.length === want.length && crypto.timingSafeEqual(got, want)) return u;
+  }
+  return null;
+}
+/* Shortcuts often send numbers as text ("8,432" or "8432 steps").
+   Take the first number in the text; anything else is "not sent". */
+function healthNum(v, min, max) {
+  if (v === undefined || v === null || v === '') return undefined;
+  let n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, '').replace(/^[^0-9.-]+/, ''));
+  if (!Number.isFinite(n)) return null;
+  if (n < min || n > max) return null;
+  return Math.round(n * 10) / 10;
+}
+const HEALTH_DAY_FIELDS = {
+  steps: [0, 200000], sleepMinutes: [0, 1440],
+  restingHeartRate: [20, 250], hrv: [1, 400],
+};
+function healthRecordFor(userId) {
+  if (!db.health[userId]) db.health[userId] = { days: {}, workouts: [], lastSyncAt: null };
+  return db.health[userId];
+}
+/* Returns { ok, errors, day } for one day's summary. */
+function parseHealthDay(raw, today) {
+  const errors = [];
+  if (!raw || typeof raw !== 'object') return { ok: false, errors: ['Each day must be an object.'] };
+  const date = clean(raw.date, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date + 'T12:00:00Z'))) {
+    return { ok: false, errors: ['date must look like 2026-11-28.'] };
+  }
+  if (date > addDaysStr(today, 1) || date < addDaysStr(today, -HEALTH_MAX_DAYS)) {
+    return { ok: false, errors: ['date ' + date + ' is outside the last ' + HEALTH_MAX_DAYS + ' days.'] };
+  }
+  const day = {};
+  for (const [k, [min, max]] of Object.entries(HEALTH_DAY_FIELDS)) {
+    const n = healthNum(raw[k], min, max);
+    if (n === null) errors.push(k + ' must be a number from ' + min + ' to ' + max + '.');
+    else if (n !== undefined) day[k] = n;
+  }
+  const workouts = [];
+  if (raw.workouts !== undefined) {
+    const list = Array.isArray(raw.workouts) ? raw.workouts : [raw.workouts];
+    if (list.length > 50) errors.push('At most 50 workouts per day.');
+    for (const w of list.slice(0, 50)) {
+      if (!w || typeof w !== 'object') { errors.push('Each workout must be an object.'); continue; }
+      const type = clean(String(w.type || ''), 60);
+      const start = clean(String(w.start || ''), 40);
+      if (!type || Number.isNaN(Date.parse(start))) { errors.push('Each workout needs a type and a start time.'); continue; }
+      const wk = { type, start: new Date(start).toISOString(), date };
+      const dur = healthNum(w.durationMinutes, 0, 1440);
+      const kcal = healthNum(w.energyKcal, 0, 10000);
+      const dist = healthNum(w.distanceMeters, 0, 500000);
+      if (dur === null || kcal === null || dist === null) { errors.push('Workout numbers are out of range.'); continue; }
+      if (dur !== undefined) wk.durationMinutes = dur;
+      if (kcal !== undefined) wk.energyKcal = kcal;
+      if (dist !== undefined) wk.distanceMeters = dist;
+      workouts.push(wk);
+    }
+  }
+  if (errors.length) return { ok: false, errors };
+  if (!Object.keys(day).length && !workouts.length) return { ok: false, errors: ['Nothing to save for ' + date + '.'] };
+  return { ok: true, date, day, workouts };
+}
+function storeHealthDays(userId, parsed) {
+  const rec = healthRecordFor(userId);
+  const now = new Date().toISOString();
+  for (const d of parsed) {
+    if (Object.keys(d.day).length) rec.days[d.date] = Object.assign({}, rec.days[d.date] || {}, d.day, { updatedAt: now });
+    for (const w of d.workouts) {
+      // Same start time and type = the same workout sent again.
+      const i = rec.workouts.findIndex(x => x.start === w.start && x.type === w.type);
+      if (i >= 0) rec.workouts[i] = w; else rec.workouts.push(w);
+    }
+  }
+  const keep = Object.keys(rec.days).sort().slice(-HEALTH_MAX_DAYS);
+  const days = {};
+  for (const k of keep) days[k] = rec.days[k];
+  rec.days = days;
+  rec.workouts.sort((a, b) => (a.start < b.start ? 1 : -1));
+  rec.workouts = rec.workouts.slice(0, HEALTH_MAX_WORKOUTS);
+  rec.lastSyncAt = now;
+}
+function healthSummaryFor(u, nDays) {
+  const rec = db.health[u.id] || { days: {}, workouts: [], lastSyncAt: null };
+  const dates = Object.keys(rec.days).sort().reverse().slice(0, nDays || 30);
+  return {
+    connected: !!u.healthKeyHash,
+    keyCreatedAt: u.healthKeyCreatedAt || null,
+    lastSyncAt: rec.lastSyncAt || null,
+    days: dates.map(d => Object.assign({ date: d }, rec.days[d])),
+    workouts: rec.workouts.slice(0, 30),
+  };
+}
+
 async function handleApi(req, res, url) {
   const p = url.pathname;
   const q = url.searchParams;
@@ -5479,9 +5597,85 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, publicUser(me));
   }
 
+  /* Apple Health ingest: authenticated by the member's own
+     connection key, not a cookie, because the request comes from an
+     Apple Shortcut on their phone. Accepts one day ({ date, steps,
+     sleepMinutes, restingHeartRate, hrv, workouts }) or { days: [...] }. */
+  if (p === '/api/health/ingest' && req.method === 'POST') {
+    const owner = userForHealthKey(req);
+    if (!owner) return sendJson(res, 401, { error: 'That Apple Health connection key is not valid. Make a new one on the Apple Health page in the app.' });
+    if (owner.role !== 'coach' && !effectiveTier(owner)) {
+      return sendJson(res, 403, { error: 'Apple Health sync is part of an active membership.', needsTier: 'training' });
+    }
+    let body;
+    try { body = await readBody(req); } catch (_) { return sendJson(res, 400, { error: 'Send the health data as JSON.' }); }
+    const list = Array.isArray(body.days) ? body.days : [body];
+    if (!list.length || list.length > 31) return sendJson(res, 400, { error: 'Send between 1 and 31 days at a time.' });
+    const today = todayStr();
+    const parsed = [];
+    for (const raw of list) {
+      const r = parseHealthDay(raw, today);
+      if (!r.ok) return sendJson(res, 400, { error: r.errors.join(' ') });
+      parsed.push(r);
+    }
+    storeHealthDays(owner.id, parsed);
+    saveDb();
+    return sendJson(res, 200, { ok: true, saved: parsed.map(d => d.date), lastSyncAt: db.health[owner.id].lastSyncAt });
+  }
+
   /* Everything below requires a login. */
   const user = readSession(req);
   if (!user) return sendJson(res, 401, { error: 'Please log in first.' });
+
+  /* ---------- Apple Health: the member's own page ---------- */
+  if (p === '/api/my/health' && req.method === 'GET') {
+    if (!tierGate(res, user, 'training')) return;
+    return sendJson(res, 200, healthSummaryFor(user, 30));
+  }
+  if (p === '/api/my/health/key' && req.method === 'POST') {
+    if (!tierGate(res, user, 'training')) return;
+    const key = HEALTH_KEY_PREFIX + crypto.randomBytes(24).toString('base64url');
+    user.healthKeyHash = healthKeyHash(key);
+    user.healthKeyCreatedAt = new Date().toISOString();
+    saveDb();
+    // Shown once. The server keeps only the hash.
+    return sendJson(res, 200, { key, keyCreatedAt: user.healthKeyCreatedAt });
+  }
+  if (p === '/api/my/health/key' && req.method === 'DELETE') {
+    delete user.healthKeyHash;
+    delete user.healthKeyCreatedAt;
+    saveDb();
+    return sendJson(res, 200, { ok: true, connected: false });
+  }
+  if (p === '/api/my/health/data' && req.method === 'DELETE') {
+    delete db.health[user.id];
+    saveDb();
+    return sendJson(res, 200, { ok: true });
+  }
+  /* ---------- Apple Health: the coach view ---------- */
+  if (p === '/api/health/members' && req.method === 'GET') {
+    if (user.role !== 'coach') return sendJson(res, 403, { error: 'Coaches only.' });
+    const rows = db.users
+      .filter(u => u.healthKeyHash || db.health[u.id])
+      .map(u => {
+        const sum = healthSummaryFor(u, 7);
+        const latest = sum.days[0] || null;
+        return {
+          id: u.id, email: u.email, role: u.role, connected: sum.connected,
+          lastSyncAt: sum.lastSyncAt, latest,
+          workouts7: sum.workouts.filter(w => w.date >= addDaysStr(todayStr(), -6)).length,
+        };
+      })
+      .sort((a, b) => String(b.lastSyncAt || '').localeCompare(String(a.lastSyncAt || '')));
+    return sendJson(res, 200, { members: rows });
+  }
+  const healthMemberMatch = /^\/api\/health\/members\/([^/]+)$/.exec(p);
+  if (healthMemberMatch && req.method === 'GET') {
+    if (user.role !== 'coach') return sendJson(res, 403, { error: 'Coaches only.' });
+    const target = db.users.find(u => u.id === decodeURIComponent(healthMemberMatch[1]));
+    if (!target) return sendJson(res, 404, { error: 'No such account.' });
+    return sendJson(res, 200, Object.assign({ id: target.id, email: target.email }, healthSummaryFor(target, 60)));
+  }
 
   /* ---------- owner scoreboard (v40) ----------
      The head coach's account only. Assistant coaches and members get
