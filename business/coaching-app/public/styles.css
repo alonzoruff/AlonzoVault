@@ -1091,7 +1091,8 @@ details.card summary { cursor: pointer; }
   gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px solid var(--line);
 }
 .roster-row:last-child { border-bottom: none; }
-.roster-actions { display: inline-flex; gap: 6px; }
+.roster-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.roster-actions .btn.primary { width: auto; }
 .roster-card details { margin-top: 8px; }
 .check-line { display: flex; align-items: center; gap: 8px; font-weight: 500; min-height: 44px; padding: 6px 0; }
 .check-line input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--red); flex: none; }
@@ -1381,8 +1382,9 @@ body.tv-mode .tv-bottom:hover, body.tv-mode:focus-within .tv-bottom { opacity: 1
 .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
 .chip {
   border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
-  /* 40px floor: chips live in dense filter rows; 44 would crowd them out */
-  padding: 6px 12px; min-height: 40px; border-radius: var(--r-pill); font-size: 13px; cursor: pointer; white-space: nowrap;
+  /* 44px floor like every other tap target: members filter one-handed
+     at the gym, and the rows already wrap. */
+  padding: 6px 12px; min-height: 44px; border-radius: var(--r-pill); font-size: 13px; cursor: pointer; white-space: nowrap;
 }
 .chip.active { background: var(--red); border-color: var(--red); color: var(--accent-ink); font-weight: 600; }
 .vid-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
@@ -1543,7 +1545,8 @@ body.runner-mode { overflow: hidden; }
 .runner-step-count { color: var(--hud-text-dim); font-size: 16px; margin: 0; }
 .runner-where { color: var(--red-soft-on-dark); font-size: clamp(17px, 3.4vw, 24px); font-weight: 600; margin: 6px 0 0; }
 .runner-ex-name {
-  font-size: clamp(44px, 10vw, 96px); line-height: 1.05; margin: 4px 0 0; font-weight: 800;
+  font-size: clamp(34px, 10vw, 96px); line-height: 1.05; margin: 4px 0 0; font-weight: 800;
+  max-width: 100%; overflow-wrap: anywhere;
 }
 .runner-ex-reps { font-size: clamp(34px, 7.5vw, 68px); color: var(--red-on-dark); font-weight: 800; margin: 0; }
 .runner-load { font-size: clamp(19px, 4.2vw, 30px); font-weight: 700; margin: 2px 0 0; }
@@ -2134,7 +2137,10 @@ html.ind-on .tabbar .tab.active::before { opacity: 0; }
 .mc-tier { font-size: var(--fs-lg); font-weight: 800; }
 .mc-price { font-size: var(--fs-md); color: var(--muted); }
 .mc-details { margin: 10px 0; }
-.mc-details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+.mc-details summary { cursor: pointer; font-weight: 600; min-height: 32px; padding: 10px 0; }
+/* A long email (a parent's school address) used to push the Account
+   page sideways on a phone. Let it break instead. */
+.mx-lead, #member-membership strong, #account-main p { overflow-wrap: anywhere; }
 .btn.quiet.danger { color: var(--danger); }
 #membership-cancel-zone { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
 .menu-group-label {
@@ -2147,7 +2153,7 @@ html.ind-on .tabbar .tab.active::before { opacity: 0; }
   background: var(--surface-2); border-radius: 0 var(--r-inner) var(--r-inner) 0;
 }
 .fc-wait-late { color: var(--warn); font-weight: 700; }
-details.card > summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+details.card > summary { cursor: pointer; font-weight: 700; min-height: 32px; padding: 10px 0; }
 
 /* ================================================================
    REDESIGN STAGE 3 (v27) — landing text link, home one-liners,
@@ -2157,6 +2163,9 @@ details.card > summary { cursor: pointer; font-weight: 700; min-height: 32px; }
   background: none; border: 0; padding: 0; cursor: pointer; font: inherit;
   color: var(--landing-accent); text-decoration: underline; text-underline-offset: 3px;
 }
+/* On the log in page this link stands alone, so give it a full thumb
+   sized target (it was about 21px tall). */
+.acct-invite .landing-textlink { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
 .landing-signin-link { margin-left: auto; flex: none; }
 .landing-hero .landing-signin-link { min-height: 40px; padding: 6px 10px; }
 .home-log-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -2824,8 +2833,8 @@ body.logged-out .public-nav { margin-left: auto; }
 .invite-form label { display: block; margin-bottom: 12px; }
 .invite-form label[hidden] { display: none; }
 .invite-form label input[type="text"], .invite-form label input[type="email"], .invite-form label select, .invite-form label textarea { display: block; width: 100%; margin-top: 4px; }
-.invite-form .invite-for label { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.invite-form .invite-consent { display: flex; align-items: flex-start; gap: 10px; }
+.invite-form .invite-for label { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px; min-height: 44px; }
+.invite-form .invite-consent { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding-block: 10px; }
 .invite-form .invite-consent input { margin-top: 3px; flex: none; }
 .invite-next { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
 .invite-next p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; }
@@ -2853,7 +2862,7 @@ body.logged-out .public-nav { margin-left: auto; }
 .legal h2:first-child { margin-top: 0; }
 .legal p { margin: 0 0 8px; line-height: 1.6; }
 .footer-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0; }
-.footer-links a { color: inherit; text-decoration: underline; padding: 6px 0; min-height: 32px; display: inline-flex; align-items: center; }
+.footer-links a { color: inherit; text-decoration: underline; padding: 6px 0; min-height: 44px; display: inline-flex; align-items: center; }
 
 /* Public home refresh: a wider, editorial layout keeps the training
    proof and the next step visible without changing member app views. */
@@ -3322,7 +3331,7 @@ body.member-mode .app-name { color: var(--mx-dim); }
   border: 1px solid rgba(255, 122, 26, .45); border-radius: var(--radius-sm); font-size: 14px; }
 .mx-preview-bar[hidden] { display: none; }
 @media (max-width: 1191px) { .mx-preview-bar { margin: 12px 16px 0; } }
-.mx-preview-exit { min-height: 40px; padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line-strong);
+.mx-preview-exit { min-height: 44px; padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line-strong);
   background: transparent; color: var(--ink); font-weight: 700; cursor: pointer; }
 
 /* Page frame */
@@ -3464,7 +3473,7 @@ body.member-mode .ci-save { min-height: 54px; font-size: 1.05rem; margin-top: 14
 .mx-week-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .mx-week-list li.is-today .mx-week-day { color: var(--red-dark); }
 .mx-week-day { width: 96px; flex: none; font-weight: 700; color: var(--muted); }
-.mx-link { background: none; border: 0; padding: 6px 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; min-height: 40px; }
+.mx-link { background: none; border: 0; padding: 6px 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; min-height: 44px; }
 .mx-link:hover { text-decoration-color: var(--red); }
 .mx-done { margin-left: auto; font-size: .82rem; font-weight: 700; color: var(--mx-ok); }
 .mx-programs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
@@ -3552,12 +3561,15 @@ body.member-mode .ci-save { min-height: 54px; font-size: 1.05rem; margin-top: 14
 .rx-chip { min-height: 44px; padding: 8px 14px; border-radius: var(--r-pill); border: 1.5px solid var(--line-strong); background: transparent; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
 .rx-chip.on { background: var(--red); border-color: var(--red); color: #fff; }
 .rx-level { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; }
+/* On a phone, 11 buttons in one row are about 23px wide each, too thin
+   to hit cleanly with a thumb. Two rows of six keep each one 44px+. */
+@media (max-width: 520px) { .rx-level { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; } }
 .rx-lv { min-height: 46px; padding: 0; border-radius: var(--radius-sm); border: 1.5px solid var(--line-strong); background: var(--mx-bg2); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer; }
 .rx-lv.on { background: #f2b84b; border-color: #f2b84b; color: #111; }
 .rx-lv.is-high.on { background: var(--red); border-color: var(--red); color: #fff; }
 .rx-field { display: block; margin-top: 16px; font-weight: 700; }
 .rx-field input { display: block; width: 100%; margin-top: 6px; min-height: 48px; padding: 10px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--line-strong);
-  background: var(--field-bg); color: var(--ink); font: inherit; font-weight: 400; }
+  background: var(--field-bg); color: var(--ink); font: inherit; font-size: 16px; font-weight: 400; }
 .rx-field input:focus { outline: 3px solid var(--focus-ring); border-color: var(--red); }
 .rx-error { color: var(--red-dark); font-weight: 700; margin: 10px 0 0 !important; }
 .rx-pain-flag { margin: 12px 0 0 !important; padding: 10px 14px; border-radius: var(--radius-sm); background: rgba(242, 184, 75, .12); border: 1px solid rgba(242, 184, 75, .4); color: var(--ink); font-size: .93rem; }
@@ -3598,7 +3610,7 @@ body.rx-sheet-open { overflow: hidden; }
 .rx-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 26px 0 12px; }
 .rx-section-head .mx-section-title { margin: 0 !important; }
 .rx-range { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--r-pill); background: var(--mx-bg2, #f0f0f2); border: 1px solid var(--line, #ddd); }
-.rx-range-btn { min-height: 38px; padding: 6px 14px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted, #555); font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer; }
+.rx-range-btn { min-height: 44px; padding: 6px 14px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted, #555); font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer; }
 .rx-range-btn.on { background: var(--red, #ff7a1a); color: var(--accent-ink); }
 .rx-grid-2 { display: grid; gap: 16px; }
 .rx-grid-2 > .mx-card { margin: 0; min-width: 0; }
@@ -3666,7 +3678,7 @@ body.rx-sheet-open { overflow: hidden; }
   .rx-opt { min-height: 70px; padding: 8px 2px; border-radius: var(--radius-sm); }
   .rx-opt-label { font-size: .72rem; }
   .rx-scale { gap: 6px; }
-  .rx-level { gap: 3px; }
+  .rx-level { gap: 6px; }
   .rx-lv { min-height: 44px; font-size: .9rem; border-radius: var(--r-inner); }
   .rx-parts li { grid-template-columns: 66px minmax(0, 1fr) minmax(70px, auto); gap: 8px; }
   .rx-kpi-num { font-size: 1.25rem; }
@@ -3701,7 +3713,7 @@ body.rx-sheet-open { overflow: hidden; }
 .sb-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 var(--sp-4); }
 .sb-tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; min-width: 0; }
 .sb-tile-label { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
-.sb-tile-value { margin: 6px 0 2px; font-size: clamp(1.7rem, 4.2vw, 2.4rem); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--ink); }
+.sb-tile-value { margin: 6px 0 2px; font-size: clamp(1.3rem, 6.5vw, 2.4rem); overflow-wrap: anywhere; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--ink); }
 .sb-tile-value.sb-nt { font-size: 1.1rem; font-weight: 600; color: var(--muted); padding: 10px 0 6px; }
 .sb-tile-sub { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 .sb-delta { display: inline-block; margin-top: 8px; font-size: var(--fs-xs); padding: 3px 8px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--muted); }
