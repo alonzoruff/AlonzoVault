@@ -716,6 +716,8 @@ function showView(name) {
   if (name === 'attendance') renderAttendance();
   if (name === 'ams') renderAms();
   if (name === 'formcheckqueue') renderCoachFormChecks();
+  if (name === 'sprintreports') renderSprintReports();
+  if (name === 'sprintqueue') renderSprintQueue();
   if (name === 'access') renderAccess();
   if (name === 'book') renderBook();
   if (name === 'bookings') renderBookings();
@@ -2785,6 +2787,121 @@ async function renderCoachFormChecks() {
     try {
       await apiDel('/api/form-checks/' + encodeURIComponent(b.dataset.fcDel));
       renderCoachFormChecks();
+    } catch (err) { alert(err.message); }
+  }));
+}
+
+/* ---------------- Sprint Analysis (Nov 28) ----------------
+   Members open the analysis tool at /sprint-analysis (the server
+   checks sign-in and plan), save the finished report, and see their
+   saved reports here. Coaches read every report in Sprint Analyses
+   and leave a note. Registered here rather than in the maps above. */
+VIEW_AREA.sprintreports = 'train';
+VIEW_AREA.sprintqueue = 'coachhub';
+VIEW_TIER_NEED.sprintreports = 'training';
+GROUP_SUBNAV.train.splice(2, 0, ['sprintreports', 'Sprint Analysis']);
+GROUP_SUBNAV.coachhub.push(['sprintqueue', 'Sprint Analyses']);
+
+function sprintWhen(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function sprintStatusBadge(r) {
+  return r.status === 'reviewed'
+    ? '<span class="badge sprint-reviewed">Coach reviewed</span>'
+    : '<span class="badge sprint-new">New</span>';
+}
+/* The report's shape comes from the analysis tool, so show it as
+   plain labeled lines: top-level values first, then each section. */
+function sprintLabel(k) {
+  return String(k).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase());
+}
+function sprintReportHtml(report, depth) {
+  depth = depth || 0;
+  if (report === null || report === undefined || report === '') return '<span class="muted">none</span>';
+  if (typeof report !== 'object') return esc(String(report));
+  if (Array.isArray(report)) {
+    if (!report.length) return '<span class="muted">none</span>';
+    if (report.every(x => x === null || typeof x !== 'object')) return esc(report.join(', '));
+    return '<ol class="sprint-list">' + report.map(x => '<li>' + sprintReportHtml(x, depth + 1) + '</li>').join('') + '</ol>';
+  }
+  return '<dl class="sprint-dl">' + Object.keys(report).map(k =>
+    '<dt>' + esc(sprintLabel(k)) + '</dt><dd>' + sprintReportHtml(report[k], depth + 1) + '</dd>').join('') + '</dl>';
+}
+
+async function renderSprintReports() {
+  const el = $('#sprintreports-main');
+  if (!el) return;
+  let data;
+  try { data = await api('/api/my/sprint-analyses'); }
+  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const reports = data.reports || [];
+  const limitLine = data.weekLimit === null || data.weekLimit === undefined
+    ? `${data.weekCount || 0} saved this week`
+    : `${data.weekCount || 0} of ${data.weekLimit} saved this week`;
+  el.innerHTML = `<div class="card">
+    <h2>Analyze a sprint</h2>
+    <p class="muted">Film from the side at 60 fps or faster, with the whole body in frame. The tool reads the video on your phone; it is never uploaded.</p>
+    <p><a class="btn primary" href="/sprint-analysis" style="width:auto;display:inline-block">Open the analysis tool</a></p>
+    <p class="muted">${esc(limitLine)}. Your plan's weekly amount resets Monday.</p>
+  </div>
+  <div class="card">
+    <h2>Your reports</h2>
+    ${reports.length ? reports.map(r => `
+    <div class="roster-row sprint-row" style="display:block">
+      <p><strong>${esc(r.athleteName || 'Sprint analysis')}</strong> · ${esc(sprintWhen(r.createdAt))} ${sprintStatusBadge(r)}</p>
+      ${r.coachNote ? `<p class="sprint-note"><strong>Coach AJ:</strong> ${esc(r.coachNote)}</p>` : ''}
+      <button class="linkish" type="button" data-sprint-open="${esc(r.id)}">Show the full report</button>
+      <div class="sprint-detail" hidden></div>
+    </div>`).join('') : emptyState({ title: 'No reports yet', body: 'Run your first analysis and save it. It shows up here, and Coach AJ sees it too.' })}
+  </div>`;
+  el.querySelectorAll('[data-sprint-open]').forEach(b => b.addEventListener('click', async () => {
+    const box = b.nextElementSibling;
+    if (!box.hidden) { box.hidden = true; b.textContent = 'Show the full report'; return; }
+    try {
+      const d = await api('/api/my/sprint-analyses/' + encodeURIComponent(b.dataset.sprintOpen));
+      box.innerHTML = sprintReportHtml(d.report.report);
+      box.hidden = false; b.textContent = 'Hide the full report';
+    } catch (err) { alert(err.message); }
+  }));
+}
+
+async function renderSprintQueue() {
+  const el = $('#sprintqueue-main');
+  if (!el) return;
+  if (!isCoachUser()) { gateHtml(el, 'The sprint analysis list lives here.'); return; }
+  let data;
+  try { data = await api('/api/sprint-analyses'); }
+  catch (err) { el.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const reports = data.reports || [];
+  const c = data.counts || {};
+  el.innerHTML = `<div class="card">
+    <h2>Sprint analyses ${c.new ? `<span class="badge plain">${c.new} new</span>` : ''}</h2>
+    <p class="muted">${c.total || 0} total, ${c.reviewed || 0} reviewed. Newest first.</p>
+    ${reports.length ? reports.map(r => `
+    <div class="roster-row sprint-row" style="display:block" data-sprint-row="${esc(r.id)}">
+      <p><strong>${esc(r.athleteName || 'Member')}</strong> · ${esc(r.email)} · ${esc(sprintWhen(r.createdAt))} ${sprintStatusBadge(r)}</p>
+      <button class="linkish" type="button" data-sprint-view="${esc(r.id)}">Open the report</button>
+      <div class="sprint-detail" hidden></div>
+      <label>Your note <textarea class="sprint-note-text" rows="3" maxlength="2000" placeholder="What stood out, and what to work on next">${esc(r.coachNote || '')}</textarea></label>
+      <p><button class="btn primary" type="button" data-sprint-review="${esc(r.id)}" style="width:auto">${r.status === 'reviewed' ? 'Update note' : 'Mark reviewed'}</button></p>
+    </div>`).join('') : emptyState({ title: 'No sprint analyses yet', body: 'When a member saves a report from the tool, it lands here.' })}
+  </div>`;
+  el.querySelectorAll('[data-sprint-view]').forEach(b => b.addEventListener('click', async () => {
+    const box = b.nextElementSibling;
+    if (!box.hidden) { box.hidden = true; b.textContent = 'Open the report'; return; }
+    try {
+      const d = await api('/api/sprint-analyses/' + encodeURIComponent(b.dataset.sprintView));
+      box.innerHTML = sprintReportHtml(d.report.report);
+      box.hidden = false; b.textContent = 'Close the report';
+    } catch (err) { alert(err.message); }
+  }));
+  el.querySelectorAll('[data-sprint-review]').forEach(b => b.addEventListener('click', async () => {
+    const row = b.closest('[data-sprint-row]');
+    const note = row.querySelector('.sprint-note-text').value.trim();
+    try {
+      await apiPost('/api/sprint-analyses/' + encodeURIComponent(b.dataset.sprintReview) + '/review', { note });
+      renderSprintQueue();
     } catch (err) { alert(err.message); }
   }));
 }
@@ -10844,6 +10961,10 @@ async function mxRenderProgress() {
 function mxToolHtml(view, icon, title, sub) {
   return `<button type="button" class="mx-tool" data-view="${view}">${mxIcon(icon)}<span class="mx-tool-text"><strong>${esc(title)}</strong><span>${esc(sub)}</span></span></button>`;
 }
+/* Sprint Analysis opens from Training in the member app. */
+MX_ALLOWED.add('sprintreports');
+MX_PARENT.sprintreports = 'training';
+
 async function mxRenderTraining() {
   const el = $('#mx-training');
   if (!el) return;
@@ -10890,6 +11011,7 @@ async function mxRenderTraining() {
       ${mxToolHtml('exercises', 'book', 'Exercise library', 'Movements with cues and sources')}
       ${mxToolHtml('drills', 'warm', 'Warm-up drills', 'The standard drills, parts A and B')}
       ${mxToolHtml('nutrition', 'food', 'Nutrition', 'What to eat and when')}
+      ${mxToolHtml('sprintreports', 'video', 'Sprint analysis', 'Analyze a sprint video and keep your reports')}
       ${mxToolHtml('livesessions', 'live', 'Live sessions', 'Live web sessions with Coach AJ')}
       ${mxToolHtml('definitions', 'help', 'Definitions', 'Every term in plain words')}
       ${mxToolHtml('guide', 'help', 'How the app works', 'The whole system in plain words')}
