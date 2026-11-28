@@ -3875,3 +3875,9 @@ html, body, input, button, select, textarea { font-variant-numeric: tabular-nums
 .film-row.is-filmed .film-status { color: var(--ink); font-weight: 600; }
 .film-note { width: 100%; margin-top: 8px; font-size: 16px; padding: 8px 12px; min-height: 40px; }
 .film-remove { margin-left: auto; background: none; border: 0; color: var(--high); font-size: 13px; padding: 6px 0; cursor: pointer; }
+/* Invitation hub (Nov 28, 2026) */
+.badge.inv-pending { background: var(--accent-tint); color: var(--red-on-dark); }
+.badge.inv-invited { background: var(--surface-2); color: var(--ink); }
+.badge.inv-declined { background: var(--surface-2); color: var(--muted); }
+.inv-msg { padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); user-select: all; }
+#inviterequests-main .chip.active { background: var(--red); color: var(--accent-ink); border-color: var(--red); }

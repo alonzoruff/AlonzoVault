@@ -10051,7 +10051,17 @@ const INVITE_TIER_LABELS = {
   access: 'Lab Access (retired $10 plan)', training: 'Lab Training $79.99/mo',
   pass: 'Lab Pass $150/mo', team: 'Team Lab $250/mo', unsure: 'Not sure yet',
 };
-async function renderInviteRequests() {
+/* Invitation hub (Nov 28, 2026): every request newest first, a count
+   at the top, a filter by status, every field the form captures, and
+   Approve, which puts the email on the member invite list (the
+   existing invite flow). Approving never emails anyone: the coach gets
+   a ready message to copy and send themselves. */
+const INVITE_STATUS_LABELS = { pending: 'New', invited: 'Invited', declined: 'Declined' };
+function inviteMessageFor(r) {
+  const first = String(r.name || '').split(' ')[0] || 'there';
+  return `Hi ${first}, you're invited to AYG Lab. Create your account at ${location.origin} using this email address: ${r.email}. Coach AJ`;
+}
+async function renderInviteRequests(filter) {
   const el = $('#inviterequests-main');
   if (!el) return;
   let data;
@@ -10060,42 +10070,56 @@ async function renderInviteRequests() {
     el.innerHTML = `<div class="card"><h2>Invitation Requests</h2><p class="error">${esc(err.message)}</p></div>`;
     return;
   }
-  const requests = data.requests || [];
-  const actBtn = (r, status, label, primary) =>
-    `<button class="btn ${primary ? 'primary' : 'secondary'}" type="button" style="width:auto" data-inv-act="${status}" data-inv-id="${r.id}">${label}</button>`;
-  const row = (r, actionsHtml) => `<div class="roster-row" style="display:block">
-      <p><strong>${esc(r.name)}</strong> · ${esc(r.email)}</p>
-      <p class="muted">For: ${r.forWhom === 'child' ? 'My child' : 'Myself'}${r.athleteName ? ' · Athlete: ' + esc(r.athleteName) : ''}</p>
-      <p class="muted">Membership interest: ${esc(INVITE_TIER_LABELS[r.tierInterest] || r.tierInterest || 'Not sure yet')}</p>
-      ${r.goal ? `<p>Working toward: ${esc(r.goal)}</p>` : ''}
+  const f = filter || state.inviteFilter || 'all';
+  state.inviteFilter = f;
+  const c = data.counts || { total: 0, new: 0, invited: 0, declined: 0 };
+  const all = (data.requests || []).slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const shown = f === 'all' ? all : all.filter(r => r.status === f);
+  const chip = (key, label, n) => `<button type="button" class="chip${f === key ? ' active' : ''}" data-inv-filter="${key}" aria-pressed="${f === key}">${label} (${n})</button>`;
+  const btn = (r, status, label, primary) =>
+    `<button class="btn ${primary ? 'primary' : 'secondary'}" type="button" style="width:auto" data-inv-act="${status}" data-inv-id="${esc(r.id)}">${label}</button>`;
+  const row = (r) => {
+    const actions = r.status === 'pending'
+      ? btn(r, 'invited', 'Approve and invite', true) + ' ' + btn(r, 'declined', 'Decline')
+      : (r.status === 'invited'
+        ? `<button class="btn secondary" type="button" style="width:auto" data-inv-copy="${esc(r.id)}">Copy invite message</button> ` + btn(r, 'pending', 'Back to new')
+        : btn(r, 'pending', 'Back to new'));
+    return `<div class="roster-row" style="display:block">
+      <p><strong>${esc(r.name)}</strong> · ${esc(r.email)} <span class="badge inv-${esc(r.status)}">${esc(INVITE_STATUS_LABELS[r.status] || r.status)}</span></p>
+      <p class="muted">${esc([r.createdAt ? fmtDate(new Date(r.createdAt)) : '', r.forWhom === 'child' ? 'For their child' + (r.athleteName ? ' ' + r.athleteName : '') : 'For themselves', r.grade, r.sport, r.location].filter(Boolean).join(' · '))}</p>
+      <p class="muted">Interested in ${esc(INVITE_TIER_LABELS[r.tierInterest] || r.tierInterest || 'Not sure yet')}</p>
+      ${r.goal ? `<p>Message: ${esc(r.goal)}</p>` : ''}
       ${r.heardFromLabel ? `<p class="muted">Heard about us: ${esc(r.heardFromLabel)}</p>` : ''}
-      <p class="muted">${esc(r.createdAt ? fmtDate(parseDate(String(r.createdAt).slice(0, 10))) : '')} · Status: ${esc(r.status)}</p>
-      ${actionsHtml ? `<p>${actionsHtml}</p>` : ''}
+      <div id="inv-msg-${esc(r.id)}"></div>
+      <p>${actions}</p>
     </div>`;
-  const pending = requests.filter(r => r.status === 'pending');
-  const invited = requests.filter(r => r.status === 'invited');
-  const declined = requests.filter(r => r.status === 'declined');
+  };
   el.innerHTML = `<div class="card">
-      <h2>Waiting on you</h2>
-      ${pending.length
-        ? pending.map(r => row(r, actBtn(r, 'invited', 'Mark Invited', true) + ' ' + actBtn(r, 'declined', 'Decline'))).join('')
-        : emptyState({ title: 'Nothing waiting right now', body: 'New requests from the invitation page land here.' })}
+      <h2>${c.total} ${c.total === 1 ? 'request' : 'requests'}</h2>
+      <p class="muted">${c.new} new · ${c.invited} invited · ${c.declined} declined. Newest first.</p>
+      <div class="chip-row">${chip('all', 'All', c.total)}${chip('pending', 'New', c.new)}${chip('invited', 'Invited', c.invited)}${chip('declined', 'Declined', c.declined)}</div>
+      <p class="muted">Approve and invite puts the email on your member invite list, so they can create an account. It does not email them: copy the invite message and send it yourself.</p>
     </div>
-    <details class="card">
-      <summary>Done (${invited.length + declined.length})</summary>
-      <h3>Invited</h3>
-      ${invited.length
-        ? invited.map(r => row(r, actBtn(r, 'pending', 'Back to pending'))).join('')
-        : '<p class="muted">No one invited yet.</p>'}
-      <h3>Declined</h3>
-      ${declined.length
-        ? declined.map(r => row(r, actBtn(r, 'pending', 'Back to pending'))).join('')
-        : '<p class="muted">Nothing here yet.</p>'}
-    </details>`;
-  el.querySelectorAll('[data-inv-act]').forEach(btn => btn.addEventListener('click', async () => {
+    <div class="card">
+      ${shown.length ? shown.map(row).join('') : emptyState({ title: 'Nothing here', body: f === 'pending' ? 'No new requests right now.' : 'New requests from the invitation page land here.' })}
+    </div>`;
+  el.querySelectorAll('[data-inv-filter]').forEach(b => b.addEventListener('click', () => renderInviteRequests(b.dataset.invFilter)));
+  const showMsg = (r) => {
+    const box = $('#inv-msg-' + CSS.escape(r.id));
+    if (!box) return;
+    const msg = inviteMessageFor(r);
+    box.innerHTML = `<p class="muted">Invite message to send ${esc(r.email)} yourself:</p><p class="inv-msg">${esc(msg)}</p>`;
+    navigator.clipboard && navigator.clipboard.writeText(msg).catch(() => {});
+  };
+  el.querySelectorAll('[data-inv-copy]').forEach(b => b.addEventListener('click', () => {
+    const r = all.find(x => x.id === b.dataset.invCopy);
+    if (r) { showMsg(r); b.textContent = 'Copied'; }
+  }));
+  el.querySelectorAll('[data-inv-act]').forEach(b => b.addEventListener('click', async () => {
     try {
-      await apiPost('/api/invite-requests/' + encodeURIComponent(btn.dataset.invId) + '/status', { status: btn.dataset.invAct });
-      renderInviteRequests();
+      const res = await apiPost('/api/invite-requests/' + encodeURIComponent(b.dataset.invId) + '/status', { status: b.dataset.invAct });
+      await renderInviteRequests();
+      if (b.dataset.invAct === 'invited' && res && res.request) showMsg(res.request);
     } catch (err) { alert(err.message); }
   }));
 }
