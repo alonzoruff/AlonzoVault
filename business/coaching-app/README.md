@@ -1,43 +1,113 @@
-# Ruffin Performance — coaching membership app
+# AYG Lab: coaching membership app
 
-The online membership app for **Ruffin Performance**, AJ Ruffin's own
-speed & strength coaching business (brand name and tagline live in one
-place: the `BRAND` block at the top of `server.js` — rename there and
-every surface follows).
+## What it is
 
-Forked from the coach's school-program sprinter app engine on Oct 25, 2026. From the fork
-on, the two apps evolve separately: this codebase contains **no school
-data, branding, or accounts**, and its store starts empty. The landing
-page carries exactly one connection to the family's gym — a single
-line linking to accelerateyourgame.com — and nothing more.
+This is the members' website for **AYG Lab**, AJ Ruffin's speed and
+strength coaching business. AYG Lab was called Ruffin Performance until
+November 2026, so the live web address, the Render service, and some
+names inside the code still say `ruffin-performance`. That is on
+purpose: renaming them would break links and logins.
 
-## Running it
+- **Live address:** ruffin-performance.onrender.com (hosted on Render,
+  service name `ruffin-performance`).
+- **Who uses it:** AJ as owner and head coach, any assistant coaches he
+  invites, and members. Sign-up is invite-only during the founding pilot.
+- **What members do:** see their program, the exercise video library,
+  their testing and progress numbers, and fill in a daily check-in.
+- **What it is not:** it is not the SJC sprinter app. The two started
+  from the same code in October 2026 and are now completely separate.
+  They share no accounts, no data, and no settings, and a change to one
+  never touches the other.
+
+The business name and tagline live in one spot: the `BRAND` block near
+the top of `server.js`. Change it there and every page follows.
+
+## The parts, in plain words
+
+- `server.js`: the whole engine. It serves the pages, runs logins,
+  saves data, and answers every button press. One file, no outside
+  packages (only what comes built into Node).
+- `public/`: what people see in the browser. `index.html` is the page,
+  `app.js` is what makes it interactive, `styles.css` is the look,
+  `sw.js` lets it work like a phone app.
+- `content/`: the coaching material bundled with the app (sessions,
+  drills, the video library, the glossary, Lab programs). These are
+  plain files in the repo, not member data.
+- `lib/`: helpers. `notify.js` sends AJ email alerts, `stripe.js` talks
+  to Stripe for payments, `logo-data.js` holds the logo.
+- `scripts/build-content.py`: refreshes `content/` from the vault's
+  shared workout files. Run it, then commit the changed `content/` files.
+- `tests/`: automatic checks (see "Tests at a glance" below).
+- `STRIPE_INTEGRATION_TODO.md`: notes on the payments setup.
+
+## Run it on your own computer
+
+You need Node.js version 18 or newer (free from nodejs.org). Then:
 
 ```sh
-node server.js        # or: npm start
+cd business/coaching-app
+npm start
 ```
 
-Zero dependencies (Node >= 18 built-ins only). Environment:
+Open http://localhost:3000. The first account you register becomes the
+owner. Stop it with Ctrl+C. Running it on your computer makes its own
+empty `data/` folder there and never touches the live site's data.
 
-- `PORT` — default 3000
-- `DATA_DIR` — where the JSON store + session secret live (default `./data`)
-- `SESSION_SECRET` — optional; generated into `DATA_DIR` when unset
-- `COACH_INVITE_EMAILS` — optional comma-separated assistant-coach invite seeds
-- `RESEND_API_KEY` — Resend API key; with `NOTIFY_EMAIL` it turns on
-  coach email notifications (invitation requests, uninvited sign-up
-  attempts, new accounts, form checks, in-person requests). Unset = off.
-- `NOTIFY_EMAIL` — where notifications go (comma-separated for several)
-- `RESEND_FROM` — sender; default `Ruffin Performance <onboarding@resend.dev>`,
-  which only delivers to the address the Resend account was made with.
-  Verify a domain in Resend to send from it.
-- `CALENDLY_URL` — the Calendly event the public booking page embeds
-  (default `https://calendly.com/alonzo-ruffinjr/30min`)
-- `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_UPLOAD_PRESET` — demo-video upload
-  identifiers (defaults are the coach's existing account values)
-- `SITE_URL` — the public address written into the page tags, sitemap and
-  robots file (default `https://ruffin-performance.onrender.com`)
-- `READ_ONLY_MODE` — set to `1` for a short pause during a move: sign-in and
-  reading work, every change is refused and nothing is saved
+## Where its data lives
+
+Everything people save (accounts, members, check-ins, testing, notes)
+is kept in **one file, `db.json`**, inside the folder named by the
+`DATA_DIR` setting. The login-signing secret sits next to it in
+`.session-secret` when one is not set by hand.
+
+- **On the live site:** Render keeps that folder on a 1 GB permanent
+  disk mounted at `/var/data` (`DATA_DIR` is set to `/var/data`), so the
+  data survives restarts and new deploys.
+- **Never in GitHub:** the `data/` folder is private and is not part of
+  the repo.
+- **Backups:** the coach can download a full backup file from inside the
+  app, and restore one the same way. Download one before any hosting
+  change.
+
+The app can also run on Vercel. There, saved data lives in a hosted
+Upstash Redis store instead of `db.json` (see "Running on Vercel" below).
+Render stays the live home until AJ gives the final word on the move.
+
+## Settings (environment variables)
+
+Settings are typed into the host (Render), never into the code. Only the
+names are listed here. Values, and above all keys and secrets, are never
+written in the repo.
+
+| Name | What it does | If it is not set |
+|---|---|---|
+| `PORT` | Which port the site listens on. Render sets it. | 3000 |
+| `DATA_DIR` | Folder that holds `db.json`. | `./data` in the app folder |
+| `SESSION_SECRET` | Signs login cookies so they can't be faked. | One is made once and kept in `DATA_DIR` |
+| `DOMAIN` | The site's public address, used for payment return links. | A placeholder address |
+| `CONTACT_EMAIL` | Public contact address in the footer and password-help link. | No address is shown |
+| `TRIAL_DAYS` | Length of the free trial shown on the site (1 to 60). | 3 |
+| `CALENDLY_URL` | The Calendly event the booking page shows. | AJ's 30-minute event |
+| `COACH_INVITE_EMAILS` | Emails to invite as assistant coaches at startup (comma-separated). | No one is pre-invited |
+| `RESEND_API_KEY` | Turns on email alerts to AJ (needs `NOTIFY_EMAIL` too). | No emails are sent |
+| `NOTIFY_EMAIL` | Where the email alerts go. | No emails are sent |
+| `RESEND_FROM` | The "from" line on those emails. | A Resend test sender |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_UPLOAD_PRESET` | Where coach demo videos upload. Public names, not secrets. | AJ's existing account |
+| `STRIPE_SECRET_KEY` | Turns on payments. | Checkout answers "Payments are not configured yet." |
+| `STRIPE_WEBHOOK_SECRET` | Lets Stripe tell the app when a membership changes. | Stripe's messages are refused |
+| `STRIPE_PRICE_LAB_ACCESS`, `STRIPE_PRICE_LAB_TRAINING`, `STRIPE_PRICE_LAB_PASS` | Override the Stripe price for each tier. | The built-in tier prices |
+| `STRIPE_PRICE_ID` | Older single-price setting, kept for compatibility. | A placeholder |
+| `STRIPE_API_BASE`, `RESEND_API_BASE` | Used only by the tests, to point at a pretend Stripe or Resend. | The real services |
+| `SITE_URL` | The public address written into page tags, the sitemap and the robots file. | `https://ruffin-performance.onrender.com` |
+| `READ_ONLY_MODE` | Set to `1` for a short pause during a move: sign-in and reading work, every change is refused. | Normal (changes allowed) |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL`, `KV_REST_API_TOKEN`) | Turns on the hosted data store (Vercel). | Data stays in `db.json` |
+| `OWNER_SETUP_EMAIL` | On an empty hosted store, the only email allowed to create the first (owner) account. | No one can claim an empty hosted store |
+| `STORE_PREFIX` | Key prefix in the hosted store. | `ayg-lab` |
+
+Payments are switched off on purpose right now: with no Stripe key set,
+checkout answers "Payments are not configured yet." That is expected,
+not a bug. Prices, tiers, and the trial are AJ's decisions and do not
+change in code without his word.
 
 ## Running on Vercel (hosted data store)
 
@@ -74,6 +144,35 @@ UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=... node scripts/copy-to-sto
 
 It refuses to overwrite a store that already has data (add `--replace` on
 purpose) and prints a count check for every collection.
+
+## Tests at a glance
+
+Each file in `tests/` starts its own copy of the app on a spare port
+with a throwaway data folder, checks it, and cleans up. Nothing touches
+the live site. Run them from `business/coaching-app`:
+
+```sh
+node tests/run-tests.js              # the big one, about 2,000 checks
+node tests/stripe-step1-tests.js     # payments, part 1
+node tests/stripe-step1c-tests.js    # payments, part 2
+node tests/stripe-step1d-tests.js    # payments, cancelling
+node tests/notify-tests.js           # email alerts and booking page
+node tests/access-page-tests.js      # coach's member access page
+node tests/membership-card-tests.js  # member's membership card
+node tests/growth-tests.js           # sign-up funnel and scoreboard
+node tests/security-headers-tests.js # security headers and the bad-request crash fix
+node tests/filming-tests.js          # Filming Tracker
+node tests/risky-areas-tests.js      # the riskiest areas, with a coverage report
+node tests/store-tests.js            # hosted data store (uses a pretend Upstash)
+node tests/run-tests-store-mode.js   # the big suite again, in hosted-store mode
+```
+
+Each one ends with a line like `2057 passed, 0 failed`. `npm test` runs
+the big suite, the store tests and the store-mode suite together. `tests/harness.js` is a shared helper,
+not a test to run.
+
+For how a change gets from an idea to the live site, see
+[How a change ships](../../docs/HOW-A-CHANGE-SHIPS.md).
 
 ## Model
 
