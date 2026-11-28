@@ -799,7 +799,7 @@ function validateResultFields(test, body) {
   if (test.kind === 'lift') {
     const w = num(body.weight !== undefined ? body.weight : body.value);
     if (w === null || w <= 0) return { error: 'Enter a valid weight in lb.' };
-    if (w > 1500) return { error: 'That weight is beyond the plausible range (max 1500 lb).' };
+    if (w > 1500) return { error: 'That weight looks too high. Check the number (1500 lb max).' };
     weight = w;
     if (body.reps !== undefined && body.reps !== null && body.reps !== '') {
       const r = num(body.reps);
@@ -970,9 +970,9 @@ function meetSeriesFor(profileId) {
    was typed. */
 function validateMeetResultInput(input) {
   const prof = profileById(clean(input.profileId, 80));
-  if (!prof) return { status: 404, error: 'Profile not found.' };
+  if (!prof) return { status: 404, error: 'That athlete is no longer on the roster. Refresh the page.' };
   const date = clean(input.date, 10);
-  if (!parseDateStr(date)) return { status: 400, error: 'Date must be YYYY-MM-DD.' };
+  if (!parseDateStr(date)) return { status: 400, error: 'Pick a date.' };
   const meet = clean(input.meet, 80);
   if (!meet) return { status: 400, error: 'Name the meet.' };
   const ev = findMeetEvent(clean(input.event, 30));
@@ -3922,28 +3922,28 @@ async function handleApi(req, res, url) {
   /* Studies: public reads like the other content endpoints. The
      whole feature answers 404 while STUDIES_ENABLED is off. */
   if (p === '/api/studies' && req.method === 'GET') {
-    if (!STUDIES_ENABLED) return sendJson(res, 404, { error: 'not found' });
+    if (!STUDIES_ENABLED) return sendJson(res, 404, { error: 'That part of the app has changed. Refresh the page to get the latest version.' });
     return sendJson(res, 200, {
       topics: studiesLib.TOPICS, studies: STUDIES,
     });
   }
   if (p.startsWith('/api/studies/') && req.method === 'GET') {
-    if (!STUDIES_ENABLED) return sendJson(res, 404, { error: 'not found' });
+    if (!STUDIES_ENABLED) return sendJson(res, 404, { error: 'That part of the app has changed. Refresh the page to get the latest version.' });
     const found = STUDIES.find(st => st.id === p.slice('/api/studies/'.length));
-    if (!found) return sendJson(res, 404, { error: 'not found' });
+    if (!found) return sendJson(res, 404, { error: "We couldn't find that. It may have been removed." });
     return sendJson(res, 200, { study: found });
   }
 
   /* Protocols: public reads like Studies. The whole feature answers
      404 while PROTOCOLS_ENABLED is off. */
   if (p === '/api/protocols' && req.method === 'GET') {
-    if (!PROTOCOLS_ENABLED) return sendJson(res, 404, { error: 'not found' });
+    if (!PROTOCOLS_ENABLED) return sendJson(res, 404, { error: 'That part of the app has changed. Refresh the page to get the latest version.' });
     return sendJson(res, 200, PROTOCOLS);
   }
   if (p.startsWith('/api/protocols/') && req.method === 'GET') {
-    if (!PROTOCOLS_ENABLED) return sendJson(res, 404, { error: 'not found' });
+    if (!PROTOCOLS_ENABLED) return sendJson(res, 404, { error: 'That part of the app has changed. Refresh the page to get the latest version.' });
     const found = PROTOCOLS.protocols.find(pr => pr.id === p.slice('/api/protocols/'.length));
-    if (!found) return sendJson(res, 404, { error: 'not found' });
+    if (!found) return sendJson(res, 404, { error: "We couldn't find that. It may have been removed." });
     return sendJson(res, 200, { protocol: found });
   }
 
@@ -4039,7 +4039,7 @@ async function handleApi(req, res, url) {
 
   /* Everything below requires a login. */
   const user = readSession(req);
-  if (!user) return sendJson(res, 401, { error: 'Please log in first.' });
+  if (!user) return sendJson(res, 401, { error: 'You were logged out. Log in again to keep going.' });
 
   /* ---------- the coach's own practice log (unchanged) ---------- */
   if (p === '/api/logs' && req.method === 'GET') {
@@ -4052,7 +4052,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const date = clean(body.date, 10);
     if (!parseDateStr(date)) {
-      return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      return sendJson(res, 400, { error: 'Pick a date.' });
     }
     const sessionId = clean(body.sessionId, 20);
     if (sessionId && !SESSION_IDS.has(sessionId)) {
@@ -4169,7 +4169,7 @@ async function handleApi(req, res, url) {
     }
     const body = await readBody(req);
     const date = body.date !== undefined ? clean(body.date, 10) : todayStr();
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (date > todayStr()) return sendJson(res, 400, { error: 'You cannot check in for a day that has not happened yet.' });
     const v = validateCheckin(body);
     if (v.error) return sendJson(res, 400, { error: v.error });
@@ -4349,7 +4349,7 @@ async function handleApi(req, res, url) {
   /* anyone else get a 403 on every endpoint below.                   */
   /* ================================================================ */
   if (user.role !== 'coach') {
-    return sendJson(res, 403, { error: 'Coaches only. Athletes do not use this system — the coach records everything.' });
+    return sendJson(res, 403, { error: 'This part of the app is for coaches.' });
   }
   const coachOnly = () => sendJson(res, 403, { error: 'Coaches only.' });
 
@@ -4559,7 +4559,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 409, { error: 'An athlete with that name is already on the roster.' });
     }
     const gid = body.groupId ? clean(body.groupId, 80) : null;
-    if (gid && !groupById(gid)) return sendJson(res, 400, { error: 'Unknown group.' });
+    if (gid && !groupById(gid)) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
     let status = 'active';
     if (body.status !== undefined) {
       status = clean(body.status, 20);
@@ -4819,7 +4819,7 @@ async function handleApi(req, res, url) {
   const profileMatch = p.match(/^\/api\/profiles\/([^/]+)$/);
   if (profileMatch && req.method === 'PUT') {
     const prof = profileById(decodeURIComponent(profileMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const body = await readBody(req);
     if (body.status !== undefined && !PROFILE_STATUSES.includes(clean(body.status, 20))) {
       return sendJson(res, 400, { error: 'Status must be active, injured, or inactive.' });
@@ -4836,7 +4836,7 @@ async function handleApi(req, res, url) {
     prof.lastName = nextLast;
     if (body.groupId !== undefined) {
       const gid = body.groupId ? clean(body.groupId, 80) : null;
-      if (gid && !groupById(gid)) return sendJson(res, 400, { error: 'Unknown group.' });
+      if (gid && !groupById(gid)) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
       prof.groupId = gid;
     }
     if (body.events !== undefined) prof.events = cleanEvents(body.events);
@@ -4854,7 +4854,7 @@ async function handleApi(req, res, url) {
   }
   if (profileMatch && req.method === 'DELETE') {
     const prof = profileById(decodeURIComponent(profileMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     if (!prof.archived) prof.archivedAt = new Date().toISOString();
     prof.archived = true;
     saveDb();
@@ -4863,7 +4863,7 @@ async function handleApi(req, res, url) {
   const profileRecordsMatch = p.match(/^\/api\/profiles\/([^/]+)\/records$/);
   if (profileRecordsMatch && req.method === 'GET') {
     const prof = profileById(decodeURIComponent(profileRecordsMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const completions = Object.values(db.completions)
       .filter(c => c.profileId === prof.id)
       .sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -4887,7 +4887,7 @@ async function handleApi(req, res, url) {
   const profileLinkMatch = p.match(/^\/api\/profiles\/([^/]+)\/link$/);
   if (profileLinkMatch && req.method === 'PUT') {
     const prof = profileById(decodeURIComponent(profileLinkMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const body = await readBody(req);
     const email = clean(body.email, 200).toLowerCase();
     if (!EMAIL_RE.test(email)) {
@@ -4910,7 +4910,7 @@ async function handleApi(req, res, url) {
   }
   if (profileLinkMatch && req.method === 'DELETE') {
     const prof = profileById(decodeURIComponent(profileLinkMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     let wasLinked = false;
     for (const e of Object.keys(db.athleteLinks)) {
       if (db.athleteLinks[e] === prof.id) { delete db.athleteLinks[e]; wasLinked = true; }
@@ -4925,8 +4925,8 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const groupId = clean(body.groupId, 80);
     const date = clean(body.date, 10);
-    if (!groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!groupById(groupId)) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const key = groupId + '|' + date;
     /* v65: a published plan cannot be changed from here. It changes
        only through a revision that is approved and published. */
@@ -4949,9 +4949,9 @@ async function handleApi(req, res, url) {
   if (p === '/api/completions' && req.method === 'POST') {
     const body = await readBody(req);
     const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const date = clean(body.date || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const key = prof.id + '|' + date;
     if (body.completed === false) {
       delete db.completions[key];
@@ -5137,7 +5137,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/coach/today-board' && req.method === 'GET') {
     const today = todayStr();
     const date = clean(q.get('date') || today, 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const tomorrow = addDaysStr(date, 1);
     const me = staffFor(user);
     const d = parseDateStr(date);
@@ -5336,8 +5336,8 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const groupId = clean(body.groupId, 80);
     const date = clean(body.date, 10);
-    if (!groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!groupById(groupId)) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (planFor(groupId, date)) return sendJson(res, 409, { error: 'That group already has a plan for that day. Open it instead.', plan: publicPlan(planFor(groupId, date), true) });
     let base = null;
     let copiedFrom = null;
@@ -5466,9 +5466,9 @@ async function handleApi(req, res, url) {
      absence. Every correction keeps the earlier value in history. */
   if (p === '/api/attendance' && req.method === 'GET') {
     const date = clean(q.get('date') || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const groupId = clean(q.get('groupId'), 80);
-    if (groupId && !groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
+    if (groupId && !groupById(groupId)) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
     const members = groupId ? groupMembers(groupId)
       : db.profiles.filter(pr => !pr.archived && pr.groupId)
         .slice().sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
@@ -5490,7 +5490,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/attendance' && req.method === 'POST') {
     const body = await readBody(req);
     const date = clean(body.date || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (date > addDaysStr(todayStr(), 0)) return sendJson(res, 400, { error: 'Attendance can only be recorded for today or an earlier day.' });
     const prof = profileById(clean(body.profileId, 80));
     if (!prof || prof.archived) return sendJson(res, 404, { error: 'Athlete not found on the roster.' });
@@ -5508,10 +5508,10 @@ async function handleApi(req, res, url) {
   if (p === '/api/attendance/bulk' && req.method === 'POST') {
     const body = await readBody(req);
     const date = clean(body.date || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (date > todayStr()) return sendJson(res, 400, { error: 'Attendance can only be recorded for today or an earlier day.' });
     const groupId = clean(body.groupId, 80);
-    if (!groupById(groupId)) return sendJson(res, 400, { error: 'Unknown group.' });
+    if (!groupById(groupId)) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
     if (body.status !== 'present') return sendJson(res, 400, { error: 'The quick fill only marks athletes Present.' });
     let marked = 0;
     for (const pr of groupMembers(groupId)) {
@@ -5654,7 +5654,7 @@ async function handleApi(req, res, url) {
   const amsAthleteMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)$/);
   if (amsAthleteMatch && req.method === 'GET') {
     const prof = profileById(decodeURIComponent(amsAthleteMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const today = todayStr();
     /* Wellness: the last 14 days of check-ins, oldest first, with
        the window's averages and flagged-day count (checkinFlags,
@@ -5725,7 +5725,7 @@ async function handleApi(req, res, url) {
   const amsNotesMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)\/notes$/);
   if (amsNotesMatch && req.method === 'POST') {
     const prof = profileById(decodeURIComponent(amsNotesMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const body = await readBody(req);
     const text = clean(body.text, 2000);
     if (!text) return sendJson(res, 400, { error: 'Write the note first.' });
@@ -5743,7 +5743,7 @@ async function handleApi(req, res, url) {
   const amsNoteMatch = p.match(/^\/api\/ams\/athlete\/([^/]+)\/notes\/([^/]+)$/);
   if (amsNoteMatch && req.method === 'PUT') {
     const prof = profileById(decodeURIComponent(amsNoteMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const note = (db.coachNotes[prof.id] || [])
       .find(n => n.id === decodeURIComponent(amsNoteMatch[2]));
     if (!note) return sendJson(res, 404, { error: 'Note not found.' });
@@ -5757,7 +5757,7 @@ async function handleApi(req, res, url) {
   }
   if (amsNoteMatch && req.method === 'DELETE') {
     const prof = profileById(decodeURIComponent(amsNoteMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const list = db.coachNotes[prof.id] || [];
     const next = list.filter(n => n.id !== decodeURIComponent(amsNoteMatch[2]));
     if (next.length === list.length) return sendJson(res, 404, { error: 'Note not found.' });
@@ -5823,7 +5823,7 @@ async function handleApi(req, res, url) {
     if (isPlainObj(body) && typeof body.sessionDate === 'string' && body.sessionDate.trim()) {
       sessionDate = parseDeviceDate(body.sessionDate);
       if (!sessionDate) {
-        return sendJson(res, 400, { error: 'That session date is not a real date — enter it as YYYY-MM-DD.' });
+        return sendJson(res, 400, { error: 'Pick the testing date.' });
       }
       if (sessionDate > todayStr()) {
         return sendJson(res, 400, { error: 'That session date is in the future — use the day the testing actually happened.' });
@@ -5958,7 +5958,7 @@ async function handleApi(req, res, url) {
     const row = db.deviceRows.find(x => x.id === clean(body.rowId, 80) && x.testDayId === day.id);
     if (!row) return sendJson(res, 404, { error: 'That unattached row is not part of this test day.' });
     const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     /* Filing goes through the import path itself (upsert per
        athlete + day + test), so attaching can never double-file a
        result the athlete already has for that day. */
@@ -5990,9 +5990,9 @@ async function handleApi(req, res, url) {
   if (p === '/api/devices/tapex/entry' && req.method === 'POST') {
     const body = await readBody(req);
     const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const date = clean(body.date, 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const metrics = {};
     for (const m of TAPEX_METRICS) {
       const raw = body[m.field];
@@ -6190,7 +6190,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/retention/purge' && req.method === 'POST') {
     const body = await readBody(req);
     const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     if (!prof.archived) {
       return sendJson(res, 400, { error: 'Only an archived athlete\'s health data can be purged. Archive the profile first.' });
     }
@@ -6399,7 +6399,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const date = clean(body.date, 10);
     const title = clean(body.title, 80);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (!title) return sendJson(res, 400, { error: 'Give the test day a title.' });
     const keys = Array.isArray(body.testKeys) ? body.testKeys.map(k => clean(k, 40)).filter(Boolean) : [];
     if (!keys.length) return sendJson(res, 400, { error: 'Pick at least one test.' });
@@ -6425,7 +6425,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/results' && req.method === 'POST') {
     const body = await readBody(req);
     const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const day = db.testDays.find(d => d.id === clean(body.testDayId, 80));
     if (!day) return sendJson(res, 404, { error: 'Test day not found.' });
     const testKey = clean(body.testKey, 40);
@@ -6523,7 +6523,7 @@ async function handleApi(req, res, url) {
     const dayParam = clean(q.get('testDayId') || '', 80);
     const profParam = clean(q.get('profileId') || '', 80);
     if (profParam && !profileById(profParam)) {
-      return sendJson(res, 404, { error: 'Profile not found.' });
+      return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     }
     let results = [];
     const ids = profParam ? [profParam] : db.profiles.map(pr => pr.id);
@@ -6583,12 +6583,12 @@ async function handleApi(req, res, url) {
   if (p === '/api/weekly/entry' && req.method === 'PUT') {
     const body = await readBody(req);
     const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const metric = findWeeklyMetric(clean(body.metricId, 40));
     if (!metric) return sendJson(res, 400, { error: 'Unknown metric.' });
     const week = clean(body.week, 10);
     if (!parseDateStr(week) || !isMonday(week)) {
-      return sendJson(res, 400, { error: 'Week must be a Monday date (YYYY-MM-DD).' });
+      return sendJson(res, 400, { error: 'Pick the Monday that starts the week.' });
     }
     const value = num(body.value);
     if (value === null || value < 0 || (value === 0 && metric.better === 'lower')) {
@@ -6603,7 +6603,7 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/weekly/series' && req.method === 'GET') {
     const prof = profileById(clean(q.get('profileId') || '', 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const metric = findWeeklyMetric(clean(q.get('metricId') || '', 40));
     if (!metric) return sendJson(res, 400, { error: 'Unknown metric.' });
     const s = weeklySeriesFor(prof.id, metric);
@@ -6720,7 +6720,7 @@ async function handleApi(req, res, url) {
       const date = clean(cl.date, 10);
       const note = clean(cl.note, 500);
       if (!by) return sendJson(res, 400, { error: 'Clearance needs the name of who cleared the athlete.' });
-      if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Clearance date must be a date (YYYY-MM-DD).' });
+      if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Add the date the athlete was cleared.' });
       if (!note) return sendJson(res, 400, { error: 'Clearance needs a note attesting that written clearance from a licensed provider was received.' });
       newClearance = {
         by, date, note,
@@ -6888,7 +6888,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/meet-results' && req.method === 'GET') {
     const profParam = clean(q.get('profileId') || '', 80);
     if (profParam && !profileById(profParam)) {
-      return sendJson(res, 404, { error: 'Profile not found.' });
+      return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     }
     const evParam = clean(q.get('event') || '', 30);
     const results = db.meetResults
@@ -6922,12 +6922,12 @@ async function handleApi(req, res, url) {
     };
     if (body.profileId !== undefined) {
       const prof = profileById(clean(body.profileId, 80));
-      if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+      if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
       next.profileId = prof.id;
     }
     if (body.date !== undefined) {
       const d = clean(body.date, 10);
-      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Pick a date.' });
       next.date = d;
     }
     if (body.meet !== undefined) {
@@ -6964,7 +6964,7 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/meet-results/prs' && req.method === 'GET') {
     const prof = profileById(clean(q.get('profileId') || '', 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     return sendJson(res, 200, {
       profileId: prof.id,
       prs: meetPrsFor(prof.id),
@@ -7165,7 +7165,7 @@ async function handleApi(req, res, url) {
         next.profileId = null;
       } else {
         const prof = profileById(clean(body.profileId, 80));
-        if (!prof) return { error: 'Profile not found.', status: 404 };
+        if (!prof) return { error: 'That athlete is no longer on the roster. Refresh the page.', status: 404 };
         next.profileId = prof.id;
       }
     }
@@ -7186,7 +7186,7 @@ async function handleApi(req, res, url) {
         next.date = '';
       } else {
         const d = clean(body.date, 10);
-        if (!parseDateStr(d)) return { error: 'Date must be YYYY-MM-DD.', status: 400 };
+        if (!parseDateStr(d)) return { error: 'Pick a date.', status: 400 };
         next.date = d;
       }
     }
@@ -7268,7 +7268,7 @@ async function handleApi(req, res, url) {
     const name = clean(body.name, 80);
     if (!name) return sendJson(res, 400, { error: 'Name the meet.' });
     const date = clean(body.date, 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     if (db.meets.some(x => x.name === name && x.date === date)) {
       return sendJson(res, 409, { error: 'A meet with that name and date already exists.' });
     }
@@ -7307,7 +7307,7 @@ async function handleApi(req, res, url) {
     }
     if (body.date !== undefined) {
       const d = clean(body.date, 10);
-      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+      if (!parseDateStr(d)) return sendJson(res, 400, { error: 'Pick a date.' });
       next.date = d;
     }
     if (body.location !== undefined) next.location = clean(body.location, 80);
@@ -7339,7 +7339,7 @@ async function handleApi(req, res, url) {
     if (!m) return sendJson(res, 404, { error: 'Meet not found.' });
     const body = await readBody(req);
     const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const ev = findMeetEvent(clean(body.event, 30));
     if (!ev) return sendJson(res, 400, { error: 'Unknown event.' });
     if (db.meetEntries.some(e => e.meetId === m.id && e.profileId === prof.id && e.event === ev.key)) {
@@ -7375,7 +7375,7 @@ async function handleApi(req, res, url) {
     if (!ev) return sendJson(res, 400, { error: 'Unknown event.' });
     const marks = Array.isArray(body.marks) ? body.marks : null;
     if (!marks || !marks.length) return sendJson(res, 400, { error: 'Enter at least one mark.' });
-    if (marks.length > 100) return sendJson(res, 400, { error: 'Too many marks in one save (max 100).' });
+    if (marks.length > 100) return sendJson(res, 400, { error: "That's more than 100 marks. Save them in two batches." });
     // Validate the whole batch through the shared meet-result rules
     // first — one bad mark saves nothing.
     const seen = new Set();
@@ -7387,7 +7387,7 @@ async function handleApi(req, res, url) {
       }
       seen.add(profileId);
       const prof = profileById(profileId);
-      if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+      if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
       if (!db.meetEntries.some(e => e.meetId === m.id && e.profileId === profileId && e.event === ev.key)) {
         return sendJson(res, 400, {
           error: prof.firstName + ' ' + prof.lastName + ' is not entered in ' + ev.name + ' at this meet.',
@@ -7482,7 +7482,7 @@ async function handleApi(req, res, url) {
     let scope = { type: 'team' };
     if (gid && gid !== 'all') {
       const g = groupById(gid);
-      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      if (!g) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
       scopeGroups = scopeGroups.filter(x => x.group.id === gid);
       scope = { type: 'group', group: { id: g.id, name: g.name } };
     }
@@ -7705,7 +7705,7 @@ async function handleApi(req, res, url) {
   const athleteReportMatch = p.match(/^\/api\/reports\/athlete\/([^/]+)$/);
   if (athleteReportMatch && req.method === 'GET') {
     const prof = profileById(decodeURIComponent(athleteReportMatch[1]));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const testing = testingHistoryFor(prof.id);
     const weekly = allWeeklyMetrics().map(m => {
       const s = weeklySeriesFor(prof.id, m);
@@ -8161,7 +8161,7 @@ async function handleApi(req, res, url) {
     const gRaw = q.get('groupId');
     if (gRaw) {
       const g = groupById(gRaw);
-      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      if (!g) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
       groupId = g.id;
     }
     const columns = pctStepsOf(workout);
@@ -8208,12 +8208,12 @@ async function handleApi(req, res, url) {
      complete stays with POST /api/completions, unchanged. */
   if (p === '/api/weight-room' && req.method === 'GET') {
     const date = clean(q.get('date') || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     let groupId = null;
     const gRaw = q.get('groupId');
     if (gRaw) {
       const g = groupById(gRaw);
-      if (!g) return sendJson(res, 400, { error: 'Unknown group.' });
+      if (!g) return sendJson(res, 400, { error: 'That group no longer exists. Refresh and pick another.' });
       groupId = g.id;
     }
     let floorWorkout = null;
@@ -8290,9 +8290,9 @@ async function handleApi(req, res, url) {
   if (p === '/api/weight-room/progress' && req.method === 'POST') {
     const body = await readBody(req);
     const prof = profileById(clean(body.profileId, 80));
-    if (!prof) return sendJson(res, 404, { error: 'Profile not found.' });
+    if (!prof) return sendJson(res, 404, { error: 'That athlete is no longer on the roster. Refresh the page.' });
     const date = clean(body.date || todayStr(), 10);
-    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Date must be YYYY-MM-DD.' });
+    if (!parseDateStr(date)) return sendJson(res, 400, { error: 'Pick a date.' });
     const workoutKey = clean(body.workoutKey, 120);
     const sep = workoutKey.indexOf(':');
     const kind = sep > 0 ? workoutKey.slice(0, sep) : '';
@@ -8515,7 +8515,7 @@ async function handleApi(req, res, url) {
   }
 
   void coachOnly;
-  return sendJson(res, 404, { error: 'not found' });
+  return sendJson(res, 404, { error: 'That part of the app has changed. Refresh the page to get the latest version.' });
 }
 
 /* ------------------------------------------------------------------ */
@@ -8610,7 +8610,7 @@ const server = http.createServer((req, res) => {
     handleApi(req, res, url).catch(() => {
       // The socket may already be gone (e.g., an oversized body was
       // destroyed mid-read) — never let the error reply itself throw.
-      try { if (!res.headersSent) sendJson(res, 400, { error: 'Bad request.' }); } catch (_) { /* gone */ }
+      try { if (!res.headersSent) sendJson(res, 400, { error: 'Something went wrong on our end. Try again, and tell Coach AJ if it keeps happening.' }); } catch (_) { /* gone */ }
     });
   } else {
     serveStatic(req, res, url);

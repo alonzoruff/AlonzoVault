@@ -137,11 +137,29 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* Plain words for when a request fails without its own message. An
+   athlete should never see a status number or a browser error. */
+const OFFLINE_MSG = 'No connection. Check your signal or Wi-Fi and try again.';
+function plainStatusMsg(status) {
+  if (status === 401) return 'You were logged out. Log in again to keep going.';
+  if (status === 403) return "Your account doesn't have access to this.";
+  if (status === 404) return "We couldn't find that. It may have been removed.";
+  if (status === 413) return 'That is too big to send. Try something smaller.';
+  if (status === 429) return 'Too many tries in a row. Wait a minute and try again.';
+  return 'The app could not reach the server just now. Wait a moment and try again.';
+}
 async function api(path, opts) {
-  const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  let res;
+  try {
+    res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+  } catch (_) {
+    /* No signal at the track: the browser's own words here are
+       "Failed to fetch" or "Load failed". */
+    throw new Error(OFFLINE_MSG);
+  }
   let data = {};
   try { data = await res.json(); } catch (_) { /* empty */ }
-  if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
+  if (!res.ok) throw new Error(data.error || plainStatusMsg(res.status));
   return data;
 }
 const apiPost = (path, body) => api(path, {
@@ -1113,8 +1131,8 @@ function countUp(el) {
 /* ---------------- shared session rendering ---------------- */
 function badge(cns) {
   return cns === 'high'
-    ? '<span class="badge high">HARD · HIGH CNS</span>'
-    : '<span class="badge low">EASY · LOW CNS</span>';
+    ? '<span class="badge high">HARD DAY</span>'
+    : '<span class="badge low">EASY DAY</span>';
 }
 function sessionRow(s) {
   return `<button class="session-row" data-session="${esc(s.id)}">
@@ -2247,7 +2265,7 @@ function renderLibPaths() {
           const it = byKey.get(key);
           const isDone = doneSet.has(key);
           return `<li class="lib-path-step ${isDone ? 'done' : ''}">
-            ${state.user ? `<input type="checkbox" class="lib-path-check" data-path-toggle="${esc(p.id)}" data-path-step="${esc(key)}" ${isDone ? 'checked' : ''} aria-label="Mark step ${i + 1} done">` : `<span class="lib-path-num">${i + 1}</span>`}
+            ${state.user ? `<label class="lib-path-hit"><input type="checkbox" class="lib-path-check" data-path-toggle="${esc(p.id)}" data-path-step="${esc(key)}" ${isDone ? 'checked' : ''} aria-label="Mark step ${i + 1} done"></label>` : `<span class="lib-path-num">${i + 1}</span>`}
             <span class="lib-path-step-main">
               <strong>${esc(it ? it.title : s.ref)}</strong>
               <span class="muted">${esc(s.why)}</span>
@@ -2488,6 +2506,12 @@ function openTermPop(btn) {
   pop.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)) + 'px';
   const below = rect.bottom + 8;
   pop.style.top = (below + 190 < window.innerHeight ? below : Math.max(12, rect.top - 198)) + 'px';
+  /* Long definitions run taller than 190px; keep the whole card, and its
+     View in Library button, on screen. */
+  const popTop = parseFloat(pop.style.top);
+  if (popTop + pop.offsetHeight > window.innerHeight - 12) {
+    pop.style.top = Math.max(12, window.innerHeight - pop.offsetHeight - 12) + 'px';
+  }
   const closeBtn = $('#term-pop-close');
   if (closeBtn) closeBtn.addEventListener('click', closeTermPop);
 }
@@ -2895,7 +2919,7 @@ function renderAccount() {
     renderCoachInvites();
     const out = async () => {
       try { await apiPost('/api/logout'); }
-      catch (err) { alert('Log out failed: ' + err.message); return; }
+      catch (err) { alert("Couldn't log you out. " + err.message); return; }
       state.user = null; await refreshUserData(); syncAuthUi(); showView('home');
     };
     $('#chip-logout').addEventListener('click', out);
@@ -3646,12 +3670,14 @@ function uploadDemoVideo(file, onProgress) {
         resolve(json.secure_url);
         return;
       }
-      const msg = (json && json.error && json.error.message)
-        || ('Upload failed (HTTP ' + xhr.status + ').');
-      reject(new Error(msg));
+      /* The upload service answers in its own technical terms, so
+         the coach gets plain words instead of its message. */
+      reject(new Error(xhr.status === 413 || xhr.status === 400
+        ? 'That video did not upload. Make sure it is under 100 MB and try again.'
+        : 'That video did not upload. Please try again.'));
     });
     xhr.addEventListener('error', () => {
-      reject(new Error('Upload failed — check your connection and try again.'));
+      reject(new Error('That video did not upload. Check your signal and try again.'));
     });
     xhr.send(form);
   });
@@ -4944,7 +4970,12 @@ async function renderTop() {
   const tm = $('#top-metric');
   if (tm) tm.addEventListener('change', () => { state.topMetric = tm.value; renderTop(); });
   const tw = $('#top-week');
-  if (tw) tw.addEventListener('change', () => { state.topWeek = tw.value; renderTop(); });
+  if (tw) tw.addEventListener('change', () => {
+    /* Any day picked moves to its Monday, so saving never hits a
+       "pick the Monday" error. */
+    if (tw.value) { const d = parseDate(tw.value); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); tw.value = dateStrOf(d); }
+    state.topWeek = tw.value; renderTop();
+  });
   const tem = $('#top-entry-metric');
   if (tem) tem.addEventListener('change', () => { state.entryMetric = tem.value; renderTop(); });
   /* Weekly saves update just the athlete's row in place (plus
@@ -6190,7 +6221,7 @@ function paintCalendar() {
       </div>
     </div>
     <div class="card">
-      <div class="table-wrap"><table class="matrix" style="table-layout:fixed">
+      <div class="table-wrap"><table class="matrix" style="table-layout:fixed;min-width:640px">
         <thead><tr>${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<th style="text-align:left">${d}</th>`).join('')}</tr></thead>
         <tbody>${rows.map(r => '<tr>' + r.map(cellHtml).join('') + '</tr>').join('')}</tbody>
       </table></div>
@@ -8550,13 +8581,21 @@ function ctDayWord(date) {
    refused because another coach changed the plan can show the
    current version instead of a bare message. */
 async function ctCall(path, method, body) {
-  const res = await fetch(path, {
-    method: method || 'GET', credentials: 'same-origin',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method: method || 'GET', credentials: 'same-origin',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (_) {
+    /* Offline: hand back a plain message instead of throwing, so the
+       form shows it and its Save button comes back. */
+    return { ok: false, status: 0, data: { error: OFFLINE_MSG } };
+  }
   let data = {};
   try { data = await res.json(); } catch (_) { /* empty */ }
+  if (!res.ok && !data.error) data.error = plainStatusMsg(res.status);
   return { ok: res.ok, status: res.status, data };
 }
 
