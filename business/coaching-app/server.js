@@ -154,8 +154,8 @@ const BRAND = {
   name: 'AYG Lab',
   short: 'AYG Lab',
   tagline: 'Speed & strength coaching',
-  version: 'v41',
-  cache: 'ayg-lab-v41',
+  version: 'v42',
+  cache: 'ayg-lab-v42',
 };
 
 /* The public booking page embeds Coach AJ's Calendly 30-minute
@@ -3236,7 +3236,10 @@ function testingHistoryFor(profileId) {
    order. The Baseline Testing Kit is the coach flow that creates a
    test day carrying exactly these three; a member's baseline for a
    test is their EARLIEST recorded result for it. */
-const CORE_TEST_KEYS = ['forty-yard-dash', 'vertical-jump', 'broad-jump'];
+/* v42: the 30m sprint replaced the 40-yard dash as the core sprint
+   test, so the baseline matches what the Lab programs test. The 40
+   stays in the catalog for anyone who still records it. */
+const CORE_TEST_KEYS = ['30m-sprint', 'vertical-jump', 'broad-jump'];
 const BASELINE_TEST_KEYS = CORE_TEST_KEYS.slice();
 function speedReportPoint(point) {
   return point ? { value: point.display, display: point.display, date: point.date } : null;
@@ -3247,7 +3250,7 @@ function speedReportPoint(point) {
    earliest): absolute and percent are the signed raw change
    (latest - baseline), while improvement / improvementPercent are
    the same movement read in the test's own better-direction —
-   positive always means better, so for the 40 a drop in time is a
+   positive always means better, so for a sprint a drop in time is a
    positive improvement and a slower latest reads improved:false.
    The client never has to guess at direction. */
 function speedReportTestEntry(test, hist) {
