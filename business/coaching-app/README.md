@@ -109,4 +109,6 @@ npm test                           # all three
 ```
 
 Starts the server on a throwaway port with a temporary `DATA_DIR`,
-exercises the API end to end, and cleans up.
+exercises the API end to end, and cleans up. The smaller files in
+`tests/` (Stripe, notifications, access page, growth, membership card,
+security headers) run the same way, one file at a time.
