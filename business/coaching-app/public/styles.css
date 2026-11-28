@@ -3873,3 +3873,5 @@ html, body, input, button, select, textarea { font-variant-numeric: tabular-nums
 .film-row.is-filmed .film-status { color: var(--ink); font-weight: 600; }
 .film-note { width: 100%; margin-top: 8px; font-size: 16px; padding: 8px 12px; min-height: 40px; }
 .film-remove { margin-left: auto; background: none; border: 0; color: var(--high); font-size: 13px; padding: 6px 0; cursor: pointer; }
+#pw-form .btn, #pw-form .mx-btn { margin-top: 12px; }
+#acct-security h3 + p, #acct-security form + p { margin-top: 8px; }

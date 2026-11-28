@@ -99,13 +99,35 @@ ride along in the full backup. To add a movement later, use the
 "Add a movement" form at the bottom of the page. Movements you add
 can be removed; the ones from the list stay.
 
+## Sign-in protections
+
+- **Limit on password guesses.** After 5 wrong passwords in a row for one
+  email (within 15 minutes), sign-in for that email is paused for 15
+  minutes, even with the right password. One address gets 30 wrong
+  passwords across all emails in 15 minutes before it is paused the same
+  way. A right password before the pause clears the count. Wrong current
+  passwords on the change-password form count too. On Render the count is
+  kept in memory (a restart clears it); on Vercel it is kept in the
+  Upstash store so every copy of the app sees it. Only a keyed hash of the
+  email or address names a counter; nothing goes into the saved data. See
+  `lib/guess-limit.js`.
+- **Sign out everywhere** (Account page). Ends every sign-in for the
+  account on every device, this one too. Each account has a sign-in
+  number inside its cookies; this raises it, so older cookies stop
+  working. Cookies made before this feature count as number 0, so nobody
+  was signed out by the change itself.
+- **Change password** (Account page). Needs the current password; the new
+  one needs 8 or more characters. It signs the account out on every other
+  device and keeps this one signed in.
+
 ## Tests
 
 ```sh
 node tests/run-tests.js            # the main suite (Render file mode)
 node tests/store-tests.js          # hosted-store mode and the Vercel entry
 node tests/run-tests-store-mode.js # the main suite again, in hosted-store mode
-npm test                           # all three
+node tests/sign-in-protection-tests.js # guess limit, sign out everywhere, change password
+npm test                           # all of the above
 ```
 
 Starts the server on a throwaway port with a temporary `DATA_DIR`,

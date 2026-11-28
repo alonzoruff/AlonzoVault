@@ -2,7 +2,7 @@
 /*
  * A tiny stand-in for Upstash Redis's REST address, for tests only.
  * It answers the few commands lib/store.js sends (GET, SET, MGET,
- * INCR, EXPIRE, and the one EVAL save script) from an in-memory map.
+ * INCR, EXPIRE, DEL, and the one EVAL save script) from an in-memory map.
  * No real Upstash account, address or token is involved: the token
  * below is a made-up placeholder.
  */
@@ -39,6 +39,7 @@ function startFakeUpstash() {
             kv.set(args[1], String(n));
             return send(200, { result: n });
           }
+          case 'DEL': { const had = kv.delete(args[1]); return send(200, { result: had ? 1 : 0 }); }
           case 'EXPIRE': return send(200, { result: kv.has(args[1]) ? 1 : 0 });
           case 'EVAL': {
             /* Only the store's save script: [EVAL, script, 2, dataKey, verKey, expected, value] */

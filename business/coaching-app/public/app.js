@@ -1822,6 +1822,59 @@ async function refreshUserData() {
   applyMembershipNav();
 }
 
+/* ---------------- sign-in and security ----------------
+   Change password and "Sign out everywhere", on both Account
+   screens (the coach one and the member one). Change password keeps
+   this device signed in and signs every other device out. Sign out
+   everywhere ends every sign-in, this device included. */
+function securityCardHtml(mx) {
+  const card = mx ? 'mx-card' : 'card';
+  const btn = mx ? 'mx-btn mx-btn-primary' : 'btn primary';
+  const ghost = mx ? 'mx-btn mx-btn-ghost' : 'btn';
+  const muted = mx ? 'mx-muted' : 'muted';
+  return `<div class="${card}" id="acct-security">
+      <h3>Password and sign-in</h3>
+      <form id="pw-form" autocomplete="on">
+        <input type="email" autocomplete="username" value="${esc(state.user.email)}" hidden readonly>
+        <label>Current password <input type="password" id="pw-current" required autocomplete="current-password"></label>
+        <label>New password (8+ characters) <input type="password" id="pw-new" required autocomplete="new-password" minlength="8"></label>
+        <label>Type the new password again <input type="password" id="pw-new2" required autocomplete="new-password" minlength="8"></label>
+        <button class="${btn}" type="submit">Change password</button>
+        <p class="error" id="pw-err" role="alert"></p>
+        <p class="${muted}" id="pw-ok" role="status"></p>
+      </form>
+      <p class="${muted}">Changing your password signs you out on every other phone or computer. You stay signed in here.</p>
+      <h3>Sign out everywhere</h3>
+      <p class="${muted}">Lost a phone, or signed in on a shared computer? This signs you out on every device, this one too. Your log, check-ins and numbers stay saved.</p>
+      <button class="${ghost}" id="acct-signout-all" type="button">Sign out everywhere</button>
+      <p class="error" id="so-err" role="alert"></p>
+    </div>`;
+}
+function wireSecurityCard(onSignedOut) {
+  const form = $('#pw-form');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#pw-err').textContent = ''; $('#pw-ok').textContent = '';
+    const current = $('#pw-current').value;
+    const next = $('#pw-new').value;
+    if (next !== $('#pw-new2').value) { $('#pw-err').textContent = 'The two new passwords do not match. Please type them again.'; return; }
+    if (next.length < 8) { $('#pw-err').textContent = 'Your new password must be at least 8 characters.'; return; }
+    try {
+      await apiPost('/api/account/password', { currentPassword: current, newPassword: next });
+      form.reset();
+      $('#pw-ok').textContent = 'Password changed. Other devices are now signed out.';
+    } catch (err) { $('#pw-err').textContent = err.message; }
+  });
+  $('#acct-signout-all').addEventListener('click', async () => {
+    $('#so-err').textContent = '';
+    if (!confirm('Sign out on every device, this one too?')) return;
+    try { await apiPost('/api/account/sign-out-everywhere'); }
+    catch (err) { $('#so-err').textContent = err.message; return; }
+    await onSignedOut();
+  });
+}
+
 /* ---------------- account ---------------- */
 function renderAccount() {
   const chip = $('#account-chip');
@@ -1837,6 +1890,7 @@ function renderAccount() {
       <p class="muted">${state.user.role === 'coach' ? 'Coach account: you run the roster, assignments, testing results, weekly numbers, and health concerns.' : 'Member account: once your coach links this email to your name on the member roster, you can log the daily wellness check-in (sleep, soreness, energy) on the Today page. Your coach runs everything else.'} Your personal log entries and cross-training swaps save to this account.</p>
       <button class="btn" id="acct-logout" type="button">Log out</button>
       ${appVersionHtml()}</div>
+      ${securityCardHtml(false)}
       ${appearanceCardHtml()}
       <div id="coach-accounts"></div>
       <div id="coach-invites"></div>
@@ -1853,6 +1907,7 @@ function renderAccount() {
     };
     $('#chip-logout').addEventListener('click', out);
     $('#acct-logout').addEventListener('click', out);
+    wireSecurityCard(async () => { state.user = null; await refreshUserData(); syncAuthUi(); showView('landing'); });
   } else {
     chip.textContent = '';
     note.textContent = '';
@@ -10913,6 +10968,7 @@ function mxRenderAccount() {
       <p class="mx-lead">Signed in as ${esc(state.user.email)}</p></header>
     ${mxPreviewNote()}
     <div id="member-membership"></div>
+    ${securityCardHtml(true)}
     <div class="mx-card">
       <h3>Sign out</h3>
       <p class="mx-muted">Your log, check-ins and numbers stay saved to your account.</p>
@@ -10920,6 +10976,7 @@ function mxRenderAccount() {
       ${appVersionHtml()}
     </div>`;
   renderMembershipCard();
+  wireSecurityCard(async () => { mxSetPreview(false); state.user = null; await refreshUserData(); syncAuthUi(); showView('landing'); });
   $('#acct-logout').addEventListener('click', async () => {
     try { await apiPost('/api/logout'); }
     catch (err) { alert('Sign out failed: ' + err.message); return; }
